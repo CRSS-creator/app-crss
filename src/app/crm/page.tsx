@@ -144,18 +144,36 @@ function CrmContent() {
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [draggedLeadId, setDraggedLeadId] = useState<string | null>(null);
   const [tasks, setTasks] = useState<CrmTask[]>([]);
-  const toggleTaskStatus = (taskId: string) => {
-  setTasks((prevTasks) =>
-    prevTasks.map((task) =>
-      task.id === taskId
-        ? {
-            ...task,
-            status: task.status === "zrobione" ? "do_zrobienia" : "zrobione",
-          }
-        : task
-    )
-  );
-};
+  async function toggleTaskStatus(taskId: string) {
+    const taskToUpdate = tasks.find((task) => task.id === taskId);
+    if (!taskToUpdate) return;
+
+    const newStatus =
+      taskToUpdate.status === "zrobione" ? "do_zrobienia" : "zrobione";
+
+    setTasks((prevTasks) =>
+      prevTasks.map((task) =>
+        task.id === taskId ? { ...task, status: newStatus } : task
+      )
+    );
+
+    const { error } = await supabase
+      .from("crm_zadania")
+      .update({ status: newStatus })
+      .eq("id", taskId);
+
+    if (error) {
+      console.error("Błąd zmiany statusu zadania CRM:", error);
+
+      setTasks((prevTasks) =>
+        prevTasks.map((task) =>
+          task.id === taskId ? { ...task, status: taskToUpdate.status } : task
+        )
+      );
+
+      alert("Nie udało się zmienić statusu zadania.");
+    }
+  }
 
   const [stageFilter, setStageFilter] = useState(EMPTY_FILTER);
   const [statusFilter, setStatusFilter] = useState(EMPTY_FILTER);

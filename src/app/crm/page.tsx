@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from "react";
 import AppLayout from "@/components/AppLayout";
+import AccessGuard from "@/components/AccessGuard";
 import { supabase } from "@/lib/supabaseClient";
 import { colors, radius, shadow } from "@/app/design";
 import { X } from "lucide-react";
 
-type UserRole = "owner" | "manager" | "admin" | "accountant" | string;
 
 type Lead = {
   id: string;
@@ -128,9 +128,18 @@ const STATUSES = [
 ];
 
 export default function CrmPage() {
+  return (
+    <AppLayout activePage="crm">
+      <AccessGuard moduleName="crm">
+        <CrmContent />
+      </AccessGuard>
+    </AppLayout>
+  );
+}
+
+function CrmContent() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
-  const [currentRole, setCurrentRole] = useState<UserRole | null>(null);
   const [creatingLead, setCreatingLead] = useState(false);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [draggedLeadId, setDraggedLeadId] = useState<string | null>(null);
@@ -152,7 +161,6 @@ export default function CrmPage() {
   const [statusFilter, setStatusFilter] = useState(EMPTY_FILTER);
   const [kadryFilter, setKadryFilter] = useState(EMPTY_FILTER);
 
-  const hasAccess = currentRole === "owner";
 
   useEffect(() => {
     loadInitialData();
@@ -160,30 +168,9 @@ export default function CrmPage() {
 
   async function loadInitialData() {
     setLoading(true);
-    await loadCurrentUserRole();
     await loadLeads();
     await loadTasks();
     setLoading(false);
-  }
-
-  async function loadCurrentUserRole() {
-    const { data: userData } = await supabase.auth.getUser();
-    const userId = userData.user?.id;
-
-    if (!userId) return;
-
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", userId)
-      .single();
-
-    if (error) {
-      console.error("Błąd pobierania roli:", error);
-      return;
-    }
-
-    setCurrentRole(data?.role || null);
   }
 
   async function loadLeads() {
@@ -318,21 +305,9 @@ async function createDefaultTasksForStage(
     0
   );
 
-  if (!loading && !hasAccess) {
-    return (
-      <AppLayout activePage="crm">
-        <section style={cardStyle}>
-          <h1 style={sectionTitleStyle}>Brak dostępu</h1>
-          <p style={subtitleStyle}>
-            Moduł CRM jest dostępny wyłącznie dla właściciela.
-          </p>
-        </section>
-      </AppLayout>
-    );
-  }
 
   return (
-    <AppLayout activePage="crm">
+    <>
       <section style={headerStyle}>
         <div>
           <p style={eyebrowStyle}>Moduł zarządczy</p>
@@ -547,7 +522,7 @@ async function createDefaultTasksForStage(
           onToggleTaskStatus={toggleTaskStatus}
         />
       )}
-    </AppLayout>
+    </>
   );
 }
 

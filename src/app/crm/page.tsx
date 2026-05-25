@@ -309,6 +309,10 @@ async function createDefaultTasksForStage(
     return matchesStage && matchesStatus && matchesKadry;
   });
 
+  const hasAnyPipelineLead = PIPELINE_STAGES.some((stage) =>
+    leads.some((lead) => lead.etap === stage)
+  );
+
   const activeLeads = leads.filter((lead) => lead.status === "otwarta");
   const totalMrr = activeLeads.reduce(
     (sum, lead) => sum + Number(lead.szacowany_mrr || 0),
@@ -380,10 +384,7 @@ async function createDefaultTasksForStage(
                 </p>
 
                 <div style={pipelineCardsStyle}>
-                  {stageLeads.length === 0 ? (
-                    <div style={pipelineEmptyStyle}>Brak szans</div>
-                  ) : (
-                    stageLeads.map((lead) => (
+                  {stageLeads.map((lead) => (
                       <div
                         key={lead.id}
                         style={pipelineCardStyle}
@@ -407,13 +408,18 @@ async function createDefaultTasksForStage(
                           </strong>
                         </div>
                       </div>
-                    ))
-                  )}
+                    ))}
                 </div>
               </div>
             );
           })}
         </div>
+
+        {!hasAnyPipelineLead && (
+          <div style={pipelineGlobalEmptyStyle}>
+            Brak szans w pipeline
+          </div>
+        )}
       </section>
 
       <section style={cardStyle}>
@@ -1164,6 +1170,17 @@ const pipelineEmptyStyle: React.CSSProperties = {
   textAlign: "center",
   color: colors.muted,
   fontWeight: 700,
+};
+
+const pipelineGlobalEmptyStyle: React.CSSProperties = {
+  marginTop: "18px",
+  border: `1px dashed ${colors.border}`,
+  borderRadius: radius.input,
+  padding: "20px",
+  textAlign: "center",
+  color: colors.muted,
+  fontWeight: 800,
+  background: colors.inputBackground,
 };
 
 const cardStyle: React.CSSProperties = {

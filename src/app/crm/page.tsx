@@ -4,6 +4,13 @@ import { useEffect, useState } from "react";
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
 import { supabase } from "@/lib/supabaseClient";
+import {
+  createCrmTasks,
+  fetchCrmLeads,
+  fetchCrmTasks,
+  updateCrmLeadStage,
+  updateCrmTaskStatus,
+} from "@/lib/crmService";
 import { colors, radius, shadow } from "@/app/design";
 import { X } from "lucide-react";
 
@@ -157,10 +164,7 @@ function CrmContent() {
       )
     );
 
-    const { error } = await supabase
-      .from("crm_zadania")
-      .update({ status: newStatus })
-      .eq("id", taskId);
+    const { error } = await updateCrmTaskStatus(taskId, newStatus);
 
     if (error) {
       console.error("Błąd zmiany statusu zadania CRM:", error);
@@ -192,10 +196,7 @@ function CrmContent() {
   }
 
   async function loadLeads() {
-    const { data, error } = await supabase
-      .from("crm_szanse_sprzedazy")
-      .select("*")
-      .order("created_at", { ascending: false });
+    const { data, error } = await fetchCrmLeads();
 
     if (error) {
       console.error("Błąd pobierania CRM:", error);
@@ -206,10 +207,7 @@ function CrmContent() {
   }
 
 async function loadTasks() {
-  const { data, error } = await supabase
-    .from("crm_zadania")
-    .select("*")
-    .order("created_at", { ascending: true });
+  const { data, error } = await fetchCrmTasks();
 
   if (error) {
     console.error("Błąd pobierania zadań CRM:", error);
@@ -244,15 +242,12 @@ async function createDefaultTasksForStage(
       crm_id: leadId,
       etap: stage,
       tytul: title,
-      status: "do_zrobienia",
+      status: "do_zrobienia" as const,
     }));
 
   if (tasksToCreate.length === 0) return;
 
-  const { data, error } = await supabase
-    .from("crm_zadania")
-    .insert(tasksToCreate)
-    .select("*");
+  const { data, error } = await createCrmTasks(tasksToCreate);
 
   if (error) {
     console.error(
@@ -276,10 +271,7 @@ async function createDefaultTasksForStage(
       )
     );
 
-    const { error } = await supabase
-      .from("crm_szanse_sprzedazy")
-      .update({ etap: newStage })
-      .eq("id", leadId);
+    const { error } = await updateCrmLeadStage(leadId, newStage);
 
     if (error) {
       console.error("Błąd zmiany etapu:", error);

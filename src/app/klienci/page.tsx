@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
 import {
@@ -10,6 +10,13 @@ import {
   fetchClients,
   updateClient,
 } from "@/lib/clientService";
+import {
+  createClientDocumentSignedUrl,
+  deleteClientDocument,
+  fetchClientDocuments,
+  type ClientDocument,
+  uploadClientDocument,
+} from "@/lib/clientDocumentsService";
 import { colors, radius, shadow } from "@/app/design";
 import {
   canEditClientAdministrative,
@@ -487,6 +494,10 @@ function ClientDrawer({
 }) {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [documents, setDocuments] = useState<ClientDocument[]>([]);
+  const [documentsLoading, setDocumentsLoading] = useState(true);
+  const [uploadingDocument, setUploadingDocument] = useState(false);
   const [draft, setDraft] = useState<ClientDraft>(() => createDraft(client));
 
   const canEditAdministrative = canEditClientAdministrative(role);
@@ -494,6 +505,7 @@ function ClientDrawer({
   useEffect(() => {
     setDraft(createDraft(client));
     setEditing(false);
+    loadDocuments();
   }, [client.id]);
 
   function updateDraft<K extends keyof ClientDraft>(
@@ -504,6 +516,80 @@ function ClientDrawer({
       ...current,
       [key]: value,
     }));
+  }
+
+  async function loadDocuments() {
+    setDocumentsLoading(true);
+
+    const { data, error } = await fetchClientDocuments(client.id);
+
+    if (error) {
+      console.error("Błąd pobierania dokumentów klienta:", error);
+      setDocumentsLoading(false);
+      return;
+    }
+
+    setDocuments(data || []);
+    setDocumentsLoading(false);
+  }
+
+  async function handleDocumentUpload(files: FileList | null) {
+    if (!files || files.length === 0) return;
+
+    setUploadingDocument(true);
+
+    for (const file of Array.from(files)) {
+      const { data, error } = await uploadClientDocument(client.id, file);
+
+      if (error) {
+        console.error("Błąd dodawania dokumentu klienta:", error);
+        alert(`Nie udało się dodać pliku: ${file.name}`);
+        continue;
+      }
+
+      if (data) {
+        setDocuments((current) => [data, ...current]);
+      }
+    }
+
+    setUploadingDocument(false);
+  }
+
+  async function openDocument(document: ClientDocument) {
+    const { data, error } = await createClientDocumentSignedUrl(document.sciezka);
+
+    if (error || !data?.signedUrl) {
+      console.error("Błąd otwierania dokumentu klienta:", error);
+      alert("Nie udało się otworzyć dokumentu.");
+      return;
+    }
+
+    window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+  }
+
+  async function removeDocument(document: ClientDocument) {
+    const confirmed = window.confirm(`Usunąć dokument "${document.nazwa}"?`);
+    if (!confirmed) return;
+
+    const { error } = await deleteClientDocument(document);
+
+    if (error) {
+      console.error("Błąd usuwania dokumentu klienta:", error);
+      alert("Nie udało się usunąć dokumentu.");
+      return;
+    }
+
+    setDocuments((current) => current.filter((item) => item.id !== document.id));
+  }
+
+  function formatDocumentSize(size: number | null) {
+    if (!size) return "—";
+
+    if (size < 1024 * 1024) {
+      return `${Math.max(1, Math.round(size / 1024))} KB`;
+    }
+
+    return `${(size / 1024 / 1024).toFixed(1)} MB`;
   }
 
   function cancelEditing() {
@@ -839,15 +925,74 @@ function ClientDrawer({
           </InfoSection>
 
           <InfoSection title="Dokumenty klienta">
-            <div style={documentsPlaceholderStyle}>
-            <p style={documentsTitleStyle}>
-            Tutaj będzie można dodawać pliki oraz opisy dokumentów klienta.
-            </p>
+            <div
+              style={documentsPlaceholderStyle}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => {
+                event.preventDefault();
+                handleDocumentUpload(event.dataTransfer.files);
+              }}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                style={{ display: "none" }}
+                onChange={(event) => {
+                  handleDocumentUpload(event.target.files);
+                  event.target.value = "";
+                }}
+              />
 
-            <button style={secondaryButtonStyle}>
-             Dodaj dokument
-            </button>
+              <p style={documentsTitleStyle}>
+                Dodaj umowy, pełnomocnictwa, dokumenty rejestrowe albo inne pliki klienta.
+              </p>
+
+              <button
+                type="button"
+                style={secondaryButtonStyle}
+                disabled={uploadingDocument}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {uploadingDocument ? "Dodawanie..." : "Dodaj dokument"}
+              </button>
             </div>
+
+            {documentsLoading ? (
+              <div style={documentsEmptyStyle}>Ładowanie dokumentów...</div>
+            ) : documents.length === 0 ? (
+              <div style={documentsEmptyStyle}>Brak dokumentów dla tego klienta.</div>
+            ) : (
+              <div style={documentsListStyle}>
+                {documents.map((document) => (
+                  <div key={document.id} style={documentsItemStyle}>
+                    <div>
+                      <div style={documentsNameStyle}>{document.nazwa}</div>
+                      <div style={documentsMetaStyle}>
+                        {formatDocumentSize(document.rozmiar)}
+                      </div>
+                    </div>
+
+                    <div style={documentsActionsStyle}>
+                      <button
+                        type="button"
+                        style={secondaryButtonStyle}
+                        onClick={() => openDocument(document)}
+                      >
+                        Otwórz
+                      </button>
+                      <button
+                        type="button"
+                        style={documentDeleteButtonStyle}
+                        onClick={() => removeDocument(document)}
+                      >
+                        Usuń
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </InfoSection>
 
         </div>
@@ -1719,4 +1864,61 @@ const documentsTitleStyle: React.CSSProperties = {
   fontWeight: 600,
   color: colors.muted,
   lineHeight: 1.6,
+};
+
+const documentsEmptyStyle: React.CSSProperties = {
+  marginTop: "12px",
+  border: `1px dashed ${colors.border}`,
+  borderRadius: radius.input,
+  padding: "16px",
+  color: colors.muted,
+  fontWeight: 700,
+  textAlign: "center",
+};
+
+const documentsListStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "10px",
+  marginTop: "14px",
+};
+
+const documentsItemStyle: React.CSSProperties = {
+  border: `1px solid ${colors.border}`,
+  borderRadius: radius.input,
+  padding: "12px 14px",
+  background: colors.white,
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "14px",
+};
+
+const documentsNameStyle: React.CSSProperties = {
+  color: colors.text,
+  fontWeight: 800,
+  wordBreak: "break-word",
+};
+
+const documentsMetaStyle: React.CSSProperties = {
+  marginTop: "3px",
+  color: colors.muted,
+  fontSize: "13px",
+  fontWeight: 650,
+};
+
+const documentsActionsStyle: React.CSSProperties = {
+  display: "flex",
+  gap: "8px",
+  flexShrink: 0,
+};
+
+const documentDeleteButtonStyle: React.CSSProperties = {
+  border: "none",
+  borderRadius: radius.button,
+  padding: "10px 14px",
+  background: "rgba(220, 38, 38, 0.10)",
+  color: colors.danger,
+  fontWeight: 800,
+  cursor: "pointer",
 };

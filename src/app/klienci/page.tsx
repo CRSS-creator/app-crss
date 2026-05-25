@@ -78,6 +78,29 @@ const CLIENT_STATUSES = [
   "Archiwalny",
 ];
 
+const CLIENT_STATUS_OPTIONS = CLIENT_STATUSES.map((status) => ({
+  value: status,
+  label: status,
+}));
+
+const LEGAL_FORM_OPTIONS = [
+  { value: "", label: "Wybierz" },
+  { value: "JDG", label: "JDG" },
+  { value: "sp. z o.o.", label: "sp. z o.o." },
+  { value: "spółka cywilna", label: "spółka cywilna" },
+  { value: "inna", label: "inna" },
+];
+
+const TAXATION_FORM_OPTIONS = [
+  { value: "", label: "Wybierz" },
+  { value: "Skala podatkowa", label: "Skala podatkowa" },
+  { value: "Podatek liniowy", label: "Podatek liniowy" },
+  { value: "Ryczałt", label: "Ryczałt" },
+  { value: "CIT", label: "CIT" },
+  { value: "Karta podatkowa", label: "Karta podatkowa" },
+  { value: "Inne", label: "Inne" },
+];
+
 const EMPTY_FILTER = "Wszystkie";
 
 function formatClientsCount(count: number) {
@@ -117,6 +140,13 @@ function ClientsContent({ currentRole }: { currentRole: UserRole | null }) {
   const [searchQuery, setSearchQuery] = useState("");
 
   const canManageClients = canManageClientsPermission(currentRole);
+  const hasActiveFilters =
+    searchQuery.trim() ||
+    statusFilter !== EMPTY_FILTER ||
+    opiekunFilter !== EMPTY_FILTER ||
+    formaPrawnaFilter !== EMPTY_FILTER ||
+    opodatkowanieFilter !== EMPTY_FILTER ||
+    kadryFilter !== EMPTY_FILTER;
 
 const filteredClients = clients.filter((client) => {
   const opiekunName =
@@ -216,6 +246,15 @@ useEffect(() => {
   function handleClientCreated(newClient: Client) {
     setClients((current) => [...current, newClient]);
     setCreatingClient(false);
+  }
+
+  function clearClientFilters() {
+    setSearchQuery("");
+    setStatusFilter(EMPTY_FILTER);
+    setOpiekunFilter(EMPTY_FILTER);
+    setFormaPrawnaFilter(EMPTY_FILTER);
+    setOpodatkowanieFilter(EMPTY_FILTER);
+    setKadryFilter(EMPTY_FILTER);
   }
   
 return (
@@ -346,7 +385,18 @@ return (
         ) : clients.length === 0 ? (
           <div style={emptyStateStyle}>Brak klientów do wyświetlenia</div>
         ) : filteredClients.length === 0 ? (
-          <div style={emptyStateStyle}>Brak klientów pasujących do wyszukiwania lub filtrów</div>
+          <div style={emptyStateStyle}>
+            <p style={emptyStateTitleStyle}>Brak klientów pasujących do wyszukiwania lub filtrów</p>
+            {hasActiveFilters && (
+              <button
+                type="button"
+                style={emptyStateActionStyle}
+                onClick={clearClientFilters}
+              >
+                Wyczyść wyszukiwanie i filtry
+              </button>
+            )}
+          </div>
         ) : (
           <div style={tableWrapperStyle}>
             <table style={tableStyle}>
@@ -623,10 +673,11 @@ function ClientDrawer({
                     })),
                   ]}
                 />
-                <EditableInput
+                <EditableSelect
                   label="Status"
                   value={draft.status_klienta}
                   onChange={(value) => updateDraft("status_klienta", value)}
+                  options={CLIENT_STATUS_OPTIONS}
                 />
               </>
             ) : (
@@ -647,17 +698,19 @@ function ClientDrawer({
           <InfoSection title="Podatki i ZUS">
             {editing && canEditAdministrative ? (
               <>
-                <EditableInput
+                <EditableSelect
                   label="Forma prawna"
                   value={draft.forma_prawna}
                   onChange={(value) => updateDraft("forma_prawna", value)}
+                  options={LEGAL_FORM_OPTIONS}
                 />
-                <EditableInput
+                <EditableSelect
                   label="Forma opodatkowania"
                   value={draft.forma_opodatkowania}
                   onChange={(value) =>
                     updateDraft("forma_opodatkowania", value)
                   }
+                  options={TAXATION_FORM_OPTIONS}
                 />
               </>
             ) : (
@@ -1486,6 +1539,22 @@ const emptyStateStyle: React.CSSProperties = {
   border: `1px dashed ${colors.border}`,
   color: colors.muted,
   textAlign: "center",
+};
+
+const emptyStateTitleStyle: React.CSSProperties = {
+  margin: "0 0 14px",
+  color: colors.muted,
+  fontWeight: 750,
+};
+
+const emptyStateActionStyle: React.CSSProperties = {
+  border: `1px solid ${colors.border}`,
+  borderRadius: radius.button,
+  padding: "10px 14px",
+  background: colors.white,
+  color: colors.navy,
+  fontWeight: 800,
+  cursor: "pointer",
 };
 
 const drawerOverlayStyle: React.CSSProperties = {

@@ -544,6 +544,7 @@ async function createDefaultTasksForStage(
           tasks={tasks.filter((task) => task.crm_id === selectedLead.id)}
           onClose={() => setSelectedLead(null)}
           onSaved={handleLeadSaved}
+          onToggleTaskStatus={toggleTaskStatus}
         />
       )}
     </AppLayout>
@@ -557,6 +558,7 @@ function LeadDrawer({
   onClose,
   onCreated,
   onSaved,
+  onToggleTaskStatus,
 }: {
   mode: "create" | "edit";
   lead?: Lead;
@@ -564,6 +566,7 @@ function LeadDrawer({
   onClose: () => void;
   onCreated?: (lead: Lead) => void;
   onSaved?: (lead: Lead) => void;
+  onToggleTaskStatus?: (taskId: string) => void | Promise<void>;
 }) {
   const [saving, setSaving] = useState(false);
   const [draft, setDraft] = useState<LeadDraft>(() =>
@@ -765,18 +768,7 @@ function LeadDrawer({
               <input
                 type="checkbox"
                 checked={isDone}
-                onChange={() =>
-  setTasks((prevTasks) =>
-    prevTasks.map((item) =>
-      item.id === task.id
-        ? {
-            ...item,
-            status: item.status === "zrobione" ? "do_zrobienia" : "zrobione",
-          }
-        : item
-    )
-  )
-}
+                onChange={() => onToggleTaskStatus?.(task.id)}
                 style={{
                   width: 18,
                   height: 18,
@@ -810,18 +802,7 @@ function LeadDrawer({
 
             <button
               type="button"
-onClick={() =>
-  setTasks((prevTasks) =>
-    prevTasks.map((item) =>
-      item.id === task.id
-        ? {
-            ...item,
-            status: item.status === "zrobione" ? "do_zrobienia" : "zrobione",
-          }
-        : item
-    )
-  )
-}
+onClick={() => onToggleTaskStatus?.(task.id)}
               style={{
                 width: 118,
                 minWidth: 118,

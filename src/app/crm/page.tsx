@@ -11,6 +11,13 @@ import {
   updateCrmLeadStage,
   updateCrmTaskStatus,
 } from "@/lib/crmService";
+import {
+  createCrmDocumentSignedUrl,
+  deleteCrmDocument,
+  fetchCrmDocuments,
+  uploadCrmDocument,
+  type CrmDocument,
+} from "@/lib/crmDocumentsService";
 import { colors, radius, shadow } from "@/app/design";
 import { X } from "lucide-react";
 
@@ -561,7 +568,9 @@ function LeadDrawer({
 }) {
   const [saving, setSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [documents, setDocuments] = useState<CrmDocument[]>([]);
+  const [documentsLoading, setDocumentsLoading] = useState(mode === "edit");
+  const [uploadingDocument, setUploadingDocument] = useState(false);
   const [draft, setDraft] = useState<LeadDraft>(() =>
     lead ? createDraft(lead) : createEmptyDraft()
   );
@@ -573,33 +582,90 @@ function LeadDrawer({
     }));
   }
 
-  function addFiles(files: FileList | File[]) {
-    const incomingFiles = Array.from(files);
+  useEffect(() => {
+    if (mode === "edit" && lead) {
+      loadDocuments();
+      return;
+    }
 
-    setSelectedFiles((current) => {
-      const existingKeys = new Set(
-        current.map((file) => `${file.name}-${file.size}-${file.lastModified}`)
-      );
+    setDocuments([]);
+    setDocumentsLoading(false);
+  }, [mode, lead?.id]);
 
-      const uniqueFiles = incomingFiles.filter(
-        (file) => !existingKeys.has(`${file.name}-${file.size}-${file.lastModified}`)
-      );
+  async function loadDocuments() {
+    if (!lead) return;
 
-      return [...current, ...uniqueFiles];
-    });
+    setDocumentsLoading(true);
+
+    const { data, error } = await fetchCrmDocuments(lead.id);
+
+    if (error) {
+      console.error("Błąd pobierania dokumentów CRM:", error);
+      setDocumentsLoading(false);
+      return;
+    }
+
+    setDocuments(data || []);
+    setDocumentsLoading(false);
   }
 
-  function removeSelectedFile(fileToRemove: File) {
-    setSelectedFiles((current) =>
-      current.filter(
-        (file) =>
-          `${file.name}-${file.size}-${file.lastModified}` !==
-          `${fileToRemove.name}-${fileToRemove.size}-${fileToRemove.lastModified}`
-      )
-    );
+  async function handleDocumentUpload(files: FileList | File[]) {
+    if (!lead) {
+      alert("Najpierw zapisz szansę, a dopiero potem dodaj pliki.");
+      return;
+    }
+
+    const filesToUpload = Array.from(files);
+    if (filesToUpload.length === 0) return;
+
+    setUploadingDocument(true);
+
+    for (const file of filesToUpload) {
+      const { data, error } = await uploadCrmDocument(lead.id, file);
+
+      if (error) {
+        console.error("Błąd dodawania dokumentu CRM:", error);
+        alert(`Nie udało się dodać pliku: ${file.name}`);
+        continue;
+      }
+
+      if (data) {
+        setDocuments((current) => [data, ...current]);
+      }
+    }
+
+    setUploadingDocument(false);
   }
 
-  function formatFileSize(size: number) {
+  async function openDocument(document: CrmDocument) {
+    const { data, error } = await createCrmDocumentSignedUrl(document.sciezka);
+
+    if (error || !data?.signedUrl) {
+      console.error("Błąd otwierania dokumentu CRM:", error);
+      alert("Nie udało się otworzyć dokumentu.");
+      return;
+    }
+
+    window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+  }
+
+  async function removeDocument(document: CrmDocument) {
+    if (!window.confirm(`Usunąć dokument "${document.nazwa}"?`)) return;
+
+    const { error } = await deleteCrmDocument(document);
+
+    if (error) {
+      console.error("Błąd usuwania dokumentu CRM:", error);
+      alert("Nie udało się usunąć dokumentu.");
+      return;
+    }
+
+    setDocuments((current) => current.filter((item) => item.id !== document.id));
+  }
+
+  function formatFileSize(size: number | null) {
+    if (!size) return "Brak rozmiaru";
+
     if (size < 1024 * 1024) {
       return `${Math.max(1, Math.round(size / 1024))} KB`;
     }
@@ -853,71 +919,88 @@ onClick={() => onToggleTaskStatus?.(task.id)}
 </FormSection>
 
           <FormSection title="Pliki">
-            <div
-              style={fileDropzoneStyle}
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={(event) => {
-                event.preventDefault();
-                addFiles(event.dataTransfer.files);
-              }}
-            >
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                style={{ display: "none" }}
-                onChange={(event) => {
-                  if (event.target.files) {
-                    addFiles(event.target.files);
-                    event.target.value = "";
-                  }
-                }}
-              />
-
-              <div>
-                <div style={fileDropzoneTitleStyle}>Dodaj pliki do szansy</div>
-                <div style={fileDropzoneDescriptionStyle}>
-                  Propozycje współpracy, wyceny, notatki ze spotkań lub inne dokumenty.
-                </div>
+            {mode === "create" ? (
+              <div style={emptyTaskStyle}>
+                Najpierw zapisz szansę, a potem dodaj do niej pliki.
               </div>
+            ) : (
+              <>
+                <div
+                  style={fileDropzoneStyle}
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    handleDocumentUpload(event.dataTransfer.files);
+                  }}
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    style={{ display: "none" }}
+                    onChange={(event) => {
+                      if (event.target.files) {
+                        handleDocumentUpload(event.target.files);
+                        event.target.value = "";
+                      }
+                    }}
+                  />
 
-              <button
-                type="button"
-                style={secondaryButtonStyle}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                Wybierz pliki
-              </button>
-            </div>
-
-            {selectedFiles.length > 0 && (
-              <div style={fileListStyle}>
-                {selectedFiles.map((file) => (
-                  <div
-                    key={`${file.name}-${file.size}-${file.lastModified}`}
-                    style={fileItemStyle}
-                  >
-                    <div>
-                      <div style={fileNameStyle}>{file.name}</div>
-                      <div style={fileMetaStyle}>{formatFileSize(file.size)}</div>
+                  <div>
+                    <div style={fileDropzoneTitleStyle}>Dokumenty szansy</div>
+                    <div style={fileDropzoneDescriptionStyle}>
+                      Propozycje współpracy, wyceny, notatki ze spotkań lub inne dokumenty.
                     </div>
-
-                    <button
-                      type="button"
-                      style={fileRemoveButtonStyle}
-                      onClick={() => removeSelectedFile(file)}
-                    >
-                      Usuń
-                    </button>
                   </div>
-                ))}
-              </div>
-            )}
 
-            <p style={fileHintStyle}>
-              Pliki są przygotowane do dodania w widoku szansy. Trwały zapis wymaga
-              podłączenia Supabase Storage.
-            </p>
+                  <button
+                    type="button"
+                    style={secondaryButtonStyle}
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadingDocument}
+                  >
+                    {uploadingDocument ? "Dodawanie..." : "Dodaj pliki"}
+                  </button>
+                </div>
+
+                {documentsLoading ? (
+                  <div style={fileHintStyle}>Ładowanie dokumentów...</div>
+                ) : documents.length === 0 ? (
+                  <div style={fileHintStyle}>Brak dokumentów dla tej szansy.</div>
+                ) : (
+                  <div style={fileListStyle}>
+                    {documents.map((document) => (
+                      <div key={document.id} style={fileItemStyle}>
+                        <div>
+                          <div style={fileNameStyle}>{document.nazwa}</div>
+                          <div style={fileMetaStyle}>
+                            {formatFileSize(document.rozmiar)}
+                          </div>
+                        </div>
+
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <button
+                            type="button"
+                            style={secondaryButtonStyle}
+                            onClick={() => openDocument(document)}
+                          >
+                            Otwórz
+                          </button>
+
+                          <button
+                            type="button"
+                            style={fileRemoveButtonStyle}
+                            onClick={() => removeDocument(document)}
+                          >
+                            Usuń
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
           </FormSection>
 
           <FormSection title="Terminy i notatki">

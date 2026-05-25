@@ -3,11 +3,16 @@
 
 import { useEffect, useState } from "react";
 import AppLayout from "@/components/AppLayout";
+import AccessGuard from "@/components/AccessGuard";
 import { supabase } from "@/lib/supabaseClient";
 import { colors, radius, shadow } from "@/app/design";
+import {
+  canEditClientAdministrative,
+  canManageClients as canManageClientsPermission,
+  type UserRole,
+} from "@/lib/permissions";
 import { X } from "lucide-react";
 
-type UserRole = "owner" | "manager" | "admin" | "accountant" | string;
 
 type Profile = {
   id: string;
@@ -84,9 +89,18 @@ function formatClientsCount(count: number) {
 }
 
 export default function ClientsPage() {
+  return (
+    <AppLayout activePage="klienci">
+      <AccessGuard moduleName="klienci">
+        {(currentRole) => <ClientsContent currentRole={currentRole} />}
+      </AccessGuard>
+    </AppLayout>
+  );
+}
+
+function ClientsContent({ currentRole }: { currentRole: UserRole | null }) {
   const [clients, setClients] = useState<Client[]>([]);
   const [opiekunowie, setOpiekunowie] = useState<Profile[]>([]);
-  const [currentRole, setCurrentRole] = useState<UserRole | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [creatingClient, setCreatingClient] = useState(false);
@@ -96,10 +110,7 @@ export default function ClientsPage() {
   const [opodatkowanieFilter, setOpodatkowanieFilter] = useState(EMPTY_FILTER);
   const [kadryFilter, setKadryFilter] = useState(EMPTY_FILTER);
 
-  const canManageClients =
-    currentRole === "owner" ||
-    currentRole === "manager" ||
-    currentRole === "admin";
+  const canManageClients = canManageClientsPermission(currentRole);
 
 const filteredClients = clients.filter((client) => {
   const opiekunName =
@@ -141,28 +152,8 @@ useEffect(() => {
 
   async function loadInitialData() {
     setLoading(true);
-    await Promise.all([loadCurrentUserRole(), loadOpiekunowie(), loadClients()]);
+    await Promise.all([loadOpiekunowie(), loadClients()]);
     setLoading(false);
-  }
-
-  async function loadCurrentUserRole() {
-    const { data: userData } = await supabase.auth.getUser();
-    const userId = userData.user?.id;
-
-    if (!userId) return;
-
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", userId)
-      .single();
-
-    if (error) {
-      console.error("Błąd pobierania roli:", error);
-      return;
-    }
-
-    setCurrentRole(data?.role || null);
   }
 
   async function loadOpiekunowie() {
@@ -233,7 +224,7 @@ useEffect(() => {
   }
   
 return (
-    <AppLayout activePage="klienci">
+    <>
       <section style={headerStyle}>
         <div>
           <p style={eyebrowStyle}>Moduł operacyjny</p>
@@ -410,7 +401,7 @@ return (
           onCreated={handleClientCreated}
          /> 
        )}   
-</AppLayout>
+</>
   );
 }
 
@@ -431,8 +422,7 @@ function ClientDrawer({
   const [saving, setSaving] = useState(false);
   const [draft, setDraft] = useState<ClientDraft>(() => createDraft(client));
 
-  const canEditAdministrative =
-    role === "owner" || role === "manager" || role === "admin";
+  const canEditAdministrative = canEditClientAdministrative(role);
 
   useEffect(() => {
     setDraft(createDraft(client));

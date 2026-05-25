@@ -109,6 +109,7 @@ function ClientsContent({ currentRole }: { currentRole: UserRole | null }) {
   const [formaPrawnaFilter, setFormaPrawnaFilter] = useState(EMPTY_FILTER);
   const [opodatkowanieFilter, setOpodatkowanieFilter] = useState(EMPTY_FILTER);
   const [kadryFilter, setKadryFilter] = useState(EMPTY_FILTER);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const canManageClients = canManageClientsPermission(currentRole);
 
@@ -137,7 +138,26 @@ const filteredClients = clients.filter((client) => {
     (kadryFilter === "Tak" && client.obsluga_kadrowa) ||
     (kadryFilter === "Nie" && !client.obsluga_kadrowa);
 
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+  const searchableText = [
+    client.nazwa,
+    client.nip,
+    client.telefon,
+    client.email,
+    client.forma_prawna,
+    client.forma_opodatkowania,
+    client.status_klienta,
+    opiekunName,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  const matchesSearch =
+    !normalizedSearch || searchableText.includes(normalizedSearch);
+
   return (
+    matchesSearch &&
     matchesStatus &&
     matchesOpiekun &&
     matchesFormaPrawna &&
@@ -253,6 +273,26 @@ return (
           </span>
         </div>
 
+<div style={searchRowStyle}>
+  <input
+    type="search"
+    style={searchInputStyle}
+    placeholder="Szukaj po nazwie, NIP, emailu, telefonie lub opiekunie"
+    value={searchQuery}
+    onChange={(e) => setSearchQuery(e.target.value)}
+  />
+
+  {searchQuery && (
+    <button
+      type="button"
+      style={clearSearchButtonStyle}
+      onClick={() => setSearchQuery("")}
+    >
+      Wyczyść
+    </button>
+  )}
+</div>
+
 <div style={compactFiltersRowStyle}>
   <span style={filtersLabelStyle}>Filtry:</span>
 
@@ -330,6 +370,8 @@ return (
           <div style={emptyStateStyle}>Ładowanie danych...</div>
         ) : clients.length === 0 ? (
           <div style={emptyStateStyle}>Brak klientów do wyświetlenia</div>
+        ) : filteredClients.length === 0 ? (
+          <div style={emptyStateStyle}>Brak klientów pasujących do wyszukiwania lub filtrów</div>
         ) : (
           <div style={tableWrapperStyle}>
             <table style={tableStyle}>
@@ -1332,6 +1374,36 @@ const tableHeaderStyle: React.CSSProperties = {
   alignItems: "center",
   justifyContent: "space-between",
   marginBottom: "22px",
+};
+
+const searchRowStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: "12px",
+  marginBottom: "16px",
+};
+
+const searchInputStyle: React.CSSProperties = {
+  width: "100%",
+  border: `1px solid ${colors.border}`,
+  borderRadius: radius.button,
+  padding: "13px 16px",
+  background: colors.inputBackground,
+  color: colors.text,
+  fontSize: "15px",
+  fontWeight: 650,
+  outline: "none",
+};
+
+const clearSearchButtonStyle: React.CSSProperties = {
+  border: `1px solid ${colors.border}`,
+  borderRadius: radius.button,
+  padding: "12px 14px",
+  background: colors.white,
+  color: colors.navy,
+  fontWeight: 800,
+  cursor: "pointer",
+  whiteSpace: "nowrap",
 };
 
 const compactFiltersRowStyle: React.CSSProperties = {

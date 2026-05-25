@@ -1,0 +1,127 @@
+"use client";
+
+import { useEffect } from "react";
+import { supabase } from "@/lib/supabaseClient";
+import { colors, radius, shadow } from "@/app/design";
+
+type AppLayoutProps = {
+  children: React.ReactNode;
+  activePage: "dashboard" | "klienci" | "rozliczenia" | "cfo" | "zespol" | "ustawienia";
+};
+
+
+  return (
+    <main style={appStyle}>
+      <aside style={sidebarStyle}>
+        <div style={logoBoxStyle}>
+          <img src="/logo-crss.svg" alt="CRSS" style={logoStyle} />
+        </div>
+
+        <nav style={navStyle}>
+          <NavItem href="/dashboard" label="Dashboard" active={activePage === "dashboard"} />
+          <NavItem href="/klienci" label="Klienci" active={activePage === "klienci"} />
+          <NavItem href="/rozliczenia" label="Rozliczenia" active={activePage === "rozliczenia"} />
+          <NavItem href="/cfo" label="CFO" active={activePage === "cfo"} />
+          <NavItem href="/zespol" label="Zespół" active={activePage === "zespol"} />
+          <NavItem href="/ustawienia" label="Ustawienia" active={activePage === "ustawienia"} />
+        </nav>
+
+        <button onClick={handleLogout} style={logoutButtonStyle}>
+          Wyloguj
+        </button>
+      </aside>
+
+      <section style={contentStyle}>{children}</section>
+    </main>
+  );
+}
+
+function NavItem({
+  href,
+  label,
+  active,
+}: {
+  href: string;
+  label: string;
+  active: boolean;
+}) {
+  return (
+    <a href={href} style={active ? activeNavItem : navItem}>
+      {label}
+    </a>
+  );
+}
+
+const appStyle: React.CSSProperties = {
+  minHeight: "100vh",
+  display: "flex",
+  background: colors.background,
+  color: colors.text,
+};
+
+const sidebarStyle: React.CSSProperties = {
+  width: "280px",
+  minHeight: "100vh",
+  padding: "28px",
+  background: colors.card,
+  borderRight: `1px solid ${colors.border}`,
+  boxShadow: shadow.soft,
+  display: "flex",
+  flexDirection: "column",
+};
+
+const logoBoxStyle: React.CSSProperties = {
+  width: "120px",
+  height: "78px",
+  borderRadius: radius.card,
+  background: colors.card,
+  border: `1px solid ${colors.border}`,
+  boxShadow: shadow.soft,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  marginBottom: "36px",
+};
+
+const logoStyle: React.CSSProperties = {
+  width: "88px",
+  height: "auto",
+};
+
+const navStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "10px",
+};
+
+const navItem: React.CSSProperties = {
+  padding: "15px 18px",
+  borderRadius: radius.button,
+  color: colors.text,
+  fontWeight: 600,
+  cursor: "pointer",
+  textDecoration: "none",
+};
+
+const activeNavItem: React.CSSProperties = {
+  ...navItem,
+  background: colors.navy,
+  color: colors.white,
+};
+
+const logoutButtonStyle: React.CSSProperties = {
+  marginTop: "auto",
+  border: "none",
+  borderRadius: radius.button,
+  padding: "16px 18px",
+  background: colors.red,
+  color: colors.white,
+  fontWeight: 800,
+  cursor: "pointer",
+  boxShadow: shadow.button,
+};
+
+const contentStyle: React.CSSProperties = {
+  flex: 1,
+  padding: "42px",
+};

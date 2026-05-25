@@ -1,0 +1,252 @@
+"use client";
+
+import { supabase } from "@/lib/supabaseClient";
+import { colors, radius } from "@/app/design";
+import {
+  Home,
+  Users,
+  ListTodo,
+  BarChart3,
+  CalendarClock,
+  TriangleAlert,
+  Rocket,
+  FolderCheck,
+  Wallet,
+  ShieldCheck,
+  LockKeyhole,
+  UserCog,
+  BriefcaseBusiness,
+} from "lucide-react";
+
+type ActivePage =
+  | "dashboard"
+  | "klienci"
+  | "zadania"
+  | "rozliczenia"
+  | "kadry"
+  | "limity"
+  | "onboarding"
+  | "zamykanie-roku"
+  | "crm"
+  | "cfo"
+  | "aml"
+  | "rodo"
+  | "uzytkownicy";
+
+type AppLayoutProps = {
+  children: React.ReactNode;
+  activePage: ActivePage;
+};
+
+const menu = [
+  {
+    title: null,
+    items: [{ href: "/dashboard", label: "Dashboard", icon: Home, page: "dashboard" }],
+  },
+  {
+    title: "Operacyjne",
+    items: [
+      { href: "/klienci", label: "Klienci", icon: Users, page: "klienci" },
+      { href: "/zadania", label: "Zadania", icon: ListTodo, page: "zadania" },
+      { href: "/rozliczenia", label: "Rozliczenia", icon: BarChart3, page: "rozliczenia" },
+      { href: "/kadry", label: "Kadry i terminy", icon: CalendarClock, page: "kadry" },
+      { href: "/limity", label: "Limity", icon: TriangleAlert, page: "limity" },
+      { href: "/onboarding", label: "Onboarding", icon: Rocket, page: "onboarding" },
+      { href: "/zamykanie-roku", label: "Zamykanie roku", icon: FolderCheck, page: "zamykanie-roku" },
+    ],
+  },
+  {
+    title: "Zarządzanie",
+    items: [
+      { href: "/crm", label: "CRM", icon: BriefcaseBusiness, page: "crm" },
+      { href: "/cfo", label: "CFO", icon: Wallet, page: "cfo" },
+      { href: "/aml", label: "AML", icon: ShieldCheck, page: "aml" },
+      { href: "/rodo", label: "RODO", icon: LockKeyhole, page: "rodo" },
+    ],
+  },
+  {
+    title: "Ustawienia",
+    items: [{ href: "/uzytkownicy", label: "Użytkownicy", icon: UserCog, page: "uzytkownicy" }],
+  },
+] as const;
+
+export default function AppLayout({ children, activePage }: AppLayoutProps) {
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    window.location.href = "/login";
+  }
+
+  return (
+    <main style={appStyle}>
+      <aside style={sidebarStyle}>
+        <div style={brandStyle}>
+          <div style={logoBoxStyle}>
+            <img src="/logo-crss.svg" alt="CRSS" style={logoStyle} />
+          </div>
+
+          <div>
+            <div style={appNameStyle}>Aplikacja CRSS</div>
+            <div style={appSubtitleStyle}>Panel operacyjny</div>
+          </div>
+        </div>
+
+        <nav style={navStyle}>
+          {menu.map((section) => (
+            <div key={section.title ?? "main"}>
+              {section.title && <div style={sectionTitleStyle}>{section.title}</div>}
+
+              <div style={sectionItemsStyle}>
+                {section.items.map((item) => (
+                  <NavItem
+                    key={item.href}
+                    href={item.href}
+                    icon={item.icon}
+                    label={item.label}
+                    active={activePage === item.page}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+        </nav>
+
+        <button onClick={handleLogout} style={logoutButtonStyle}>
+          Wyloguj
+        </button>
+      </aside>
+
+      <section style={contentStyle}>{children}</section>
+    </main>
+  );
+}
+
+function NavItem({
+  href,
+  icon: Icon,
+  label,
+  active,
+}: {
+  href: string;
+  icon: React.ElementType;
+  label: string;
+  active: boolean;
+}) {
+  return (
+    <a href={href} style={active ? activeNavItem : navItem}>
+      <Icon size={18} strokeWidth={2.2} />
+      <span>{label}</span>
+    </a>
+  );
+}
+
+const appStyle: React.CSSProperties = {
+  minHeight: "100vh",
+  display: "flex",
+  background: colors.background,
+  color: colors.text,
+};
+
+const sidebarStyle: React.CSSProperties = {
+  width: "270px",
+  minHeight: "100vh",
+  padding: "24px",
+  background: colors.card,
+  borderRight: `1px solid ${colors.border}`,
+  boxShadow: "none",
+  display: "flex",
+  flexDirection: "column",
+};
+
+const brandStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: "14px",
+  marginBottom: "30px",
+};
+
+const logoBoxStyle: React.CSSProperties = {
+  width: "72px",
+  height: "52px",
+  borderRadius: radius.card,
+  background: colors.card,
+  border: `1px solid ${colors.border}`,
+  boxShadow: "none",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+};
+
+const logoStyle: React.CSSProperties = {
+  width: "52px",
+  height: "auto",
+};
+
+const appNameStyle: React.CSSProperties = {
+  fontSize: "15px",
+  fontWeight: 800,
+  color: colors.text,
+};
+
+const appSubtitleStyle: React.CSSProperties = {
+  marginTop: "3px",
+  fontSize: "12px",
+  color: colors.muted,
+};
+
+const navStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "20px",
+};
+
+const sectionItemsStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "8px",
+};
+
+const sectionTitleStyle: React.CSSProperties = {
+  margin: "0 0 9px 10px",
+  fontSize: "11px",
+  fontWeight: 800,
+  textTransform: "uppercase",
+  letterSpacing: "0.08em",
+  color: colors.muted,
+};
+
+const navItem: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: "12px",
+  padding: "13px 15px",
+  borderRadius: radius.button,
+  color: colors.text,
+  fontWeight: 650,
+  cursor: "pointer",
+  textDecoration: "none",
+  transition: "all 0.18s ease",
+};
+
+const activeNavItem: React.CSSProperties = {
+  ...navItem,
+  background: colors.navy,
+  color: colors.white,
+  boxShadow: "0 2px 8px rgba(15, 23, 42, 0.08)",
+};
+
+const logoutButtonStyle: React.CSSProperties = {
+  marginTop: "auto",
+  border: "none",
+  borderRadius: radius.button,
+  padding: "15px 18px",
+  background: colors.red,
+  color: colors.white,
+  fontWeight: 800,
+  cursor: "pointer",
+  boxShadow: "none",
+};
+
+const contentStyle: React.CSSProperties = {
+  flex: 1,
+  padding: "42px",
+};

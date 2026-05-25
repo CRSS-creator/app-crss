@@ -4,7 +4,12 @@
 import { useEffect, useState } from "react";
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
-import { supabase } from "@/lib/supabaseClient";
+import {
+  createClient as createClientRecord,
+  fetchClientCaregivers,
+  fetchClients,
+  updateClient,
+} from "@/lib/clientService";
 import { colors, radius, shadow } from "@/app/design";
 import {
   canEditClientAdministrative,
@@ -177,11 +182,7 @@ useEffect(() => {
   }
 
   async function loadOpiekunowie() {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("id, full_name, email, role")
-      .in("role", ["owner", "manager", "admin", "accountant"])
-      .order("full_name", { ascending: true });
+    const { data, error } = await fetchClientCaregivers();
 
     if (error) {
       console.error("Błąd pobierania opiekunów:", error);
@@ -192,33 +193,7 @@ useEffect(() => {
   }
 
   async function loadClients() {
-    const { data, error } = await supabase
-      .from("klienci")
-      .select(`
-        id,
-        nazwa,
-        nip,
-        telefon,
-        email,
-        forma_prawna,
-        forma_opodatkowania,
-        obsluga_kadrowa,
-        status_klienta,
-        abonament,
-        czynny_vat,
-        vat_ue,
-        schemat_zus,
-        limit_dokumentow,
-        dodatkowe_uslugi,
-        notatki,
-        opiekun_id,
-        profiles!klienci_opiekun_id_fkey (
-          full_name,
-          email,
-          role
-        )
-      `)
-      .order("nazwa", { ascending: true });
+    const { data, error } = await fetchClients();
 
     if (error) {
       console.error("Błąd pobierania klientów:", error);
@@ -520,10 +495,7 @@ function ClientDrawer({
       ...administrativePayload,
     };
 
-    const { error } = await supabase
-      .from("klienci")
-      .update(payload)
-      .eq("id", client.id);
+    const { error } = await updateClient(client.id, payload);
 
     if (error) {
       console.error("Błąd zapisu klienta:", error);
@@ -904,11 +876,7 @@ function CreateClientDrawer({
       notatki: draft.notatki.trim() || null,
     };
 
-    const { data, error } = await supabase
-      .from("klienci")
-      .insert(payload)
-      .select("*")
-      .single();
+    const { data, error } = await createClientRecord(payload);
 
     if (error) {
       console.error("Błąd dodawania klienta:", error);

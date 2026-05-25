@@ -2,6 +2,8 @@
 
 import { supabase } from "@/lib/supabaseClient";
 import { colors, radius } from "@/app/design";
+import { useCurrentUserRole } from "@/hooks/useCurrentUserRole";
+import { canAccessModule, type AppModule } from "@/lib/permissions";
 import {
   Home,
   Users,
@@ -18,20 +20,7 @@ import {
   BriefcaseBusiness,
 } from "lucide-react";
 
-type ActivePage =
-  | "dashboard"
-  | "klienci"
-  | "zadania"
-  | "rozliczenia"
-  | "kadry"
-  | "limity"
-  | "onboarding"
-  | "zamykanie-roku"
-  | "crm"
-  | "cfo"
-  | "aml"
-  | "rodo"
-  | "uzytkownicy";
+type ActivePage = AppModule;
 
 type AppLayoutProps = {
   children: React.ReactNode;
@@ -71,6 +60,17 @@ const menu = [
 ] as const;
 
 export default function AppLayout({ children, activePage }: AppLayoutProps) {
+  const { role, loading: roleLoading } = useCurrentUserRole();
+
+  const visibleMenu = menu
+    .map((section) => ({
+      ...section,
+      items: roleLoading
+        ? section.items
+        : section.items.filter((item) => canAccessModule(role, item.page)),
+    }))
+    .filter((section) => section.items.length > 0);
+
   async function handleLogout() {
     await supabase.auth.signOut();
     window.location.href = "/login";
@@ -91,7 +91,7 @@ export default function AppLayout({ children, activePage }: AppLayoutProps) {
         </div>
 
         <nav style={navStyle}>
-          {menu.map((section) => (
+          {visibleMenu.map((section) => (
             <div key={section.title ?? "main"}>
               {section.title && <div style={sectionTitleStyle}>{section.title}</div>}
 

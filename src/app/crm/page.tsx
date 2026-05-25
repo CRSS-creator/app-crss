@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
 import { supabase } from "@/lib/supabaseClient";
@@ -560,6 +560,8 @@ function LeadDrawer({
   onToggleTaskStatus?: (taskId: string) => void | Promise<void>;
 }) {
   const [saving, setSaving] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [draft, setDraft] = useState<LeadDraft>(() =>
     lead ? createDraft(lead) : createEmptyDraft()
   );
@@ -569,6 +571,40 @@ function LeadDrawer({
       ...current,
       [key]: value,
     }));
+  }
+
+  function addFiles(files: FileList | File[]) {
+    const incomingFiles = Array.from(files);
+
+    setSelectedFiles((current) => {
+      const existingKeys = new Set(
+        current.map((file) => `${file.name}-${file.size}-${file.lastModified}`)
+      );
+
+      const uniqueFiles = incomingFiles.filter(
+        (file) => !existingKeys.has(`${file.name}-${file.size}-${file.lastModified}`)
+      );
+
+      return [...current, ...uniqueFiles];
+    });
+  }
+
+  function removeSelectedFile(fileToRemove: File) {
+    setSelectedFiles((current) =>
+      current.filter(
+        (file) =>
+          `${file.name}-${file.size}-${file.lastModified}` !==
+          `${fileToRemove.name}-${fileToRemove.size}-${fileToRemove.lastModified}`
+      )
+    );
+  }
+
+  function formatFileSize(size: number) {
+    if (size < 1024 * 1024) {
+      return `${Math.max(1, Math.round(size / 1024))} KB`;
+    }
+
+    return `${(size / 1024 / 1024).toFixed(1)} MB`;
   }
 
   async function saveLead() {
@@ -815,6 +851,74 @@ onClick={() => onToggleTaskStatus?.(task.id)}
     )}
   </div>
 </FormSection>
+
+          <FormSection title="Pliki">
+            <div
+              style={fileDropzoneStyle}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => {
+                event.preventDefault();
+                addFiles(event.dataTransfer.files);
+              }}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                style={{ display: "none" }}
+                onChange={(event) => {
+                  if (event.target.files) {
+                    addFiles(event.target.files);
+                    event.target.value = "";
+                  }
+                }}
+              />
+
+              <div>
+                <div style={fileDropzoneTitleStyle}>Dodaj pliki do szansy</div>
+                <div style={fileDropzoneDescriptionStyle}>
+                  Propozycje współpracy, wyceny, notatki ze spotkań lub inne dokumenty.
+                </div>
+              </div>
+
+              <button
+                type="button"
+                style={secondaryButtonStyle}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                Wybierz pliki
+              </button>
+            </div>
+
+            {selectedFiles.length > 0 && (
+              <div style={fileListStyle}>
+                {selectedFiles.map((file) => (
+                  <div
+                    key={`${file.name}-${file.size}-${file.lastModified}`}
+                    style={fileItemStyle}
+                  >
+                    <div>
+                      <div style={fileNameStyle}>{file.name}</div>
+                      <div style={fileMetaStyle}>{formatFileSize(file.size)}</div>
+                    </div>
+
+                    <button
+                      type="button"
+                      style={fileRemoveButtonStyle}
+                      onClick={() => removeSelectedFile(file)}
+                    >
+                      Usuń
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <p style={fileHintStyle}>
+              Pliki są przygotowane do dodania w widoku szansy. Trwały zapis wymaga
+              podłączenia Supabase Storage.
+            </p>
+          </FormSection>
 
           <FormSection title="Terminy i notatki">
             <EditableInput label="Data telefonu" type="date" value={draft.data_telefonu} onChange={(v) => updateDraft("data_telefonu", v)} />
@@ -1448,4 +1552,76 @@ const emptyTaskStyle: React.CSSProperties = {
   color: colors.muted,
   fontWeight: 700,
   textAlign: "center",
+};
+
+const fileDropzoneStyle: React.CSSProperties = {
+  border: `1px dashed ${colors.border}`,
+  borderRadius: radius.input,
+  padding: "18px",
+  background: colors.inputBackground,
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "16px",
+};
+
+const fileDropzoneTitleStyle: React.CSSProperties = {
+  color: colors.text,
+  fontWeight: 850,
+  marginBottom: "5px",
+};
+
+const fileDropzoneDescriptionStyle: React.CSSProperties = {
+  color: colors.muted,
+  fontSize: "13px",
+  fontWeight: 650,
+  lineHeight: 1.5,
+};
+
+const fileListStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "10px",
+  marginTop: "14px",
+};
+
+const fileItemStyle: React.CSSProperties = {
+  border: `1px solid ${colors.border}`,
+  borderRadius: radius.input,
+  padding: "12px 14px",
+  background: colors.white,
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "12px",
+};
+
+const fileNameStyle: React.CSSProperties = {
+  color: colors.text,
+  fontWeight: 800,
+  wordBreak: "break-word",
+};
+
+const fileMetaStyle: React.CSSProperties = {
+  color: colors.muted,
+  fontSize: "13px",
+  fontWeight: 650,
+  marginTop: "3px",
+};
+
+const fileRemoveButtonStyle: React.CSSProperties = {
+  border: "none",
+  borderRadius: radius.button,
+  padding: "8px 12px",
+  background: "rgba(220, 38, 38, 0.10)",
+  color: colors.danger,
+  fontWeight: 800,
+  cursor: "pointer",
+};
+
+const fileHintStyle: React.CSSProperties = {
+  margin: "12px 0 0",
+  color: colors.muted,
+  fontSize: "13px",
+  lineHeight: 1.6,
 };

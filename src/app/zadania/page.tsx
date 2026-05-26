@@ -256,7 +256,7 @@ function TaskDrawer({ mode, task, currentUserId, assignees, clients, onClose, on
   const [documents, setDocuments] = useState<TaskDocument[]>([]);
   const [timerNote, setTimerNote] = useState("");
   const [uploading, setUploading] = useState(false);
-  const [clientSearch, setClientSearch] = useState(() => task?.czy_wewnetrzne ? "" : formatClientName(getClient(task?.klienci)));
+  const [clientSearch, setClientSearch] = useState(() => getInitialClientSearch(task));
 
   const activeTimeEntry = timeEntries.find((entry) => entry.osoba_id === currentUserId && !entry.ended_at);
   const totalSeconds = timeEntries.reduce((sum, entry) => sum + Number(entry.duration_seconds || 0), 0);
@@ -267,7 +267,7 @@ function TaskDrawer({ mode, task, currentUserId, assignees, clients, onClose, on
 
   useEffect(() => {
     setDraft(createDraft(task, currentUserId));
-    setClientSearch(task?.czy_wewnetrzne ? "" : formatClientName(getClient(task?.klienci)));
+    setClientSearch(getInitialClientSearch(task));
   }, [task?.id, currentUserId]);
 
   useEffect(() => {
@@ -501,12 +501,8 @@ function TaskDrawer({ mode, task, currentUserId, assignees, clients, onClose, on
   );
 }
 
-function SummaryCard({ label, value }: { label: string; value: number | string }) {
-  return <div style={summaryCardStyle}><p style={summaryLabelStyle}>{label}</p><strong style={summaryValueStyle}>{value}</strong></div>;
-}
-function EditableRow({ label, children }: { label: string; children: React.ReactNode }) {
-  return <label style={editableRowStyle}><span style={infoLabelStyle}>{label}</span>{children}</label>;
-}
+function SummaryCard({ label, value }: { label: string; value: number | string }) { return <div style={summaryCardStyle}><p style={summaryLabelStyle}>{label}</p><strong style={summaryValueStyle}>{value}</strong></div>; }
+function EditableRow({ label, children }: { label: string; children: React.ReactNode }) { return <label style={editableRowStyle}><span style={infoLabelStyle}>{label}</span>{children}</label>; }
 function Th({ children, width }: { children: React.ReactNode; width?: string }) { return <th style={{ ...thStyle, width }}>{children}</th>; }
 function Td({ children, strong }: { children: React.ReactNode; strong?: boolean }) { return <td style={{ ...tdStyle, fontWeight: strong ? 800 : 500 }}>{children}</td>; }
 function Badge({ children }: { children: React.ReactNode }) { return <span style={badgeStyle}>{children}</span>; }
@@ -523,6 +519,10 @@ function createDraft(task: Task | null, currentUserId: string | null): TaskDraft
     czy_wewnetrzne: task?.czy_wewnetrzne ?? false,
     notatki: task?.notatki || "",
   };
+}
+function getInitialClientSearch(task: Task | null) {
+  if (!task || task.czy_wewnetrzne || !task.klient_id) return "";
+  return formatClientName(getClient(task.klienci));
 }
 function filterAssignableProfiles(profiles: Profile[], role: UserRole | null, userId: string | null) {
   if (role === "owner") return profiles;
@@ -567,10 +567,10 @@ const cardStyle: React.CSSProperties = { background: colors.card, border: `1px s
 const tableHeaderStyle: React.CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "18px", marginBottom: "18px" };
 const sectionTitleStyle: React.CSSProperties = { margin: 0, color: colors.navy, fontSize: "24px" };
 const counterStyle: React.CSSProperties = { color: colors.muted, fontWeight: 800 };
-const searchInputStyle: React.CSSProperties = { width: "100%", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, color: colors.text, padding: "14px 18px", fontSize: "15px", fontWeight: 650, marginBottom: "16px" };
+const searchInputStyle: React.CSSProperties = { width: "100%", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, color: colors.text, padding: "13px 18px", fontSize: "14px", fontWeight: 600, marginBottom: "16px" };
 const compactFiltersRowStyle: React.CSSProperties = { display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "26px" };
 const filtersLabelStyle: React.CSSProperties = { color: colors.muted, fontWeight: 800, fontSize: "14px" };
-const compactFilterStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, color: colors.text, padding: "10px 38px 10px 14px", minWidth: "160px", fontWeight: 650 };
+const compactFilterStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, color: colors.text, padding: "10px 38px 10px 14px", minWidth: "160px", fontSize: "14px", fontWeight: 500 };
 const tableWrapperStyle: React.CSSProperties = { overflowX: "auto" };
 const tableStyle: React.CSSProperties = { width: "100%", borderCollapse: "collapse" };
 const thStyle: React.CSSProperties = { textAlign: "left", padding: "13px 12px", color: colors.muted, fontSize: "13px", borderBottom: `1px solid ${colors.border}` };

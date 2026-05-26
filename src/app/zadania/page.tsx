@@ -104,35 +104,20 @@ function TasksContent({ currentRole }: { currentRole: UserRole | null }) {
 
   const filteredTasks = tasks.filter((task) => {
     const assigneeName = formatProfileName(getProfile(task.profiles));
-    const clientName = task.czy_wewnetrzne
-      ? "Wewnętrzne"
-      : formatClientName(getClient(task.klienci));
-
+    const clientName = task.czy_wewnetrzne ? "Wewnętrzne" : formatClientName(getClient(task.klienci));
     const matchesStatus = statusFilter === EMPTY_FILTER || task.status === statusFilter;
     const matchesAssignee = assigneeFilter === EMPTY_FILTER || task.osoba_id === assigneeFilter;
     const matchesClient =
       clientFilter === EMPTY_FILTER ||
       (clientFilter === "internal" && task.czy_wewnetrzne) ||
       task.klient_id === clientFilter;
-
     const normalizedSearch = searchQuery.trim().toLowerCase();
-    const searchableText = [
-      task.tytul,
-      task.opis,
-      task.notatki,
-      assigneeName,
-      clientName,
-    ]
+    const searchableText = [task.tytul, task.opis, task.notatki, assigneeName, clientName]
       .filter(Boolean)
       .join(" ")
       .toLowerCase();
 
-    return (
-      matchesStatus &&
-      matchesAssignee &&
-      matchesClient &&
-      (!normalizedSearch || searchableText.includes(normalizedSearch))
-    );
+    return matchesStatus && matchesAssignee && matchesClient && (!normalizedSearch || searchableText.includes(normalizedSearch));
   });
 
   const openTasks = tasks.filter((task) => !["zrobione", "anulowane"].includes(task.status));
@@ -145,7 +130,6 @@ function TasksContent({ currentRole }: { currentRole: UserRole | null }) {
 
   async function loadInitialData() {
     setLoading(true);
-
     const { data: userData } = await supabase.auth.getUser();
     const userId = userData.user?.id ?? null;
     setCurrentUserId(userId);
@@ -184,11 +168,9 @@ function TasksContent({ currentRole }: { currentRole: UserRole | null }) {
           <p style={eyebrowStyle}>Moduł operacyjny</p>
           <h1 style={titleStyle}>Zadania</h1>
           <p style={subtitleStyle}>
-            Zadania zespołu, terminy, notatki, dokumenty i rejestr czasu pracy
-            przypisany do klienta albo spraw wewnętrznych.
+            Zadania zespołu, terminy, notatki, dokumenty i rejestr czasu pracy przypisany do klienta albo spraw wewnętrznych.
           </p>
         </div>
-
         <button style={primaryButtonStyle} onClick={() => setCreatingTask(true)}>
           <Plus size={18} />
           Dodaj zadanie
@@ -215,27 +197,18 @@ function TasksContent({ currentRole }: { currentRole: UserRole | null }) {
             onChange={(event) => setSearchQuery(event.target.value)}
             placeholder="Szukaj zadania"
           />
-
           <select style={filterStyle} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
             <option value={EMPTY_FILTER}>Status</option>
-            {STATUS_OPTIONS.map((status) => (
-              <option key={status.value} value={status.value}>{status.label}</option>
-            ))}
+            {STATUS_OPTIONS.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}
           </select>
-
           <select style={filterStyle} value={assigneeFilter} onChange={(event) => setAssigneeFilter(event.target.value)}>
             <option value={EMPTY_FILTER}>Osoba</option>
-            {assignees.map((assignee) => (
-              <option key={assignee.id} value={assignee.id}>{formatProfileName(assignee)}</option>
-            ))}
+            {assignees.map((assignee) => <option key={assignee.id} value={assignee.id}>{formatProfileName(assignee)}</option>)}
           </select>
-
           <select style={filterStyle} value={clientFilter} onChange={(event) => setClientFilter(event.target.value)}>
-            <option value={EMPTY_FILTER}>Klient / wewnętrzne</option>
+            <option value={EMPTY_FILTER}>Klient</option>
             <option value="internal">Wewnętrzne</option>
-            {clients.map((client) => (
-              <option key={client.id} value={client.id}>{formatClientName(client)}</option>
-            ))}
+            {clients.map((client) => <option key={client.id} value={client.id}>{formatClientName(client)}</option>)}
           </select>
         </div>
 
@@ -262,7 +235,7 @@ function TasksContent({ currentRole }: { currentRole: UserRole | null }) {
                     <Td strong>{task.tytul}</Td>
                     <Td><Badge>{statusLabel(task.status)}</Badge></Td>
                     <Td><Badge>{priorityLabel(task.priorytet)}</Badge></Td>
-                    <Td>{formatDateTime(task.termin)}</Td>
+                    <Td>{formatDate(task.termin)}</Td>
                     <Td>{formatProfileName(getProfile(task.profiles))}</Td>
                     <Td>{task.czy_wewnetrzne ? "Wewnętrzne" : formatClientName(getClient(task.klienci))}</Td>
                   </tr>
@@ -350,10 +323,8 @@ function TaskDrawer({
       fetchTaskTimeEntries(taskId),
       fetchTaskDocuments(taskId),
     ]);
-
     if (timeResult.error) console.error("Błąd pobierania czasu pracy:", timeResult.error);
     if (documentsResult.error) console.error("Błąd pobierania dokumentów zadania:", documentsResult.error);
-
     setTimeEntries((timeResult.data || []) as TimeEntry[]);
     setDocuments((documentsResult.data || []) as TaskDocument[]);
   }
@@ -367,35 +338,29 @@ function TaskDrawer({
       alert("Tytuł zadania jest wymagany.");
       return;
     }
-
     if (!draft.osoba_id) {
       alert("Wybierz osobę odpowiedzialną.");
       return;
     }
-
     if (!draft.czy_wewnetrzne && !draft.klient_id) {
       alert("Wybierz klienta albo oznacz zadanie jako wewnętrzne.");
       return;
     }
 
     setSaving(true);
-
     const payload: TaskPayload = {
       tytul: draft.tytul.trim(),
       opis: draft.opis.trim() || null,
       status: draft.status,
       priorytet: draft.priorytet,
-      termin: draft.termin ? new Date(draft.termin).toISOString() : null,
+      termin: draft.termin ? new Date(`${draft.termin}T12:00:00`).toISOString() : null,
       osoba_id: draft.osoba_id,
       klient_id: draft.czy_wewnetrzne ? null : draft.klient_id,
       czy_wewnetrzne: draft.czy_wewnetrzne,
       notatki: draft.notatki.trim() || null,
     };
 
-    const result = mode === "create" || !task
-      ? await createTask(payload)
-      : await updateTask(task.id, payload);
-
+    const result = mode === "create" || !task ? await createTask(payload) : await updateTask(task.id, payload);
     setSaving(false);
 
     if (result.error) {
@@ -403,27 +368,18 @@ function TaskDrawer({
       alert("Nie udało się zapisać zadania.");
       return;
     }
-
-    if (mode === "create") {
-      onCreated(result.data as Task);
-    } else {
-      onSaved(result.data as Task);
-    }
+    mode === "create" ? onCreated(result.data as Task) : onSaved(result.data as Task);
   }
 
   async function startTimer() {
     if (!task || !currentUserId || activeTimeEntry) return;
-
     const result = await startTaskTimer(task.id, currentUserId);
-
     if (result.error) {
       console.error("Błąd uruchamiania licznika:", result.error);
       alert("Nie udało się uruchomić licznika.");
       return;
     }
-
     setTimeEntries((current) => [result.data as TimeEntry, ...current]);
-
     if (task.status === "do_zrobienia") {
       const statusResult = await updateTaskStatus(task.id, "w_trakcie");
       if (!statusResult.error) onSaved(statusResult.data as Task);
@@ -432,57 +388,45 @@ function TaskDrawer({
 
   async function stopTimer() {
     if (!activeTimeEntry) return;
-
     const result = await stopTaskTimer(activeTimeEntry.id, timerNote);
-
     if (result.error) {
       console.error("Błąd zatrzymywania licznika:", result.error);
       alert("Nie udało się zatrzymać licznika.");
       return;
     }
-
-    setTimeEntries((current) =>
-      current.map((entry) => (entry.id === activeTimeEntry.id ? (result.data as TimeEntry) : entry))
-    );
+    setTimeEntries((current) => current.map((entry) => (entry.id === activeTimeEntry.id ? (result.data as TimeEntry) : entry)));
     setTimerNote("");
   }
 
   async function uploadDocument(file: File | null) {
     if (!task || !file) return;
-
     setUploading(true);
     const result = await uploadTaskDocument(task.id, file);
     setUploading(false);
-
     if (result.error) {
       console.error("Błąd dodawania dokumentu:", result.error);
       alert("Nie udało się dodać dokumentu.");
       return;
     }
-
     setDocuments((current) => [result.data as TaskDocument, ...current]);
   }
 
   async function openDocument(document: TaskDocument) {
     const result = await createTaskDocumentSignedUrl(document.sciezka);
-
     if (result.error || !result.data?.signedUrl) {
       alert("Nie udało się otworzyć dokumentu.");
       return;
     }
-
     window.open(result.data.signedUrl, "_blank", "noopener,noreferrer");
   }
 
   async function removeDocument(document: TaskDocument) {
     const result = await deleteTaskDocument(document);
-
     if (result.error) {
       console.error("Błąd usuwania dokumentu:", result.error);
       alert("Nie udało się usunąć dokumentu.");
       return;
     }
-
     setDocuments((current) => current.filter((item) => item.id !== document.id));
   }
 
@@ -521,7 +465,7 @@ function TaskDrawer({
               </EditableRow>
             </div>
             <EditableRow label="Termin">
-              <input style={inputStyle} type="datetime-local" value={draft.termin} onChange={(event) => updateDraft("termin", event.target.value)} />
+              <input style={inputStyle} type="date" value={draft.termin} onChange={(event) => updateDraft("termin", event.target.value)} />
             </EditableRow>
             <EditableRow label="Osoba odpowiedzialna">
               <select style={inputStyle} value={draft.osoba_id} onChange={(event) => updateDraft("osoba_id", event.target.value)}>
@@ -585,7 +529,7 @@ function TaskDrawer({
                     timeEntries.map((entry) => (
                       <div key={entry.id} style={timeItemStyle}>
                         <div>
-                          <strong>{formatDateTime(entry.started_at)}</strong>
+                          <strong>{formatDate(entry.started_at)}</strong>
                           <p style={taskMetaStyle}>{entry.opis || "Bez opisu"}</p>
                         </div>
                         <span style={counterStyle}>{entry.ended_at ? formatDuration(entry.duration_seconds || 0) : "W toku"}</span>
@@ -659,10 +603,10 @@ function createDraft(task: Task | null, currentUserId: string | null): TaskDraft
     opis: task?.opis || "",
     status: task?.status || "do_zrobienia",
     priorytet: task?.priorytet || "normalny",
-    termin: task?.termin ? toDateTimeLocal(task.termin) : "",
+    termin: task?.termin ? toDateInput(task.termin) : "",
     osoba_id: task?.osoba_id || currentUserId || "",
     klient_id: task?.klient_id || "",
-    czy_wewnetrzne: task?.czy_wewnetrzne ?? true,
+    czy_wewnetrzne: task?.czy_wewnetrzne ?? false,
     notatki: task?.notatki || "",
   };
 }
@@ -698,14 +642,12 @@ function priorityLabel(priority: TaskPriority) {
   return PRIORITY_OPTIONS.find((item) => item.value === priority)?.label || priority;
 }
 
-function formatDateTime(value: string | null) {
+function formatDate(value: string | null) {
   if (!value) return "—";
   return new Intl.DateTimeFormat("pl-PL", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
   }).format(new Date(value));
 }
 
@@ -715,10 +657,10 @@ function formatDuration(seconds: number) {
   return `${hours}h ${minutes.toString().padStart(2, "0")}m`;
 }
 
-function toDateTimeLocal(value: string) {
+function toDateInput(value: string) {
   const date = new Date(value);
   const offsetDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
-  return offsetDate.toISOString().slice(0, 16);
+  return offsetDate.toISOString().slice(0, 10);
 }
 
 function startOfToday() {
@@ -728,9 +670,7 @@ function startOfToday() {
 }
 
 function isSameDay(first: Date, second: Date) {
-  return first.getFullYear() === second.getFullYear()
-    && first.getMonth() === second.getMonth()
-    && first.getDate() === second.getDate();
+  return first.getFullYear() === second.getFullYear() && first.getMonth() === second.getMonth() && first.getDate() === second.getDate();
 }
 
 const headerStyle: React.CSSProperties = {
@@ -773,13 +713,12 @@ const primaryButtonStyle: React.CSSProperties = {
   color: colors.white,
   fontWeight: 800,
   cursor: "pointer",
-  boxShadow: shadow.button,
+  boxShadow: "none",
 };
 
 const primarySmallButtonStyle: React.CSSProperties = {
   ...primaryButtonStyle,
   justifyContent: "center",
-  boxShadow: "none",
 };
 
 const summaryGridStyle: React.CSSProperties = {
@@ -849,18 +788,12 @@ const filterStyle: React.CSSProperties = {
   borderRadius: radius.input,
   background: colors.inputBackground,
   color: colors.text,
-  padding: "12px 14px",
+  padding: "12px 42px 12px 14px",
   fontWeight: 650,
 };
 
-const tableWrapperStyle: React.CSSProperties = {
-  overflowX: "auto",
-};
-
-const tableStyle: React.CSSProperties = {
-  width: "100%",
-  borderCollapse: "collapse",
-};
+const tableWrapperStyle: React.CSSProperties = { overflowX: "auto" };
+const tableStyle: React.CSSProperties = { width: "100%", borderCollapse: "collapse" };
 
 const thStyle: React.CSSProperties = {
   textAlign: "left",
@@ -993,7 +926,7 @@ const inputStyle: React.CSSProperties = {
   borderRadius: radius.input,
   background: colors.inputBackground,
   color: colors.text,
-  padding: "13px 14px",
+  padding: "13px 42px 13px 14px",
   fontSize: "15px",
 };
 
@@ -1024,34 +957,11 @@ const timerBoxStyle: React.CSSProperties = {
   marginBottom: "14px",
 };
 
-const timerLabelStyle: React.CSSProperties = {
-  margin: 0,
-  color: colors.muted,
-  fontWeight: 800,
-};
-
-const timerValueStyle: React.CSSProperties = {
-  display: "block",
-  marginTop: "5px",
-  color: colors.navy,
-  fontSize: "24px",
-};
-
-const timerButtonStyle: React.CSSProperties = {
-  ...primarySmallButtonStyle,
-  background: colors.success,
-};
-
-const stopButtonStyle: React.CSSProperties = {
-  ...primarySmallButtonStyle,
-  background: colors.red,
-};
-
-const timeListStyle: React.CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  gap: "10px",
-};
+const timerLabelStyle: React.CSSProperties = { margin: 0, color: colors.muted, fontWeight: 800 };
+const timerValueStyle: React.CSSProperties = { display: "block", marginTop: "5px", color: colors.navy, fontSize: "24px" };
+const timerButtonStyle: React.CSSProperties = { ...primarySmallButtonStyle, background: colors.success };
+const stopButtonStyle: React.CSSProperties = { ...primarySmallButtonStyle, background: colors.red };
+const timeListStyle: React.CSSProperties = { display: "flex", flexDirection: "column", gap: "10px" };
 
 const timeItemStyle: React.CSSProperties = {
   display: "flex",
@@ -1064,10 +974,7 @@ const timeItemStyle: React.CSSProperties = {
   background: colors.inputBackground,
 };
 
-const taskMetaStyle: React.CSSProperties = {
-  margin: "5px 0 0",
-  color: colors.muted,
-};
+const taskMetaStyle: React.CSSProperties = { margin: "5px 0 0", color: colors.muted };
 
 const emptyTaskStyle: React.CSSProperties = {
   padding: "14px",

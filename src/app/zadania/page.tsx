@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabaseClient";
 import type { UserRole } from "@/lib/permissions";
 import {
   createTask,
+  fetchActiveTaskTimers,
   fetchTaskAssignees,
   fetchTaskClients,
   fetchTasks,
@@ -75,6 +76,7 @@ export default function TasksPage() {
 function TasksContent({ currentRole }: { currentRole: UserRole | null }) {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [activeTimers, setActiveTimers] = useState<TimeEntry[]>([]);
   const [assignees, setAssignees] = useState<Profile[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
@@ -115,19 +117,23 @@ function TasksContent({ currentRole }: { currentRole: UserRole | null }) {
   async function loadInitialData() {
     setLoading(true);
     const { data: userData } = await supabase.auth.getUser();
-    setCurrentUserId(userData.user?.id ?? null);
+    const userId = userData.user?.id ?? null;
+    setCurrentUserId(userId);
 
-    const [tasksResult, assigneesResult, clientsResult] = await Promise.all([
+    const [tasksResult, timersResult, assigneesResult, clientsResult] = await Promise.all([
       fetchTasks(),
+      userId ? fetchActiveTaskTimers(userId) : Promise.resolve({ data: [], error: null }),
       fetchTaskAssignees(),
       fetchTaskClients(),
     ]);
 
     if (tasksResult.error) console.error("Błąd pobierania zadań:", tasksResult.error);
+    if (timersResult.error) console.error("Błąd pobierania liczników:", timersResult.error);
     if (assigneesResult.error) console.error("Błąd pobierania osób:", assigneesResult.error);
     if (clientsResult.error) console.error("Błąd pobierania klientów:", clientsResult.error);
 
     setTasks((tasksResult.data || []) as Task[]);
+    setActiveTimers((timersResult.data || []) as TimeEntry[]);
     setAssignees((assigneesResult.data || []) as Profile[]);
     setClients((clientsResult.data || []) as Client[]);
     setLoading(false);
@@ -142,6 +148,35 @@ function TasksContent({ currentRole }: { currentRole: UserRole | null }) {
   function handleTaskSaved(task: Task) {
     setTasks((current) => current.map((item) => (item.id === task.id ? task : item)));
     setSelectedTask(task);
+  }
+
+  async function toggleRowTimer(task: Task) {
+    if (!currentUserId) return;
+    const activeTimer = activeTimers.find((entry) => entry.zadanie_id === task.id);
+
+    if (activeTimer) {
+      const result = await stopTaskTimer(activeTimer.id);
+      if (result.error) {
+        console.error("Błąd zatrzymywania licznika:", result.error);
+        alert("Nie udało się zatrzymać licznika.");
+        return;
+      }
+      setActiveTimers((current) => current.filter((entry) => entry.id !== activeTimer.id));
+      return;
+    }
+
+    const result = await startTaskTimer(task.id, currentUserId);
+    if (result.error) {
+      console.error("Błąd uruchamiania licznika:", result.error);
+      alert("Nie udało się uruchomić licznika.");
+      return;
+    }
+    setActiveTimers((current) => [result.data as TimeEntry, ...current]);
+
+    if (task.status === "do_zrobienia") {
+      const statusResult = await updateTaskStatus(task.id, "w_trakcie");
+      if (!statusResult.error) handleTaskSaved(statusResult.data as Task);
+    }
   }
 
   return (
@@ -171,12 +206,7 @@ function TasksContent({ currentRole }: { currentRole: UserRole | null }) {
           <span style={counterStyle}>{loading ? "Ładowanie..." : `${filteredTasks.length} pozycji`}</span>
         </div>
 
-        <input
-          style={searchInputStyle}
-          value={searchQuery}
-          onChange={(event) => setSearchQuery(event.target.value)}
-          placeholder="Szukaj po zadaniu, kliencie, osobie lub notatce"
-        />
+        <input style={searchInputStyle} value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Szukaj po zadaniu, kliencie, osobie lub notatce" />
 
         <div style={compactFiltersRowStyle}>
           <span style={filtersLabelStyle}>Filtry:</span>
@@ -204,37 +234,46 @@ function TasksContent({ currentRole }: { currentRole: UserRole | null }) {
             <table style={tableStyle}>
               <thead>
                 <tr>
-                  <Th width="30%">Zadanie</Th>
-                  <Th width="13%">Status</Th>
-                  <Th width="12%">Priorytet</Th>
-                  <Th width="15%">Termin</Th>
-                  <Th width="15%">Osoba</Th>
-                  <Th width="15%">Klient</Th>
+                  <Th width="27%">Zadanie</Th>
+                  <Th width="12%">Status</Th>
+                  <Th width="11%">Priorytet</Th>
+                  <Th width="12%">Termin</Th>
+                  <Th width="14%">Osoba</Th>
+                  <Th width="14%">Klient</Th>
+                  <Th width="10%">Akcje</Th>
                 </tr>
               </thead>
               <tbody>
-                {filteredTasks.map((task) => (
-                  <tr key={task.id} style={rowStyle} onClick={() => setSelectedTask(task)}>
-                    <Td strong>{task.tytul}</Td>
-                    <Td><Badge>{statusLabel(task.status)}</Badge></Td>
-                    <Td><Badge>{priorityLabel(task.priorytet)}</Badge></Td>
-                    <Td>{formatDate(task.termin)}</Td>
-                    <Td>{formatProfileName(getProfile(task.profiles))}</Td>
-                    <Td>{task.czy_wewnetrzne ? "Wewnętrzne" : formatClientName(getClient(task.klienci))}</Td>
-                  </tr>
-                ))}
+                {filteredTasks.map((task) => {
+                  const hasActiveTimer = activeTimers.some((entry) => entry.zadanie_id === task.id);
+
+                  return (
+                    <tr key={task.id} style={rowStyle} onClick={() => setSelectedTask(task)}>
+                      <Td strong>{task.tytul}</Td>
+                      <Td><StatusBadge status={task.status} /></Td>
+                      <Td><PriorityBadge priority={task.priorytet} /></Td>
+                      <Td>{formatDate(task.termin)}</Td>
+                      <Td>{formatProfileName(getProfile(task.profiles))}</Td>
+                      <Td>{task.czy_wewnetrzne ? "Wewnętrzne" : formatClientName(getClient(task.klienci))}</Td>
+                      <Td>
+                        <div style={actionsCellStyle} onClick={(event) => event.stopPropagation()}>
+                          <button style={hasActiveTimer ? stopTinyButtonStyle : timerTinyButtonStyle} onClick={() => toggleRowTimer(task)} aria-label={hasActiveTimer ? "Zatrzymaj licznik" : "Uruchom licznik"}>
+                            {hasActiveTimer ? <Square size={15} /> : <Play size={15} />}
+                          </button>
+                          <button style={detailsButtonStyle} onClick={() => setSelectedTask(task)}>Szczegóły</button>
+                        </div>
+                      </Td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
       </section>
 
-      {creatingTask && (
-        <TaskDrawer mode="create" task={null} currentUserId={currentUserId} currentRole={currentRole} assignees={visibleAssignees} clients={clients} onClose={() => setCreatingTask(false)} onCreated={handleTaskCreated} onSaved={handleTaskSaved} />
-      )}
-      {selectedTask && (
-        <TaskDrawer mode="edit" task={selectedTask} currentUserId={currentUserId} currentRole={currentRole} assignees={visibleAssignees} clients={clients} onClose={() => setSelectedTask(null)} onCreated={handleTaskCreated} onSaved={handleTaskSaved} />
-      )}
+      {creatingTask && <TaskDrawer mode="create" task={null} currentUserId={currentUserId} currentRole={currentRole} assignees={visibleAssignees} clients={clients} onClose={() => setCreatingTask(false)} onCreated={handleTaskCreated} onSaved={handleTaskSaved} />}
+      {selectedTask && <TaskDrawer mode="edit" task={selectedTask} currentUserId={currentUserId} currentRole={currentRole} assignees={visibleAssignees} clients={clients} onClose={() => setSelectedTask(null)} onCreated={handleTaskCreated} onSaved={handleTaskSaved} />}
     </>
   );
 }
@@ -478,16 +517,21 @@ function TaskDrawer({ mode, task, currentUserId, assignees, clients, onClose, on
               </section>
 
               <section style={drawerSectionStyle}>
-                <h3 style={drawerSectionTitleStyle}>Dokumenty</h3>
-                <label style={uploadButtonStyle}>
-                  <Paperclip size={17} />
-                  {uploading ? "Dodawanie..." : "Dodaj dokument"}
-                  <input type="file" style={{ display: "none" }} onChange={(event) => uploadDocument(event.target.files?.[0] || null)} />
-                </label>
-                <div style={timeListStyle}>
+                <div style={documentsHeaderStyle}>
+                  <h3 style={drawerSectionTitleStyle}>Dokumenty</h3>
+                  <label style={uploadButtonStyle}>
+                    <Paperclip size={17} />
+                    {uploading ? "Dodawanie..." : "Dodaj dokument"}
+                    <input type="file" style={{ display: "none" }} onChange={(event) => uploadDocument(event.target.files?.[0] || null)} />
+                  </label>
+                </div>
+                <div style={documentsListStyle}>
                   {documents.length === 0 ? <div style={emptyTaskStyle}>Brak dokumentów</div> : documents.map((document) => (
-                    <div key={document.id} style={timeItemStyle}>
-                      <button style={linkButtonStyle} onClick={() => openDocument(document)}>{document.nazwa}</button>
+                    <div key={document.id} style={documentItemStyle}>
+                      <div>
+                        <button style={documentNameButtonStyle} onClick={() => openDocument(document)}>{document.nazwa}</button>
+                        <p style={taskMetaStyle}>{formatFileSize(document.rozmiar)}</p>
+                      </div>
                       <button style={secondaryButtonStyle} onClick={() => removeDocument(document)}>Usuń</button>
                     </div>
                   ))}
@@ -505,7 +549,8 @@ function SummaryCard({ label, value }: { label: string; value: number | string }
 function EditableRow({ label, children }: { label: string; children: React.ReactNode }) { return <label style={editableRowStyle}><span style={infoLabelStyle}>{label}</span>{children}</label>; }
 function Th({ children, width }: { children: React.ReactNode; width?: string }) { return <th style={{ ...thStyle, width }}>{children}</th>; }
 function Td({ children, strong }: { children: React.ReactNode; strong?: boolean }) { return <td style={{ ...tdStyle, fontWeight: strong ? 800 : 500 }}>{children}</td>; }
-function Badge({ children }: { children: React.ReactNode }) { return <span style={badgeStyle}>{children}</span>; }
+function StatusBadge({ status }: { status: TaskStatus }) { return <span style={{ ...badgeStyle, ...statusBadgeStyle(status) }}>{statusLabel(status)}</span>; }
+function PriorityBadge({ priority }: { priority: TaskPriority }) { return <span style={{ ...badgeStyle, ...priorityBadgeStyle(priority) }}>{priorityLabel(priority)}</span>; }
 
 function createDraft(task: Task | null, currentUserId: string | null): TaskDraft {
   return {
@@ -545,6 +590,11 @@ function formatDuration(seconds: number) {
   const minutes = Math.floor((seconds % 3600) / 60);
   return `${hours}h ${minutes.toString().padStart(2, "0")}m`;
 }
+function formatFileSize(size: number | null) {
+  if (!size) return "Rozmiar nieznany";
+  if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
+  return `${(size / 1024 / 1024).toFixed(1)} MB`;
+}
 function toDateInput(value: string) {
   const date = new Date(value);
   const offsetDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
@@ -552,6 +602,18 @@ function toDateInput(value: string) {
 }
 function startOfToday() { const date = new Date(); date.setHours(0, 0, 0, 0); return date; }
 function isSameDay(first: Date, second: Date) { return first.getFullYear() === second.getFullYear() && first.getMonth() === second.getMonth() && first.getDate() === second.getDate(); }
+function statusBadgeStyle(status: TaskStatus): React.CSSProperties {
+  if (status === "zrobione") return { background: "#dcfce7", color: "#166534", borderColor: "#bbf7d0" };
+  if (status === "w_trakcie") return { background: "#dbeafe", color: "#1d4ed8", borderColor: "#bfdbfe" };
+  if (status === "anulowane") return { background: "#f1f5f9", color: "#64748b", borderColor: "#cbd5e1" };
+  return { background: "#fef3c7", color: "#92400e", borderColor: "#fde68a" };
+}
+function priorityBadgeStyle(priority: TaskPriority): React.CSSProperties {
+  if (priority === "pilne") return { background: "#fee2e2", color: "#b91c1c", borderColor: "#fecaca" };
+  if (priority === "wysoki") return { background: "#ffedd5", color: "#c2410c", borderColor: "#fed7aa" };
+  if (priority === "niski") return { background: "#ecfdf5", color: "#047857", borderColor: "#bbf7d0" };
+  return { background: "#eef2ff", color: "#3730a3", borderColor: "#c7d2fe" };
+}
 
 const headerStyle: React.CSSProperties = { display: "flex", justifyContent: "space-between", gap: "24px", alignItems: "flex-start", marginBottom: "30px" };
 const eyebrowStyle: React.CSSProperties = { color: colors.red, fontWeight: 800, margin: "0 0 8px" };
@@ -577,6 +639,10 @@ const thStyle: React.CSSProperties = { textAlign: "left", padding: "13px 12px", 
 const rowStyle: React.CSSProperties = { cursor: "pointer", borderBottom: `1px solid ${colors.border}` };
 const tdStyle: React.CSSProperties = { padding: "15px 12px", color: colors.text, verticalAlign: "top" };
 const badgeStyle: React.CSSProperties = { display: "inline-flex", borderRadius: radius.badge, padding: "6px 10px", background: colors.inputBackground, border: `1px solid ${colors.border}`, color: colors.text, fontSize: "12px", fontWeight: 800 };
+const actionsCellStyle: React.CSSProperties = { display: "flex", alignItems: "center", gap: "8px" };
+const timerTinyButtonStyle: React.CSSProperties = { width: "38px", height: "38px", display: "inline-flex", alignItems: "center", justifyContent: "center", border: "none", borderRadius: radius.button, background: colors.success, color: colors.white, cursor: "pointer" };
+const stopTinyButtonStyle: React.CSSProperties = { ...timerTinyButtonStyle, background: colors.red };
+const detailsButtonStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "10px 14px", background: colors.card, color: colors.navy, fontWeight: 800, cursor: "pointer" };
 const emptyStateStyle: React.CSSProperties = { padding: "24px", borderRadius: radius.input, background: colors.inputBackground, border: `1px dashed ${colors.border}`, color: colors.muted, textAlign: "center" };
 const drawerOverlayStyle: React.CSSProperties = { position: "fixed", inset: 0, background: "rgba(15, 23, 42, 0.32)", display: "flex", justifyContent: "flex-end", zIndex: 50 };
 const drawerStyle: React.CSSProperties = { width: "min(720px, 100%)", height: "100vh", background: colors.card, borderLeft: `1px solid ${colors.border}`, boxShadow: shadow.card, display: "flex", flexDirection: "column" };
@@ -585,7 +651,7 @@ const drawerTitleStyle: React.CSSProperties = { margin: 0, color: colors.navy, f
 const closeButtonStyle: React.CSSProperties = { width: "42px", height: "42px", display: "inline-flex", alignItems: "center", justifyContent: "center", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.inputBackground, color: colors.text, cursor: "pointer" };
 const drawerContentStyle: React.CSSProperties = { padding: "24px 28px 34px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "20px" };
 const drawerSectionStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: "22px", background: colors.card };
-const drawerSectionTitleStyle: React.CSSProperties = { margin: "0 0 16px", color: colors.navy, fontSize: "20px" };
+const drawerSectionTitleStyle: React.CSSProperties = { margin: 0, color: colors.navy, fontSize: "20px" };
 const editableRowStyle: React.CSSProperties = { display: "flex", flexDirection: "column", gap: "7px", marginBottom: "14px" };
 const twoColumnsStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "14px" };
 const infoLabelStyle: React.CSSProperties = { color: colors.muted, fontSize: "13px", fontWeight: 800 };
@@ -605,6 +671,9 @@ const timeListStyle: React.CSSProperties = { display: "flex", flexDirection: "co
 const timeItemStyle: React.CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", padding: "13px", borderRadius: radius.input, border: `1px solid ${colors.border}`, background: colors.inputBackground };
 const taskMetaStyle: React.CSSProperties = { margin: "5px 0 0", color: colors.muted };
 const emptyTaskStyle: React.CSSProperties = { padding: "14px", borderRadius: radius.input, border: `1px dashed ${colors.border}`, color: colors.muted, textAlign: "center" };
-const uploadButtonStyle: React.CSSProperties = { ...primarySmallButtonStyle, width: "fit-content", marginBottom: "14px" };
-const linkButtonStyle: React.CSSProperties = { border: "none", background: "transparent", color: colors.navy, fontWeight: 800, cursor: "pointer", textAlign: "left" };
+const documentsHeaderStyle: React.CSSProperties = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", marginBottom: "14px" };
+const uploadButtonStyle: React.CSSProperties = { ...primarySmallButtonStyle, width: "fit-content", padding: "11px 14px" };
+const documentsListStyle: React.CSSProperties = { display: "flex", flexDirection: "column", gap: "10px" };
+const documentItemStyle: React.CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", padding: "13px", borderRadius: radius.input, border: `1px solid ${colors.border}`, background: colors.inputBackground };
+const documentNameButtonStyle: React.CSSProperties = { border: "none", background: "transparent", color: colors.navy, fontWeight: 800, cursor: "pointer", padding: 0, textAlign: "left" };
 const secondaryButtonStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "9px 12px", background: colors.card, color: colors.text, fontWeight: 800, cursor: "pointer" };

@@ -621,16 +621,16 @@ function toDateInput(value: string) {
 function startOfToday() { const date = new Date(); date.setHours(0, 0, 0, 0); return date; }
 function isSameDay(first: Date, second: Date) { return first.getFullYear() === second.getFullYear() && first.getMonth() === second.getMonth() && first.getDate() === second.getDate(); }
 function statusBadgeStyle(status: TaskStatus): React.CSSProperties {
-  if (status === "zrobione") return { background: "#dcfce7", color: "#166534", borderColor: "#bbf7d0" };
-  if (status === "w_trakcie") return { background: "#dbeafe", color: "#1d4ed8", borderColor: "#bfdbfe" };
-  if (status === "anulowane") return { background: "#f1f5f9", color: "#64748b", borderColor: "#cbd5e1" };
-  return { background: "#fef3c7", color: "#92400e", borderColor: "#fde68a" };
+  if (status === "zrobione") return { background: "#e7f6ec", color: "#16a34a", borderColor: "transparent" };
+  if (status === "w_trakcie") return { background: "#e8eef8", color: colors.navy, borderColor: "transparent" };
+  if (status === "anulowane") return { background: "#f1f5f9", color: "#64748b", borderColor: "transparent" };
+  return { background: "#f3f5f9", color: colors.navy, borderColor: "transparent" };
 }
 function priorityBadgeStyle(priority: TaskPriority): React.CSSProperties {
-  if (priority === "pilne") return { background: "#fee2e2", color: "#b91c1c", borderColor: "#fecaca" };
-  if (priority === "wysoki") return { background: "#ffedd5", color: "#c2410c", borderColor: "#fed7aa" };
-  if (priority === "niski") return { background: "#ecfdf5", color: "#047857", borderColor: "#bbf7d0" };
-  return { background: "#eef2ff", color: "#3730a3", borderColor: "#c7d2fe" };
+  if (priority === "pilne") return { background: "#fde8ea", color: colors.red, borderColor: "transparent" };
+  if (priority === "wysoki") return { background: "#fff3df", color: "#b45309", borderColor: "transparent" };
+  if (priority === "niski") return { background: "#e7f6ec", color: "#16a34a", borderColor: "transparent" };
+  return { background: "#e8eef8", color: colors.navy, borderColor: "transparent" };
 }
 
 const headerStyle: React.CSSProperties = { display: "flex", justifyContent: "space-between", gap: "24px", alignItems: "flex-start", marginBottom: "30px" };

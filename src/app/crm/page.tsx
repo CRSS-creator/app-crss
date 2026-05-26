@@ -404,7 +404,7 @@ async function createDefaultTasksForStage(
                           {lead.nazwa || "—"}
                         </div>
                         <div style={pipelineCardMetaStyle}>
-                          {lead.status || "Brak statusu"}
+                          <LeadStatusBadge status={lead.status} />
                         </div>
                         <div style={pipelineCardFooterStyle}>
                           <span>{lead.czy_kadry ? "Kadry" : "Bez kadr"}</span>
@@ -501,7 +501,7 @@ async function createDefaultTasksForStage(
                     <Td strong>{lead.nazwa || "—"}</Td>
                     <Td>{PIPELINE_LABELS[lead.etap || ""] || lead.etap || "—"}</Td>
                     <Td>
-                      <Badge>{lead.status || "Brak"}</Badge>
+                      <LeadStatusBadge status={lead.status} />
                     </Td>
                     <Td>
                       <Badge>{lead.czy_kadry ? "Tak" : "Nie"}</Badge>
@@ -1199,6 +1199,22 @@ function Td({ children, strong }: { children: React.ReactNode; strong?: boolean 
 
 function Badge({ children }: { children: React.ReactNode }) {
   return <span style={badgeStyle}>{children}</span>;
+}
+
+function LeadStatusBadge({ status }: { status: string | null }) {
+  return <span style={{ ...badgeStyle, ...leadStatusBadgeStyle(status) }}>{leadStatusLabel(status)}</span>;
+}
+
+function leadStatusLabel(status: string | null) {
+  if (!status) return "Brak";
+  return STATUSES.find((item) => item.value === status)?.label || status.charAt(0).toUpperCase() + status.slice(1);
+}
+
+function leadStatusBadgeStyle(status: string | null): React.CSSProperties {
+  if (status === "wygrana") return { background: "#e7f6ec", color: "#16a34a" };
+  if (status === "przegrana") return { background: "#fde8ea", color: colors.red };
+  if (status === "otwarta") return { background: "#e8eef8", color: colors.navy };
+  return { background: "#f3f5f9", color: colors.navy };
 }
 
 const headerStyle: React.CSSProperties = {

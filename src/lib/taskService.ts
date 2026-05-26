@@ -132,6 +132,16 @@ export async function fetchTaskTimeEntries(taskId: string) {
     .order("started_at", { ascending: false });
 }
 
+export async function fetchActiveTaskTimers(userId: string) {
+  return supabase
+    .from("czas_pracy")
+    .select(TIME_ENTRY_SELECT)
+    .eq("osoba_id", userId)
+    .is("ended_at", null)
+    .not("zadanie_id", "is", null)
+    .order("started_at", { ascending: false });
+}
+
 export async function startTaskTimer(taskId: string, userId: string) {
   return supabase
     .from("czas_pracy")

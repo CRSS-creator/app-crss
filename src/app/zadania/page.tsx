@@ -92,19 +92,21 @@ function TasksContent({ currentRole }: { currentRole: UserRole | null }) {
     [assignees, currentRole, currentUserId]
   );
 
-  const filteredTasks = tasks.filter((task) => {
-    const assigneeName = formatProfileName(getProfile(task.profiles));
-    const clientName = task.czy_wewnetrzne ? "Wewnętrzne" : formatClientName(getClient(task.klienci));
-    const text = [task.tytul, task.opis, task.notatki, assigneeName, clientName].filter(Boolean).join(" ").toLowerCase();
-    const query = searchQuery.trim().toLowerCase();
+  const filteredTasks = tasks
+    .filter((task) => {
+      const assigneeName = formatProfileName(getProfile(task.profiles));
+      const clientName = task.czy_wewnetrzne ? "Wewnętrzne" : formatClientName(getClient(task.klienci));
+      const text = [task.tytul, task.opis, task.notatki, assigneeName, clientName].filter(Boolean).join(" ").toLowerCase();
+      const query = searchQuery.trim().toLowerCase();
 
-    return (
-      (statusFilter === EMPTY_FILTER || task.status === statusFilter) &&
-      (assigneeFilter === EMPTY_FILTER || task.osoba_id === assigneeFilter) &&
-      (clientFilter === EMPTY_FILTER || (clientFilter === "internal" && task.czy_wewnetrzne) || task.klient_id === clientFilter) &&
-      (!query || text.includes(query))
-    );
-  });
+      return (
+        (statusFilter === EMPTY_FILTER || task.status === statusFilter) &&
+        (assigneeFilter === EMPTY_FILTER || task.osoba_id === assigneeFilter) &&
+        (clientFilter === EMPTY_FILTER || (clientFilter === "internal" && task.czy_wewnetrzne) || task.klient_id === clientFilter) &&
+        (!query || text.includes(query))
+      );
+    })
+    .sort(compareTasksByUrgency);
 
   const openTasks = tasks.filter((task) => !["zrobione", "anulowane"].includes(task.status));
   const overdueTasks = openTasks.filter((task) => task.termin && new Date(task.termin) < startOfToday());
@@ -197,7 +199,6 @@ function TasksContent({ currentRole }: { currentRole: UserRole | null }) {
         <SummaryCard label="Otwarte" value={openTasks.length} />
         <SummaryCard label="Na dziś" value={todayTasks.length} />
         <SummaryCard label="Po terminie" value={overdueTasks.length} />
-        <SummaryCard label="Wszystkie" value={tasks.length} />
       </section>
 
       <section style={cardStyle}>
@@ -248,7 +249,7 @@ function TasksContent({ currentRole }: { currentRole: UserRole | null }) {
                   const hasActiveTimer = activeTimers.some((entry) => entry.zadanie_id === task.id);
 
                   return (
-                    <tr key={task.id} style={rowStyle} onClick={() => setSelectedTask(task)}>
+                    <tr key={task.id} style={rowStyle}>
                       <Td strong>{task.tytul}</Td>
                       <Td><StatusBadge status={task.status} /></Td>
                       <Td><PriorityBadge priority={task.priorytet} /></Td>
@@ -256,7 +257,7 @@ function TasksContent({ currentRole }: { currentRole: UserRole | null }) {
                       <Td>{formatProfileName(getProfile(task.profiles))}</Td>
                       <Td>{task.czy_wewnetrzne ? "Wewnętrzne" : formatClientName(getClient(task.klienci))}</Td>
                       <Td>
-                        <div style={actionsCellStyle} onClick={(event) => event.stopPropagation()}>
+                        <div style={actionsCellStyle}>
                           <button style={hasActiveTimer ? stopTinyButtonStyle : timerTinyButtonStyle} onClick={() => toggleRowTimer(task)} aria-label={hasActiveTimer ? "Zatrzymaj licznik" : "Uruchom licznik"}>
                             {hasActiveTimer ? <Square size={15} /> : <Play size={15} />}
                           </button>
@@ -569,6 +570,23 @@ function getInitialClientSearch(task: Task | null) {
   if (!task || task.czy_wewnetrzne || !task.klient_id) return "";
   return formatClientName(getClient(task.klienci));
 }
+function compareTasksByUrgency(first: Task, second: Task) {
+  const firstDone = ["zrobione", "anulowane"].includes(first.status) ? 1 : 0;
+  const secondDone = ["zrobione", "anulowane"].includes(second.status) ? 1 : 0;
+  if (firstDone !== secondDone) return firstDone - secondDone;
+
+  const firstTime = first.termin ? new Date(first.termin).getTime() : Number.MAX_SAFE_INTEGER;
+  const secondTime = second.termin ? new Date(second.termin).getTime() : Number.MAX_SAFE_INTEGER;
+  if (firstTime !== secondTime) return firstTime - secondTime;
+
+  return priorityWeight(second.priorytet) - priorityWeight(first.priorytet);
+}
+function priorityWeight(priority: TaskPriority) {
+  if (priority === "pilne") return 4;
+  if (priority === "wysoki") return 3;
+  if (priority === "normalny") return 2;
+  return 1;
+}
 function filterAssignableProfiles(profiles: Profile[], role: UserRole | null, userId: string | null) {
   if (role === "owner") return profiles;
   if (role === "manager") return profiles.filter((profile) => profile.role !== "owner");
@@ -621,7 +639,7 @@ const titleStyle: React.CSSProperties = { fontSize: "42px", lineHeight: 1.05, ma
 const subtitleStyle: React.CSSProperties = { maxWidth: "760px", fontSize: "17px", lineHeight: 1.7, color: colors.muted, marginTop: "14px" };
 const primaryButtonStyle: React.CSSProperties = { display: "inline-flex", alignItems: "center", gap: "9px", border: "none", borderRadius: radius.button, padding: "15px 20px", background: colors.red, color: colors.white, fontWeight: 800, cursor: "pointer", boxShadow: "none" };
 const primarySmallButtonStyle: React.CSSProperties = { ...primaryButtonStyle, justifyContent: "center" };
-const summaryGridStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "18px", marginBottom: "24px" };
+const summaryGridStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "18px", marginBottom: "24px" };
 const summaryCardStyle: React.CSSProperties = { background: colors.card, border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: "24px", boxShadow: shadow.soft };
 const summaryLabelStyle: React.CSSProperties = { margin: 0, color: colors.muted, fontWeight: 700 };
 const summaryValueStyle: React.CSSProperties = { display: "block", marginTop: "10px", fontSize: "30px", color: colors.navy };
@@ -636,8 +654,8 @@ const compactFilterStyle: React.CSSProperties = { border: `1px solid ${colors.bo
 const tableWrapperStyle: React.CSSProperties = { overflowX: "auto" };
 const tableStyle: React.CSSProperties = { width: "100%", borderCollapse: "collapse" };
 const thStyle: React.CSSProperties = { textAlign: "left", padding: "13px 12px", color: colors.muted, fontSize: "13px", borderBottom: `1px solid ${colors.border}` };
-const rowStyle: React.CSSProperties = { cursor: "pointer", borderBottom: `1px solid ${colors.border}` };
-const tdStyle: React.CSSProperties = { padding: "15px 12px", color: colors.text, verticalAlign: "top" };
+const rowStyle: React.CSSProperties = { borderBottom: `1px solid ${colors.border}` };
+const tdStyle: React.CSSProperties = { padding: "15px 12px", color: colors.text, verticalAlign: "middle" };
 const badgeStyle: React.CSSProperties = { display: "inline-flex", borderRadius: radius.badge, padding: "6px 10px", background: colors.inputBackground, border: `1px solid ${colors.border}`, color: colors.text, fontSize: "12px", fontWeight: 800 };
 const actionsCellStyle: React.CSSProperties = { display: "flex", alignItems: "center", gap: "8px" };
 const timerTinyButtonStyle: React.CSSProperties = { width: "38px", height: "38px", display: "inline-flex", alignItems: "center", justifyContent: "center", border: "none", borderRadius: radius.button, background: colors.success, color: colors.white, cursor: "pointer" };

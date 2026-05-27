@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
+import { colors, radius, shadow } from "@/app/design";
 import { supabase } from "@/lib/supabaseClient";
 import {
   createCrmTasks,
@@ -18,19 +20,7 @@ import {
   uploadCrmDocument,
   type CrmDocument,
 } from "@/lib/crmDocumentsService";
-import {
-  createCrmOffer,
-  fetchCrmOfferEvents,
-  fetchCrmOffers,
-  publishCrmOffer,
-  updateCrmOffer,
-  type CrmOffer,
-  type CrmOfferEvent,
-  type CrmOfferPayload,
-} from "@/lib/crmOfferService";
-import { colors, radius, shadow } from "@/app/design";
 import { X } from "lucide-react";
-
 
 type Lead = {
   id: string;
@@ -93,39 +83,10 @@ type CrmTask = {
   opis: string | null;
   status: "do_zrobienia" | "w_trakcie" | "zrobione";
   termin: string | null;
-  created_at: string | null;
-  updated_at: string | null;
-};
-
-type OfferDraft = {
-  tytul: string;
-  przygotowana_dla: string;
-  osoba_kontaktowa: string;
-  podsumowanie_rozmowy: string;
-  potrzeby_klienta: string;
-  rekomendowany_pakiet: string;
-  opis_pakietu: string;
-  cena_standard: string;
-  cena_premium: string;
-  cena_wdrozenia: string;
-  zakres: string;
-  warunki: string;
-  cta_label: string;
-  cta_url: string;
-  pdf_url: string;
-  wazna_do: string;
 };
 
 const EMPTY_FILTER = "Wszystkie";
-
-const PIPELINE_STAGES = [
-  "nowy_lead",
-  "kontakt_proba_kontaktu",
-  "rozmowa_online",
-  "propozycja_wspolpracy_wyslana",
-  "decyzja",
-];
-
+const PIPELINE_STAGES = ["nowy_lead", "kontakt_proba_kontaktu", "rozmowa_online", "propozycja_wspolpracy_wyslana", "decyzja"];
 const PIPELINE_LABELS: Record<string, string> = {
   nowy_lead: "Nowy lead",
   kontakt_proba_kontaktu: "Kontakt / próba kontaktu",
@@ -133,37 +94,13 @@ const PIPELINE_LABELS: Record<string, string> = {
   propozycja_wspolpracy_wyslana: "Propozycja współpracy wysłana",
   decyzja: "Decyzja",
 };
-
 const DEFAULT_TASKS_BY_STAGE: Record<string, string[]> = {
-  nowy_lead: [
-    "Uzupełnij źródło leada",
-    "Skontaktuj się z leadem do 30 minut",
-  ],
-
-  kontakt_proba_kontaktu: [
-    "Zadzwoń lub odpisz i zaproponuj termin rozmowy online",
-    "Jeśli brak odpowiedzi, ustaw kolejne zadanie follow-up",
-    "Zapisz wynik kontaktu",
-  ],
-
-  rozmowa_online: [
-    "Zapisz powód kontaktu",
-    "Zbierz minimum danych do wyceny",
-    "Zapisz, czy przygotowujemy ofertę",
-  ],
-
-  propozycja_wspolpracy_wyslana: [
-    "Zapisz datę wysłania propozycji",
-    "Ustaw follow-up D+2",
-    "Ustaw follow-up D+5",
-  ],
-
-  decyzja: [
-    "Zamknij szansę jako wygrana albo przegrana",
-    "Jeśli przegrana, zapisz powód",
-  ],
+  nowy_lead: ["Uzupełnij źródło leada", "Skontaktuj się z leadem do 30 minut"],
+  kontakt_proba_kontaktu: ["Zadzwoń lub odpisz i zaproponuj termin rozmowy online", "Jeśli brak odpowiedzi, ustaw kolejne zadanie follow-up", "Zapisz wynik kontaktu"],
+  rozmowa_online: ["Zapisz powód kontaktu", "Zbierz minimum danych do wyceny", "Zapisz, czy przygotowujemy ofertę"],
+  propozycja_wspolpracy_wyslana: ["Zapisz datę wysłania propozycji", "Ustaw follow-up D+2", "Ustaw follow-up D+5"],
+  decyzja: ["Zamknij szansę jako wygrana albo przegrana", "Jeśli przegrana, zapisz powód"],
 };
-
 const STATUSES = [
   { value: "otwarta", label: "Otwarta" },
   { value: "wygrana", label: "Wygrana" },
@@ -182,43 +119,14 @@ export default function CrmPage() {
 
 function CrmContent() {
   const [leads, setLeads] = useState<Lead[]>([]);
+  const [tasks, setTasks] = useState<CrmTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [creatingLead, setCreatingLead] = useState(false);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [draggedLeadId, setDraggedLeadId] = useState<string | null>(null);
-  const [tasks, setTasks] = useState<CrmTask[]>([]);
-  async function toggleTaskStatus(taskId: string) {
-    const taskToUpdate = tasks.find((task) => task.id === taskId);
-    if (!taskToUpdate) return;
-
-    const newStatus =
-      taskToUpdate.status === "zrobione" ? "do_zrobienia" : "zrobione";
-
-    setTasks((prevTasks) =>
-      prevTasks.map((task) =>
-        task.id === taskId ? { ...task, status: newStatus } : task
-      )
-    );
-
-    const { error } = await updateCrmTaskStatus(taskId, newStatus);
-
-    if (error) {
-      console.error("Błąd zmiany statusu zadania CRM:", error);
-
-      setTasks((prevTasks) =>
-        prevTasks.map((task) =>
-          task.id === taskId ? { ...task, status: taskToUpdate.status } : task
-        )
-      );
-
-      alert("Nie udało się zmienić statusu zadania.");
-    }
-  }
-
   const [stageFilter, setStageFilter] = useState(EMPTY_FILTER);
   const [statusFilter, setStatusFilter] = useState(EMPTY_FILTER);
   const [kadryFilter, setKadryFilter] = useState(EMPTY_FILTER);
-
 
   useEffect(() => {
     loadInitialData();
@@ -226,135 +134,60 @@ function CrmContent() {
 
   async function loadInitialData() {
     setLoading(true);
-    await loadLeads();
-    await loadTasks();
+    const [leadsResult, tasksResult] = await Promise.all([fetchCrmLeads(), fetchCrmTasks()]);
+    if (leadsResult.error) console.error("Błąd pobierania CRM:", leadsResult.error);
+    else setLeads((leadsResult.data || []) as Lead[]);
+    if (tasksResult.error) console.error("Błąd pobierania zadań CRM:", tasksResult.error);
+    else setTasks((tasksResult.data || []) as CrmTask[]);
     setLoading(false);
   }
 
-  async function loadLeads() {
-    const { data, error } = await fetchCrmLeads();
-
-    if (error) {
-      console.error("Błąd pobierania CRM:", error);
-      return;
-    }
-
-    setLeads(data || []);
-  }
-
-async function loadTasks() {
-  const { data, error } = await fetchCrmTasks();
-
-  if (error) {
-    console.error("Błąd pobierania zadań CRM:", error);
-    return;
-  }
-
-  setTasks(data || []);
-}
-
-async function createDefaultTasksForStage(
-  leadId: string,
-  stage: string
-) {
-  const defaultTasks = DEFAULT_TASKS_BY_STAGE[stage] || [];
-
-  if (defaultTasks.length === 0) return;
-
-  const existingTasks = tasks.filter(
-    (task) =>
-      task.crm_id === leadId &&
-      task.etap === stage
-  );
-
-  const tasksToCreate = defaultTasks
-    .filter(
-      (title) =>
-        !existingTasks.some(
-          (task) => task.tytul === title
-        )
-    )
-    .map((title) => ({
-      crm_id: leadId,
-      etap: stage,
-      tytul: title,
-      status: "do_zrobienia" as const,
-    }));
-
-  if (tasksToCreate.length === 0) return;
-
-  const { data, error } = await createCrmTasks(tasksToCreate);
-
-  if (error) {
-    console.error(
-      "Błąd tworzenia zadań CRM:",
-      error
-    );
-    return;
-  }
-
-  setTasks((current) => [
-    ...current,
-    ...(data || []),
-  ]);
-}
-
   async function moveLeadToStage(leadId: string, newStage: string) {
     const previousLeads = leads;
-
-    setLeads((current) =>
-      current.map((lead) =>        lead.id === leadId ? { ...lead, etap: newStage } : lead
-      )
-    );
-
+    setLeads((current) => current.map((lead) => lead.id === leadId ? { ...lead, etap: newStage } : lead));
     const { error } = await updateCrmLeadStage(leadId, newStage);
-
     if (error) {
       console.error("Błąd zmiany etapu:", error);
       setLeads(previousLeads);
       alert("Nie udało się zmienić etapu.");
+      return;
     }
-
-    await createDefaultTasksForStage(
-      leadId,
-      newStage
-     );  
-    }
-
-  function handleLeadCreated(newLead: Lead) {
-    setLeads((current) => [newLead, ...current]);
-    setCreatingLead(false);
+    await createDefaultTasksForStage(leadId, newStage);
   }
 
-  function handleLeadSaved(updatedLead: Lead) {
-    setLeads((current) =>
-      current.map((lead) => (lead.id === updatedLead.id ? updatedLead : lead))
-    );
-    setSelectedLead(updatedLead);
+  async function createDefaultTasksForStage(leadId: string, stage: string) {
+    const defaults = DEFAULT_TASKS_BY_STAGE[stage] || [];
+    const existing = tasks.filter((task) => task.crm_id === leadId && task.etap === stage);
+    const toCreate = defaults
+      .filter((title) => !existing.some((task) => task.tytul === title))
+      .map((title) => ({ crm_id: leadId, etap: stage, tytul: title, status: "do_zrobienia" as const }));
+    if (toCreate.length === 0) return;
+    const { data, error } = await createCrmTasks(toCreate);
+    if (error) console.error("Błąd tworzenia zadań CRM:", error);
+    else setTasks((current) => [...current, ...((data || []) as CrmTask[])]);
+  }
+
+  async function toggleTaskStatus(taskId: string) {
+    const currentTask = tasks.find((task) => task.id === taskId);
+    if (!currentTask) return;
+    const newStatus = currentTask.status === "zrobione" ? "do_zrobienia" : "zrobione";
+    setTasks((current) => current.map((task) => task.id === taskId ? { ...task, status: newStatus } : task));
+    const { error } = await updateCrmTaskStatus(taskId, newStatus);
+    if (error) {
+      console.error("Błąd zmiany statusu zadania CRM:", error);
+      setTasks((current) => current.map((task) => task.id === taskId ? currentTask : task));
+      alert("Nie udało się zmienić statusu zadania.");
+    }
   }
 
   const filteredLeads = leads.filter((lead) => {
     const matchesStage = stageFilter === EMPTY_FILTER || lead.etap === stageFilter;
-    const matchesStatus =
-      statusFilter === EMPTY_FILTER || lead.status === statusFilter;
-    const matchesKadry =
-      kadryFilter === EMPTY_FILTER ||
-      (kadryFilter === "Tak" && lead.czy_kadry) ||
-      (kadryFilter === "Nie" && !lead.czy_kadry);
-
+    const matchesStatus = statusFilter === EMPTY_FILTER || lead.status === statusFilter;
+    const matchesKadry = kadryFilter === EMPTY_FILTER || (kadryFilter === "Tak" && lead.czy_kadry) || (kadryFilter === "Nie" && !lead.czy_kadry);
     return matchesStage && matchesStatus && matchesKadry;
   });
-
-  const hasAnyPipelineLead = PIPELINE_STAGES.some((stage) =>
-    leads.some((lead) => lead.etap === stage)
-  );
-
   const activeLeads = leads.filter((lead) => lead.status === "otwarta");
-  const totalMrr = activeLeads.reduce(
-    (sum, lead) => sum + Number(lead.szacowany_mrr || 0),
-    0
-  );
-
+  const totalMrr = activeLeads.reduce((sum, lead) => sum + Number(lead.szacowany_mrr || 0), 0);
 
   return (
     <>
@@ -362,413 +195,121 @@ async function createDefaultTasksForStage(
         <div>
           <p style={eyebrowStyle}>Moduł zarządczy</p>
           <h1 style={titleStyle}>CRM</h1>
-          <p style={subtitleStyle}>
-            Szanse sprzedaży, pipeline, statusy rozmów i prognozowany miesięczny
-            przychód.
-          </p>
+          <p style={subtitleStyle}>Szanse sprzedaży, pipeline, zadania, pliki i przejście do ofert PDF.</p>
         </div>
-
-        <button style={primaryButtonStyle} onClick={() => setCreatingLead(true)}>
-          Dodaj szansę
-        </button>
+        <div style={headerActionsStyle}>
+          <Link href="/crm/oferty" style={secondaryButtonStyle}>Oferty PDF</Link>
+          <button style={primaryButtonStyle} onClick={() => setCreatingLead(true)}>Dodaj szansę</button>
+        </div>
       </section>
 
       <section style={summaryGridStyle}>
         <SummaryCard label="Aktywne szanse" value={activeLeads.length} />
-        <SummaryCard
-          label="Szacowany MRR"
-          value={`${totalMrr.toLocaleString("pl-PL")} zł`}
-        />
-        <SummaryCard
-          label="Wygrane"
-          value={leads.filter((lead) => lead.status === "wygrana").length}
-        />
-        <SummaryCard
-          label="Przegrane"
-          value={leads.filter((lead) => lead.status === "przegrana").length}
-        />
+        <SummaryCard label="Szacowany MRR" value={`${totalMrr.toLocaleString("pl-PL")} zł`} />
+        <SummaryCard label="Wygrane" value={leads.filter((lead) => lead.status === "wygrana").length} />
+        <SummaryCard label="Przegrane" value={leads.filter((lead) => lead.status === "przegrana").length} />
       </section>
 
-      <section style={pipelineSectionStyle}>
+      <section style={cardStyle}>
         <div style={tableHeaderStyle}>
           <h2 style={sectionTitleStyle}>Pipeline sprzedaży</h2>
         </div>
-
         <div style={pipelineGridStyle}>
           {PIPELINE_STAGES.map((stage) => {
             const stageLeads = leads.filter((lead) => lead.etap === stage);
-            const stageMrr = stageLeads.reduce(
-              (sum, lead) => sum + Number(lead.szacowany_mrr || 0),
-              0
-            );
-
+            const stageMrr = stageLeads.reduce((sum, lead) => sum + Number(lead.szacowany_mrr || 0), 0);
             return (
-              <div
-                key={stage}
-                style={pipelineColumnStyle}
-                onDragOver={(event) => event.preventDefault()}
-                onDrop={() => {
-                  if (draggedLeadId) {
-                    moveLeadToStage(draggedLeadId, stage);
-                    setDraggedLeadId(null);
-                  }
-                }}
-              >
+              <div key={stage} style={pipelineColumnStyle} onDragOver={(event) => event.preventDefault()} onDrop={() => {
+                if (draggedLeadId) {
+                  moveLeadToStage(draggedLeadId, stage);
+                  setDraggedLeadId(null);
+                }
+              }}>
                 <h3 style={pipelineTitleStyle}>{PIPELINE_LABELS[stage]}</h3>
-                <p style={pipelineMetaStyle}>
-                  {stageLeads.length} szans · {stageMrr.toLocaleString("pl-PL")} zł
-                </p>
-
+                <p style={pipelineMetaStyle}>{stageLeads.length} szans · {stageMrr.toLocaleString("pl-PL")} zł</p>
                 <div style={pipelineCardsStyle}>
                   {stageLeads.map((lead) => (
-                      <div
-                        key={lead.id}
-                        style={pipelineCardStyle}
-                        draggable
-                        onDragStart={() => setDraggedLeadId(lead.id)}
-                        onDragEnd={() => setDraggedLeadId(null)}
-                        onClick={() => setSelectedLead(lead)}
-                      >
-                        <div style={pipelineCardTitleStyle}>
-                          {lead.nazwa || "—"}
-                        </div>
-                        <div style={pipelineCardMetaStyle}>
-                          <LeadStatusBadge status={lead.status} />
-                        </div>
-                        <div style={pipelineCardFooterStyle}>
-                          <span>{lead.czy_kadry ? "Kadry" : "Bez kadr"}</span>
-                          <strong>
-                            {lead.szacowany_mrr
-                              ? `${lead.szacowany_mrr.toLocaleString("pl-PL")} zł`
-                              : "—"}
-                          </strong>
-                        </div>
-                      </div>
-                    ))}
+                    <button key={lead.id} style={pipelineCardStyle} draggable onDragStart={() => setDraggedLeadId(lead.id)} onDragEnd={() => setDraggedLeadId(null)} onClick={() => setSelectedLead(lead)}>
+                      <strong>{lead.nazwa || "—"}</strong>
+                      <span>{lead.osoba_kontaktowa || lead.email || "Brak kontaktu"}</span>
+                      <span>{lead.szacowany_mrr ? `${lead.szacowany_mrr.toLocaleString("pl-PL")} zł` : "Brak MRR"}</span>
+                    </button>
+                  ))}
                 </div>
               </div>
             );
           })}
         </div>
-
-        {!hasAnyPipelineLead && (
-          <div style={pipelineGlobalEmptyStyle}>
-            Brak szans w pipeline
-          </div>
-        )}
       </section>
 
       <section style={cardStyle}>
         <div style={tableHeaderStyle}>
           <h2 style={sectionTitleStyle}>Lista szans sprzedaży</h2>
-          <span style={counterStyle}>
-            {loading ? "Ładowanie..." : `${filteredLeads.length} pozycji`}
-          </span>
+          <span style={counterStyle}>{loading ? "Ładowanie..." : `${filteredLeads.length} pozycji`}</span>
         </div>
-
-        <div style={compactFiltersRowStyle}>
-          <span style={filtersLabelStyle}>Filtry:</span>
-
-          <select
-            style={compactFilterStyle}
-            value={stageFilter}
-            onChange={(e) => setStageFilter(e.target.value)}
-          >
+        <div style={filtersStyle}>
+          <select style={filterStyle} value={stageFilter} onChange={(event) => setStageFilter(event.target.value)}>
             <option value={EMPTY_FILTER}>Etap</option>
-            {PIPELINE_STAGES.map((stage) => (
-              <option key={stage} value={stage}>
-                {PIPELINE_LABELS[stage]}
-              </option>
-            ))}
+            {PIPELINE_STAGES.map((stage) => <option key={stage} value={stage}>{PIPELINE_LABELS[stage]}</option>)}
           </select>
-
-          <select
-            style={compactFilterStyle}
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-          >
+          <select style={filterStyle} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
             <option value={EMPTY_FILTER}>Status</option>
-            {STATUSES.map((status) => (
-              <option key={status.value} value={status.value}>
-                {status.label}
-              </option>
-            ))}
+            {STATUSES.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}
           </select>
-
-          <select
-            style={compactFilterStyle}
-            value={kadryFilter}
-            onChange={(e) => setKadryFilter(e.target.value)}
-          >
+          <select style={filterStyle} value={kadryFilter} onChange={(event) => setKadryFilter(event.target.value)}>
             <option value={EMPTY_FILTER}>Kadry</option>
             <option value="Tak">Tak</option>
             <option value="Nie">Nie</option>
           </select>
         </div>
-
-        {loading ? (
-          <div style={emptyStateStyle}>Ładowanie danych...</div>
-        ) : filteredLeads.length === 0 ? (
-          <div style={emptyStateStyle}>Brak szans sprzedaży do wyświetlenia</div>
-        ) : (
+        {loading ? <div style={emptyStyle}>Ładowanie danych...</div> : filteredLeads.length === 0 ? <div style={emptyStyle}>Brak szans sprzedaży do wyświetlenia</div> : (
           <div style={tableWrapperStyle}>
             <table style={tableStyle}>
-              <thead>
-                <tr>
-                  <Th width="35%">Firma</Th>
-                  <Th width="20%">Etap</Th>
-                  <Th width="15%">Status</Th>
-                  <Th width="10%">Kadry</Th>
-                  <Th width="10%">MRR</Th>
-                  <Th width="10%">Akcje</Th>
+              <thead><tr><Th>Firma</Th><Th>Etap</Th><Th>Status</Th><Th>Kadry</Th><Th>MRR</Th><Th>Akcje</Th></tr></thead>
+              <tbody>{filteredLeads.map((lead) => (
+                <tr key={lead.id} style={rowStyle}>
+                  <Td strong>{lead.nazwa || "—"}</Td>
+                  <Td>{PIPELINE_LABELS[lead.etap || ""] || lead.etap || "—"}</Td>
+                  <Td><Badge>{statusLabel(lead.status)}</Badge></Td>
+                  <Td>{lead.czy_kadry ? "Tak" : "Nie"}</Td>
+                  <Td>{lead.szacowany_mrr ? `${lead.szacowany_mrr.toLocaleString("pl-PL")} zł` : "—"}</Td>
+                  <Td><button style={secondaryButtonStyle} onClick={() => setSelectedLead(lead)}>Szczegóły</button></Td>
                 </tr>
-              </thead>
-
-              <tbody>
-                {filteredLeads.map((lead) => (
-                  <tr key={lead.id} style={rowStyle}>
-                    <Td strong>{lead.nazwa || "—"}</Td>
-                    <Td>{PIPELINE_LABELS[lead.etap || ""] || lead.etap || "—"}</Td>
-                    <Td>
-                      <LeadStatusBadge status={lead.status} />
-                    </Td>
-                    <Td>
-                      <Badge>{lead.czy_kadry ? "Tak" : "Nie"}</Badge>
-                    </Td>
-                    <Td>
-                      {lead.szacowany_mrr !== null
-                        ? `${lead.szacowany_mrr.toLocaleString("pl-PL")} zł`
-                        : "—"}
-                    </Td>
-                    <Td>
-                      <button
-                        style={secondaryButtonStyle}
-                        onClick={() => setSelectedLead(lead)}
-                      >
-                        Szczegóły
-                      </button>
-                    </Td>
-                  </tr>
-                ))}
-              </tbody>
+              ))}</tbody>
             </table>
           </div>
         )}
       </section>
 
-      {creatingLead && (
-        <LeadDrawer
-          mode="create"
-          onClose={() => setCreatingLead(false)}
-          onCreated={handleLeadCreated}
-        />
-      )}
-
-      {selectedLead && (
-        <LeadDrawer
-          mode="edit"
-          lead={selectedLead}
-          tasks={tasks.filter((task) => task.crm_id === selectedLead.id)}
-          onClose={() => setSelectedLead(null)}
-          onSaved={handleLeadSaved}
-          onToggleTaskStatus={toggleTaskStatus}
-        />
-      )}
+      {creatingLead && <LeadDrawer mode="create" tasks={[]} onClose={() => setCreatingLead(false)} onCreated={(lead) => { setLeads((current) => [lead, ...current]); setCreatingLead(false); }} />}
+      {selectedLead && <LeadDrawer mode="edit" lead={selectedLead} tasks={tasks.filter((task) => task.crm_id === selectedLead.id)} onClose={() => setSelectedLead(null)} onSaved={(lead) => { setLeads((current) => current.map((item) => item.id === lead.id ? lead : item)); setSelectedLead(lead); }} onToggleTaskStatus={toggleTaskStatus} />}
     </>
   );
 }
 
-function LeadDrawer({
-  mode,
-  lead,
-  tasks,
-  onClose,
-  onCreated,
-  onSaved,
-  onToggleTaskStatus,
-}: {
-  mode: "create" | "edit";
-  lead?: Lead;
-  tasks?: CrmTask[];
-  onClose: () => void;
-  onCreated?: (lead: Lead) => void;
-  onSaved?: (lead: Lead) => void;
-  onToggleTaskStatus?: (taskId: string) => void | Promise<void>;
-}) {
+function LeadDrawer({ mode, lead, tasks, onClose, onCreated, onSaved, onToggleTaskStatus }: { mode: "create" | "edit"; lead?: Lead; tasks: CrmTask[]; onClose: () => void; onCreated?: (lead: Lead) => void; onSaved?: (lead: Lead) => void; onToggleTaskStatus?: (taskId: string) => void | Promise<void>; }) {
   const [saving, setSaving] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [draft, setDraft] = useState<LeadDraft>(() => lead ? createDraft(lead) : createEmptyDraft());
   const [documents, setDocuments] = useState<CrmDocument[]>([]);
   const [documentsLoading, setDocumentsLoading] = useState(mode === "edit");
   const [uploadingDocument, setUploadingDocument] = useState(false);
-  const [offer, setOffer] = useState<CrmOffer | null>(null);
-  const [offerEvents, setOfferEvents] = useState<CrmOfferEvent[]>([]);
-  const [offerLoading, setOfferLoading] = useState(mode === "edit");
-  const [offerSaving, setOfferSaving] = useState(false);
-  const [offerDraft, setOfferDraft] = useState<OfferDraft>(() =>
-    createOfferDraftFromLead(lead)
-  );
-  const [draft, setDraft] = useState<LeadDraft>(() =>
-    lead ? createDraft(lead) : createEmptyDraft()
-  );
-
-  function updateDraft<K extends keyof LeadDraft>(key: K, value: LeadDraft[K]) {
-    setDraft((current) => ({
-      ...current,
-      [key]: value,
-    }));
-  }
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    if (mode === "edit" && lead) {
-      loadDocuments();
-      loadOffer();
-      return;
-    }
-
-    setDocuments([]);
-    setDocumentsLoading(false);
-    setOffer(null);
-    setOfferEvents([]);
-    setOfferLoading(false);
+    if (mode === "edit" && lead) loadDocuments();
   }, [mode, lead?.id]);
 
-  function updateOfferDraft<K extends keyof OfferDraft>(key: K, value: OfferDraft[K]) {
-    setOfferDraft((current) => ({ ...current, [key]: value }));
-  }
-
-  async function loadOffer() {
-    if (!lead) return;
-    setOfferLoading(true);
-    const { data, error } = await fetchCrmOffers(lead.id);
-    if (error) {
-      console.error("Blad pobierania ofert CRM:", error);
-      setOfferLoading(false);
-      return;
-    }
-    const firstOffer = (data?.[0] || null) as CrmOffer | null;
-    setOffer(firstOffer);
-    setOfferDraft(firstOffer ? createOfferDraft(firstOffer) : createOfferDraftFromLead(lead));
-    setOfferLoading(false);
-    if (firstOffer) await loadOfferEvents(firstOffer.id);
-  }
-
-  async function loadOfferEvents(offerId: string) {
-    const { data, error } = await fetchCrmOfferEvents(offerId);
-    if (error) {
-      console.error("Blad pobierania statystyk oferty:", error);
-      return;
-    }
-    setOfferEvents((data || []) as CrmOfferEvent[]);
-  }
-
-  async function saveOffer() {
-    if (!lead) return;
-    setOfferSaving(true);
-    const payload = createOfferPayload(lead.id, offerDraft);
-    const result = offer ? await updateCrmOffer(offer.id, payload) : await createCrmOffer(payload);
-    setOfferSaving(false);
-    if (result.error) {
-      console.error("Blad zapisu oferty:", result.error);
-      alert("Nie udalo sie zapisac oferty.");
-      return;
-    }
-    setOffer(result.data as CrmOffer);
-    await loadOfferEvents((result.data as CrmOffer).id);
-  }
-
-  async function publishOffer() {
-    if (!offer) {
-      alert("Najpierw zapisz oferte, potem ja opublikuj.");
-      return;
-    }
-    const { data, error } = await publishCrmOffer(offer.id);
-    if (error) {
-      console.error("Blad publikacji oferty:", error);
-      alert("Nie udalo sie opublikowac oferty.");
-      return;
-    }
-    setOffer(data as CrmOffer);
+  function updateDraft<K extends keyof LeadDraft>(key: K, value: LeadDraft[K]) {
+    setDraft((current) => ({ ...current, [key]: value }));
   }
 
   async function loadDocuments() {
     if (!lead) return;
-
     setDocumentsLoading(true);
-
     const { data, error } = await fetchCrmDocuments(lead.id);
-
-    if (error) {
-      console.error("Błąd pobierania dokumentów CRM:", error);
-      setDocumentsLoading(false);
-      return;
-    }
-
-    setDocuments(data || []);
+    if (error) console.error("Błąd pobierania dokumentów CRM:", error);
+    else setDocuments(data || []);
     setDocumentsLoading(false);
-  }
-
-  async function handleDocumentUpload(files: FileList | File[]) {
-    if (!lead) {
-      alert("Najpierw zapisz szansę, a dopiero potem dodaj pliki.");
-      return;
-    }
-
-    const filesToUpload = Array.from(files);
-    if (filesToUpload.length === 0) return;
-
-    setUploadingDocument(true);
-
-    for (const file of filesToUpload) {
-      const { data, error } = await uploadCrmDocument(lead.id, file);
-
-      if (error) {
-        console.error("Błąd dodawania dokumentu CRM:", error);
-        alert(`Nie udało się dodać pliku: ${file.name}`);
-        continue;
-      }
-
-      if (data) {
-        setDocuments((current) => [data, ...current]);
-      }
-    }
-
-    setUploadingDocument(false);
-  }
-
-  async function openDocument(document: CrmDocument) {
-    const { data, error } = await createCrmDocumentSignedUrl(document.sciezka);
-
-    if (error || !data?.signedUrl) {
-      console.error("Błąd otwierania dokumentu CRM:", error);
-      alert("Nie udało się otworzyć dokumentu.");
-      return;
-    }
-
-    window.open(data.signedUrl, "_blank", "noopener,noreferrer");
-  }
-
-  async function removeDocument(document: CrmDocument) {
-    if (!window.confirm(`Usunąć dokument "${document.nazwa}"?`)) return;
-
-    const { error } = await deleteCrmDocument(document);
-
-    if (error) {
-      console.error("Błąd usuwania dokumentu CRM:", error);
-      alert("Nie udało się usunąć dokumentu.");
-      return;
-    }
-
-    setDocuments((current) => current.filter((item) => item.id !== document.id));
-  }
-
-  function formatFileSize(size: number | null) {
-    if (!size) return "Brak rozmiaru";
-
-    if (size < 1024 * 1024) {
-      return `${Math.max(1, Math.round(size / 1024))} KB`;
-    }
-
-    return `${(size / 1024 / 1024).toFixed(1)} MB`;
   }
 
   async function saveLead() {
@@ -776,78 +317,45 @@ function LeadDrawer({
       alert("Nazwa firmy jest wymagana.");
       return;
     }
-
     setSaving(true);
-
-    const payload = {
-      nazwa: draft.nazwa.trim(),
-      osoba_kontaktowa: draft.osoba_kontaktowa.trim() || null,
-      telefon: draft.telefon.trim() || null,
-      email: draft.email.trim() || null,
-      nip: draft.nip.trim() || null,
-      forma_prawna: draft.forma_prawna.trim() || null,
-      etap: draft.etap,
-      status: draft.status,
-      zrodlo_leada: draft.zrodlo_leada.trim() || null,
-      szacowany_mrr: draft.szacowany_mrr ? Number(draft.szacowany_mrr) : null,
-      data_telefonu: draft.data_telefonu || null,
-      data_spotkania_online: draft.data_spotkania_online || null,
-      data_wyslania_oferty: draft.data_wyslania_oferty || null,
-      data_follow_up: draft.data_follow_up || null,
-      powod_kontaktu: draft.powod_kontaktu.trim() || null,
-      powod_zmiany_biura: draft.powod_zmiany_biura.trim() || null,
-      liczba_dokumentow: draft.liczba_dokumentow
-        ? Number(draft.liczba_dokumentow)
-        : null,
-      liczba_transakcji: draft.liczba_transakcji
-        ? Number(draft.liczba_transakcji)
-        : null,
-      czy_kadry: draft.czy_kadry,
-      liczba_pracownikow: draft.liczba_pracownikow
-        ? Number(draft.liczba_pracownikow)
-        : null,
-      powod_przegranej: draft.powod_przegranej.trim() || null,
-      notatki: draft.notatki.trim() || null,
-    };
-
-    if (mode === "create") {
-      const { data, error } = await supabase
-        .from("crm_szanse_sprzedazy")
-        .insert(payload)
-        .select("*")
-        .single();
-
-      if (error) {
-        console.error("Błąd dodawania szansy:", error);
-        alert("Nie udało się dodać szansy sprzedaży.");
-        setSaving(false);
-        return;
-      }
-
-      onCreated?.(data);
-      
-      setSaving(false);
-      return;
-    }
-
-    if (!lead) return;
-
-    const { data, error } = await supabase
-      .from("crm_szanse_sprzedazy")
-      .update(payload)
-      .eq("id", lead.id)
-      .select("*")
-      .single();
-
-    if (error) {
-      console.error("Błąd edycji szansy:", error);
-      alert("Nie udało się zapisać zmian.");
-      setSaving(false);
-      return;
-    }
-
-    onSaved?.(data);
+    const payload = createLeadPayload(draft);
+    const result = mode === "create"
+      ? await supabase.from("crm_szanse_sprzedazy").insert(payload).select("*").single()
+      : await supabase.from("crm_szanse_sprzedazy").update(payload).eq("id", lead?.id).select("*").single();
     setSaving(false);
+    if (result.error) {
+      console.error("Błąd zapisu szansy:", result.error);
+      alert("Nie udało się zapisać szansy.");
+      return;
+    }
+    if (mode === "create") onCreated?.(result.data as Lead);
+    else onSaved?.(result.data as Lead);
+  }
+
+  async function handleDocumentUpload(files: FileList | File[]) {
+    if (!lead) return alert("Najpierw zapisz szansę, a potem dodaj pliki.");
+    const filesToUpload = Array.from(files);
+    if (filesToUpload.length === 0) return;
+    setUploadingDocument(true);
+    for (const file of filesToUpload) {
+      const { data, error } = await uploadCrmDocument(lead.id, file);
+      if (error) alert(`Nie udało się dodać pliku: ${file.name}`);
+      else if (data) setDocuments((current) => [data, ...current]);
+    }
+    setUploadingDocument(false);
+  }
+
+  async function openDocument(document: CrmDocument) {
+    const { data, error } = await createCrmDocumentSignedUrl(document.sciezka);
+    if (error || !data?.signedUrl) return alert("Nie udało się otworzyć dokumentu.");
+    window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+  }
+
+  async function removeDocument(document: CrmDocument) {
+    if (!window.confirm(`Usunąć dokument "${document.nazwa}"?`)) return;
+    const { error } = await deleteCrmDocument(document);
+    if (error) alert("Nie udało się usunąć dokumentu.");
+    else setDocuments((current) => current.filter((item) => item.id !== document.id));
   }
 
   return (
@@ -855,312 +363,94 @@ function LeadDrawer({
       <aside style={drawerStyle} onClick={(event) => event.stopPropagation()}>
         <div style={drawerHeaderStyle}>
           <div>
-            <p style={eyebrowStyle}>
-              {mode === "create" ? "Nowa szansa sprzedaży" : "Szczegóły szansy"}
-            </p>
-            <h2 style={drawerTitleStyle}>
-              {mode === "create" ? "Dodaj szansę" : draft.nazwa || "Szansa"}
-            </h2>
+            <p style={eyebrowStyle}>{mode === "create" ? "Nowa szansa sprzedaży" : "Szczegóły szansy"}</p>
+            <h2 style={drawerTitleStyle}>{mode === "create" ? "Dodaj szansę" : draft.nazwa || "Szansa"}</h2>
           </div>
-
-          <button style={closeButtonStyle} onClick={onClose}>
-            <X size={20} />
-          </button>
+          <button style={closeButtonStyle} onClick={onClose}><X size={20} /></button>
         </div>
-
         <div style={drawerActionsStyle}>
-          <button style={secondaryButtonStyle} onClick={onClose}>
-            Anuluj
-          </button>
-
-          <button style={primarySmallButtonStyle} onClick={saveLead} disabled={saving}>
-            {saving ? "Zapisywanie..." : mode === "create" ? "Dodaj szansę" : "Zapisz zmiany"}
-          </button>
+          <button style={secondaryButtonStyle} onClick={onClose}>Anuluj</button>
+          <button style={primarySmallButtonStyle} onClick={saveLead} disabled={saving}>{saving ? "Zapisywanie..." : "Zapisz"}</button>
         </div>
 
         <div style={drawerContentStyle}>
           <FormSection title="Dane podstawowe">
-            <EditableInput label="Nazwa firmy" value={draft.nazwa} onChange={(v) => updateDraft("nazwa", v)} />
-            <EditableInput label="Osoba kontaktowa" value={draft.osoba_kontaktowa} onChange={(v) => updateDraft("osoba_kontaktowa", v)} />
-            <EditableInput label="Telefon" value={draft.telefon} onChange={(v) => updateDraft("telefon", v)} />
-            <EditableInput label="Email" type="email" value={draft.email} onChange={(v) => updateDraft("email", v)} />
-            <EditableInput label="NIP" value={draft.nip} onChange={(v) => updateDraft("nip", v)} />
+            <EditableInput label="Nazwa firmy" value={draft.nazwa} onChange={(value) => updateDraft("nazwa", value)} />
+            <EditableInput label="Osoba kontaktowa" value={draft.osoba_kontaktowa} onChange={(value) => updateDraft("osoba_kontaktowa", value)} />
+            <EditableInput label="Telefon" value={draft.telefon} onChange={(value) => updateDraft("telefon", value)} />
+            <EditableInput label="Email" type="email" value={draft.email} onChange={(value) => updateDraft("email", value)} />
+            <EditableInput label="NIP" value={draft.nip} onChange={(value) => updateDraft("nip", value)} />
           </FormSection>
 
           <FormSection title="Sprzedaż">
-            <EditableSelect
-              label="Etap"
-              value={draft.etap}
-              onChange={(v) => updateDraft("etap", v)}
-              options={PIPELINE_STAGES.map((stage) => ({
-                value: stage,
-                label: PIPELINE_LABELS[stage],
-              }))}
-            />
-            <EditableSelect
-              label="Status"
-              value={draft.status}
-              onChange={(v) => updateDraft("status", v)}
-              options={STATUSES}
-            />
-            <EditableInput label="Źródło leada" value={draft.zrodlo_leada} onChange={(v) => updateDraft("zrodlo_leada", v)} />
-            <EditableInput label="Szacowany MRR" type="number" value={draft.szacowany_mrr} onChange={(v) => updateDraft("szacowany_mrr", v)} />
+            <EditableSelect label="Etap" value={draft.etap} onChange={(value) => updateDraft("etap", value)} options={PIPELINE_STAGES.map((stage) => ({ value: stage, label: PIPELINE_LABELS[stage] }))} />
+            <EditableSelect label="Status" value={draft.status} onChange={(value) => updateDraft("status", value)} options={STATUSES} />
+            <EditableInput label="Źródło leada" value={draft.zrodlo_leada} onChange={(value) => updateDraft("zrodlo_leada", value)} />
+            <EditableInput label="Szacowany MRR" type="number" value={draft.szacowany_mrr} onChange={(value) => updateDraft("szacowany_mrr", value)} />
           </FormSection>
 
           <FormSection title="Zakres obsługi">
-            <EditableSelect
-               label="Forma prawna"
-               value={draft.forma_prawna}
-               onChange={(v) => updateDraft("forma_prawna", v)}
-               options={[
-               { value: "", label: "Wybierz" },
-               { value: "JDG", label: "JDG" },
-               { value: "Spółka z o.o.", label: "Spółka z o.o." },
-               { value: "Fundacja", label: "Fundacja" },
-               { value: "Stowarzyszenie", label: "Stowarzyszenie" },
-               { value: "Spółka cywilna", label: "Spółka cywilna" },
-               { value: "Inna", label: "Inna" },
-               ]}
-            />
-            <EditableInput label="Liczba dokumentów" type="number" value={draft.liczba_dokumentow} onChange={(v) => updateDraft("liczba_dokumentow", v)} />
-            <EditableInput label="Liczba transakcji" type="number" value={draft.liczba_transakcji} onChange={(v) => updateDraft("liczba_transakcji", v)} />
-            <EditableCheckbox label="Kadry" checked={draft.czy_kadry} onChange={(v) => updateDraft("czy_kadry", v)} />
-            {draft.czy_kadry && (
-              <EditableInput label="Liczba pracowników" type="number" value={draft.liczba_pracownikow} onChange={(v) => updateDraft("liczba_pracownikow", v)} />
-            )}
+            <EditableInput label="Forma prawna" value={draft.forma_prawna} onChange={(value) => updateDraft("forma_prawna", value)} />
+            <EditableInput label="Liczba dokumentów" type="number" value={draft.liczba_dokumentow} onChange={(value) => updateDraft("liczba_dokumentow", value)} />
+            <EditableInput label="Liczba transakcji" type="number" value={draft.liczba_transakcji} onChange={(value) => updateDraft("liczba_transakcji", value)} />
+            <EditableCheckbox label="Kadry" checked={draft.czy_kadry} onChange={(value) => updateDraft("czy_kadry", value)} />
+            {draft.czy_kadry && <EditableInput label="Liczba pracowników" type="number" value={draft.liczba_pracownikow} onChange={(value) => updateDraft("liczba_pracownikow", value)} />}
           </FormSection>
 
           <FormSection title="Zadania sprzedażowe">
-  <div style={taskListStyle}>
-    {(tasks || []).length === 0 ? (
-      <div style={emptyTaskStyle}>Brak zadań dla tej szansy.</div>
-    ) : (
-      (tasks || []).map((task) => {
-        const isDone = task.status === "zrobione";
+            {tasks.length === 0 ? <div style={emptyStyle}>Brak zadań dla tej szansy.</div> : tasks.map((task) => (
+              <button key={task.id} style={taskItemStyle} onClick={() => onToggleTaskStatus?.(task.id)}>
+                <span>{task.tytul}</span>
+                <strong>{task.status === "zrobione" ? "Zrobione" : "Do zrobienia"}</strong>
+              </button>
+            ))}
+          </FormSection>
 
-        return (
-          <div
-            key={task.id}
-            style={{
-              ...taskItemStyle,
-              background: isDone ? "#ecfdf5" : "#f8fafc",
-              borderColor: isDone ? "#bbf7d0" : "#cbd5e1",
-            }}
-          >
-            <label
-              style={{
-                display: "flex",
-                alignItems: "flex-start",
-                gap: 12,
-                flex: 1,
-                cursor: "pointer",
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={isDone}
-                onChange={() => onToggleTaskStatus?.(task.id)}
-                style={{
-                  width: 18,
-                  height: 18,
-                  marginTop: 4,
-                  cursor: "pointer",
-                }}
-              />
-
-              <div>
-                <div
-                  style={{
-                    ...taskTitleStyle,
-                    color: isDone ? "#047857" : "#1e293b",
-                    textDecoration: isDone ? "line-through" : "none",
-                  }}
-                >
-                  {task.tytul}
+          <FormSection title="Oferta PDF">
+            {mode === "create" ? <div style={emptyStyle}>Najpierw zapisz szansę, a potem przejdź do ofert PDF.</div> : (
+              <div style={offerLinkPanelStyle}>
+                <div>
+                  <strong>Oferta PDF i śledzenie klienta</strong>
+                  <p>PDF, prywatny link, statystyki stron, CTA i wysyłka przez n8n są w osobnym ekranie.</p>
                 </div>
-
-                <div
-                  style={{
-                    ...taskMetaStyle,
-                    color: isDone ? "#059669" : "#475569",
-                  }}
-                >
-                  {PIPELINE_LABELS[task.etap] || task.etap}
-                  {task.termin ? ` · termin: ${task.termin}` : ""}
-                </div>
-              </div>
-            </label>
-
-            <button
-              type="button"
-onClick={() => onToggleTaskStatus?.(task.id)}
-              style={{
-                width: 118,
-                minWidth: 118,
-                height: 44,
-                borderRadius: 999,
-                border: "none",
-                cursor: "pointer",
-                fontWeight: 800,
-                fontSize: 13,
-                background: isDone ? "#bbf7d0" : "#e2e8f0",
-                color: isDone ? "#047857" : "#0f172a",
-              }}
-            >
-              {isDone ? "Zrobione" : "Do zrobienia"}
-            </button>
-          </div>
-        );
-      })
-    )}
-  </div>
-</FormSection>
-
-          <FormSection title="Oferta interaktywna">
-            {mode === "create" ? (
-              <div style={emptyTaskStyle}>Najpierw zapisz szanse, a potem przygotuj indywidualna oferte.</div>
-            ) : offerLoading ? (
-              <div style={emptyTaskStyle}>Ladowanie oferty...</div>
-            ) : (
-              <div style={offerPanelStyle}>
-                <div style={offerHeaderStyle}>
-                  <div>
-                    <div style={fileDropzoneTitleStyle}>{offer ? "Oferta dla klienta" : "Nowa oferta dla klienta"}</div>
-                    <div style={fileDropzoneDescriptionStyle}>Edytowalna podstrona z CTA i pomiarem uwagi na sekcjach.</div>
-                  </div>
-                  {offer && <Badge>{offer.status === "published" ? "Opublikowana" : offer.status === "accepted" ? "Zaakceptowana" : "Szkic"}</Badge>}
-                </div>
-
-                <EditableInput label="Tytul" value={offerDraft.tytul} onChange={(v) => updateOfferDraft("tytul", v)} />
-                <EditableInput label="Dla firmy" value={offerDraft.przygotowana_dla} onChange={(v) => updateOfferDraft("przygotowana_dla", v)} />
-                <EditableInput label="Osoba kontaktowa" value={offerDraft.osoba_kontaktowa} onChange={(v) => updateOfferDraft("osoba_kontaktowa", v)} />
-                <EditableTextarea label="Podsumowanie rozmowy" value={offerDraft.podsumowanie_rozmowy} onChange={(v) => updateOfferDraft("podsumowanie_rozmowy", v)} />
-                <EditableTextarea label="Potrzeby klienta" value={offerDraft.potrzeby_klienta} onChange={(v) => updateOfferDraft("potrzeby_klienta", v)} />
-                <EditableInput label="Rekomendowany pakiet" value={offerDraft.rekomendowany_pakiet} onChange={(v) => updateOfferDraft("rekomendowany_pakiet", v)} />
-                <EditableTextarea label="Opis pakietu" value={offerDraft.opis_pakietu} onChange={(v) => updateOfferDraft("opis_pakietu", v)} />
-                <EditableInput label="Cena Standard" type="number" value={offerDraft.cena_standard} onChange={(v) => updateOfferDraft("cena_standard", v)} />
-                <EditableInput label="Cena Premium" type="number" value={offerDraft.cena_premium} onChange={(v) => updateOfferDraft("cena_premium", v)} />
-                <EditableInput label="Cena wdrozenia" type="number" value={offerDraft.cena_wdrozenia} onChange={(v) => updateOfferDraft("cena_wdrozenia", v)} />
-                <EditableTextarea label="Zakres" value={offerDraft.zakres} onChange={(v) => updateOfferDraft("zakres", v)} />
-                <EditableTextarea label="Warunki" value={offerDraft.warunki} onChange={(v) => updateOfferDraft("warunki", v)} />
-                <EditableInput label="CTA" value={offerDraft.cta_label} onChange={(v) => updateOfferDraft("cta_label", v)} />
-                <EditableInput label="Link CTA" value={offerDraft.cta_url} onChange={(v) => updateOfferDraft("cta_url", v)} />
-                <EditableInput label="Link PDF" value={offerDraft.pdf_url} onChange={(v) => updateOfferDraft("pdf_url", v)} />
-                <EditableInput label="Wazna do" type="date" value={offerDraft.wazna_do} onChange={(v) => updateOfferDraft("wazna_do", v)} />
-
-                <div style={offerActionsStyle}>
-                  <button type="button" style={primarySmallButtonStyle} onClick={saveOffer} disabled={offerSaving}>{offerSaving ? "Zapisywanie..." : "Zapisz oferte"}</button>
-                  <button type="button" style={secondaryButtonStyle} onClick={publishOffer} disabled={!offer}>Opublikuj</button>
-                  {offer && <button type="button" style={secondaryButtonStyle} onClick={() => navigator.clipboard.writeText(createOfferUrl(offer.public_token))}>Kopiuj link</button>}
-                  {offer && offer.status !== "draft" && <button type="button" style={secondaryButtonStyle} onClick={() => window.open(createOfferUrl(offer.public_token), "_blank", "noopener,noreferrer")}>Podglad</button>}
-                </div>
-
-                {offer && (
-                  <div style={analyticsGridStyle}>
-                    <SummaryCard label="Otwarcia" value={countEvents(offerEvents, "open")} />
-                    <SummaryCard label="Klikniecia CTA" value={countEvents(offerEvents, "cta_click")} />
-                    <SummaryCard label="Pobrania PDF" value={countEvents(offerEvents, "pdf_download")} />
-                    <SummaryCard label="Najdluzej ogladane" value={topSectionLabel(offerEvents)} />
-                  </div>
-                )}
+                <Link href="/crm/oferty" style={secondaryButtonStyle}>Przejdź do ofert</Link>
               </div>
             )}
           </FormSection>
 
           <FormSection title="Pliki">
-            {mode === "create" ? (
-              <div style={emptyTaskStyle}>
-                Najpierw zapisz szansę, a potem dodaj do niej pliki.
-              </div>
-            ) : (
+            {mode === "create" ? <div style={emptyStyle}>Najpierw zapisz szansę, a potem dodaj pliki.</div> : (
               <>
-                <div
-                  style={fileDropzoneStyle}
-                  onDragOver={(event) => event.preventDefault()}
-                  onDrop={(event) => {
-                    event.preventDefault();
-                    handleDocumentUpload(event.dataTransfer.files);
-                  }}
-                >
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    multiple
-                    style={{ display: "none" }}
-                    onChange={(event) => {
-                      if (event.target.files) {
-                        handleDocumentUpload(event.target.files);
-                        event.target.value = "";
-                      }
-                    }}
-                  />
-
+                <input ref={fileInputRef} type="file" multiple style={{ display: "none" }} onChange={(event) => { if (event.target.files) handleDocumentUpload(event.target.files); }} />
+                <div style={fileDropzoneStyle}>
                   <div>
-                    <div style={fileDropzoneTitleStyle}>Dokumenty szansy</div>
-                    <div style={fileDropzoneDescriptionStyle}>
-                      Propozycje współpracy, wyceny, notatki ze spotkań lub inne dokumenty.
+                    <strong>Dokumenty szansy</strong>
+                    <p>Notatki, pliki klienta i materiały robocze.</p>
+                  </div>
+                  <button style={secondaryButtonStyle} onClick={() => fileInputRef.current?.click()} disabled={uploadingDocument}>{uploadingDocument ? "Dodawanie..." : "Dodaj pliki"}</button>
+                </div>
+                {documentsLoading ? <p style={hintStyle}>Ładowanie dokumentów...</p> : documents.length === 0 ? <p style={hintStyle}>Brak dokumentów.</p> : documents.map((document) => (
+                  <div key={document.id} style={fileItemStyle}>
+                    <div><strong>{document.nazwa}</strong><span>{formatFileSize(document.rozmiar)}</span></div>
+                    <div style={fileActionsStyle}>
+                      <button style={secondaryButtonStyle} onClick={() => openDocument(document)}>Otwórz</button>
+                      <button style={dangerButtonStyle} onClick={() => removeDocument(document)}>Usuń</button>
                     </div>
                   </div>
-
-                  <button
-                    type="button"
-                    style={secondaryButtonStyle}
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={uploadingDocument}
-                  >
-                    {uploadingDocument ? "Dodawanie..." : "Dodaj pliki"}
-                  </button>
-                </div>
-
-                {documentsLoading ? (
-                  <div style={fileHintStyle}>Ładowanie dokumentów...</div>
-                ) : documents.length === 0 ? (
-                  <div style={fileHintStyle}>Brak dokumentów dla tej szansy.</div>
-                ) : (
-                  <div style={fileListStyle}>
-                    {documents.map((document) => (
-                      <div key={document.id} style={fileItemStyle}>
-                        <div>
-                          <div style={fileNameStyle}>{document.nazwa}</div>
-                          <div style={fileMetaStyle}>
-                            {formatFileSize(document.rozmiar)}
-                          </div>
-                        </div>
-
-                        <div style={{ display: "flex", gap: 8 }}>
-                          <button
-                            type="button"
-                            style={secondaryButtonStyle}
-                            onClick={() => openDocument(document)}
-                          >
-                            Otwórz
-                          </button>
-
-                          <button
-                            type="button"
-                            style={fileRemoveButtonStyle}
-                            onClick={() => removeDocument(document)}
-                          >
-                            Usuń
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                ))}
               </>
             )}
           </FormSection>
 
           <FormSection title="Terminy i notatki">
-            <EditableInput label="Data telefonu" type="date" value={draft.data_telefonu} onChange={(v) => updateDraft("data_telefonu", v)} />
-            <EditableInput label="Data spotkania online" type="date" value={draft.data_spotkania_online} onChange={(v) => updateDraft("data_spotkania_online", v)} />
-            <EditableInput label="Data wysłania oferty" type="date" value={draft.data_wyslania_oferty} onChange={(v) => updateDraft("data_wyslania_oferty", v)} />
-            <EditableInput label="Data follow-up" type="date" value={draft.data_follow_up} onChange={(v) => updateDraft("data_follow_up", v)} />
-            <EditableTextarea label="Powód kontaktu" value={draft.powod_kontaktu} onChange={(v) => updateDraft("powod_kontaktu", v)} />
-            <EditableTextarea label="Powód zmiany biura" value={draft.powod_zmiany_biura} onChange={(v) => updateDraft("powod_zmiany_biura", v)} />
-            <EditableTextarea label="Powód przegranej" value={draft.powod_przegranej} onChange={(v) => updateDraft("powod_przegranej", v)} />
-            <EditableTextarea label="Notatki" value={draft.notatki} onChange={(v) => updateDraft("notatki", v)} />
+            <EditableInput label="Data telefonu" type="date" value={draft.data_telefonu} onChange={(value) => updateDraft("data_telefonu", value)} />
+            <EditableInput label="Data spotkania online" type="date" value={draft.data_spotkania_online} onChange={(value) => updateDraft("data_spotkania_online", value)} />
+            <EditableInput label="Data wysłania oferty" type="date" value={draft.data_wyslania_oferty} onChange={(value) => updateDraft("data_wyslania_oferty", value)} />
+            <EditableInput label="Data follow-up" type="date" value={draft.data_follow_up} onChange={(value) => updateDraft("data_follow_up", value)} />
+            <EditableTextarea label="Powód kontaktu" value={draft.powod_kontaktu} onChange={(value) => updateDraft("powod_kontaktu", value)} />
+            <EditableTextarea label="Powód zmiany biura" value={draft.powod_zmiany_biura} onChange={(value) => updateDraft("powod_zmiany_biura", value)} />
+            <EditableTextarea label="Powód przegranej" value={draft.powod_przegranej} onChange={(value) => updateDraft("powod_przegranej", value)} />
+            <EditableTextarea label="Notatki" value={draft.notatki} onChange={(value) => updateDraft("notatki", value)} />
           </FormSection>
         </div>
       </aside>
@@ -1169,808 +459,76 @@ onClick={() => onToggleTaskStatus?.(task.id)}
 }
 
 function createEmptyDraft(): LeadDraft {
-  return {
-    nazwa: "",
-    osoba_kontaktowa: "",
-    telefon: "",
-    email: "",
-    nip: "",
-    forma_prawna: "",
-    etap: "nowy_lead",
-    status: "otwarta",
-    zrodlo_leada: "",
-    szacowany_mrr: "",
-    data_telefonu: "",
-    data_spotkania_online: "",
-    data_wyslania_oferty: "",
-    data_follow_up: "",
-    powod_kontaktu: "",
-    powod_zmiany_biura: "",
-    liczba_dokumentow: "",
-    liczba_transakcji: "",
-    czy_kadry: false,
-    liczba_pracownikow: "",
-    powod_przegranej: "",
-    notatki: "",
-  };
-}
-
-function createOfferDraftFromLead(lead?: Lead): OfferDraft {
-  return {
-    tytul: `Oferta wspolpracy dla ${lead?.nazwa || "klienta"}`,
-    przygotowana_dla: lead?.nazwa || "",
-    osoba_kontaktowa: lead?.osoba_kontaktowa || "",
-    podsumowanie_rozmowy: lead?.powod_kontaktu || "",
-    potrzeby_klienta: lead?.powod_zmiany_biura || "",
-    rekomendowany_pakiet: lead?.czy_kadry ? "Premium" : "Standard",
-    opis_pakietu: "Pakiet dopasowany do informacji z rozmowy i aktualnych potrzeb firmy.",
-    cena_standard: lead?.szacowany_mrr ? String(lead.szacowany_mrr) : "",
-    cena_premium: "",
-    cena_wdrozenia: "",
-    zakres: createDefaultOfferScope(lead),
-    warunki: "Po akceptacji oferty ustalimy harmonogram wdrozenia i osobe odpowiedzialna po stronie klienta.",
-    cta_label: "Chce omowic oferte",
-    cta_url: "",
-    pdf_url: "",
-    wazna_do: "",
-  };
-}
-
-function createOfferDraft(offer: CrmOffer): OfferDraft {
-  return {
-    tytul: offer.tytul || "",
-    przygotowana_dla: offer.przygotowana_dla || "",
-    osoba_kontaktowa: offer.osoba_kontaktowa || "",
-    podsumowanie_rozmowy: offer.podsumowanie_rozmowy || "",
-    potrzeby_klienta: offer.potrzeby_klienta || "",
-    rekomendowany_pakiet: offer.rekomendowany_pakiet || "Standard",
-    opis_pakietu: offer.opis_pakietu || "",
-    cena_standard: offer.cena_standard !== null && offer.cena_standard !== undefined ? String(offer.cena_standard) : "",
-    cena_premium: offer.cena_premium !== null && offer.cena_premium !== undefined ? String(offer.cena_premium) : "",
-    cena_wdrozenia: offer.cena_wdrozenia !== null && offer.cena_wdrozenia !== undefined ? String(offer.cena_wdrozenia) : "",
-    zakres: offer.zakres || "",
-    warunki: offer.warunki || "",
-    cta_label: offer.cta_label || "Chce omowic oferte",
-    cta_url: offer.cta_url || "",
-    pdf_url: offer.pdf_url || "",
-    wazna_do: offer.wazna_do || "",
-  };
-}
-
-function createOfferPayload(crmId: string, draft: OfferDraft): CrmOfferPayload {
-  return {
-    crm_id: crmId,
-    tytul: draft.tytul.trim() || "Oferta wspolpracy",
-    przygotowana_dla: draft.przygotowana_dla.trim() || null,
-    osoba_kontaktowa: draft.osoba_kontaktowa.trim() || null,
-    podsumowanie_rozmowy: draft.podsumowanie_rozmowy.trim() || null,
-    potrzeby_klienta: draft.potrzeby_klienta.trim() || null,
-    rekomendowany_pakiet: draft.rekomendowany_pakiet.trim() || "Standard",
-    opis_pakietu: draft.opis_pakietu.trim() || null,
-    cena_standard: draft.cena_standard ? Number(draft.cena_standard) : null,
-    cena_premium: draft.cena_premium ? Number(draft.cena_premium) : null,
-    cena_wdrozenia: draft.cena_wdrozenia ? Number(draft.cena_wdrozenia) : null,
-    zakres: draft.zakres.trim() || null,
-    warunki: draft.warunki.trim() || null,
-    cta_label: draft.cta_label.trim() || "Chce omowic oferte",
-    cta_url: draft.cta_url.trim() || null,
-    pdf_url: draft.pdf_url.trim() || null,
-    wazna_do: draft.wazna_do || null,
-  };
-}
-
-function createDefaultOfferScope(lead?: Lead) {
-  const parts = [
-    "Biezaca obsluga ksiegowa i podatkowa.",
-    lead?.liczba_dokumentow ? `Szacowana liczba dokumentow: ${lead.liczba_dokumentow}.` : "",
-    lead?.liczba_transakcji ? `Szacowana liczba transakcji: ${lead.liczba_transakcji}.` : "",
-    lead?.czy_kadry ? `Obsluga kadrowo-placowa${lead.liczba_pracownikow ? ` dla ${lead.liczba_pracownikow} osob` : ""}.` : "",
-  ].filter(Boolean);
-  return parts.join("\n");
-}
-
-function createOfferUrl(token: string) {
-  if (typeof window === "undefined") return `/oferta/${token}`;
-  return `${window.location.origin}/oferta/${token}`;
-}
-
-function countEvents(events: CrmOfferEvent[], type: CrmOfferEvent["event_type"]) {
-  return events.filter((event) => event.event_type === type).length;
-}
-
-function topSectionLabel(events: CrmOfferEvent[]) {
-  const totals = events
-    .filter((event) => event.event_type === "section_time" && event.section_key)
-    .reduce<Record<string, number>>((acc, event) => {
-      acc[event.section_key || ""] = (acc[event.section_key || ""] || 0) + Number(event.duration_seconds || 0);
-      return acc;
-    }, {});
-  const [sectionKey] = Object.entries(totals).sort((first, second) => second[1] - first[1])[0] || [];
-  if (!sectionKey) return "Brak danych";
-  const labels: Record<string, string> = { summary: "Podsumowanie", needs: "Potrzeby", package: "Pakiet", scope: "Zakres", terms: "Warunki" };
-  return labels[sectionKey] || sectionKey;
+  return { nazwa: "", osoba_kontaktowa: "", telefon: "", email: "", nip: "", forma_prawna: "", etap: "nowy_lead", status: "otwarta", zrodlo_leada: "", szacowany_mrr: "", data_telefonu: "", data_spotkania_online: "", data_wyslania_oferty: "", data_follow_up: "", powod_kontaktu: "", powod_zmiany_biura: "", liczba_dokumentow: "", liczba_transakcji: "", czy_kadry: false, liczba_pracownikow: "", powod_przegranej: "", notatki: "" };
 }
 
 function createDraft(lead: Lead): LeadDraft {
-  return {
-    nazwa: lead.nazwa || "",
-    osoba_kontaktowa: lead.osoba_kontaktowa || "",
-    telefon: lead.telefon || "",
-    email: lead.email || "",
-    nip: lead.nip || "",
-    forma_prawna: lead.forma_prawna || "",
-    etap: lead.etap || "nowy_lead",
-    status: lead.status || "otwarta",
-    zrodlo_leada: lead.zrodlo_leada || "",
-    szacowany_mrr:
-      lead.szacowany_mrr !== null && lead.szacowany_mrr !== undefined
-        ? String(lead.szacowany_mrr)
-        : "",
-    data_telefonu: formatDateForInput(lead.data_telefonu),
-    data_spotkania_online: formatDateForInput(lead.data_spotkania_online),
-    data_wyslania_oferty: formatDateForInput(lead.data_wyslania_oferty),
-    data_follow_up: formatDateForInput(lead.data_follow_up),
-    powod_kontaktu: lead.powod_kontaktu || "",
-    powod_zmiany_biura: lead.powod_zmiany_biura || "",
-    liczba_dokumentow:
-      lead.liczba_dokumentow !== null && lead.liczba_dokumentow !== undefined
-        ? String(lead.liczba_dokumentow)
-        : "",
-    liczba_transakcji:
-      lead.liczba_transakcji !== null && lead.liczba_transakcji !== undefined
-        ? String(lead.liczba_transakcji)
-        : "",
-    czy_kadry: Boolean(lead.czy_kadry),
-    liczba_pracownikow:
-      lead.liczba_pracownikow !== null && lead.liczba_pracownikow !== undefined
-        ? String(lead.liczba_pracownikow)
-        : "",
-    powod_przegranej: lead.powod_przegranej || "",
-    notatki: lead.notatki || "",
-  };
+  return { nazwa: lead.nazwa || "", osoba_kontaktowa: lead.osoba_kontaktowa || "", telefon: lead.telefon || "", email: lead.email || "", nip: lead.nip || "", forma_prawna: lead.forma_prawna || "", etap: lead.etap || "nowy_lead", status: lead.status || "otwarta", zrodlo_leada: lead.zrodlo_leada || "", szacowany_mrr: lead.szacowany_mrr !== null && lead.szacowany_mrr !== undefined ? String(lead.szacowany_mrr) : "", data_telefonu: formatDateForInput(lead.data_telefonu), data_spotkania_online: formatDateForInput(lead.data_spotkania_online), data_wyslania_oferty: formatDateForInput(lead.data_wyslania_oferty), data_follow_up: formatDateForInput(lead.data_follow_up), powod_kontaktu: lead.powod_kontaktu || "", powod_zmiany_biura: lead.powod_zmiany_biura || "", liczba_dokumentow: lead.liczba_dokumentow !== null && lead.liczba_dokumentow !== undefined ? String(lead.liczba_dokumentow) : "", liczba_transakcji: lead.liczba_transakcji !== null && lead.liczba_transakcji !== undefined ? String(lead.liczba_transakcji) : "", czy_kadry: Boolean(lead.czy_kadry), liczba_pracownikow: lead.liczba_pracownikow !== null && lead.liczba_pracownikow !== undefined ? String(lead.liczba_pracownikow) : "", powod_przegranej: lead.powod_przegranej || "", notatki: lead.notatki || "" };
 }
 
-function formatDateForInput(value: string | null) {
-  if (!value) return "";
-  return value.slice(0, 16);
+function createLeadPayload(draft: LeadDraft) {
+  return { nazwa: draft.nazwa.trim(), osoba_kontaktowa: draft.osoba_kontaktowa.trim() || null, telefon: draft.telefon.trim() || null, email: draft.email.trim() || null, nip: draft.nip.trim() || null, forma_prawna: draft.forma_prawna.trim() || null, etap: draft.etap, status: draft.status, zrodlo_leada: draft.zrodlo_leada.trim() || null, szacowany_mrr: draft.szacowany_mrr ? Number(draft.szacowany_mrr) : null, data_telefonu: draft.data_telefonu || null, data_spotkania_online: draft.data_spotkania_online || null, data_wyslania_oferty: draft.data_wyslania_oferty || null, data_follow_up: draft.data_follow_up || null, powod_kontaktu: draft.powod_kontaktu.trim() || null, powod_zmiany_biura: draft.powod_zmiany_biura.trim() || null, liczba_dokumentow: draft.liczba_dokumentow ? Number(draft.liczba_dokumentow) : null, liczba_transakcji: draft.liczba_transakcji ? Number(draft.liczba_transakcji) : null, czy_kadry: draft.czy_kadry, liczba_pracownikow: draft.liczba_pracownikow ? Number(draft.liczba_pracownikow) : null, powod_przegranej: draft.powod_przegranej.trim() || null, notatki: draft.notatki.trim() || null };
 }
 
-function SummaryCard({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div style={summaryCardStyle}>
-      <div style={summaryLabelStyle}>{label}</div>
-      <div style={summaryValueStyle}>{value}</div>
-    </div>
-  );
-}
-
-function FormSection({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section style={drawerSectionStyle}>
-      <h3 style={drawerSectionTitleStyle}>{title}</h3>
-      <div>{children}</div>
-    </section>
-  );
-}
-
-function EditableInput({
-  label,
-  value,
-  onChange,
-  type = "text",
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  type?: "text" | "number" | "email" | "datetime-local" | "date";
-}) {
-  return (
-    <div style={editableRowStyle}>
-      <label style={infoLabelStyle}>{label}</label>
-      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} style={inputStyle} />
-    </div>
-  );
-}
-
-function EditableSelect({
-  label,
-  value,
-  onChange,
-  options,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  options: { value: string; label: string }[];
-}) {
-  return (
-    <div style={editableRowStyle}>
-      <label style={infoLabelStyle}>{label}</label>
-      <select value={value} onChange={(e) => onChange(e.target.value)} style={inputStyle}>
-        {options.map((option) => (
-          <option key={option.value || "empty"} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
-}
-
-function EditableCheckbox({
-  label,
-  checked,
-  onChange,
-}: {
-  label: string;
-  checked: boolean;
-  onChange: (value: boolean) => void;
-}) {
-  return (
-    <div style={editableRowStyle}>
-      <span style={infoLabelStyle}>{label}</span>
-      <label style={checkboxLabelStyle}>
-        <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
-        <span>{checked ? "Tak" : "Nie"}</span>
-      </label>
-    </div>
-  );
-}
-
-function EditableTextarea({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <div style={textareaRowStyle}>
-      <label style={infoLabelStyle}>{label}</label>
-      <textarea value={value} onChange={(e) => onChange(e.target.value)} style={textareaStyle} rows={4} />
-    </div>
-  );
-}
-
-function Th({ children, width }: { children: React.ReactNode; width?: string }) {
-  return <th style={{ ...thStyle, width }}>{children}</th>;
-}
-
-function Td({ children, strong }: { children: React.ReactNode; strong?: boolean }) {
-  return <td style={{ ...tdStyle, fontWeight: strong ? 800 : 500 }}>{children}</td>;
-}
-
-function Badge({ children }: { children: React.ReactNode }) {
-  return <span style={badgeStyle}>{children}</span>;
-}
-
-function LeadStatusBadge({ status }: { status: string | null }) {
-  return <span style={{ ...badgeStyle, ...leadStatusBadgeStyle(status) }}>{leadStatusLabel(status)}</span>;
-}
-
-function leadStatusLabel(status: string | null) {
-  if (!status) return "Brak";
-  return STATUSES.find((item) => item.value === status)?.label || status.charAt(0).toUpperCase() + status.slice(1);
-}
-
-function leadStatusBadgeStyle(status: string | null): React.CSSProperties {
-  if (status === "wygrana") return { background: "#e7f6ec", color: "#16a34a" };
-  if (status === "przegrana") return { background: "#fde8ea", color: colors.red };
-  if (status === "otwarta") return { background: "#e8eef8", color: colors.navy };
-  return { background: "#f3f5f9", color: colors.navy };
-}
-
-const headerStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "flex-start",
-  justifyContent: "space-between",
-  gap: "24px",
-  marginBottom: "28px",
-};
-
-const eyebrowStyle: React.CSSProperties = {
-  color: colors.red,
-  fontWeight: 800,
-  margin: "0 0 8px",
-};
-
-const titleStyle: React.CSSProperties = {
-  fontSize: "42px",
-  lineHeight: 1.05,
-  margin: 0,
-  color: colors.navy,
-};
-
-const subtitleStyle: React.CSSProperties = {
-  maxWidth: "780px",
-  fontSize: "17px",
-  lineHeight: 1.7,
-  color: colors.muted,
-  marginTop: "14px",
-};
-
-const primaryButtonStyle: React.CSSProperties = {
-  border: "none",
-  borderRadius: radius.button,
-  padding: "16px 22px",
-  background: colors.red,
-  color: colors.white,
-  fontWeight: 800,
-  cursor: "pointer",
-};
-
-const primarySmallButtonStyle: React.CSSProperties = {
-  border: "none",
-  borderRadius: radius.button,
-  padding: "11px 15px",
-  background: colors.red,
-  color: colors.white,
-  fontWeight: 800,
-  cursor: "pointer",
-};
-
-const summaryGridStyle: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-  gap: "18px",
-  marginBottom: "24px",
-};
-
-const summaryCardStyle: React.CSSProperties = {
-  background: colors.card,
-  border: `1px solid ${colors.border}`,
-  borderRadius: radius.card,
-  padding: "22px",
-  boxShadow: shadow.soft,
-};
-
-const summaryLabelStyle: React.CSSProperties = {
-  color: colors.muted,
-  fontWeight: 700,
-  marginBottom: "14px",
-};
-
-const summaryValueStyle: React.CSSProperties = {
-  color: colors.navy,
-  fontSize: "28px",
-  fontWeight: 850,
-};
-
-const pipelineSectionStyle: React.CSSProperties = {
-  background: colors.card,
-  border: `1px solid ${colors.border}`,
-  borderRadius: radius.card,
-  padding: "30px",
-  boxShadow: shadow.soft,
-  marginBottom: "24px",
-};
-
-const pipelineGridStyle: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(5, minmax(220px, 1fr))",
-  gap: "16px",
-  overflowX: "auto",
-};
-
-const pipelineColumnStyle: React.CSSProperties = {
-  border: `1px solid ${colors.border}`,
-  borderRadius: radius.card,
-  background: colors.inputBackground,
-  padding: "16px",
-  minHeight: "260px",
-};
-
-const pipelineTitleStyle: React.CSSProperties = {
-  margin: 0,
-  color: colors.navy,
-  fontSize: "15px",
-  fontWeight: 850,
-};
-
-const pipelineMetaStyle: React.CSSProperties = {
-  margin: "6px 0 14px",
-  color: colors.muted,
-  fontSize: "13px",
-  fontWeight: 700,
-};
-
-const pipelineCardsStyle: React.CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  gap: "10px",
-};
-
-const pipelineCardStyle: React.CSSProperties = {
-  background: colors.white,
-  border: `1px solid ${colors.border}`,
-  borderRadius: radius.input,
-  padding: "14px",
-  cursor: "grab",
-};
-
-const pipelineCardTitleStyle: React.CSSProperties = {
-  color: colors.text,
-  fontWeight: 850,
-  marginBottom: "5px",
-};
-
-const pipelineCardMetaStyle: React.CSSProperties = {
-  color: colors.muted,
-  fontSize: "13px",
-  fontWeight: 650,
-};
-
-const pipelineCardFooterStyle: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: "10px",
-  marginTop: "14px",
-  color: colors.muted,
-  fontSize: "13px",
-};
-
-const pipelineEmptyStyle: React.CSSProperties = {
-  border: `1px dashed ${colors.border}`,
-  borderRadius: radius.input,
-  padding: "18px",
-  textAlign: "center",
-  color: colors.muted,
-  fontWeight: 700,
-};
-
-const pipelineGlobalEmptyStyle: React.CSSProperties = {
-  marginTop: "18px",
-  border: `1px dashed ${colors.border}`,
-  borderRadius: radius.input,
-  padding: "20px",
-  textAlign: "center",
-  color: colors.muted,
-  fontWeight: 800,
-  background: colors.inputBackground,
-};
-
-const cardStyle: React.CSSProperties = {
-  background: colors.card,
-  border: `1px solid ${colors.border}`,
-  borderRadius: radius.card,
-  padding: "30px",
-  boxShadow: shadow.soft,
-};
-
-const tableHeaderStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  marginBottom: "22px",
-};
-
-const sectionTitleStyle: React.CSSProperties = {
-  margin: 0,
-  color: colors.navy,
-  fontSize: "24px",
-};
-
-const counterStyle: React.CSSProperties = {
-  color: colors.muted,
-  fontWeight: 700,
-};
-
-const compactFiltersRowStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: "12px",
-  marginBottom: "22px",
-  flexWrap: "wrap",
-};
-
-const filtersLabelStyle: React.CSSProperties = {
-  fontSize: "14px",
-  fontWeight: 700,
-  color: colors.muted,
-};
-
-const compactFilterStyle: React.CSSProperties = {
-  border: `1px solid ${colors.border}`,
-  borderRadius: radius.button,
-  padding: "10px 14px",
-  background: colors.card,
-  color: colors.text,
-  fontSize: "14px",
-  minWidth: "160px",
-};
-
-const tableWrapperStyle: React.CSSProperties = {
-  width: "100%",
-  overflowX: "auto",
-};
-
-const tableStyle: React.CSSProperties = {
-  width: "100%",
-  borderCollapse: "collapse",
-};
-
-const thStyle: React.CSSProperties = {
-  textAlign: "left",
-  padding: "14px 16px",
-  color: colors.muted,
-  fontSize: "13px",
-  textTransform: "uppercase",
-  letterSpacing: "0.04em",
-  borderBottom: `1px solid ${colors.border}`,
-};
-
-const rowStyle: React.CSSProperties = {
-  borderBottom: `1px solid ${colors.border}`,
-};
-
-const tdStyle: React.CSSProperties = {
-  padding: "18px 16px",
-  color: colors.text,
-  verticalAlign: "middle",
-};
-
-const badgeStyle: React.CSSProperties = {
-  display: "inline-flex",
-  borderRadius: radius.badge,
-  padding: "7px 12px",
-  background: "rgba(23, 59, 115, 0.10)",
-  color: colors.navy,
-  fontWeight: 800,
-  fontSize: "13px",
-};
-
-const secondaryButtonStyle: React.CSSProperties = {
-  border: `1px solid ${colors.border}`,
-  borderRadius: radius.button,
-  padding: "10px 14px",
-  background: colors.white,
-  color: colors.navy,
-  fontWeight: 800,
-  cursor: "pointer",
-};
-
-const emptyStateStyle: React.CSSProperties = {
-  padding: "28px",
-  borderRadius: radius.input,
-  background: colors.inputBackground,
-  border: `1px dashed ${colors.border}`,
-  color: colors.muted,
-  textAlign: "center",
-};
-
-const drawerOverlayStyle: React.CSSProperties = {
-  position: "fixed",
-  inset: 0,
-  zIndex: 50,
-  background: "rgba(15, 23, 42, 0.32)",
-  backdropFilter: "blur(3px)",
-  display: "flex",
-  justifyContent: "flex-end",
-};
-
-const drawerStyle: React.CSSProperties = {
-  width: "560px",
-  maxWidth: "100%",
-  height: "100vh",
-  background: colors.card,
-  borderLeft: `1px solid ${colors.border}`,
-  boxShadow: "-12px 0 30px rgba(15, 23, 42, 0.12)",
-  padding: "28px",
-  overflowY: "auto",
-};
-
-const drawerHeaderStyle: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: "18px",
-  marginBottom: "16px",
-};
-
-const drawerActionsStyle: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "flex-end",
-  gap: "10px",
-  marginBottom: "24px",
-};
-
-const drawerTitleStyle: React.CSSProperties = {
-  margin: 0,
-  color: colors.navy,
-  fontSize: "28px",
-  lineHeight: 1.15,
-};
-
-const closeButtonStyle: React.CSSProperties = {
-  width: "40px",
-  height: "40px",
-  borderRadius: "999px",
-  border: `1px solid ${colors.border}`,
-  background: colors.white,
-  color: colors.navy,
-  cursor: "pointer",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-};
-
-const drawerContentStyle: React.CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  gap: "18px",
-};
-
-const drawerSectionStyle: React.CSSProperties = {
-  border: `1px solid ${colors.border}`,
-  borderRadius: radius.card,
-  padding: "20px",
-  background: colors.white,
-};
-
-const drawerSectionTitleStyle: React.CSSProperties = {
-  margin: "0 0 14px",
-  color: colors.navy,
-  fontSize: "18px",
-};
-
-const editableRowStyle: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "180px 1fr",
-  gap: "14px",
-  alignItems: "center",
-  padding: "10px 0",
-  borderBottom: `1px solid ${colors.border}`,
-};
-
-const textareaRowStyle: React.CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  gap: "8px",
-};
-
-const infoLabelStyle: React.CSSProperties = {
-  color: colors.muted,
-  fontWeight: 700,
-  fontSize: "14px",
-};
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  border: `1px solid ${colors.border}`,
-  borderRadius: radius.input,
-  padding: "10px 12px",
-  background: colors.inputBackground,
-  color: colors.text,
-  fontWeight: 650,
-  outline: "none",
-};
-
-const textareaStyle: React.CSSProperties = {
-  ...inputStyle,
-  resize: "vertical",
-  minHeight: "96px",
-  lineHeight: 1.6,
-};
-
-const checkboxLabelStyle: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: "9px",
-  color: colors.text,
-  fontWeight: 750,
-};
-
-const taskListStyle: React.CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  gap: "10px",
-};
-
-const taskItemStyle: React.CSSProperties = {
-  border: `1px solid ${colors.border}`,
-  borderRadius: radius.input,
-  padding: "14px",
-  background: colors.inputBackground,
-  display: "flex",
-  justifyContent: "space-between",
-  gap: "14px",
-};
-
-const taskTitleStyle: React.CSSProperties = {
-  fontWeight: 850,
-  color: colors.text,
-  marginBottom: "5px",
-};
-
-const taskMetaStyle: React.CSSProperties = {
-  color: colors.muted,
-  fontSize: "13px",
-  fontWeight: 650,
-};
-
-const emptyTaskStyle: React.CSSProperties = {
-  border: `1px dashed ${colors.border}`,
-  borderRadius: radius.input,
-  padding: "18px",
-  color: colors.muted,
-  fontWeight: 700,
-  textAlign: "center",
-};
-
-const fileDropzoneStyle: React.CSSProperties = {
-  border: `1px dashed ${colors.border}`,
-  borderRadius: radius.input,
-  padding: "18px",
-  background: colors.inputBackground,
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  gap: "16px",
-};
-
-const fileDropzoneTitleStyle: React.CSSProperties = {
-  color: colors.text,
-  fontWeight: 850,
-  marginBottom: "5px",
-};
-
-const fileDropzoneDescriptionStyle: React.CSSProperties = {
-  color: colors.muted,
-  fontSize: "13px",
-  fontWeight: 650,
-  lineHeight: 1.5,
-};
-
-const fileListStyle: React.CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  gap: "10px",
-  marginTop: "14px",
-};
-
-const fileItemStyle: React.CSSProperties = {
-  border: `1px solid ${colors.border}`,
-  borderRadius: radius.input,
-  padding: "12px 14px",
-  background: colors.white,
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  gap: "12px",
-};
-
-const fileNameStyle: React.CSSProperties = {
-  color: colors.text,
-  fontWeight: 800,
-  wordBreak: "break-word",
-};
-
-const fileMetaStyle: React.CSSProperties = {
-  color: colors.muted,
-  fontSize: "13px",
-  fontWeight: 650,
-  marginTop: "3px",
-};
-
-const fileRemoveButtonStyle: React.CSSProperties = {
-  border: "none",
-  borderRadius: radius.button,
-  padding: "8px 12px",
-  background: "rgba(220, 38, 38, 0.10)",
-  color: colors.danger,
-  fontWeight: 800,
-  cursor: "pointer",
-};
-
-const fileHintStyle: React.CSSProperties = {
-  margin: "12px 0 0",
-  color: colors.muted,
-  fontSize: "13px",
-  lineHeight: 1.6,
-};
-
-const offerPanelStyle: React.CSSProperties = { display: "flex", flexDirection: "column", gap: "12px" };
-const offerHeaderStyle: React.CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "14px", padding: "16px", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground };
-const offerActionsStyle: React.CSSProperties = { display: "flex", flexWrap: "wrap", gap: "10px", marginTop: "4px" };
-const analyticsGridStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "10px", marginTop: "8px" };
+function formatDateForInput(value: string | null) { return value ? value.slice(0, 10) : ""; }
+function formatFileSize(size: number | null) { if (!size) return "Brak rozmiaru"; return size < 1024 * 1024 ? `${Math.max(1, Math.round(size / 1024))} KB` : `${(size / 1024 / 1024).toFixed(1)} MB`; }
+function statusLabel(status: string | null) { return STATUSES.find((item) => item.value === status)?.label || status || "Brak"; }
+
+function SummaryCard({ label, value }: { label: string; value: string | number }) { return <div style={summaryCardStyle}><span>{label}</span><strong>{value}</strong></div>; }
+function FormSection({ title, children }: { title: string; children: React.ReactNode }) { return <section style={drawerSectionStyle}><h3>{title}</h3>{children}</section>; }
+function EditableInput({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (value: string) => void; type?: "text" | "number" | "email" | "date" }) { return <label style={editableRowStyle}><span>{label}</span><input type={type} value={value} onChange={(event) => onChange(event.target.value)} style={inputStyle} /></label>; }
+function EditableSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: { value: string; label: string }[] }) { return <label style={editableRowStyle}><span>{label}</span><select value={value} onChange={(event) => onChange(event.target.value)} style={inputStyle}>{options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>; }
+function EditableCheckbox({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) { return <label style={editableRowStyle}><span>{label}</span><input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} /></label>; }
+function EditableTextarea({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) { return <label style={textareaRowStyle}><span>{label}</span><textarea value={value} onChange={(event) => onChange(event.target.value)} style={textareaStyle} rows={4} /></label>; }
+function Th({ children }: { children: React.ReactNode }) { return <th style={thStyle}>{children}</th>; }
+function Td({ children, strong }: { children: React.ReactNode; strong?: boolean }) { return <td style={{ ...tdStyle, fontWeight: strong ? 800 : 500 }}>{children}</td>; }
+function Badge({ children }: { children: React.ReactNode }) { return <span style={badgeStyle}>{children}</span>; }
+
+const headerStyle: React.CSSProperties = { display: "flex", justifyContent: "space-between", gap: "24px", alignItems: "flex-start", marginBottom: "28px" };
+const headerActionsStyle: React.CSSProperties = { display: "flex", gap: "12px", flexWrap: "wrap", justifyContent: "flex-end" };
+const eyebrowStyle: React.CSSProperties = { color: colors.red, fontWeight: 800, margin: "0 0 8px" };
+const titleStyle: React.CSSProperties = { fontSize: "42px", lineHeight: 1.05, margin: 0, color: colors.navy };
+const subtitleStyle: React.CSSProperties = { maxWidth: "780px", fontSize: "17px", lineHeight: 1.7, color: colors.muted, marginTop: "14px" };
+const primaryButtonStyle: React.CSSProperties = { border: "none", borderRadius: radius.button, padding: "14px 18px", background: colors.red, color: colors.white, fontWeight: 800, cursor: "pointer", textDecoration: "none" };
+const primarySmallButtonStyle: React.CSSProperties = { ...primaryButtonStyle, padding: "11px 15px" };
+const secondaryButtonStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "10px 14px", background: colors.white, color: colors.navy, fontWeight: 800, cursor: "pointer", textDecoration: "none" };
+const summaryGridStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "18px", marginBottom: "24px" };
+const summaryCardStyle: React.CSSProperties = { background: colors.card, border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: "22px", boxShadow: shadow.soft, display: "flex", flexDirection: "column", gap: "10px", color: colors.muted, fontWeight: 800 };
+const cardStyle: React.CSSProperties = { background: colors.card, border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: "28px", boxShadow: shadow.soft, marginBottom: "24px" };
+const tableHeaderStyle: React.CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "18px" };
+const sectionTitleStyle: React.CSSProperties = { margin: 0, color: colors.navy, fontSize: "24px" };
+const counterStyle: React.CSSProperties = { color: colors.muted, fontWeight: 700 };
+const pipelineGridStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(5, minmax(220px, 1fr))", gap: "16px", overflowX: "auto" };
+const pipelineColumnStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.inputBackground, padding: "16px", minHeight: "260px" };
+const pipelineTitleStyle: React.CSSProperties = { margin: 0, color: colors.navy, fontSize: "15px", fontWeight: 850 };
+const pipelineMetaStyle: React.CSSProperties = { margin: "6px 0 14px", color: colors.muted, fontSize: "13px", fontWeight: 700 };
+const pipelineCardsStyle: React.CSSProperties = { display: "flex", flexDirection: "column", gap: "10px" };
+const pipelineCardStyle: React.CSSProperties = { background: colors.white, border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "14px", cursor: "grab", display: "flex", flexDirection: "column", gap: "5px", textAlign: "left", color: colors.text };
+const filtersStyle: React.CSSProperties = { display: "flex", gap: "12px", flexWrap: "wrap", marginBottom: "18px" };
+const filterStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "10px 14px", background: colors.card, color: colors.text, minWidth: "160px" };
+const tableWrapperStyle: React.CSSProperties = { overflowX: "auto" };
+const tableStyle: React.CSSProperties = { width: "100%", borderCollapse: "collapse" };
+const thStyle: React.CSSProperties = { textAlign: "left", padding: "14px 16px", color: colors.muted, fontSize: "13px", textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: `1px solid ${colors.border}` };
+const rowStyle: React.CSSProperties = { borderBottom: `1px solid ${colors.border}` };
+const tdStyle: React.CSSProperties = { padding: "16px", color: colors.text, verticalAlign: "middle" };
+const badgeStyle: React.CSSProperties = { display: "inline-flex", borderRadius: radius.badge, padding: "7px 12px", background: "rgba(23, 59, 115, 0.10)", color: colors.navy, fontWeight: 800, fontSize: "13px" };
+const emptyStyle: React.CSSProperties = { border: `1px dashed ${colors.border}`, borderRadius: radius.input, padding: "18px", color: colors.muted, fontWeight: 700, textAlign: "center" };
+const drawerOverlayStyle: React.CSSProperties = { position: "fixed", inset: 0, zIndex: 50, background: "rgba(15, 23, 42, 0.32)", backdropFilter: "blur(3px)", display: "flex", justifyContent: "flex-end" };
+const drawerStyle: React.CSSProperties = { width: "560px", maxWidth: "100%", height: "100vh", background: colors.card, borderLeft: `1px solid ${colors.border}`, boxShadow: "-12px 0 30px rgba(15, 23, 42, 0.12)", padding: "28px", overflowY: "auto" };
+const drawerHeaderStyle: React.CSSProperties = { display: "flex", justifyContent: "space-between", gap: "18px", marginBottom: "16px" };
+const drawerActionsStyle: React.CSSProperties = { display: "flex", justifyContent: "flex-end", gap: "10px", marginBottom: "24px" };
+const drawerTitleStyle: React.CSSProperties = { margin: 0, color: colors.navy, fontSize: "28px", lineHeight: 1.15 };
+const closeButtonStyle: React.CSSProperties = { width: "40px", height: "40px", borderRadius: "999px", border: `1px solid ${colors.border}`, background: colors.white, color: colors.navy, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" };
+const drawerContentStyle: React.CSSProperties = { display: "flex", flexDirection: "column", gap: "18px" };
+const drawerSectionStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: "20px", background: colors.white };
+const editableRowStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "180px 1fr", gap: "14px", alignItems: "center", padding: "10px 0", borderBottom: `1px solid ${colors.border}`, color: colors.muted, fontWeight: 700 };
+const textareaRowStyle: React.CSSProperties = { display: "flex", flexDirection: "column", gap: "8px", color: colors.muted, fontWeight: 700 };
+const inputStyle: React.CSSProperties = { width: "100%", border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "10px 12px", background: colors.inputBackground, color: colors.text, fontWeight: 650, outline: "none" };
+const textareaStyle: React.CSSProperties = { ...inputStyle, resize: "vertical", minHeight: "96px", lineHeight: 1.6 };
+const taskItemStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "14px", background: colors.inputBackground, display: "flex", justifyContent: "space-between", gap: "14px", width: "100%", textAlign: "left", cursor: "pointer" };
+const offerLinkPanelStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "16px", background: colors.inputBackground, display: "flex", justifyContent: "space-between", gap: "14px", alignItems: "center" };
+const fileDropzoneStyle: React.CSSProperties = { border: `1px dashed ${colors.border}`, borderRadius: radius.input, padding: "18px", background: colors.inputBackground, display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "center" };
+const fileItemStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "12px 14px", background: colors.white, display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", marginTop: "10px" };
+const fileActionsStyle: React.CSSProperties = { display: "flex", gap: "8px" };
+const dangerButtonStyle: React.CSSProperties = { border: "none", borderRadius: radius.button, padding: "8px 12px", background: "rgba(220, 38, 38, 0.10)", color: colors.danger, fontWeight: 800, cursor: "pointer" };
+const hintStyle: React.CSSProperties = { color: colors.muted, fontSize: "13px", lineHeight: 1.6 };

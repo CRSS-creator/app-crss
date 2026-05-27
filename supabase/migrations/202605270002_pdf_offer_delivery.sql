@@ -11,6 +11,11 @@ insert into storage.buckets (id, name, public)
 values ('crm-oferty-pdf', 'crm-oferty-pdf', true)
 on conflict (id) do update set public = true;
 
+drop policy if exists "crm_offer_pdf_public_read" on storage.objects;
+drop policy if exists "crm_offer_pdf_owner_insert" on storage.objects;
+drop policy if exists "crm_offer_pdf_owner_update" on storage.objects;
+drop policy if exists "crm_offer_pdf_owner_delete" on storage.objects;
+
 create policy "crm_offer_pdf_public_read"
   on storage.objects for select
   using (bucket_id = 'crm-oferty-pdf');

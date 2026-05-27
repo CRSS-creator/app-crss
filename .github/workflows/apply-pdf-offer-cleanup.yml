@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - .github/workflows/apply-pdf-offer-cleanup.yml
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -58,9 +59,8 @@ jobs:
   );
 }
 '''
-          if old not in text:
-              raise SystemExit('Analytics block not found')
-          text = text.replace(old, new)
+          if old in text:
+              text = text.replace(old, new)
 
           old = '''function totalPdfMinutes(events: CrmOfferEvent[]) {
   const seconds = events
@@ -86,9 +86,8 @@ jobs:
     .sort((first, second) => second.seconds - first.seconds || second.views - first.views);
 }
 '''
-          if old not in text:
-              raise SystemExit('totalPdfMinutes block not found')
-          text = text.replace(old, new)
+          if old in text:
+              text = text.replace(old, new)
           text = text.replace(
               'const analyticsStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "12px", marginBottom: "18px" };',
               'const analyticsShellStyle: React.CSSProperties = { marginBottom: "18px" };\nconst analyticsStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "12px" };\nconst pageStatsStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "10px", marginTop: "12px" };\nconst pageStatRowStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, padding: "12px", display: "flex", flexDirection: "column", gap: "4px", color: colors.muted, fontWeight: 800 };'

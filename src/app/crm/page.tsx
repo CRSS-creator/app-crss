@@ -18,6 +18,16 @@ import {
   uploadCrmDocument,
   type CrmDocument,
 } from "@/lib/crmDocumentsService";
+import {
+  createCrmOffer,
+  fetchCrmOfferEvents,
+  fetchCrmOffers,
+  publishCrmOffer,
+  updateCrmOffer,
+  type CrmOffer,
+  type CrmOfferEvent,
+  type CrmOfferPayload,
+} from "@/lib/crmOfferService";
 import { colors, radius, shadow } from "@/app/design";
 import { X } from "lucide-react";
 
@@ -85,6 +95,25 @@ type CrmTask = {
   termin: string | null;
   created_at: string | null;
   updated_at: string | null;
+};
+
+type OfferDraft = {
+  tytul: string;
+  przygotowana_dla: string;
+  osoba_kontaktowa: string;
+  podsumowanie_rozmowy: string;
+  potrzeby_klienta: string;
+  rekomendowany_pakiet: string;
+  opis_pakietu: string;
+  cena_standard: string;
+  cena_premium: string;
+  cena_wdrozenia: string;
+  zakres: string;
+  warunki: string;
+  cta_label: string;
+  cta_url: string;
+  pdf_url: string;
+  wazna_do: string;
 };
 
 const EMPTY_FILTER = "Wszystkie";
@@ -571,6 +600,13 @@ function LeadDrawer({
   const [documents, setDocuments] = useState<CrmDocument[]>([]);
   const [documentsLoading, setDocumentsLoading] = useState(mode === "edit");
   const [uploadingDocument, setUploadingDocument] = useState(false);
+  const [offer, setOffer] = useState<CrmOffer | null>(null);
+  const [offerEvents, setOfferEvents] = useState<CrmOfferEvent[]>([]);
+  const [offerLoading, setOfferLoading] = useState(mode === "edit");
+  const [offerSaving, setOfferSaving] = useState(false);
+  const [offerDraft, setOfferDraft] = useState<OfferDraft>(() =>
+    createOfferDraftFromLead(lead)
+  );
   const [draft, setDraft] = useState<LeadDraft>(() =>
     lead ? createDraft(lead) : createEmptyDraft()
   );
@@ -585,12 +621,74 @@ function LeadDrawer({
   useEffect(() => {
     if (mode === "edit" && lead) {
       loadDocuments();
+      loadOffer();
       return;
     }
 
     setDocuments([]);
     setDocumentsLoading(false);
+    setOffer(null);
+    setOfferEvents([]);
+    setOfferLoading(false);
   }, [mode, lead?.id]);
+
+  function updateOfferDraft<K extends keyof OfferDraft>(key: K, value: OfferDraft[K]) {
+    setOfferDraft((current) => ({ ...current, [key]: value }));
+  }
+
+  async function loadOffer() {
+    if (!lead) return;
+    setOfferLoading(true);
+    const { data, error } = await fetchCrmOffers(lead.id);
+    if (error) {
+      console.error("Blad pobierania ofert CRM:", error);
+      setOfferLoading(false);
+      return;
+    }
+    const firstOffer = (data?.[0] || null) as CrmOffer | null;
+    setOffer(firstOffer);
+    setOfferDraft(firstOffer ? createOfferDraft(firstOffer) : createOfferDraftFromLead(lead));
+    setOfferLoading(false);
+    if (firstOffer) await loadOfferEvents(firstOffer.id);
+  }
+
+  async function loadOfferEvents(offerId: string) {
+    const { data, error } = await fetchCrmOfferEvents(offerId);
+    if (error) {
+      console.error("Blad pobierania statystyk oferty:", error);
+      return;
+    }
+    setOfferEvents((data || []) as CrmOfferEvent[]);
+  }
+
+  async function saveOffer() {
+    if (!lead) return;
+    setOfferSaving(true);
+    const payload = createOfferPayload(lead.id, offerDraft);
+    const result = offer ? await updateCrmOffer(offer.id, payload) : await createCrmOffer(payload);
+    setOfferSaving(false);
+    if (result.error) {
+      console.error("Blad zapisu oferty:", result.error);
+      alert("Nie udalo sie zapisac oferty.");
+      return;
+    }
+    setOffer(result.data as CrmOffer);
+    await loadOfferEvents((result.data as CrmOffer).id);
+  }
+
+  async function publishOffer() {
+    if (!offer) {
+      alert("Najpierw zapisz oferte, potem ja opublikuj.");
+      return;
+    }
+    const { data, error } = await publishCrmOffer(offer.id);
+    if (error) {
+      console.error("Blad publikacji oferty:", error);
+      alert("Nie udalo sie opublikowac oferty.");
+      return;
+    }
+    setOffer(data as CrmOffer);
+  }
 
   async function loadDocuments() {
     if (!lead) return;
@@ -918,6 +1016,57 @@ onClick={() => onToggleTaskStatus?.(task.id)}
   </div>
 </FormSection>
 
+          <FormSection title="Oferta interaktywna">
+            {mode === "create" ? (
+              <div style={emptyTaskStyle}>Najpierw zapisz szanse, a potem przygotuj indywidualna oferte.</div>
+            ) : offerLoading ? (
+              <div style={emptyTaskStyle}>Ladowanie oferty...</div>
+            ) : (
+              <div style={offerPanelStyle}>
+                <div style={offerHeaderStyle}>
+                  <div>
+                    <div style={fileDropzoneTitleStyle}>{offer ? "Oferta dla klienta" : "Nowa oferta dla klienta"}</div>
+                    <div style={fileDropzoneDescriptionStyle}>Edytowalna podstrona z CTA i pomiarem uwagi na sekcjach.</div>
+                  </div>
+                  {offer && <Badge>{offer.status === "published" ? "Opublikowana" : offer.status === "accepted" ? "Zaakceptowana" : "Szkic"}</Badge>}
+                </div>
+
+                <EditableInput label="Tytul" value={offerDraft.tytul} onChange={(v) => updateOfferDraft("tytul", v)} />
+                <EditableInput label="Dla firmy" value={offerDraft.przygotowana_dla} onChange={(v) => updateOfferDraft("przygotowana_dla", v)} />
+                <EditableInput label="Osoba kontaktowa" value={offerDraft.osoba_kontaktowa} onChange={(v) => updateOfferDraft("osoba_kontaktowa", v)} />
+                <EditableTextarea label="Podsumowanie rozmowy" value={offerDraft.podsumowanie_rozmowy} onChange={(v) => updateOfferDraft("podsumowanie_rozmowy", v)} />
+                <EditableTextarea label="Potrzeby klienta" value={offerDraft.potrzeby_klienta} onChange={(v) => updateOfferDraft("potrzeby_klienta", v)} />
+                <EditableInput label="Rekomendowany pakiet" value={offerDraft.rekomendowany_pakiet} onChange={(v) => updateOfferDraft("rekomendowany_pakiet", v)} />
+                <EditableTextarea label="Opis pakietu" value={offerDraft.opis_pakietu} onChange={(v) => updateOfferDraft("opis_pakietu", v)} />
+                <EditableInput label="Cena Standard" type="number" value={offerDraft.cena_standard} onChange={(v) => updateOfferDraft("cena_standard", v)} />
+                <EditableInput label="Cena Premium" type="number" value={offerDraft.cena_premium} onChange={(v) => updateOfferDraft("cena_premium", v)} />
+                <EditableInput label="Cena wdrozenia" type="number" value={offerDraft.cena_wdrozenia} onChange={(v) => updateOfferDraft("cena_wdrozenia", v)} />
+                <EditableTextarea label="Zakres" value={offerDraft.zakres} onChange={(v) => updateOfferDraft("zakres", v)} />
+                <EditableTextarea label="Warunki" value={offerDraft.warunki} onChange={(v) => updateOfferDraft("warunki", v)} />
+                <EditableInput label="CTA" value={offerDraft.cta_label} onChange={(v) => updateOfferDraft("cta_label", v)} />
+                <EditableInput label="Link CTA" value={offerDraft.cta_url} onChange={(v) => updateOfferDraft("cta_url", v)} />
+                <EditableInput label="Link PDF" value={offerDraft.pdf_url} onChange={(v) => updateOfferDraft("pdf_url", v)} />
+                <EditableInput label="Wazna do" type="date" value={offerDraft.wazna_do} onChange={(v) => updateOfferDraft("wazna_do", v)} />
+
+                <div style={offerActionsStyle}>
+                  <button type="button" style={primarySmallButtonStyle} onClick={saveOffer} disabled={offerSaving}>{offerSaving ? "Zapisywanie..." : "Zapisz oferte"}</button>
+                  <button type="button" style={secondaryButtonStyle} onClick={publishOffer} disabled={!offer}>Opublikuj</button>
+                  {offer && <button type="button" style={secondaryButtonStyle} onClick={() => navigator.clipboard.writeText(createOfferUrl(offer.public_token))}>Kopiuj link</button>}
+                  {offer && offer.status !== "draft" && <button type="button" style={secondaryButtonStyle} onClick={() => window.open(createOfferUrl(offer.public_token), "_blank", "noopener,noreferrer")}>Podglad</button>}
+                </div>
+
+                {offer && (
+                  <div style={analyticsGridStyle}>
+                    <SummaryCard label="Otwarcia" value={countEvents(offerEvents, "open")} />
+                    <SummaryCard label="Klikniecia CTA" value={countEvents(offerEvents, "cta_click")} />
+                    <SummaryCard label="Pobrania PDF" value={countEvents(offerEvents, "pdf_download")} />
+                    <SummaryCard label="Najdluzej ogladane" value={topSectionLabel(offerEvents)} />
+                  </div>
+                )}
+              </div>
+            )}
+          </FormSection>
+
           <FormSection title="Pliki">
             {mode === "create" ? (
               <div style={emptyTaskStyle}>
@@ -1044,6 +1193,102 @@ function createEmptyDraft(): LeadDraft {
     powod_przegranej: "",
     notatki: "",
   };
+}
+
+function createOfferDraftFromLead(lead?: Lead): OfferDraft {
+  return {
+    tytul: `Oferta wspolpracy dla ${lead?.nazwa || "klienta"}`,
+    przygotowana_dla: lead?.nazwa || "",
+    osoba_kontaktowa: lead?.osoba_kontaktowa || "",
+    podsumowanie_rozmowy: lead?.powod_kontaktu || "",
+    potrzeby_klienta: lead?.powod_zmiany_biura || "",
+    rekomendowany_pakiet: lead?.czy_kadry ? "Premium" : "Standard",
+    opis_pakietu: "Pakiet dopasowany do informacji z rozmowy i aktualnych potrzeb firmy.",
+    cena_standard: lead?.szacowany_mrr ? String(lead.szacowany_mrr) : "",
+    cena_premium: "",
+    cena_wdrozenia: "",
+    zakres: createDefaultOfferScope(lead),
+    warunki: "Po akceptacji oferty ustalimy harmonogram wdrozenia i osobe odpowiedzialna po stronie klienta.",
+    cta_label: "Chce omowic oferte",
+    cta_url: "",
+    pdf_url: "",
+    wazna_do: "",
+  };
+}
+
+function createOfferDraft(offer: CrmOffer): OfferDraft {
+  return {
+    tytul: offer.tytul || "",
+    przygotowana_dla: offer.przygotowana_dla || "",
+    osoba_kontaktowa: offer.osoba_kontaktowa || "",
+    podsumowanie_rozmowy: offer.podsumowanie_rozmowy || "",
+    potrzeby_klienta: offer.potrzeby_klienta || "",
+    rekomendowany_pakiet: offer.rekomendowany_pakiet || "Standard",
+    opis_pakietu: offer.opis_pakietu || "",
+    cena_standard: offer.cena_standard !== null && offer.cena_standard !== undefined ? String(offer.cena_standard) : "",
+    cena_premium: offer.cena_premium !== null && offer.cena_premium !== undefined ? String(offer.cena_premium) : "",
+    cena_wdrozenia: offer.cena_wdrozenia !== null && offer.cena_wdrozenia !== undefined ? String(offer.cena_wdrozenia) : "",
+    zakres: offer.zakres || "",
+    warunki: offer.warunki || "",
+    cta_label: offer.cta_label || "Chce omowic oferte",
+    cta_url: offer.cta_url || "",
+    pdf_url: offer.pdf_url || "",
+    wazna_do: offer.wazna_do || "",
+  };
+}
+
+function createOfferPayload(crmId: string, draft: OfferDraft): CrmOfferPayload {
+  return {
+    crm_id: crmId,
+    tytul: draft.tytul.trim() || "Oferta wspolpracy",
+    przygotowana_dla: draft.przygotowana_dla.trim() || null,
+    osoba_kontaktowa: draft.osoba_kontaktowa.trim() || null,
+    podsumowanie_rozmowy: draft.podsumowanie_rozmowy.trim() || null,
+    potrzeby_klienta: draft.potrzeby_klienta.trim() || null,
+    rekomendowany_pakiet: draft.rekomendowany_pakiet.trim() || "Standard",
+    opis_pakietu: draft.opis_pakietu.trim() || null,
+    cena_standard: draft.cena_standard ? Number(draft.cena_standard) : null,
+    cena_premium: draft.cena_premium ? Number(draft.cena_premium) : null,
+    cena_wdrozenia: draft.cena_wdrozenia ? Number(draft.cena_wdrozenia) : null,
+    zakres: draft.zakres.trim() || null,
+    warunki: draft.warunki.trim() || null,
+    cta_label: draft.cta_label.trim() || "Chce omowic oferte",
+    cta_url: draft.cta_url.trim() || null,
+    pdf_url: draft.pdf_url.trim() || null,
+    wazna_do: draft.wazna_do || null,
+  };
+}
+
+function createDefaultOfferScope(lead?: Lead) {
+  const parts = [
+    "Biezaca obsluga ksiegowa i podatkowa.",
+    lead?.liczba_dokumentow ? `Szacowana liczba dokumentow: ${lead.liczba_dokumentow}.` : "",
+    lead?.liczba_transakcji ? `Szacowana liczba transakcji: ${lead.liczba_transakcji}.` : "",
+    lead?.czy_kadry ? `Obsluga kadrowo-placowa${lead.liczba_pracownikow ? ` dla ${lead.liczba_pracownikow} osob` : ""}.` : "",
+  ].filter(Boolean);
+  return parts.join("\n");
+}
+
+function createOfferUrl(token: string) {
+  if (typeof window === "undefined") return `/oferta/${token}`;
+  return `${window.location.origin}/oferta/${token}`;
+}
+
+function countEvents(events: CrmOfferEvent[], type: CrmOfferEvent["event_type"]) {
+  return events.filter((event) => event.event_type === type).length;
+}
+
+function topSectionLabel(events: CrmOfferEvent[]) {
+  const totals = events
+    .filter((event) => event.event_type === "section_time" && event.section_key)
+    .reduce<Record<string, number>>((acc, event) => {
+      acc[event.section_key || ""] = (acc[event.section_key || ""] || 0) + Number(event.duration_seconds || 0);
+      return acc;
+    }, {});
+  const [sectionKey] = Object.entries(totals).sort((first, second) => second[1] - first[1])[0] || [];
+  if (!sectionKey) return "Brak danych";
+  const labels: Record<string, string> = { summary: "Podsumowanie", needs: "Potrzeby", package: "Pakiet", scope: "Zakres", terms: "Warunki" };
+  return labels[sectionKey] || sectionKey;
 }
 
 function createDraft(lead: Lead): LeadDraft {
@@ -1724,3 +1969,8 @@ const fileHintStyle: React.CSSProperties = {
   fontSize: "13px",
   lineHeight: 1.6,
 };
+
+const offerPanelStyle: React.CSSProperties = { display: "flex", flexDirection: "column", gap: "12px" };
+const offerHeaderStyle: React.CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "14px", padding: "16px", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground };
+const offerActionsStyle: React.CSSProperties = { display: "flex", flexWrap: "wrap", gap: "10px", marginTop: "4px" };
+const analyticsGridStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "10px", marginTop: "8px" };

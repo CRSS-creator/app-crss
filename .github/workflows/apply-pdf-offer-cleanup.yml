@@ -1,0 +1,141 @@
+name: Apply PDF offer cleanup
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/apply-pdf-offer-cleanup.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch CRM offer screens
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          offers_path = Path('src/app/crm/oferty/page.tsx')
+          text = offers_path.read_text(encoding='utf-8')
+          old = '''function Analytics({ events }: { events: CrmOfferEvent[] }) {
+  return (
+    <section style={analyticsStyle}>
+      <Stat label="Otwarcia" value={countEvents(events, "open")} />
+      <Stat label="Pobrania PDF" value={countEvents(events, "pdf_download")} />
+      <Stat label="Kliknięcia CTA" value={countEvents(events, "cta_click")} />
+      <Stat label="Czas przy PDF" value={`${totalPdfMinutes(events)} min`} />
+    </section>
+  );
+}
+'''
+          new = '''function Analytics({ events }: { events: CrmOfferEvent[] }) {
+  const pageStats = collectPageStats(events);
+
+  return (
+    <section style={analyticsShellStyle}>
+      <div style={analyticsStyle}>
+        <Stat label="Otwarcia" value={countEvents(events, "open")} />
+        <Stat label="Pobrania PDF" value={countEvents(events, "pdf_download")} />
+        <Stat label="Kliknięcia CTA" value={countEvents(events, "cta_click")} />
+        <Stat label="Najmocniejsza strona" value={pageStats[0]?.label || "Brak danych"} />
+      </div>
+      {pageStats.length > 0 && (
+        <div style={pageStatsStyle}>
+          {pageStats.map((page) => (
+            <div key={page.key} style={pageStatRowStyle}>
+              <strong>{page.label}</strong>
+              <span>{page.views} wejść · {page.minutes} min</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+'''
+          if old not in text:
+              raise SystemExit('Analytics block not found')
+          text = text.replace(old, new)
+
+          old = '''function totalPdfMinutes(events: CrmOfferEvent[]) {
+  const seconds = events
+    .filter((event) => event.event_type === "section_time" && event.section_key === "pdf")
+    .reduce((total, event) => total + Number(event.duration_seconds || 0), 0);
+  return Math.round(seconds / 60);
+}
+'''
+          new = '''function collectPageStats(events: CrmOfferEvent[]) {
+  const stats = events
+    .filter((event) => event.event_type === "section_time" && event.section_key?.startsWith("pdf_page_"))
+    .reduce<Record<string, { key: string; label: string; views: number; seconds: number }>>((acc, event) => {
+      const key = event.section_key || "pdf_page_0";
+      const pageNumber = key.replace("pdf_page_", "");
+      if (!acc[key]) acc[key] = { key, label: `Strona ${pageNumber}`, views: 0, seconds: 0 };
+      if (Number(event.duration_seconds || 0) === 0) acc[key].views += 1;
+      acc[key].seconds += Number(event.duration_seconds || 0);
+      return acc;
+    }, {});
+
+  return Object.values(stats)
+    .map((item) => ({ ...item, minutes: Math.round(item.seconds / 60) }))
+    .sort((first, second) => second.seconds - first.seconds || second.views - first.views);
+}
+'''
+          if old not in text:
+              raise SystemExit('totalPdfMinutes block not found')
+          text = text.replace(old, new)
+          text = text.replace(
+              'const analyticsStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "12px", marginBottom: "18px" };',
+              'const analyticsShellStyle: React.CSSProperties = { marginBottom: "18px" };\nconst analyticsStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "12px" };\nconst pageStatsStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "10px", marginTop: "12px" };\nconst pageStatRowStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, padding: "12px", display: "flex", flexDirection: "column", gap: "4px", color: colors.muted, fontWeight: 800 };'
+          )
+          offers_path.write_text(text, encoding='utf-8')
+
+          crm_path = Path('src/app/crm/page.tsx')
+          crm = crm_path.read_text(encoding='utf-8')
+          pattern = r'          <FormSection title="Oferta interaktywna">.*?          </FormSection>\n\n          <FormSection title="Pliki">'
+          replacement = '''          <FormSection title="Oferta PDF">
+            {mode === "create" ? (
+              <div style={emptyTaskStyle}>Najpierw zapisz szansę, a potem przejdź do ofert PDF.</div>
+            ) : (
+              <div style={offerPanelStyle}>
+                <div style={offerHeaderStyle}>
+                  <div>
+                    <div style={fileDropzoneTitleStyle}>Oferta PDF i śledzenie klienta</div>
+                    <div style={fileDropzoneDescriptionStyle}>Oferty są teraz obsługiwane w osobnym ekranie: PDF, link dla klienta, statystyki stron, CTA i wysyłka przez n8n.</div>
+                  </div>
+                  <a href="/crm/oferty" style={secondaryButtonStyle}>Przejdź do ofert</a>
+                </div>
+              </div>
+            )}
+          </FormSection>
+
+          <FormSection title="Pliki">'''
+          crm, count = re.subn(pattern, replacement, crm, count=1, flags=re.S)
+          if count != 1:
+              raise SystemExit('Offer section not replaced')
+          crm_path.write_text(crm, encoding='utf-8')
+
+          cleanup = Path('supabase/migrations/202605270003_cleanup_pdf_offer_schema.sql')
+          cleanup.write_text('''alter table public.crm_oferty
+  drop column if exists podsumowanie_rozmowy,
+  drop column if exists potrzeby_klienta,
+  drop column if exists opis_pakietu,
+  drop column if exists cena_standard,
+  drop column if exists cena_premium,
+  drop column if exists cena_wdrozenia,
+  drop column if exists zakres;
+''', encoding='utf-8')
+          PY
+      - name: Commit cleanup
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/apply-pdf-offer-cleanup.yml
+          git add src/app/crm/oferty/page.tsx src/app/crm/page.tsx supabase/migrations/202605270003_cleanup_pdf_offer_schema.sql
+          git commit -m "Posprzataj oferty PDF w CRM"
+          git push

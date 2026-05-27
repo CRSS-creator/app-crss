@@ -22,6 +22,13 @@ export type CrmOffer = {
   cta_label: string;
   cta_url: string | null;
   pdf_url: string | null;
+  pdf_storage_path: string | null;
+  pdf_file_name: string | null;
+  pdf_file_size: number | null;
+  n8n_webhook_url: string | null;
+  email_recipient: string | null;
+  email_subject: string | null;
+  email_sent_at: string | null;
   wazna_do: string | null;
   published_at: string | null;
   accepted_at: string | null;
@@ -57,8 +64,23 @@ export type CrmOfferPayload = {
   cta_label: string;
   cta_url?: string | null;
   pdf_url?: string | null;
+  pdf_storage_path?: string | null;
+  pdf_file_name?: string | null;
+  pdf_file_size?: number | null;
+  n8n_webhook_url?: string | null;
+  email_recipient?: string | null;
+  email_subject?: string | null;
+  email_sent_at?: string | null;
   wazna_do?: string | null;
 };
+
+export type CrmOfferLeadContext = {
+  nazwa?: string | null;
+  email?: string | null;
+  osoba_kontaktowa?: string | null;
+};
+
+const CRM_OFFER_PDF_BUCKET = "crm-oferty-pdf";
 
 export async function fetchCrmOffers(crmId: string) {
   return supabase
@@ -93,6 +115,31 @@ export async function updateCrmOffer(offerId: string, payload: Partial<CrmOfferP
     .single();
 }
 
+export async function uploadCrmOfferPdf(offerId: string, file: File) {
+  const fileName = sanitizeFileName(file.name || "oferta.pdf");
+  const storagePath = `${offerId}/${Date.now()}-${fileName}`;
+  const upload = await supabase.storage
+    .from(CRM_OFFER_PDF_BUCKET)
+    .upload(storagePath, file, {
+      cacheControl: "3600",
+      contentType: "application/pdf",
+      upsert: false,
+    });
+
+  if (upload.error) return { data: null, error: upload.error };
+
+  const { data: publicUrl } = supabase.storage
+    .from(CRM_OFFER_PDF_BUCKET)
+    .getPublicUrl(storagePath);
+
+  return updateCrmOffer(offerId, {
+    pdf_url: publicUrl.publicUrl,
+    pdf_storage_path: storagePath,
+    pdf_file_name: file.name || fileName,
+    pdf_file_size: file.size,
+  });
+}
+
 export async function publishCrmOffer(offerId: string) {
   return supabase
     .from("crm_oferty")
@@ -100,6 +147,37 @@ export async function publishCrmOffer(offerId: string) {
     .eq("id", offerId)
     .select("*")
     .single();
+}
+
+export async function sendCrmOfferToN8n(offer: CrmOffer, lead?: CrmOfferLeadContext | null) {
+  if (!offer.n8n_webhook_url) {
+    return { ok: false, error: "Brak adresu webhooka n8n." };
+  }
+
+  const publicUrl = typeof window === "undefined" ? `/oferta/${offer.public_token}` : `${window.location.origin}/oferta/${offer.public_token}`;
+  const response = await fetch(offer.n8n_webhook_url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      offer_id: offer.id,
+      title: offer.tytul,
+      company: offer.przygotowana_dla || lead?.nazwa || null,
+      contact_person: offer.osoba_kontaktowa || lead?.osoba_kontaktowa || null,
+      recipient: offer.email_recipient || lead?.email || null,
+      subject: offer.email_subject || `Oferta CRSS dla ${offer.przygotowana_dla || lead?.nazwa || "Twojej firmy"}`,
+      offer_url: publicUrl,
+      pdf_url: offer.pdf_url,
+      cta_label: offer.cta_label,
+      cta_url: offer.cta_url,
+    }),
+  });
+
+  if (!response.ok) {
+    return { ok: false, error: `n8n zwrócił status ${response.status}.` };
+  }
+
+  await updateCrmOffer(offer.id, { email_sent_at: new Date().toISOString() });
+  return { ok: true, error: null };
 }
 
 export async function markCrmOfferAccepted(offerId: string, visitorId?: string | null) {
@@ -134,4 +212,15 @@ export async function trackCrmOfferEvent(payload: {
     duration_seconds: payload.duration_seconds ?? null,
     metadata: payload.metadata || {},
   });
+}
+
+function sanitizeFileName(value: string) {
+  const cleaned = value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+
+  return cleaned.toLowerCase().endsWith(".pdf") ? cleaned : `${cleaned || "oferta"}.pdf`;
 }

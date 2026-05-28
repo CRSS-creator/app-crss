@@ -1,9 +1,11 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { colors, radius } from "@/app/design";
 import { useCurrentUserRole } from "@/hooks/useCurrentUserRole";
 import { canAccessModule, type AppModule } from "@/lib/permissions";
+import { fetchUnreadNotificationsCount } from "@/lib/notificationService";
 import {
   Home,
   Users,
@@ -18,6 +20,7 @@ import {
   LockKeyhole,
   UserCog,
   BriefcaseBusiness,
+  Bell,
 } from "lucide-react";
 
 type ActivePage = AppModule;
@@ -30,7 +33,10 @@ type AppLayoutProps = {
 const menu = [
   {
     title: null,
-    items: [{ href: "/dashboard", label: "Dashboard", icon: Home, page: "dashboard" }],
+    items: [
+      { href: "/dashboard", label: "Dashboard", icon: Home, page: "dashboard" },
+      { href: "/powiadomienia", label: "Powiadomienia", icon: Bell, page: "powiadomienia" },
+    ],
   },
   {
     title: "Operacyjne",
@@ -61,6 +67,17 @@ const menu = [
 
 export default function AppLayout({ children, activePage }: AppLayoutProps) {
   const { role, loading: roleLoading } = useCurrentUserRole();
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    if (roleLoading || !role || !canAccessModule(role, "powiadomienia")) return;
+    loadUnreadCount();
+  }, [roleLoading, role]);
+
+  async function loadUnreadCount() {
+    const { count } = await fetchUnreadNotificationsCount();
+    setUnreadCount(count || 0);
+  }
 
   const visibleMenu = menu
     .map((section) => ({
@@ -103,6 +120,7 @@ export default function AppLayout({ children, activePage }: AppLayoutProps) {
                     icon={item.icon}
                     label={item.label}
                     active={activePage === item.page}
+                    badge={item.page === "powiadomienia" ? unreadCount : 0}
                   />
                 ))}
               </div>
@@ -125,16 +143,19 @@ function NavItem({
   icon: Icon,
   label,
   active,
+  badge,
 }: {
   href: string;
   icon: React.ElementType;
   label: string;
   active: boolean;
+  badge?: number;
 }) {
   return (
     <a href={href} style={active ? activeNavItem : navItem}>
       <Icon size={18} strokeWidth={2.2} />
-      <span>{label}</span>
+      <span style={navLabelStyle}>{label}</span>
+      {Boolean(badge) && <span style={active ? activeBadgeStyle : badgeStyle}>{badge}</span>}
     </a>
   );
 }
@@ -233,6 +254,10 @@ const activeNavItem: React.CSSProperties = {
   color: colors.white,
   boxShadow: "0 2px 8px rgba(15, 23, 42, 0.08)",
 };
+
+const navLabelStyle: React.CSSProperties = { flex: 1 };
+const badgeStyle: React.CSSProperties = { minWidth: "22px", height: "22px", borderRadius: radius.badge, background: colors.red, color: colors.white, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: 850 };
+const activeBadgeStyle: React.CSSProperties = { ...badgeStyle, background: colors.white, color: colors.navy };
 
 const logoutButtonStyle: React.CSSProperties = {
   marginTop: "auto",

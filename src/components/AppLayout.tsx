@@ -121,6 +121,7 @@ export default function AppLayout({ children, activePage }: AppLayoutProps) {
                     label={item.label}
                     active={activePage === item.page}
                     badge={item.page === "powiadomienia" ? unreadCount : 0}
+                    highlighted={item.page === "powiadomienia" && unreadCount > 0}
                   />
                 ))}
               </div>
@@ -144,17 +145,22 @@ function NavItem({
   label,
   active,
   badge,
+  highlighted,
 }: {
   href: string;
   icon: React.ElementType;
   label: string;
   active: boolean;
   badge?: number;
+  highlighted?: boolean;
 }) {
+  const itemStyle = active ? activeNavItem : highlighted ? unreadNavItem : navItem;
+
   return (
-    <a href={href} style={active ? activeNavItem : navItem}>
+    <a href={href} style={itemStyle}>
       <Icon size={18} strokeWidth={2.2} />
       <span style={navLabelStyle}>{label}</span>
+      {highlighted && !active && <span style={unreadDotStyle} />}
       {Boolean(badge) && <span style={active ? activeBadgeStyle : badgeStyle}>{badge}</span>}
     </a>
   );
@@ -246,6 +252,7 @@ const navItem: React.CSSProperties = {
   cursor: "pointer",
   textDecoration: "none",
   transition: "all 0.18s ease",
+  border: "1px solid transparent",
 };
 
 const activeNavItem: React.CSSProperties = {
@@ -255,7 +262,15 @@ const activeNavItem: React.CSSProperties = {
   boxShadow: "0 2px 8px rgba(15, 23, 42, 0.08)",
 };
 
+const unreadNavItem: React.CSSProperties = {
+  ...navItem,
+  background: "rgba(241, 51, 84, 0.08)",
+  borderColor: "rgba(241, 51, 84, 0.28)",
+  color: colors.navy,
+};
+
 const navLabelStyle: React.CSSProperties = { flex: 1 };
+const unreadDotStyle: React.CSSProperties = { width: "8px", height: "8px", borderRadius: "999px", background: colors.red, boxShadow: "0 0 0 4px rgba(241, 51, 84, 0.12)" };
 const badgeStyle: React.CSSProperties = { minWidth: "22px", height: "22px", borderRadius: radius.badge, background: colors.red, color: colors.white, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: 850 };
 const activeBadgeStyle: React.CSSProperties = { ...badgeStyle, background: colors.white, color: colors.navy };
 

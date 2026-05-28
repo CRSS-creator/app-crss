@@ -52,6 +52,7 @@ export default function CrmOffersPage() {
 function CrmOffersContent() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [selectedLeadId, setSelectedLeadId] = useState("");
+  const [leadCtaStatuses, setLeadCtaStatuses] = useState<Record<string, string>>({});
   const [offer, setOffer] = useState<CrmOffer | null>(null);
   const [events, setEvents] = useState<CrmOfferEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -82,12 +83,28 @@ function CrmOffersContent() {
     setLeads(list);
     setSelectedLeadId(list[0]?.id || "");
     setLoading(false);
+    loadLeadCtaStatuses(list);
+  }
+
+  async function loadLeadCtaStatuses(list: Lead[]) {
+    const entries = await Promise.all(list.map(async (lead) => {
+      const { data } = await fetchCrmOffers(lead.id);
+      const currentOffer = (data?.[0] || null) as CrmOffer | null;
+      if (!currentOffer) return [lead.id, "Brak propozycji"] as const;
+      if (currentOffer.status === "accepted") return [lead.id, "Akceptowana"] as const;
+      const { data: eventData } = await fetchCrmOfferEvents(currentOffer.id);
+      const ctaClicks = ((eventData || []) as CrmOfferEvent[]).filter((event) => event.event_type === "cta_click").length;
+      if (ctaClicks > 0) return [lead.id, `CTA kliknięte: ${ctaClicks}`] as const;
+      if (currentOffer.cta_url) return [lead.id, "CTA gotowe"] as const;
+      return [lead.id, "Brak CTA"] as const;
+    }));
+    setLeadCtaStatuses(Object.fromEntries(entries));
   }
 
   async function loadOffer(lead: Lead) {
     const { data, error } = await fetchCrmOffers(lead.id);
     if (error) {
-      console.error("Błąd pobierania ofert:", error);
+      console.error("Błąd pobierania propozycji:", error);
       return;
     }
     const currentOffer = (data?.[0] || null) as CrmOffer | null;
@@ -117,13 +134,14 @@ function CrmOffersContent() {
     const result = offer ? await updateCrmOffer(offer.id, payload) : await createCrmOffer(payload);
     setSaving(false);
     if (result.error) {
-      console.error("Błąd zapisu oferty:", result.error);
-      alert("Nie udało się zapisać oferty.");
+      console.error("Błąd zapisu propozycji:", result.error);
+      alert("Nie udało się zapisać propozycji.");
       return null;
     }
     const savedOffer = result.data as CrmOffer;
     setOffer(savedOffer);
     await loadEvents(savedOffer.id);
+    await loadLeadCtaStatuses(leads);
     return savedOffer;
   }
 
@@ -137,11 +155,12 @@ function CrmOffersContent() {
 
     const { data, error } = await publishCrmOffer(savedOffer.id);
     if (error) {
-      console.error("Błąd publikacji oferty:", error);
-      alert("Nie udało się opublikować oferty.");
+      console.error("Błąd publikacji propozycji:", error);
+      alert("Nie udało się opublikować propozycji.");
       return;
     }
     setOffer(data as CrmOffer);
+    await loadLeadCtaStatuses(leads);
   }
 
   async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
@@ -165,6 +184,7 @@ function CrmOffersContent() {
     }
 
     setOffer(data as CrmOffer);
+    await loadLeadCtaStatuses(leads);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
@@ -188,7 +208,7 @@ function CrmOffersContent() {
       return;
     }
 
-    alert("Dane oferty wysłane do n8n.");
+    alert("Dane propozycji wysłane do n8n.");
     await loadOffer(selectedLead as Lead);
   }
 
@@ -199,7 +219,7 @@ function CrmOffersContent() {
       <section style={headerStyle}>
         <div>
           <p style={eyebrowStyle}>CRM</p>
-          <h1 style={titleStyle}>Oferty PDF</h1>
+          <h1 style={titleStyle}>Propozycje współpracy</h1>
           <p style={subtitleStyle}>Wgraj gotowy PDF od zespołu, opublikuj prywatny link i wyślij dane do n8n, które przygotuje maila z Twojej poczty.</p>
         </div>
       </section>
@@ -211,18 +231,19 @@ function CrmOffersContent() {
             <button key={lead.id} style={lead.id === selectedLeadId ? activeLeadStyle : leadButtonStyle} onClick={() => setSelectedLeadId(lead.id)}>
               <strong>{lead.nazwa || "Bez nazwy"}</strong>
               <span>{lead.osoba_kontaktowa || lead.email || "Brak kontaktu"}</span>
+              <em style={ctaStatusStyle}>{leadCtaStatuses[lead.id] || "Sprawdzam CTA"}</em>
             </button>
           ))}
         </aside>
 
         <main style={mainStyle}>
           {!selectedLead ? (
-            <div style={emptyStyle}>Wybierz szansę, aby przygotować ofertę.</div>
+            <div style={emptyStyle}>Wybierz szansę, aby przygotować propozycję.</div>
           ) : (
             <>
               <div style={toolbarStyle}>
                 <div>
-                  <h2 style={sectionTitleStyle}>{selectedLead.nazwa || "Oferta"}</h2>
+                  <h2 style={sectionTitleStyle}>{selectedLead.nazwa || "Propozycja"}</h2>
                   <p style={metaStyle}>{offer ? statusLabel(offer.status) : "Nowy szkic"}</p>
                 </div>
                 <div style={actionsStyle}>
@@ -237,9 +258,9 @@ function CrmOffersContent() {
 
               <section style={uploadPanelStyle}>
                 <div>
-                  <p style={panelEyebrowStyle}>PDF oferty</p>
-                  <h3 style={panelTitleStyle}>{offer?.pdf_file_name || "Wgraj dokument oferty"}</h3>
-                  <p style={panelTextStyle}>{offer?.pdf_file_size ? `${formatFileSize(offer.pdf_file_size)} · link gotowy do śledzenia` : "Po wgraniu PDF klient zobaczy ofertę na prywatnej stronie, a CRM zapisze otwarcia, pobrania i czas oglądania."}</p>
+                  <p style={panelEyebrowStyle}>PDF propozycji</p>
+                  <h3 style={panelTitleStyle}>{offer?.pdf_file_name || "Wgraj dokument propozycji"}</h3>
+                  <p style={panelTextStyle}>{offer?.pdf_file_size ? `${formatFileSize(offer.pdf_file_size)} · link gotowy do śledzenia` : "Po wgraniu PDF klient zobaczy propozycję na prywatnej stronie, a CRM zapisze otwarcia, pobrania i czas oglądania."}</p>
                   {offer?.pdf_url && <a style={linkStyle} href={offer.pdf_url} target="_blank" rel="noreferrer">Otwórz PDF</a>}
                 </div>
                 <div style={uploadActionsStyle}>
@@ -282,12 +303,25 @@ function CrmOffersContent() {
 }
 
 function Analytics({ events }: { events: CrmOfferEvent[] }) {
+  const pageStats = collectPageStats(events);
   return (
-    <section style={analyticsStyle}>
-      <Stat label="Otwarcia" value={countEvents(events, "open")} />
-      <Stat label="Pobrania PDF" value={countEvents(events, "pdf_download")} />
-      <Stat label="Kliknięcia CTA" value={countEvents(events, "cta_click")} />
-      <Stat label="Czas przy PDF" value={`${totalPdfMinutes(events)} min`} />
+    <section style={analyticsShellStyle}>
+      <div style={analyticsStyle}>
+        <Stat label="Otwarcia" value={countEvents(events, "open")} />
+        <Stat label="Pobrania PDF" value={countEvents(events, "pdf_download")} />
+        <Stat label="Kliknięcia CTA" value={countEvents(events, "cta_click")} />
+        <Stat label="Najmocniejsza strona" value={pageStats[0]?.label || "Brak danych"} />
+      </div>
+      {pageStats.length > 0 && (
+        <div style={pageStatsStyle}>
+          {pageStats.map((page) => (
+            <div key={page.key} style={pageStatRowStyle}>
+              <strong>{page.label}</strong>
+              <span>{page.views} wejść · {page.minutes} min</span>
+            </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 }
@@ -302,15 +336,15 @@ function Stat({ label, value }: { label: string; value: string | number }) {
 
 function createOfferDraftFromLead(lead: Lead | null): OfferDraft {
   return {
-    tytul: `Oferta CRSS dla ${lead?.nazwa || "klienta"}`,
+    tytul: `Propozycja współpracy CRSS dla ${lead?.nazwa || "klienta"}`,
     przygotowana_dla: lead?.nazwa || "",
     osoba_kontaktowa: lead?.osoba_kontaktowa || "",
-    cta_label: "Chcę omówić ofertę",
+    cta_label: "Chcę omówić propozycję",
     cta_url: "",
     n8n_webhook_url: "",
     email_recipient: lead?.email || "",
-    email_subject: `Oferta CRSS dla ${lead?.nazwa || "Państwa firmy"}`,
-    warunki: "Po akceptacji oferty skontaktujemy się, aby ustalić szczegóły startu współpracy.",
+    email_subject: `Propozycja współpracy CRSS dla ${lead?.nazwa || "Państwa firmy"}`,
+    warunki: "Po akceptacji propozycji skontaktujemy się, aby ustalić szczegóły startu współpracy.",
     wazna_do: "",
   };
 }
@@ -320,11 +354,11 @@ function createOfferDraft(offer: CrmOffer, lead: Lead | null): OfferDraft {
     tytul: offer.tytul || "",
     przygotowana_dla: offer.przygotowana_dla || lead?.nazwa || "",
     osoba_kontaktowa: offer.osoba_kontaktowa || lead?.osoba_kontaktowa || "",
-    cta_label: offer.cta_label || "Chcę omówić ofertę",
+    cta_label: offer.cta_label || "Chcę omówić propozycję",
     cta_url: offer.cta_url || "",
     n8n_webhook_url: offer.n8n_webhook_url || "",
     email_recipient: offer.email_recipient || lead?.email || "",
-    email_subject: offer.email_subject || `Oferta CRSS dla ${offer.przygotowana_dla || lead?.nazwa || "Państwa firmy"}`,
+    email_subject: offer.email_subject || `Propozycja współpracy CRSS dla ${offer.przygotowana_dla || lead?.nazwa || "Państwa firmy"}`,
     warunki: offer.warunki || "",
     wazna_do: offer.wazna_do || "",
   };
@@ -333,15 +367,15 @@ function createOfferDraft(offer: CrmOffer, lead: Lead | null): OfferDraft {
 function createOfferPayload(lead: Lead, draft: OfferDraft): CrmOfferPayload {
   return {
     crm_id: lead.id,
-    tytul: draft.tytul.trim() || "Oferta CRSS",
+    tytul: draft.tytul.trim() || "Propozycja współpracy CRSS",
     przygotowana_dla: draft.przygotowana_dla.trim() || lead.nazwa || null,
     osoba_kontaktowa: draft.osoba_kontaktowa.trim() || lead.osoba_kontaktowa || null,
     rekomendowany_pakiet: "PDF",
-    cta_label: draft.cta_label.trim() || "Chcę omówić ofertę",
+    cta_label: draft.cta_label.trim() || "Chcę omówić propozycję",
     cta_url: draft.cta_url.trim() || null,
     n8n_webhook_url: draft.n8n_webhook_url.trim() || null,
     email_recipient: draft.email_recipient.trim() || lead.email || null,
-    email_subject: draft.email_subject.trim() || `Oferta CRSS dla ${draft.przygotowana_dla || lead.nazwa || "Państwa firmy"}`,
+    email_subject: draft.email_subject.trim() || `Propozycja współpracy CRSS dla ${draft.przygotowana_dla || lead.nazwa || "Państwa firmy"}`,
     warunki: draft.warunki.trim() || null,
     wazna_do: draft.wazna_do || null,
   };
@@ -356,11 +390,21 @@ function countEvents(events: CrmOfferEvent[], type: CrmOfferEvent["event_type"])
   return events.filter((event) => event.event_type === type).length;
 }
 
-function totalPdfMinutes(events: CrmOfferEvent[]) {
-  const seconds = events
-    .filter((event) => event.event_type === "section_time" && event.section_key === "pdf")
-    .reduce((total, event) => total + Number(event.duration_seconds || 0), 0);
-  return Math.round(seconds / 60);
+function collectPageStats(events: CrmOfferEvent[]) {
+  const stats = events
+    .filter((event) => event.event_type === "section_time" && event.section_key?.startsWith("pdf_page_"))
+    .reduce<Record<string, { key: string; label: string; views: number; seconds: number }>>((acc, event) => {
+      const key = event.section_key || "pdf_page_0";
+      const pageNumber = key.replace("pdf_page_", "");
+      if (!acc[key]) acc[key] = { key, label: `Strona ${pageNumber}`, views: 0, seconds: 0 };
+      if (Number(event.duration_seconds || 0) === 0) acc[key].views += 1;
+      acc[key].seconds += Number(event.duration_seconds || 0);
+      return acc;
+    }, {});
+
+  return Object.values(stats)
+    .map((item) => ({ ...item, minutes: Math.round(item.seconds / 60) }))
+    .sort((first, second) => second.seconds - first.seconds || second.views - first.views);
 }
 
 function statusLabel(status: CrmOffer["status"]) {
@@ -389,13 +433,17 @@ const mainStyle: React.CSSProperties = { background: colors.card, border: `1px s
 const sectionTitleStyle: React.CSSProperties = { margin: 0, color: colors.navy, fontSize: "22px" };
 const leadButtonStyle: React.CSSProperties = { display: "flex", flexDirection: "column", gap: "4px", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, padding: "12px", textAlign: "left", cursor: "pointer" };
 const activeLeadStyle: React.CSSProperties = { ...leadButtonStyle, borderColor: colors.navy, background: "#e8eef8" };
+const ctaStatusStyle: React.CSSProperties = { display: "inline-flex", alignSelf: "flex-start", marginTop: "4px", borderRadius: radius.badge, padding: "5px 8px", background: "rgba(23, 59, 115, 0.10)", color: colors.navy, fontStyle: "normal", fontWeight: 800, fontSize: "12px" };
 const emptyStyle: React.CSSProperties = { border: `1px dashed ${colors.border}`, borderRadius: radius.input, padding: "18px", color: colors.muted, textAlign: "center", fontWeight: 700 };
 const toolbarStyle: React.CSSProperties = { display: "flex", justifyContent: "space-between", gap: "18px", alignItems: "flex-start", marginBottom: "18px" };
 const metaStyle: React.CSSProperties = { margin: "6px 0 0", color: colors.muted, fontWeight: 800 };
 const actionsStyle: React.CSSProperties = { display: "flex", flexWrap: "wrap", gap: "10px", justifyContent: "flex-end" };
-const primaryButtonStyle: React.CSSProperties = { border: "none", borderRadius: radius.button, padding: "11px 15px", background: colors.red, color: colors.white, fontWeight: 800, cursor: "pointer" };
-const secondaryButtonStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "10px 14px", background: colors.white, color: colors.navy, fontWeight: 800, cursor: "pointer" };
-const analyticsStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "12px", marginBottom: "18px" };
+const primaryButtonStyle: React.CSSProperties = { border: "none", borderRadius: radius.button, padding: "11px 15px", minHeight: "42px", background: colors.red, color: colors.white, fontWeight: 800, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", textAlign: "center" };
+const secondaryButtonStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "10px 14px", minHeight: "42px", background: colors.white, color: colors.navy, fontWeight: 800, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", textAlign: "center" };
+const analyticsShellStyle: React.CSSProperties = { marginBottom: "18px" };
+const analyticsStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "12px" };
+const pageStatsStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "10px", marginTop: "12px" };
+const pageStatRowStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, padding: "12px", display: "flex", flexDirection: "column", gap: "4px", color: colors.muted, fontWeight: 800 };
 const statStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "14px", display: "flex", flexDirection: "column", gap: "8px", color: colors.muted, fontWeight: 800 };
 const uploadPanelStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.inputBackground, padding: "22px", marginBottom: "18px", display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: "18px", alignItems: "center" };
 const panelEyebrowStyle: React.CSSProperties = { margin: "0 0 8px", color: colors.red, fontWeight: 850, fontSize: "13px" };

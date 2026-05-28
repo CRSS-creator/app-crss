@@ -5,9 +5,10 @@ import { useParams } from "next/navigation";
 import { colors, radius, shadow } from "@/app/design";
 import {
   fetchPublicCrmOffer,
-  markCrmOfferAccepted,
+  recordCrmOfferDecision,
   trackCrmOfferEvent,
   type CrmOffer,
+  type CrmOfferDecision,
 } from "@/lib/crmOfferService";
 
 declare global {
@@ -23,7 +24,7 @@ export default function PublicOfferPage() {
   const params = useParams<{ token: string }>();
   const [offer, setOffer] = useState<CrmOffer | null>(null);
   const [loading, setLoading] = useState(true);
-  const [accepted, setAccepted] = useState(false);
+  const [decisionSaving, setDecisionSaving] = useState<CrmOfferDecision | null>(null);
   const [pdfDocument, setPdfDocument] = useState<any>(null);
   const [pdfError, setPdfError] = useState(false);
   const activePageRef = useRef<number | null>(null);
@@ -138,36 +139,19 @@ export default function PublicOfferPage() {
     }
 
     setOffer(data as CrmOffer);
-    setAccepted(data.status === "accepted");
     setLoading(false);
   }
 
-  async function handleCtaClick() {
-    if (!offer) return;
-
-    await trackCrmOfferEvent({
-      oferta_id: offer.id,
-      event_type: "cta_click",
-      visitor_id: visitorId,
-      metadata: { label: offer.cta_label },
-    });
-
-    if (offer.cta_url) {
-      window.open(offer.cta_url, "_blank", "noopener,noreferrer");
-    }
-  }
-
-  async function handleAccept() {
-    if (!offer || accepted) return;
-
-    const { data, error } = await markCrmOfferAccepted(offer.id, visitorId);
+  async function handleDecision(decision: CrmOfferDecision) {
+    if (!offer || decisionSaving) return;
+    setDecisionSaving(decision);
+    const { data, error } = await recordCrmOfferDecision(offer.id, decision, visitorId);
+    setDecisionSaving(null);
     if (error) {
-      alert("Nie udało się potwierdzić propozycji. Spróbuj ponownie.");
+      alert("Nie udało się zapisać decyzji. Spróbuj ponownie.");
       return;
     }
-
     setOffer(data as CrmOffer);
-    setAccepted(true);
   }
 
   async function handlePdfDownload() {
@@ -186,6 +170,8 @@ export default function PublicOfferPage() {
   if (loading) return <main style={statePageStyle}>Ładowanie propozycji...</main>;
   if (!offer) return <main style={statePageStyle}>Propozycja jest niedostępna albo link wygasł.</main>;
 
+  const decisionLabel = statusDecisionLabel(offer.status);
+
   return (
     <main style={pageStyle}>
       <section style={topBarStyle}>
@@ -196,14 +182,9 @@ export default function PublicOfferPage() {
             Przygotowana dla: <strong>{offer.przygotowana_dla || "Twojej firmy"}</strong>
             {offer.osoba_kontaktowa ? ` · ${offer.osoba_kontaktowa}` : ""}
           </p>
+          {decisionLabel && <p style={decisionStatusStyle}>{decisionLabel}</p>}
         </div>
-        <div style={actionsStyle}>
-          <button style={primaryButtonStyle} onClick={handleAccept} disabled={accepted}>
-            {accepted ? "Propozycja zaakceptowana" : "Akceptuję propozycję"}
-          </button>
-          <button style={secondaryButtonStyle} onClick={handleCtaClick}>{offer.cta_label || "Chcę omówić propozycję"}</button>
-          {offer.pdf_url && <button style={secondaryButtonStyle} onClick={handlePdfDownload}>Pobierz PDF</button>}
-        </div>
+        <DecisionButtons onDecision={handleDecision} saving={decisionSaving} status={offer.status} />
       </section>
 
       <section style={viewerShellStyle}>
@@ -228,14 +209,29 @@ export default function PublicOfferPage() {
       <section style={footerCtaStyle}>
         <div>
           <h2 style={footerTitleStyle}>Następny krok</h2>
-          <p style={footerTextStyle}>{offer.warunki || "Po akceptacji propozycji skontaktujemy się, aby ustalić szczegóły startu współpracy."}</p>
+          <p style={footerTextStyle}>{offer.warunki || "Po wyborze jednej z opcji opiekun propozycji otrzyma powiadomienie w CRM."}</p>
           {offer.wazna_do && <p style={validStyle}>Propozycja ważna do: {formatDate(offer.wazna_do)}</p>}
         </div>
-        <button style={primaryButtonStyle} onClick={handleAccept} disabled={accepted}>
-          {accepted ? "Dziękujemy za akceptację" : "Akceptuję propozycję"}
-        </button>
+        <DecisionButtons onDecision={handleDecision} saving={decisionSaving} status={offer.status} compact />
       </section>
     </main>
+  );
+}
+
+function DecisionButtons({ onDecision, saving, status, compact }: { onDecision: (decision: CrmOfferDecision) => void; saving: CrmOfferDecision | null; status: CrmOffer["status"]; compact?: boolean }) {
+  const disabled = Boolean(saving);
+  return (
+    <div style={compact ? footerActionsStyle : actionsStyle}>
+      <button style={primaryButtonStyle} onClick={() => onDecision("accepted")} disabled={disabled || status === "accepted"}>
+        {saving === "accepted" ? "Zapisywanie..." : status === "accepted" ? "Propozycja zaakceptowana" : "Akceptuję propozycję"}
+      </button>
+      <button style={secondaryButtonStyle} onClick={() => onDecision("discussion_requested")} disabled={disabled || status === "discussion_requested"}>
+        {saving === "discussion_requested" ? "Zapisywanie..." : status === "discussion_requested" ? "Prośba wysłana" : "Chcę omówić propozycję"}
+      </button>
+      <button style={rejectButtonStyle} onClick={() => onDecision("rejected")} disabled={disabled || status === "rejected"}>
+        {saving === "rejected" ? "Zapisywanie..." : status === "rejected" ? "Propozycja odrzucona" : "Odrzucam propozycję"}
+      </button>
+    </div>
   );
 }
 
@@ -322,15 +318,25 @@ function formatDate(value: string) {
   return new Intl.DateTimeFormat("pl-PL", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(value));
 }
 
+function statusDecisionLabel(status: CrmOffer["status"]) {
+  if (status === "accepted") return "Status: zaakceptowana";
+  if (status === "discussion_requested") return "Status: klient chce omówić propozycję";
+  if (status === "rejected") return "Status: odrzucona";
+  return null;
+}
+
 const pageStyle: React.CSSProperties = { minHeight: "100vh", background: colors.background, color: colors.text, padding: "24px" };
 const statePageStyle: React.CSSProperties = { ...pageStyle, display: "grid", placeItems: "center", fontWeight: 800 };
 const topBarStyle: React.CSSProperties = { maxWidth: "1240px", margin: "0 auto 18px", display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: "18px", alignItems: "end" };
 const eyebrowStyle: React.CSSProperties = { margin: "0 0 8px", color: colors.red, fontWeight: 850 };
 const titleStyle: React.CSSProperties = { margin: 0, color: colors.navy, fontSize: "42px", lineHeight: 1.08 };
 const subtitleStyle: React.CSSProperties = { margin: "10px 0 0", color: colors.muted, fontSize: "16px", lineHeight: 1.6 };
+const decisionStatusStyle: React.CSSProperties = { display: "inline-flex", margin: "12px 0 0", borderRadius: radius.badge, background: "rgba(23, 59, 115, 0.10)", color: colors.navy, padding: "7px 12px", fontWeight: 850 };
 const actionsStyle: React.CSSProperties = { display: "flex", gap: "10px", flexWrap: "wrap", justifyContent: "flex-end" };
+const footerActionsStyle: React.CSSProperties = { ...actionsStyle, minWidth: "360px" };
 const primaryButtonStyle: React.CSSProperties = { border: "none", borderRadius: radius.button, padding: "13px 16px", minHeight: "44px", background: colors.red, color: colors.white, fontWeight: 850, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", textAlign: "center" };
 const secondaryButtonStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "12px 15px", minHeight: "44px", background: colors.white, color: colors.navy, fontWeight: 850, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", textAlign: "center" };
+const rejectButtonStyle: React.CSSProperties = { ...secondaryButtonStyle, color: colors.danger, background: "rgba(220, 38, 38, 0.06)" };
 const viewerShellStyle: React.CSSProperties = { maxWidth: "1240px", height: "calc(100vh - 210px)", minHeight: "620px", margin: "0 auto", background: "#eef2f7", border: `1px solid ${colors.border}`, borderRadius: radius.card, overflow: "auto", boxShadow: shadow.soft };
 const pdfPagesStyle: React.CSSProperties = { display: "flex", flexDirection: "column", gap: "22px", alignItems: "center", padding: "24px" };
 const pdfPageStyle: React.CSSProperties = { width: "min(100%, 920px)", display: "flex", flexDirection: "column", gap: "8px", alignItems: "center" };

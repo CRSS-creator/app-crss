@@ -32,7 +32,7 @@ function NotificationsContent() {
   async function loadNotifications() {
     setLoading(true);
     const { data, error } = await fetchNotifications();
-    if (error) console.error("Blad pobierania powiadomien:", error);
+    if (error) console.error("Błąd pobierania powiadomień:", error);
     else setNotifications((data || []) as AppNotification[]);
     setLoading(false);
   }
@@ -56,7 +56,7 @@ function NotificationsContent() {
         <div>
           <p style={eyebrowStyle}>Aplikacja CRSS</p>
           <h1 style={titleStyle}>Powiadomienia</h1>
-          <p style={subtitleStyle}>Najwazniejsze komunikaty z CRM i pracy operacyjnej.</p>
+          <p style={subtitleStyle}>Najważniejsze komunikaty z CRM i pracy operacyjnej.</p>
         </div>
         <button style={secondaryButtonStyle} onClick={markAllRead} disabled={unreadCount === 0}>Oznacz jako przeczytane</button>
       </section>
@@ -69,9 +69,9 @@ function NotificationsContent() {
 
       <section style={cardStyle}>
         {loading ? (
-          <div style={emptyStyle}>Ladowanie powiadomien...</div>
+          <div style={emptyStyle}>Ładowanie powiadomień...</div>
         ) : notifications.length === 0 ? (
-          <div style={emptyStyle}>Brak powiadomien.</div>
+          <div style={emptyStyle}>Brak powiadomień.</div>
         ) : (
           <div style={listStyle}>
             {notifications.map((notification) => {
@@ -90,7 +90,7 @@ function NotificationsContent() {
                   </div>
                   <div style={itemActionsStyle}>
                     {publicToken && (
-                      <a style={secondaryButtonStyle} href={`/oferta/${publicToken}`} target="_blank" rel="noreferrer">Otworz propozycje</a>
+                      <a style={secondaryButtonStyle} href={`/oferta/${publicToken}`} target="_blank" rel="noreferrer">Otwórz propozycję</a>
                     )}
                     {notification.status === "unread" && <button style={primaryButtonStyle} onClick={() => markRead(notification)}>Przeczytane</button>}
                   </div>

@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { colors, radius } from "@/app/design";
 import { useCurrentUserRole } from "@/hooks/useCurrentUserRole";
 import { canAccessModule, type AppModule } from "@/lib/permissions";
-import { fetchUnreadNotificationsCount } from "@/lib/notificationService";
+import { createDueTaskNotifications, fetchUnreadNotificationsCount } from "@/lib/notificationService";
 import {
   Home,
   Users,
@@ -75,6 +75,7 @@ export default function AppLayout({ children, activePage }: AppLayoutProps) {
   }, [roleLoading, role]);
 
   async function loadUnreadCount() {
+    await createDueTaskNotifications();
     const { count } = await fetchUnreadNotificationsCount();
     setUnreadCount(count || 0);
   }

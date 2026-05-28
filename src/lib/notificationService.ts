@@ -30,6 +30,10 @@ export async function fetchUnreadNotificationsCount() {
     .eq("status", "unread");
 }
 
+export async function createDueTaskNotifications() {
+  return supabase.rpc("create_due_task_notifications");
+}
+
 export async function markNotificationRead(notificationId: string) {
   return supabase
     .from("powiadomienia")

@@ -8,6 +8,19 @@ export type SettlementStatus =
   | "sprawdzone_zatwierdzone"
   | "podatki_wyslane";
 
+type SettlementClient = {
+  id?: string;
+  nazwa: string | null;
+  nip: string | null;
+  opiekun_id: string | null;
+  forma_prawna: string | null;
+  forma_opodatkowania: string | null;
+  profiles?: {
+    full_name: string | null;
+    email: string | null;
+  }[] | null;
+};
+
 export type MonthlySettlement = {
   id: string;
   created_at: string;
@@ -19,25 +32,7 @@ export type MonthlySettlement = {
   liczba_zleceniobiorcow: number;
   faktura_wystawiona: boolean;
   uwagi: string | null;
-  klienci?: {
-    id?: string;
-    nazwa: string | null;
-    nip: string | null;
-    opiekun_id: string | null;
-    profiles?: {
-      full_name: string | null;
-      email: string | null;
-    }[] | null;
-  } | {
-    id?: string;
-    nazwa: string | null;
-    nip: string | null;
-    opiekun_id: string | null;
-    profiles?: {
-      full_name: string | null;
-      email: string | null;
-    }[] | null;
-  }[] | null;
+  klienci?: SettlementClient | SettlementClient[] | null;
 };
 
 export type SettlementUpdatePayload = {
@@ -63,6 +58,8 @@ const SETTLEMENT_SELECT = `
     nazwa,
     nip,
     opiekun_id,
+    forma_prawna,
+    forma_opodatkowania,
     profiles!klienci_opiekun_id_fkey (
       full_name,
       email
@@ -70,8 +67,8 @@ const SETTLEMENT_SELECT = `
   )
 `;
 
-export async function ensureCurrentMonthSettlements() {
-  return supabase.rpc("ensure_monthly_settlements");
+export async function ensureCurrentMonthSettlements(period?: string) {
+  return supabase.rpc("ensure_monthly_settlements", { public_period: period || undefined });
 }
 
 export async function fetchMonthlySettlements(period: string) {

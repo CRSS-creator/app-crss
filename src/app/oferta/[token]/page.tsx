@@ -131,7 +131,7 @@ export default function PublicOfferPage() {
     const { data, error } = await fetchPublicCrmOffer(params.token);
 
     if (error) {
-      console.error("Błąd pobierania oferty:", error);
+      console.error("Błąd pobierania propozycji:", error);
       setOffer(null);
       setLoading(false);
       return;
@@ -162,7 +162,7 @@ export default function PublicOfferPage() {
 
     const { data, error } = await markCrmOfferAccepted(offer.id, visitorId);
     if (error) {
-      alert("Nie udało się potwierdzić oferty. Spróbuj ponownie.");
+      alert("Nie udało się potwierdzić propozycji. Spróbuj ponownie.");
       return;
     }
 
@@ -183,14 +183,14 @@ export default function PublicOfferPage() {
     window.open(offer.pdf_url, "_blank", "noopener,noreferrer");
   }
 
-  if (loading) return <main style={statePageStyle}>Ładowanie oferty...</main>;
-  if (!offer) return <main style={statePageStyle}>Oferta jest niedostępna albo link wygasł.</main>;
+  if (loading) return <main style={statePageStyle}>Ładowanie propozycji...</main>;
+  if (!offer) return <main style={statePageStyle}>Propozycja jest niedostępna albo link wygasł.</main>;
 
   return (
     <main style={pageStyle}>
       <section style={topBarStyle}>
         <div>
-          <p style={eyebrowStyle}>Oferta CRSS</p>
+          <p style={eyebrowStyle}>Propozycja CRSS</p>
           <h1 style={titleStyle}>{offer.tytul}</h1>
           <p style={subtitleStyle}>
             Przygotowana dla: <strong>{offer.przygotowana_dla || "Twojej firmy"}</strong>
@@ -199,9 +199,9 @@ export default function PublicOfferPage() {
         </div>
         <div style={actionsStyle}>
           <button style={primaryButtonStyle} onClick={handleAccept} disabled={accepted}>
-            {accepted ? "Oferta zaakceptowana" : "Akceptuję ofertę"}
+            {accepted ? "Propozycja zaakceptowana" : "Akceptuję propozycję"}
           </button>
-          <button style={secondaryButtonStyle} onClick={handleCtaClick}>{offer.cta_label}</button>
+          <button style={secondaryButtonStyle} onClick={handleCtaClick}>{offer.cta_label || "Chcę omówić propozycję"}</button>
           {offer.pdf_url && <button style={secondaryButtonStyle} onClick={handlePdfDownload}>Pobierz PDF</button>}
         </div>
       </section>
@@ -214,13 +214,13 @@ export default function PublicOfferPage() {
             ))}
           </div>
         ) : offer.pdf_url && pdfError ? (
-          <iframe src={offer.pdf_url} title="Oferta PDF" style={pdfFrameStyle} />
+          <iframe src={offer.pdf_url} title="Propozycja PDF" style={pdfFrameStyle} />
         ) : offer.pdf_url ? (
           <div style={emptyPdfStyle}>Przygotowuję podgląd PDF...</div>
         ) : (
           <div style={emptyPdfStyle}>
             <strong>PDF nie został jeszcze dodany.</strong>
-            <span>Poproś opiekuna oferty o dosłanie dokumentu.</span>
+            <span>Poproś opiekuna propozycji o dosłanie dokumentu.</span>
           </div>
         )}
       </section>
@@ -228,11 +228,11 @@ export default function PublicOfferPage() {
       <section style={footerCtaStyle}>
         <div>
           <h2 style={footerTitleStyle}>Następny krok</h2>
-          <p style={footerTextStyle}>{offer.warunki || "Po akceptacji oferty skontaktujemy się, aby ustalić szczegóły startu współpracy."}</p>
-          {offer.wazna_do && <p style={validStyle}>Oferta ważna do: {formatDate(offer.wazna_do)}</p>}
+          <p style={footerTextStyle}>{offer.warunki || "Po akceptacji propozycji skontaktujemy się, aby ustalić szczegóły startu współpracy."}</p>
+          {offer.wazna_do && <p style={validStyle}>Propozycja ważna do: {formatDate(offer.wazna_do)}</p>}
         </div>
         <button style={primaryButtonStyle} onClick={handleAccept} disabled={accepted}>
-          {accepted ? "Dziękujemy za akceptację" : "Akceptuję ofertę"}
+          {accepted ? "Dziękujemy za akceptację" : "Akceptuję propozycję"}
         </button>
       </section>
     </main>
@@ -329,8 +329,8 @@ const eyebrowStyle: React.CSSProperties = { margin: "0 0 8px", color: colors.red
 const titleStyle: React.CSSProperties = { margin: 0, color: colors.navy, fontSize: "42px", lineHeight: 1.08 };
 const subtitleStyle: React.CSSProperties = { margin: "10px 0 0", color: colors.muted, fontSize: "16px", lineHeight: 1.6 };
 const actionsStyle: React.CSSProperties = { display: "flex", gap: "10px", flexWrap: "wrap", justifyContent: "flex-end" };
-const primaryButtonStyle: React.CSSProperties = { border: "none", borderRadius: radius.button, padding: "13px 16px", background: colors.red, color: colors.white, fontWeight: 850, cursor: "pointer" };
-const secondaryButtonStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "12px 15px", background: colors.white, color: colors.navy, fontWeight: 850, cursor: "pointer" };
+const primaryButtonStyle: React.CSSProperties = { border: "none", borderRadius: radius.button, padding: "13px 16px", minHeight: "44px", background: colors.red, color: colors.white, fontWeight: 850, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", textAlign: "center" };
+const secondaryButtonStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "12px 15px", minHeight: "44px", background: colors.white, color: colors.navy, fontWeight: 850, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", textAlign: "center" };
 const viewerShellStyle: React.CSSProperties = { maxWidth: "1240px", height: "calc(100vh - 210px)", minHeight: "620px", margin: "0 auto", background: "#eef2f7", border: `1px solid ${colors.border}`, borderRadius: radius.card, overflow: "auto", boxShadow: shadow.soft };
 const pdfPagesStyle: React.CSSProperties = { display: "flex", flexDirection: "column", gap: "22px", alignItems: "center", padding: "24px" };
 const pdfPageStyle: React.CSSProperties = { width: "min(100%, 920px)", display: "flex", flexDirection: "column", gap: "8px", alignItems: "center" };

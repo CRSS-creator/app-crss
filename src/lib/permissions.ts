@@ -2,6 +2,7 @@ export type UserRole = "owner" | "manager" | "admin" | "accountant" | string;
 
 export type AppModule =
   | "dashboard"
+  | "powiadomienia"
   | "klienci"
   | "zadania"
   | "rozliczenia"
@@ -17,6 +18,7 @@ export type AppModule =
 
 const moduleAccess: Record<AppModule, string[]> = {
   dashboard: ["owner", "manager", "admin", "accountant"],
+  powiadomienia: ["owner", "manager", "admin", "accountant"],
   klienci: ["owner", "manager", "admin", "accountant"],
   zadania: ["owner", "manager", "admin", "accountant"],
   rozliczenia: ["owner", "manager", "admin", "accountant"],

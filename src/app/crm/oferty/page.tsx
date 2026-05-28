@@ -214,7 +214,7 @@ function CrmOffersContent() {
           <p style={eyebrowStyle}>CRM</p>
           <h1 style={titleStyle}>Propozycje współpracy</h1>
         </div>
-        <button style={secondaryButtonStyle} onClick={() => { window.location.href = "/crm"; }}>Cofnij do CRM</button>
+        <button style={secondaryButtonStyle} onClick={() => { window.location.href = "/crm"; }}>Wróć do CRM</button>
       </section>
 
       <section style={gridStyle}>

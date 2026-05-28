@@ -68,6 +68,7 @@ export type CrmOfferLeadContext = {
 };
 
 const CRM_OFFER_PDF_BUCKET = "crm-oferty-pdf";
+const CONFIGURED_N8N_WEBHOOK_URL = process.env.NEXT_PUBLIC_N8N_CRM_OFFER_WEBHOOK_URL || "";
 
 export async function fetchCrmOffers(crmId: string) {
   return supabase
@@ -137,12 +138,14 @@ export async function publishCrmOffer(offerId: string) {
 }
 
 export async function sendCrmOfferToN8n(offer: CrmOffer, lead?: CrmOfferLeadContext | null) {
-  if (!offer.n8n_webhook_url) {
-    return { ok: false, error: "Brak adresu webhooka n8n." };
+  const webhookUrl = offer.n8n_webhook_url || CONFIGURED_N8N_WEBHOOK_URL;
+
+  if (!webhookUrl) {
+    return { ok: false, error: "Brak konfiguracji automatycznej wysylki maila." };
   }
 
   const publicUrl = typeof window === "undefined" ? `/oferta/${offer.public_token}` : `${window.location.origin}/oferta/${offer.public_token}`;
-  const response = await fetch(offer.n8n_webhook_url, {
+  const response = await fetch(webhookUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -151,7 +154,7 @@ export async function sendCrmOfferToN8n(offer: CrmOffer, lead?: CrmOfferLeadCont
       company: offer.przygotowana_dla || lead?.nazwa || null,
       contact_person: offer.osoba_kontaktowa || lead?.osoba_kontaktowa || null,
       recipient: offer.email_recipient || lead?.email || null,
-      subject: offer.email_subject || `Propozycja współpracy CRSS dla ${offer.przygotowana_dla || lead?.nazwa || "Twojej firmy"}`,
+      subject: offer.email_subject || `Propozycja wspolpracy CRSS dla ${offer.przygotowana_dla || lead?.nazwa || "Twojej firmy"}`,
       offer_url: publicUrl,
       pdf_url: offer.pdf_url,
       cta_label: offer.cta_label,
@@ -160,7 +163,7 @@ export async function sendCrmOfferToN8n(offer: CrmOffer, lead?: CrmOfferLeadCont
   });
 
   if (!response.ok) {
-    return { ok: false, error: `n8n zwrócił status ${response.status}.` };
+    return { ok: false, error: `Automatyzacja zwrocila status ${response.status}.` };
   }
 
   await updateCrmOffer(offer.id, { email_sent_at: new Date().toISOString() });

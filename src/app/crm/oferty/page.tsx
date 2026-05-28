@@ -30,7 +30,6 @@ type OfferDraft = {
   tytul: string;
   przygotowana_dla: string;
   osoba_kontaktowa: string;
-  n8n_webhook_url: string;
   email_recipient: string;
   email_subject: string;
   warunki: string;
@@ -193,24 +192,21 @@ function CrmOffersContent() {
       alert("Najpierw wgraj PDF.");
       return;
     }
-    if (!savedOffer.n8n_webhook_url) {
-      alert("Wklej adres webhooka n8n.");
-      return;
-    }
 
     setSending(true);
     const result = await sendCrmOfferToN8n(savedOffer, selectedLead);
     setSending(false);
     if (!result.ok) {
-      alert(result.error || "Nie udalo sie wyslac danych do n8n.");
+      alert(result.error || "Nie udalo sie przekazac maila do wysylki.");
       return;
     }
 
-    alert("Dane propozycji wyslane do n8n.");
+    alert("Mail zostal przekazany do wysylki.");
     await loadOffer(selectedLead as Lead);
   }
 
   const offerUrl = offer ? createOfferUrl(offer.public_token) : "";
+  const recipientDisplay = draft.osoba_kontaktowa.trim() || selectedLead?.osoba_kontaktowa || selectedLead?.email || "Brak osoby kontaktowej";
 
   return (
     <>
@@ -218,8 +214,8 @@ function CrmOffersContent() {
         <div>
           <p style={eyebrowStyle}>CRM</p>
           <h1 style={titleStyle}>Propozycje wspolpracy</h1>
-          <p style={subtitleStyle}>Wgraj gotowy PDF od zespolu, opublikuj prywatny link i wyslij dane do n8n, ktore przygotuje maila z Twojej poczty.</p>
         </div>
+        <button style={secondaryButtonStyle} onClick={() => { window.location.href = "/crm"; }}>Cofnij do CRM</button>
       </section>
 
       <section style={gridStyle}>
@@ -277,18 +273,14 @@ function CrmOffersContent() {
 
               <section style={n8nPanelStyle}>
                 <div style={n8nHeaderStyle}>
-                  <div>
-                    <p style={panelEyebrowStyle}>Automatyczna wysylka</p>
-                    <h3 style={panelTitleStyle}>n8n przygotuje maila z Twojej poczty</h3>
-                  </div>
-                  <button style={primaryButtonStyle} onClick={sendViaN8n} disabled={sending}>{sending ? "Wysylanie..." : "Wyslij do n8n"}</button>
+                  <p style={panelEyebrowStyle}>Automatyczna wysylka</p>
+                  <button style={primaryButtonStyle} onClick={sendViaN8n} disabled={sending}>{sending ? "Wysylanie..." : "Wyslij maila"}</button>
                 </div>
                 <div style={formStyle}>
-                  <Field label="Webhook n8n"><input style={inputStyle} value={draft.n8n_webhook_url} onChange={(event) => updateDraft("n8n_webhook_url", event.target.value)} placeholder="https://.../webhook/..." /></Field>
-                  <Field label="Odbiorca"><input style={inputStyle} value={draft.email_recipient} onChange={(event) => updateDraft("email_recipient", event.target.value)} placeholder="mail klienta" /></Field>
+                  <Field label="Odbiorca"><div style={readOnlyValueStyle}>{recipientDisplay}</div></Field>
                   <Field label="Temat maila"><input style={inputStyle} value={draft.email_subject} onChange={(event) => updateDraft("email_subject", event.target.value)} /></Field>
                 </div>
-                {offer?.email_sent_at && <p style={sentStyle}>Ostatnio wyslano do n8n: {formatDateTime(offer.email_sent_at)}</p>}
+                {offer?.email_sent_at && <p style={sentStyle}>Ostatnio wyslano maila: {formatDateTime(offer.email_sent_at)}</p>}
               </section>
             </>
           )}
@@ -335,7 +327,6 @@ function createOfferDraftFromLead(lead: Lead | null): OfferDraft {
     tytul: `Propozycja wspolpracy CRSS dla ${lead?.nazwa || "klienta"}`,
     przygotowana_dla: lead?.nazwa || "",
     osoba_kontaktowa: lead?.osoba_kontaktowa || "",
-    n8n_webhook_url: "",
     email_recipient: lead?.email || "",
     email_subject: `Propozycja wspolpracy CRSS dla ${lead?.nazwa || "Panstwa firmy"}`,
     warunki: "Po akceptacji propozycji skontaktujemy sie, aby ustalic szczegoly startu wspolpracy.",
@@ -348,7 +339,6 @@ function createOfferDraft(offer: CrmOffer, lead: Lead | null): OfferDraft {
     tytul: offer.tytul || "",
     przygotowana_dla: offer.przygotowana_dla || lead?.nazwa || "",
     osoba_kontaktowa: offer.osoba_kontaktowa || lead?.osoba_kontaktowa || "",
-    n8n_webhook_url: offer.n8n_webhook_url || "",
     email_recipient: offer.email_recipient || lead?.email || "",
     email_subject: offer.email_subject || `Propozycja wspolpracy CRSS dla ${offer.przygotowana_dla || lead?.nazwa || "Panstwa firmy"}`,
     warunki: offer.warunki || "",
@@ -365,7 +355,6 @@ function createOfferPayload(lead: Lead, draft: OfferDraft): CrmOfferPayload {
     rekomendowany_pakiet: "PDF",
     cta_label: "Chce omowic propozycje",
     cta_url: null,
-    n8n_webhook_url: draft.n8n_webhook_url.trim() || null,
     email_recipient: draft.email_recipient.trim() || lead.email || null,
     email_subject: draft.email_subject.trim() || `Propozycja wspolpracy CRSS dla ${draft.przygotowana_dla || lead.nazwa || "Panstwa firmy"}`,
     warunki: draft.warunki.trim() || null,
@@ -417,10 +406,9 @@ function formatDateTime(value: string) {
   return new Intl.DateTimeFormat("pl-PL", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
 }
 
-const headerStyle: React.CSSProperties = { marginBottom: "28px" };
+const headerStyle: React.CSSProperties = { marginBottom: "28px", display: "flex", justifyContent: "space-between", gap: "18px", alignItems: "flex-start" };
 const eyebrowStyle: React.CSSProperties = { margin: "0 0 8px", color: colors.red, fontWeight: 800 };
 const titleStyle: React.CSSProperties = { margin: 0, color: colors.navy, fontSize: "42px", lineHeight: 1.05 };
-const subtitleStyle: React.CSSProperties = { maxWidth: "780px", color: colors.muted, fontSize: "17px", lineHeight: 1.7 };
 const gridStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "300px minmax(0, 1fr)", gap: "22px", alignItems: "start" };
 const sideStyle: React.CSSProperties = { background: colors.card, border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: "18px", boxShadow: shadow.soft, display: "flex", flexDirection: "column", gap: "10px" };
 const mainStyle: React.CSSProperties = { background: colors.card, border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: "24px", boxShadow: shadow.soft };
@@ -449,6 +437,7 @@ const formStyle: React.CSSProperties = { display: "flex", flexDirection: "column
 const fieldStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "190px 1fr", gap: "14px", alignItems: "start", borderBottom: `1px solid ${colors.border}`, paddingBottom: "12px" };
 const labelStyle: React.CSSProperties = { color: colors.muted, fontWeight: 800, fontSize: "14px", paddingTop: "10px" };
 const inputStyle: React.CSSProperties = { width: "100%", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, color: colors.text, padding: "11px 12px", fontWeight: 650 };
+const readOnlyValueStyle: React.CSSProperties = { ...inputStyle, minHeight: "44px", display: "flex", alignItems: "center" };
 const textareaStyle: React.CSSProperties = { ...inputStyle, minHeight: "90px", resize: "vertical", lineHeight: 1.6 };
 const n8nPanelStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: "20px", marginTop: "18px", background: colors.white };
 const n8nHeaderStyle: React.CSSProperties = { display: "flex", justifyContent: "space-between", gap: "18px", alignItems: "center", marginBottom: "16px" };

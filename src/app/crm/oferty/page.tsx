@@ -30,8 +30,6 @@ type OfferDraft = {
   tytul: string;
   przygotowana_dla: string;
   osoba_kontaktowa: string;
-  cta_label: string;
-  cta_url: string;
   n8n_webhook_url: string;
   email_recipient: string;
   email_subject: string;
@@ -75,7 +73,7 @@ function CrmOffersContent() {
     setLoading(true);
     const { data, error } = await fetchCrmLeads();
     if (error) {
-      console.error("Błąd pobierania szans CRM:", error);
+      console.error("Blad pobierania szans CRM:", error);
       setLoading(false);
       return;
     }
@@ -91,12 +89,12 @@ function CrmOffersContent() {
       const { data } = await fetchCrmOffers(lead.id);
       const currentOffer = (data?.[0] || null) as CrmOffer | null;
       if (!currentOffer) return [lead.id, "Brak propozycji"] as const;
-      if (currentOffer.status === "accepted") return [lead.id, "Akceptowana"] as const;
-      const { data: eventData } = await fetchCrmOfferEvents(currentOffer.id);
-      const ctaClicks = ((eventData || []) as CrmOfferEvent[]).filter((event) => event.event_type === "cta_click").length;
-      if (ctaClicks > 0) return [lead.id, `CTA kliknięte: ${ctaClicks}`] as const;
-      if (currentOffer.cta_url) return [lead.id, "CTA gotowe"] as const;
-      return [lead.id, "Brak CTA"] as const;
+      if (currentOffer.status === "accepted") return [lead.id, "Zaakceptowana"] as const;
+      if (currentOffer.status === "discussion_requested") return [lead.id, "Chce omowic"] as const;
+      if (currentOffer.status === "rejected") return [lead.id, "Odrzucona"] as const;
+      if (currentOffer.status === "published") return [lead.id, "Oczekuje"] as const;
+      if (currentOffer.status === "expired") return [lead.id, "Wygasla"] as const;
+      return [lead.id, "Szkic"] as const;
     }));
     setLeadCtaStatuses(Object.fromEntries(entries));
   }
@@ -104,7 +102,7 @@ function CrmOffersContent() {
   async function loadOffer(lead: Lead) {
     const { data, error } = await fetchCrmOffers(lead.id);
     if (error) {
-      console.error("Błąd pobierania propozycji:", error);
+      console.error("Blad pobierania propozycji:", error);
       return;
     }
     const currentOffer = (data?.[0] || null) as CrmOffer | null;
@@ -117,7 +115,7 @@ function CrmOffersContent() {
   async function loadEvents(offerId: string) {
     const { data, error } = await fetchCrmOfferEvents(offerId);
     if (error) {
-      console.error("Błąd pobierania statystyk:", error);
+      console.error("Blad pobierania statystyk:", error);
       return;
     }
     setEvents((data || []) as CrmOfferEvent[]);
@@ -134,8 +132,8 @@ function CrmOffersContent() {
     const result = offer ? await updateCrmOffer(offer.id, payload) : await createCrmOffer(payload);
     setSaving(false);
     if (result.error) {
-      console.error("Błąd zapisu propozycji:", result.error);
-      alert("Nie udało się zapisać propozycji.");
+      console.error("Blad zapisu propozycji:", result.error);
+      alert("Nie udalo sie zapisac propozycji.");
       return null;
     }
     const savedOffer = result.data as CrmOffer;
@@ -149,14 +147,14 @@ function CrmOffersContent() {
     const savedOffer = offer || await saveOffer();
     if (!savedOffer) return;
     if (!savedOffer.pdf_url) {
-      alert("Dodaj PDF przed publikacją linku dla klienta.");
+      alert("Dodaj PDF przed publikacja linku dla klienta.");
       return;
     }
 
     const { data, error } = await publishCrmOffer(savedOffer.id);
     if (error) {
-      console.error("Błąd publikacji propozycji:", error);
-      alert("Nie udało się opublikować propozycji.");
+      console.error("Blad publikacji propozycji:", error);
+      alert("Nie udalo sie opublikowac propozycji.");
       return;
     }
     setOffer(data as CrmOffer);
@@ -178,8 +176,8 @@ function CrmOffersContent() {
     const { data, error } = await uploadCrmOfferPdf(savedOffer.id, file);
     setUploading(false);
     if (error) {
-      console.error("Błąd wgrywania PDF:", error);
-      alert("Nie udało się wgrać PDF.");
+      console.error("Blad wgrywania PDF:", error);
+      alert("Nie udalo sie wgrac PDF.");
       return;
     }
 
@@ -204,11 +202,11 @@ function CrmOffersContent() {
     const result = await sendCrmOfferToN8n(savedOffer, selectedLead);
     setSending(false);
     if (!result.ok) {
-      alert(result.error || "Nie udało się wysłać danych do n8n.");
+      alert(result.error || "Nie udalo sie wyslac danych do n8n.");
       return;
     }
 
-    alert("Dane propozycji wysłane do n8n.");
+    alert("Dane propozycji wyslane do n8n.");
     await loadOffer(selectedLead as Lead);
   }
 
@@ -219,26 +217,26 @@ function CrmOffersContent() {
       <section style={headerStyle}>
         <div>
           <p style={eyebrowStyle}>CRM</p>
-          <h1 style={titleStyle}>Propozycje współpracy</h1>
-          <p style={subtitleStyle}>Wgraj gotowy PDF od zespołu, opublikuj prywatny link i wyślij dane do n8n, które przygotuje maila z Twojej poczty.</p>
+          <h1 style={titleStyle}>Propozycje wspolpracy</h1>
+          <p style={subtitleStyle}>Wgraj gotowy PDF od zespolu, opublikuj prywatny link i wyslij dane do n8n, ktore przygotuje maila z Twojej poczty.</p>
         </div>
       </section>
 
       <section style={gridStyle}>
         <aside style={sideStyle}>
           <h2 style={sectionTitleStyle}>Szanse</h2>
-          {loading ? <div style={emptyStyle}>Ładowanie...</div> : leads.map((lead) => (
+          {loading ? <div style={emptyStyle}>Ladowanie...</div> : leads.map((lead) => (
             <button key={lead.id} style={lead.id === selectedLeadId ? activeLeadStyle : leadButtonStyle} onClick={() => setSelectedLeadId(lead.id)}>
               <strong>{lead.nazwa || "Bez nazwy"}</strong>
               <span>{lead.osoba_kontaktowa || lead.email || "Brak kontaktu"}</span>
-              <em style={ctaStatusStyle}>{leadCtaStatuses[lead.id] || "Sprawdzam CTA"}</em>
+              <em style={ctaStatusStyle}>{leadCtaStatuses[lead.id] || "Sprawdzam status"}</em>
             </button>
           ))}
         </aside>
 
         <main style={mainStyle}>
           {!selectedLead ? (
-            <div style={emptyStyle}>Wybierz szansę, aby przygotować propozycję.</div>
+            <div style={emptyStyle}>Wybierz szanse, aby przygotowac propozycje.</div>
           ) : (
             <>
               <div style={toolbarStyle}>
@@ -250,7 +248,7 @@ function CrmOffersContent() {
                   <button style={primaryButtonStyle} onClick={saveOffer} disabled={saving}>{saving ? "Zapisywanie..." : "Zapisz"}</button>
                   <button style={secondaryButtonStyle} onClick={publishOffer}>Opublikuj link</button>
                   {offer && <button style={secondaryButtonStyle} onClick={() => navigator.clipboard.writeText(offerUrl)}>Kopiuj link</button>}
-                  {offer && offer.status !== "draft" && <button style={secondaryButtonStyle} onClick={() => window.open(offerUrl, "_blank", "noopener,noreferrer")}>Podgląd</button>}
+                  {offer && offer.status !== "draft" && <button style={secondaryButtonStyle} onClick={() => window.open(offerUrl, "_blank", "noopener,noreferrer")}>Podglad</button>}
                 </div>
               </div>
 
@@ -260,8 +258,8 @@ function CrmOffersContent() {
                 <div>
                   <p style={panelEyebrowStyle}>PDF propozycji</p>
                   <h3 style={panelTitleStyle}>{offer?.pdf_file_name || "Wgraj dokument propozycji"}</h3>
-                  <p style={panelTextStyle}>{offer?.pdf_file_size ? `${formatFileSize(offer.pdf_file_size)} · link gotowy do śledzenia` : "Po wgraniu PDF klient zobaczy propozycję na prywatnej stronie, a CRM zapisze otwarcia, pobrania i czas oglądania."}</p>
-                  {offer?.pdf_url && <a style={linkStyle} href={offer.pdf_url} target="_blank" rel="noreferrer">Otwórz PDF</a>}
+                  <p style={panelTextStyle}>{offer?.pdf_file_size ? `${formatFileSize(offer.pdf_file_size)} · link gotowy do sledzenia` : "Po wgraniu PDF klient zobaczy propozycje na prywatnej stronie, a CRM zapisze otwarcia, pobrania i czas ogladania."}</p>
+                  {offer?.pdf_url && <a style={linkStyle} href={offer.pdf_url} target="_blank" rel="noreferrer">Otworz PDF</a>}
                 </div>
                 <div style={uploadActionsStyle}>
                   <input ref={fileInputRef} type="file" accept="application/pdf" style={{ display: "none" }} onChange={handleFileChange} />
@@ -270,29 +268,27 @@ function CrmOffersContent() {
               </section>
 
               <section style={formStyle}>
-                <Field label="Tytuł"><input style={inputStyle} value={draft.tytul} onChange={(event) => updateDraft("tytul", event.target.value)} /></Field>
+                <Field label="Tytul"><input style={inputStyle} value={draft.tytul} onChange={(event) => updateDraft("tytul", event.target.value)} /></Field>
                 <Field label="Dla firmy"><input style={inputStyle} value={draft.przygotowana_dla} onChange={(event) => updateDraft("przygotowana_dla", event.target.value)} /></Field>
                 <Field label="Osoba kontaktowa"><input style={inputStyle} value={draft.osoba_kontaktowa} onChange={(event) => updateDraft("osoba_kontaktowa", event.target.value)} /></Field>
-                <Field label="CTA na stronie"><input style={inputStyle} value={draft.cta_label} onChange={(event) => updateDraft("cta_label", event.target.value)} /></Field>
-                <Field label="Link CTA"><input style={inputStyle} value={draft.cta_url} onChange={(event) => updateDraft("cta_url", event.target.value)} placeholder="np. link do kalendarza" /></Field>
-                <Field label="Ważna do"><input style={inputStyle} type="date" value={draft.wazna_do} onChange={(event) => updateDraft("wazna_do", event.target.value)} /></Field>
-                <Field label="Warunki / następny krok"><textarea style={textareaStyle} value={draft.warunki} onChange={(event) => updateDraft("warunki", event.target.value)} /></Field>
+                <Field label="Wazna do"><input style={inputStyle} type="date" value={draft.wazna_do} onChange={(event) => updateDraft("wazna_do", event.target.value)} /></Field>
+                <Field label="Warunki / nastepny krok"><textarea style={textareaStyle} value={draft.warunki} onChange={(event) => updateDraft("warunki", event.target.value)} /></Field>
               </section>
 
               <section style={n8nPanelStyle}>
                 <div style={n8nHeaderStyle}>
                   <div>
-                    <p style={panelEyebrowStyle}>Automatyczna wysyłka</p>
+                    <p style={panelEyebrowStyle}>Automatyczna wysylka</p>
                     <h3 style={panelTitleStyle}>n8n przygotuje maila z Twojej poczty</h3>
                   </div>
-                  <button style={primaryButtonStyle} onClick={sendViaN8n} disabled={sending}>{sending ? "Wysyłanie..." : "Wyślij do n8n"}</button>
+                  <button style={primaryButtonStyle} onClick={sendViaN8n} disabled={sending}>{sending ? "Wysylanie..." : "Wyslij do n8n"}</button>
                 </div>
                 <div style={formStyle}>
                   <Field label="Webhook n8n"><input style={inputStyle} value={draft.n8n_webhook_url} onChange={(event) => updateDraft("n8n_webhook_url", event.target.value)} placeholder="https://.../webhook/..." /></Field>
                   <Field label="Odbiorca"><input style={inputStyle} value={draft.email_recipient} onChange={(event) => updateDraft("email_recipient", event.target.value)} placeholder="mail klienta" /></Field>
                   <Field label="Temat maila"><input style={inputStyle} value={draft.email_subject} onChange={(event) => updateDraft("email_subject", event.target.value)} /></Field>
                 </div>
-                {offer?.email_sent_at && <p style={sentStyle}>Ostatnio wysłano do n8n: {formatDateTime(offer.email_sent_at)}</p>}
+                {offer?.email_sent_at && <p style={sentStyle}>Ostatnio wyslano do n8n: {formatDateTime(offer.email_sent_at)}</p>}
               </section>
             </>
           )}
@@ -309,7 +305,7 @@ function Analytics({ events }: { events: CrmOfferEvent[] }) {
       <div style={analyticsStyle}>
         <Stat label="Otwarcia" value={countEvents(events, "open")} />
         <Stat label="Pobrania PDF" value={countEvents(events, "pdf_download")} />
-        <Stat label="Kliknięcia CTA" value={countEvents(events, "cta_click")} />
+        <Stat label="Chca omowic" value={countEvents(events, "cta_click")} />
         <Stat label="Najmocniejsza strona" value={pageStats[0]?.label || "Brak danych"} />
       </div>
       {pageStats.length > 0 && (
@@ -317,7 +313,7 @@ function Analytics({ events }: { events: CrmOfferEvent[] }) {
           {pageStats.map((page) => (
             <div key={page.key} style={pageStatRowStyle}>
               <strong>{page.label}</strong>
-              <span>{page.views} wejść · {page.minutes} min</span>
+              <span>{page.views} wejsc · {page.minutes} min</span>
             </div>
           ))}
         </div>
@@ -330,21 +326,19 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   return <label style={fieldStyle}><span style={labelStyle}>{label}</span>{children}</label>;
 }
 
-function Stat({ label, value }: { label: string; value: string | number }) {
+function Stat({ label, value }: { label: string | number; value: string | number }) {
   return <div style={statStyle}><span>{label}</span><strong>{value}</strong></div>;
 }
 
 function createOfferDraftFromLead(lead: Lead | null): OfferDraft {
   return {
-    tytul: `Propozycja współpracy CRSS dla ${lead?.nazwa || "klienta"}`,
+    tytul: `Propozycja wspolpracy CRSS dla ${lead?.nazwa || "klienta"}`,
     przygotowana_dla: lead?.nazwa || "",
     osoba_kontaktowa: lead?.osoba_kontaktowa || "",
-    cta_label: "Chcę omówić propozycję",
-    cta_url: "",
     n8n_webhook_url: "",
     email_recipient: lead?.email || "",
-    email_subject: `Propozycja współpracy CRSS dla ${lead?.nazwa || "Państwa firmy"}`,
-    warunki: "Po akceptacji propozycji skontaktujemy się, aby ustalić szczegóły startu współpracy.",
+    email_subject: `Propozycja wspolpracy CRSS dla ${lead?.nazwa || "Panstwa firmy"}`,
+    warunki: "Po akceptacji propozycji skontaktujemy sie, aby ustalic szczegoly startu wspolpracy.",
     wazna_do: "",
   };
 }
@@ -354,11 +348,9 @@ function createOfferDraft(offer: CrmOffer, lead: Lead | null): OfferDraft {
     tytul: offer.tytul || "",
     przygotowana_dla: offer.przygotowana_dla || lead?.nazwa || "",
     osoba_kontaktowa: offer.osoba_kontaktowa || lead?.osoba_kontaktowa || "",
-    cta_label: offer.cta_label || "Chcę omówić propozycję",
-    cta_url: offer.cta_url || "",
     n8n_webhook_url: offer.n8n_webhook_url || "",
     email_recipient: offer.email_recipient || lead?.email || "",
-    email_subject: offer.email_subject || `Propozycja współpracy CRSS dla ${offer.przygotowana_dla || lead?.nazwa || "Państwa firmy"}`,
+    email_subject: offer.email_subject || `Propozycja wspolpracy CRSS dla ${offer.przygotowana_dla || lead?.nazwa || "Panstwa firmy"}`,
     warunki: offer.warunki || "",
     wazna_do: offer.wazna_do || "",
   };
@@ -367,15 +359,15 @@ function createOfferDraft(offer: CrmOffer, lead: Lead | null): OfferDraft {
 function createOfferPayload(lead: Lead, draft: OfferDraft): CrmOfferPayload {
   return {
     crm_id: lead.id,
-    tytul: draft.tytul.trim() || "Propozycja współpracy CRSS",
+    tytul: draft.tytul.trim() || "Propozycja wspolpracy CRSS",
     przygotowana_dla: draft.przygotowana_dla.trim() || lead.nazwa || null,
     osoba_kontaktowa: draft.osoba_kontaktowa.trim() || lead.osoba_kontaktowa || null,
     rekomendowany_pakiet: "PDF",
-    cta_label: draft.cta_label.trim() || "Chcę omówić propozycję",
-    cta_url: draft.cta_url.trim() || null,
+    cta_label: "Chce omowic propozycje",
+    cta_url: null,
     n8n_webhook_url: draft.n8n_webhook_url.trim() || null,
     email_recipient: draft.email_recipient.trim() || lead.email || null,
-    email_subject: draft.email_subject.trim() || `Propozycja współpracy CRSS dla ${draft.przygotowana_dla || lead.nazwa || "Państwa firmy"}`,
+    email_subject: draft.email_subject.trim() || `Propozycja wspolpracy CRSS dla ${draft.przygotowana_dla || lead.nazwa || "Panstwa firmy"}`,
     warunki: draft.warunki.trim() || null,
     wazna_do: draft.wazna_do || null,
   };
@@ -410,7 +402,9 @@ function collectPageStats(events: CrmOfferEvent[]) {
 function statusLabel(status: CrmOffer["status"]) {
   if (status === "published") return "Opublikowana";
   if (status === "accepted") return "Zaakceptowana";
-  if (status === "expired") return "Wygasła";
+  if (status === "discussion_requested") return "Klient chce omowic";
+  if (status === "rejected") return "Odrzucona";
+  if (status === "expired") return "Wygasla";
   return "Szkic";
 }
 

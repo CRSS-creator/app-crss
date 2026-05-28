@@ -15,11 +15,11 @@ import {
 } from "@/lib/monthlySettlementsService";
 
 const STATUS_OPTIONS: { value: SettlementStatus; label: string }[] = [
-  { value: "czeka_na_dokumenty", label: "Oczekiwanie na dokumenty" },
-  { value: "dokumenty_kompletne_biuro", label: "Dostarczono dokumenty kompletne" },
+  { value: "czeka_na_dokumenty", label: "Czeka na dokumenty" },
+  { value: "dokumenty_kompletne_biuro", label: "Dokumenty kompletne" },
   { value: "w_trakcie_ksiegowania", label: "W trakcie księgowania" },
   { value: "do_sprawdzenia", label: "Do sprawdzenia" },
-  { value: "sprawdzone_zatwierdzone", label: "Sprawdzone i zatwierdzone" },
+  { value: "sprawdzone_zatwierdzone", label: "Zatwierdzone" },
   { value: "podatki_wyslane", label: "Podatki wysłane" },
 ];
 
@@ -68,8 +68,8 @@ function SettlementsContent() {
 
   async function loadSettlements() {
     setLoading(true);
-    await ensureCurrentMonthSettlements();
     const normalizedPeriod = `${period}-01`;
+    await ensureCurrentMonthSettlements();
     const [settlementsResult, progressResult] = await Promise.all([
       fetchMonthlySettlements(normalizedPeriod),
       fetchSettlementTaskProgress(normalizedPeriod),
@@ -131,7 +131,7 @@ function SettlementsContent() {
       <section style={summaryGridStyle}>
         <SummaryCard label="Rozliczenia" value={settlements.length} />
         <SummaryCard label="Postęp zadań" value={`${avgProgress}%`} />
-        <SummaryCard label="Zablokowane fakturą" value={lockedCount} />
+        <SummaryCard label="Faktury wystawione" value={lockedCount} />
       </section>
 
       <section style={cardStyle}>
@@ -164,14 +164,14 @@ function SettlementsContent() {
             <table style={tableStyle}>
               <thead>
                 <tr>
-                  <Th width="22%">Klient</Th>
-                  <Th width="18%">Status</Th>
-                  <Th width="9%">Dok.</Th>
-                  <Th width="9%">Prac.</Th>
-                  <Th width="9%">Zlec.</Th>
+                  <Th width="21%">Klient</Th>
+                  <Th width="17%">Status</Th>
+                  <Th width="10%">L. dokumentów</Th>
+                  <Th width="10%">L. pracowników</Th>
+                  <Th width="12%">L. zleceniobiorców</Th>
                   <Th width="12%">Zadania cykliczne</Th>
                   <Th width="10%">Faktura</Th>
-                  <Th width="11%">Akcje</Th>
+                  <Th width="8%">Akcje</Th>
                 </tr>
               </thead>
               <tbody>
@@ -189,10 +189,11 @@ function SettlementsContent() {
                       </Td>
                       <Td>
                         <select
-                          style={{ ...inputStyle, ...statusSelectStyle(settlement.status_ksiegowosci) }}
+                          style={{ ...statusInputStyle, ...statusSelectStyle(settlement.status_ksiegowosci) }}
                           value={settlement.status_ksiegowosci}
                           disabled={locked || savingId === settlement.id}
                           onChange={(event) => patchSettlement(settlement, { status_ksiegowosci: event.target.value as SettlementStatus })}
+                          title={statusLabel(settlement.status_ksiegowosci)}
                         >
                           {STATUS_OPTIONS.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}
                         </select>
@@ -202,12 +203,7 @@ function SettlementsContent() {
                       <Td><NumberInput value={settlement.liczba_zleceniobiorcow} disabled={locked} onChange={(value) => patchSettlement(settlement, { liczba_zleceniobiorcow: value })} /></Td>
                       <Td><ProgressBadge progress={progress.progress} done={progress.done_tasks} total={progress.total_tasks} /></Td>
                       <Td><span style={locked ? invoiceIssuedStyle : invoiceOpenStyle}>{locked ? "Wystawiona" : "Nie wystawiona"}</span></Td>
-                      <Td>
-                        <div style={actionsCellStyle}>
-                          <button style={detailsButtonStyle} onClick={() => setSelectedSettlement(settlement)}>Szczegóły</button>
-                          {!locked && <button style={lockButtonStyle} onClick={() => markInvoiceIssued(settlement)} disabled={savingId === settlement.id}>Faktura</button>}
-                        </div>
-                      </Td>
+                      <Td><button style={detailsButtonStyle} onClick={() => setSelectedSettlement(settlement)}>Szczegóły</button></Td>
                     </tr>
                   );
                 })}
@@ -265,9 +261,9 @@ function SettlementDrawer({ settlement, progress, onClose, onSave, onInvoice, sa
               </select>
             </Field>
             <div style={threeColumnsStyle}>
-              <Field label="Dokumenty"><NumberInput value={settlement.liczba_dokumentow} disabled={locked} onChange={(value) => onSave(settlement, { liczba_dokumentow: value })} /></Field>
-              <Field label="Pracownicy"><NumberInput value={settlement.liczba_pracownikow} disabled={locked} onChange={(value) => onSave(settlement, { liczba_pracownikow: value })} /></Field>
-              <Field label="Zleceniobiorcy"><NumberInput value={settlement.liczba_zleceniobiorcow} disabled={locked} onChange={(value) => onSave(settlement, { liczba_zleceniobiorcow: value })} /></Field>
+              <Field label="L. dokumentów"><NumberInput value={settlement.liczba_dokumentow} disabled={locked} onChange={(value) => onSave(settlement, { liczba_dokumentow: value })} /></Field>
+              <Field label="L. pracowników"><NumberInput value={settlement.liczba_pracownikow} disabled={locked} onChange={(value) => onSave(settlement, { liczba_pracownikow: value })} /></Field>
+              <Field label="L. zleceniobiorców"><NumberInput value={settlement.liczba_zleceniobiorcow} disabled={locked} onChange={(value) => onSave(settlement, { liczba_zleceniobiorcow: value })} /></Field>
             </div>
             <Field label="Uwagi">
               <textarea style={textareaStyle} value={settlement.uwagi || ""} disabled={locked} onChange={(event) => onSave(settlement, { uwagi: event.target.value })} />
@@ -295,7 +291,6 @@ function SettlementDrawer({ settlement, progress, onClose, onSave, onInvoice, sa
 
 function NumberInput({ value, disabled, onChange }: { value: number; disabled: boolean; onChange: (value: number) => void }) {
   const [localValue, setLocalValue] = useState(String(value ?? 0));
-
   useEffect(() => setLocalValue(String(value ?? 0)), [value]);
 
   return (
@@ -312,22 +307,10 @@ function NumberInput({ value, disabled, onChange }: { value: number; disabled: b
 }
 
 function ProgressBadge({ progress, done, total, large }: { progress: number; done: number; total: number; large?: boolean }) {
-  return (
-    <div style={large ? progressLargeStyle : progressStyle}>
-      <strong>{progress}%</strong>
-      <span>{done}/{total} zadań</span>
-    </div>
-  );
+  return <div style={large ? progressLargeStyle : progressStyle}><strong>{progress}%</strong><span>{done}/{total} zadań</span></div>;
 }
-
-function SummaryCard({ label, value }: { label: string; value: string | number }) {
-  return <div style={summaryCardStyle}><span>{label}</span><strong>{value}</strong></div>;
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <label style={fieldStyle}><span style={labelStyle}>{label}</span>{children}</label>;
-}
-
+function SummaryCard({ label, value }: { label: string; value: string | number }) { return <div style={summaryCardStyle}><span>{label}</span><strong>{value}</strong></div>; }
+function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label style={fieldStyle}><span style={labelStyle}>{label}</span>{children}</label>; }
 function Th({ children, width }: { children: React.ReactNode; width?: string }) { return <th style={{ ...thStyle, width }}>{children}</th>; }
 function Td({ children, strong }: { children: React.ReactNode; strong?: boolean }) { return <td style={{ ...tdStyle, fontWeight: strong ? 800 : 500 }}>{children}</td>; }
 
@@ -335,7 +318,7 @@ function getClient(value: MonthlySettlement["klienci"]) { return Array.isArray(v
 function getCaregiverName(client: ReturnType<typeof getClient>) { return client?.profiles?.[0]?.full_name || client?.profiles?.[0]?.email || "Brak opiekuna"; }
 function currentMonthInput() { return new Date().toISOString().slice(0, 7); }
 function formatMonth(value: string) { return new Intl.DateTimeFormat("pl-PL", { month: "long", year: "numeric" }).format(new Date(`${value}-01T12:00:00`)); }
-
+function statusLabel(status: SettlementStatus) { return STATUS_OPTIONS.find((item) => item.value === status)?.label || status; }
 function statusSelectStyle(status: SettlementStatus): React.CSSProperties {
   if (status === "czeka_na_dokumenty") return { background: "#ffd8d8", color: "#991b1b" };
   if (status === "dokumenty_kompletne_biuro") return { background: "#ffe7b8", color: "#92400e" };
@@ -361,19 +344,19 @@ const filtersRowStyle: React.CSSProperties = { display: "flex", alignItems: "cen
 const filtersLabelStyle: React.CSSProperties = { color: colors.muted, fontWeight: 800, fontSize: "14px" };
 const filterStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, color: colors.text, padding: "10px 38px 10px 14px", minWidth: "190px", fontSize: "14px", fontWeight: 650 };
 const tableWrapperStyle: React.CSSProperties = { overflowX: "auto" };
-const tableStyle: React.CSSProperties = { width: "100%", borderCollapse: "collapse" };
-const thStyle: React.CSSProperties = { textAlign: "left", padding: "13px 12px", color: colors.muted, fontSize: "13px", borderBottom: `1px solid ${colors.border}` };
+const tableStyle: React.CSSProperties = { width: "100%", borderCollapse: "collapse", tableLayout: "fixed" };
+const thStyle: React.CSSProperties = { textAlign: "left", padding: "13px 10px", color: colors.muted, fontSize: "13px", borderBottom: `1px solid ${colors.border}`, lineHeight: 1.25 };
 const rowStyle: React.CSSProperties = { borderBottom: `1px solid ${colors.border}` };
-const tdStyle: React.CSSProperties = { padding: "15px 12px", color: colors.text, verticalAlign: "middle" };
+const tdStyle: React.CSSProperties = { padding: "15px 10px", color: colors.text, verticalAlign: "middle" };
 const inputStyle: React.CSSProperties = { width: "100%", border: `1px solid ${colors.border}`, borderRadius: radius.input, color: colors.text, padding: "10px 12px", fontWeight: 800 };
-const smallInputStyle: React.CSSProperties = { ...inputStyle, maxWidth: "88px", background: colors.inputBackground };
+const statusInputStyle: React.CSSProperties = { ...inputStyle, minWidth: 0, maxWidth: "100%", height: "42px", padding: "8px 28px 8px 10px", fontSize: "12px", lineHeight: 1.1, whiteSpace: "normal" };
+const smallInputStyle: React.CSSProperties = { ...inputStyle, width: "100%", maxWidth: "94px", background: colors.inputBackground, textAlign: "center" };
 const textareaStyle: React.CSSProperties = { ...inputStyle, minHeight: "96px", resize: "vertical", background: colors.inputBackground };
-const clientCellStyle: React.CSSProperties = { display: "flex", flexDirection: "column", gap: "5px" };
+const clientCellStyle: React.CSSProperties = { display: "flex", flexDirection: "column", gap: "5px", minWidth: 0 };
 const progressStyle: React.CSSProperties = { display: "inline-flex", flexDirection: "column", gap: "4px", borderRadius: radius.input, background: "#e8eef8", color: colors.navy, padding: "8px 10px", fontWeight: 800, minWidth: "86px" };
 const progressLargeStyle: React.CSSProperties = { ...progressStyle, width: "100%", padding: "18px", fontSize: "20px" };
-const invoiceIssuedStyle: React.CSSProperties = { display: "inline-flex", borderRadius: radius.badge, background: "#e7f6ec", color: colors.success, padding: "7px 10px", fontWeight: 850 };
+const invoiceIssuedStyle: React.CSSProperties = { display: "inline-flex", borderRadius: radius.badge, background: "#d8f5df", color: colors.success, padding: "7px 10px", fontWeight: 850 };
 const invoiceOpenStyle: React.CSSProperties = { display: "inline-flex", borderRadius: radius.badge, background: "#f1f5f9", color: colors.muted, padding: "7px 10px", fontWeight: 850 };
-const actionsCellStyle: React.CSSProperties = { display: "flex", gap: "8px", flexWrap: "wrap" };
 const detailsButtonStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "9px 12px", background: colors.card, color: colors.navy, fontWeight: 800, cursor: "pointer" };
 const lockButtonStyle: React.CSSProperties = { ...detailsButtonStyle, background: colors.red, color: colors.white, borderColor: colors.red };
 const emptyStateStyle: React.CSSProperties = { padding: "24px", borderRadius: radius.input, background: colors.inputBackground, border: `1px dashed ${colors.border}`, color: colors.muted, textAlign: "center", fontWeight: 800 };

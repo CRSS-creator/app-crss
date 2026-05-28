@@ -5,6 +5,16 @@ alter table public.crm_oferty
   add constraint crm_oferty_status_check
   check (status in ('draft', 'published', 'accepted', 'discussion_requested', 'rejected', 'expired'));
 
+drop policy if exists crm_oferty_public_select on public.crm_oferty;
+create policy crm_oferty_public_select
+on public.crm_oferty
+for select
+to anon
+using (
+  public_token is not null
+  and status in ('published', 'accepted', 'discussion_requested', 'rejected')
+);
+
 alter table public.crm_oferta_events
   drop constraint if exists crm_oferta_events_event_type_check;
 
@@ -34,19 +44,30 @@ create index if not exists powiadomienia_recipient_idx on public.powiadomienia(r
 alter table public.powiadomienia enable row level security;
 
 drop policy if exists powiadomienia_select_owner on public.powiadomienia;
-create policy powiadomienia_select_owner
+drop policy if exists powiadomienia_select_app_users on public.powiadomienia;
+create policy powiadomienia_select_app_users
 on public.powiadomienia
 for select
 to authenticated
-using (public.current_user_role() = 'owner');
+using (
+  recipient_id = auth.uid()
+  or public.current_user_role() in ('owner', 'admin', 'manager', 'accountant')
+);
 
 drop policy if exists powiadomienia_update_owner on public.powiadomienia;
-create policy powiadomienia_update_owner
+drop policy if exists powiadomienia_update_app_users on public.powiadomienia;
+create policy powiadomienia_update_app_users
 on public.powiadomienia
 for update
 to authenticated
-using (public.current_user_role() = 'owner')
-with check (public.current_user_role() = 'owner');
+using (
+  recipient_id = auth.uid()
+  or public.current_user_role() in ('owner', 'admin', 'manager', 'accountant')
+)
+with check (
+  recipient_id = auth.uid()
+  or public.current_user_role() in ('owner', 'admin', 'manager', 'accountant')
+);
 
 create or replace function public.record_crm_offer_decision(
   public_offer_id uuid,

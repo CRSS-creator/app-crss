@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
@@ -97,7 +97,7 @@ const PIPELINE_LABELS: Record<string, string> = {
 const DEFAULT_TASKS_BY_STAGE: Record<string, string[]> = {
   nowy_lead: ["Uzupełnij źródło leada", "Skontaktuj się z leadem do 30 minut"],
   kontakt_proba_kontaktu: ["Zadzwoń lub odpisz i zaproponuj termin rozmowy online", "Jeśli brak odpowiedzi, ustaw kolejne zadanie follow-up", "Zapisz wynik kontaktu"],
-  rozmowa_online: ["Zapisz powód kontaktu", "Zbierz minimum danych do wyceny", "Zapisz, czy przygotowujemy ofertę"],
+  rozmowa_online: ["Zapisz powód kontaktu", "Zbierz minimum danych do wyceny", "Zapisz, czy przygotowujemy propozycję"],
   propozycja_wspolpracy_wyslana: ["Zapisz datę wysłania propozycji", "Ustaw follow-up D+2", "Ustaw follow-up D+5"],
   decyzja: ["Zamknij szansę jako wygrana albo przegrana", "Jeśli przegrana, zapisz powód"],
 };
@@ -195,10 +195,10 @@ function CrmContent() {
         <div>
           <p style={eyebrowStyle}>Moduł zarządczy</p>
           <h1 style={titleStyle}>CRM</h1>
-          <p style={subtitleStyle}>Szanse sprzedaży, pipeline, zadania, pliki i przejście do ofert PDF.</p>
+          <p style={subtitleStyle}>Szanse sprzedaży, pipeline, zadania, pliki i propozycje współpracy.</p>
         </div>
         <div style={headerActionsStyle}>
-          <Link href="/crm/oferty" style={secondaryButtonStyle}>Oferty PDF</Link>
+          <Link href="/crm/oferty" style={secondaryButtonStyle}>Propozycje współpracy</Link>
           <button style={primaryButtonStyle} onClick={() => setCreatingLead(true)}>Dodaj szansę</button>
         </div>
       </section>
@@ -265,7 +265,7 @@ function CrmContent() {
         {loading ? <div style={emptyStyle}>Ładowanie danych...</div> : filteredLeads.length === 0 ? <div style={emptyStyle}>Brak szans sprzedaży do wyświetlenia</div> : (
           <div style={tableWrapperStyle}>
             <table style={tableStyle}>
-              <thead><tr><Th>Firma</Th><Th>Etap</Th><Th>Status</Th><Th>Kadry</Th><Th>MRR</Th><Th>Akcje</Th></tr></thead>
+              <thead><tr><Th>Firma</Th><Th>Etap</Th><Th>Status</Th><Th>Kadry</Th><Th>MRR</Th><Th>Status CTA</Th><Th>Akcje</Th></tr></thead>
               <tbody>{filteredLeads.map((lead) => (
                 <tr key={lead.id} style={rowStyle}>
                   <Td strong>{lead.nazwa || "—"}</Td>
@@ -273,6 +273,7 @@ function CrmContent() {
                   <Td><Badge>{statusLabel(lead.status)}</Badge></Td>
                   <Td>{lead.czy_kadry ? "Tak" : "Nie"}</Td>
                   <Td>{lead.szacowany_mrr ? `${lead.szacowany_mrr.toLocaleString("pl-PL")} zł` : "—"}</Td>
+                  <Td><Badge>W propozycjach</Badge></Td>
                   <Td><button style={secondaryButtonStyle} onClick={() => setSelectedLead(lead)}>Szczegóły</button></Td>
                 </tr>
               ))}</tbody>
@@ -398,22 +399,29 @@ function LeadDrawer({ mode, lead, tasks, onClose, onCreated, onSaved, onToggleTa
           </FormSection>
 
           <FormSection title="Zadania sprzedażowe">
-            {tasks.length === 0 ? <div style={emptyStyle}>Brak zadań dla tej szansy.</div> : tasks.map((task) => (
-              <button key={task.id} style={taskItemStyle} onClick={() => onToggleTaskStatus?.(task.id)}>
-                <span>{task.tytul}</span>
-                <strong>{task.status === "zrobione" ? "Zrobione" : "Do zrobienia"}</strong>
-              </button>
-            ))}
+            <div style={taskListStyle}>
+              {tasks.length === 0 ? <div style={emptyStyle}>Brak zadań dla tej szansy.</div> : tasks.map((task) => {
+                const isDone = task.status === "zrobione";
+                return (
+                  <div key={task.id} style={{ ...taskItemStyle, background: isDone ? "#ecfdf5" : "#f8fafc", borderColor: isDone ? "#bbf7d0" : "#cbd5e1" }}>
+                    <label style={taskCheckLabelStyle}>
+                      <input type="checkbox" checked={isDone} onChange={() => onToggleTaskStatus?.(task.id)} style={taskCheckboxStyle} />
+                      <div>
+                        <div style={{ ...taskTitleStyle, color: isDone ? "#047857" : "#1e293b", textDecoration: isDone ? "line-through" : "none" }}>{task.tytul}</div>
+                        <div style={{ ...taskMetaStyle, color: isDone ? "#059669" : "#475569" }}>{PIPELINE_LABELS[task.etap] || task.etap}{task.termin ? ` · termin: ${task.termin}` : ""}</div>
+                      </div>
+                    </label>
+                    <button type="button" onClick={() => onToggleTaskStatus?.(task.id)} style={{ ...taskStatusButtonStyle, background: isDone ? "#bbf7d0" : "#e2e8f0", color: isDone ? "#047857" : "#0f172a" }}>{isDone ? "Zrobione" : "Do zrobienia"}</button>
+                  </div>
+                );
+              })}
+            </div>
           </FormSection>
 
-          <FormSection title="Oferta PDF">
-            {mode === "create" ? <div style={emptyStyle}>Najpierw zapisz szansę, a potem przejdź do ofert PDF.</div> : (
+          <FormSection title="Propozycja współpracy">
+            {mode === "create" ? <div style={emptyStyle}>Najpierw zapisz szansę, a potem przygotuj propozycję współpracy.</div> : (
               <div style={offerLinkPanelStyle}>
-                <div>
-                  <strong>Oferta PDF i śledzenie klienta</strong>
-                  <p>PDF, prywatny link, statystyki stron, CTA i wysyłka przez n8n są w osobnym ekranie.</p>
-                </div>
-                <Link href="/crm/oferty" style={secondaryButtonStyle}>Przejdź do ofert</Link>
+                <Link href="/crm/oferty" style={proposalButtonStyle}>Przejdź do propozycji</Link>
               </div>
             )}
           </FormSection>
@@ -445,7 +453,7 @@ function LeadDrawer({ mode, lead, tasks, onClose, onCreated, onSaved, onToggleTa
           <FormSection title="Terminy i notatki">
             <EditableInput label="Data telefonu" type="date" value={draft.data_telefonu} onChange={(value) => updateDraft("data_telefonu", value)} />
             <EditableInput label="Data spotkania online" type="date" value={draft.data_spotkania_online} onChange={(value) => updateDraft("data_spotkania_online", value)} />
-            <EditableInput label="Data wysłania oferty" type="date" value={draft.data_wyslania_oferty} onChange={(value) => updateDraft("data_wyslania_oferty", value)} />
+            <EditableInput label="Data wysłania propozycji" type="date" value={draft.data_wyslania_oferty} onChange={(value) => updateDraft("data_wyslania_oferty", value)} />
             <EditableInput label="Data follow-up" type="date" value={draft.data_follow_up} onChange={(value) => updateDraft("data_follow_up", value)} />
             <EditableTextarea label="Powód kontaktu" value={draft.powod_kontaktu} onChange={(value) => updateDraft("powod_kontaktu", value)} />
             <EditableTextarea label="Powód zmiany biura" value={draft.powod_zmiany_biura} onChange={(value) => updateDraft("powod_zmiany_biura", value)} />
@@ -489,9 +497,9 @@ const headerActionsStyle: React.CSSProperties = { display: "flex", gap: "12px", 
 const eyebrowStyle: React.CSSProperties = { color: colors.red, fontWeight: 800, margin: "0 0 8px" };
 const titleStyle: React.CSSProperties = { fontSize: "42px", lineHeight: 1.05, margin: 0, color: colors.navy };
 const subtitleStyle: React.CSSProperties = { maxWidth: "780px", fontSize: "17px", lineHeight: 1.7, color: colors.muted, marginTop: "14px" };
-const primaryButtonStyle: React.CSSProperties = { border: "none", borderRadius: radius.button, padding: "14px 18px", background: colors.red, color: colors.white, fontWeight: 800, cursor: "pointer", textDecoration: "none" };
-const primarySmallButtonStyle: React.CSSProperties = { ...primaryButtonStyle, padding: "11px 15px" };
-const secondaryButtonStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "10px 14px", background: colors.white, color: colors.navy, fontWeight: 800, cursor: "pointer", textDecoration: "none" };
+const primaryButtonStyle: React.CSSProperties = { border: "none", borderRadius: radius.button, padding: "14px 18px", minHeight: "46px", background: colors.red, color: colors.white, fontWeight: 800, cursor: "pointer", textDecoration: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", textAlign: "center" };
+const primarySmallButtonStyle: React.CSSProperties = { ...primaryButtonStyle, padding: "11px 15px", minHeight: "42px" };
+const secondaryButtonStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "10px 14px", minHeight: "42px", background: colors.white, color: colors.navy, fontWeight: 800, cursor: "pointer", textDecoration: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", textAlign: "center" };
 const summaryGridStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "18px", marginBottom: "24px" };
 const summaryCardStyle: React.CSSProperties = { background: colors.card, border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: "22px", boxShadow: shadow.soft, display: "flex", flexDirection: "column", gap: "10px", color: colors.muted, fontWeight: 800 };
 const cardStyle: React.CSSProperties = { background: colors.card, border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: "28px", boxShadow: shadow.soft, marginBottom: "24px" };
@@ -525,8 +533,15 @@ const editableRowStyle: React.CSSProperties = { display: "grid", gridTemplateCol
 const textareaRowStyle: React.CSSProperties = { display: "flex", flexDirection: "column", gap: "8px", color: colors.muted, fontWeight: 700 };
 const inputStyle: React.CSSProperties = { width: "100%", border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "10px 12px", background: colors.inputBackground, color: colors.text, fontWeight: 650, outline: "none" };
 const textareaStyle: React.CSSProperties = { ...inputStyle, resize: "vertical", minHeight: "96px", lineHeight: 1.6 };
-const taskItemStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "14px", background: colors.inputBackground, display: "flex", justifyContent: "space-between", gap: "14px", width: "100%", textAlign: "left", cursor: "pointer" };
-const offerLinkPanelStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "16px", background: colors.inputBackground, display: "flex", justifyContent: "space-between", gap: "14px", alignItems: "center" };
+const taskListStyle: React.CSSProperties = { display: "flex", flexDirection: "column", gap: "10px" };
+const taskItemStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "14px", background: colors.inputBackground, display: "flex", justifyContent: "space-between", gap: "14px", alignItems: "center" };
+const taskCheckLabelStyle: React.CSSProperties = { display: "flex", alignItems: "flex-start", gap: 12, flex: 1, cursor: "pointer" };
+const taskCheckboxStyle: React.CSSProperties = { width: 18, height: 18, marginTop: 4, cursor: "pointer" };
+const taskTitleStyle: React.CSSProperties = { fontWeight: 850, color: colors.text, marginBottom: "5px" };
+const taskMetaStyle: React.CSSProperties = { color: colors.muted, fontSize: "13px", fontWeight: 650 };
+const taskStatusButtonStyle: React.CSSProperties = { width: 118, minWidth: 118, height: 44, borderRadius: 999, border: "none", cursor: "pointer", fontWeight: 800, fontSize: 13 };
+const offerLinkPanelStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "16px", background: colors.inputBackground, display: "flex", justifyContent: "center" };
+const proposalButtonStyle: React.CSSProperties = { ...primaryButtonStyle, minHeight: "54px", width: "100%", fontSize: "16px" };
 const fileDropzoneStyle: React.CSSProperties = { border: `1px dashed ${colors.border}`, borderRadius: radius.input, padding: "18px", background: colors.inputBackground, display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "center" };
 const fileItemStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "12px 14px", background: colors.white, display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", marginTop: "10px" };
 const fileActionsStyle: React.CSSProperties = { display: "flex", gap: "8px" };

@@ -102,7 +102,7 @@ export async function updateCrmOffer(offerId: string, payload: Partial<CrmOfferP
 }
 
 export async function uploadCrmOfferPdf(offerId: string, file: File) {
-  const fileName = sanitizeFileName(file.name || "oferta.pdf");
+  const fileName = sanitizeFileName(file.name || "propozycja.pdf");
   const storagePath = `${offerId}/${Date.now()}-${fileName}`;
   const upload = await supabase.storage
     .from(CRM_OFFER_PDF_BUCKET)
@@ -150,7 +150,7 @@ export async function sendCrmOfferToN8n(offer: CrmOffer, lead?: CrmOfferLeadCont
       company: offer.przygotowana_dla || lead?.nazwa || null,
       contact_person: offer.osoba_kontaktowa || lead?.osoba_kontaktowa || null,
       recipient: offer.email_recipient || lead?.email || null,
-      subject: offer.email_subject || `Oferta CRSS dla ${offer.przygotowana_dla || lead?.nazwa || "Twojej firmy"}`,
+      subject: offer.email_subject || `Propozycja współpracy CRSS dla ${offer.przygotowana_dla || lead?.nazwa || "Twojej firmy"}`,
       offer_url: publicUrl,
       pdf_url: offer.pdf_url,
       cta_label: offer.cta_label,
@@ -208,5 +208,5 @@ function sanitizeFileName(value: string) {
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
 
-  return cleaned.toLowerCase().endsWith(".pdf") ? cleaned : `${cleaned || "oferta"}.pdf`;
+  return cleaned.toLowerCase().endsWith(".pdf") ? cleaned : `${cleaned || "propozycja"}.pdf`;
 }

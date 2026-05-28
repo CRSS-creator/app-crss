@@ -32,7 +32,7 @@ function NotificationsContent() {
   async function loadNotifications() {
     setLoading(true);
     const { data, error } = await fetchNotifications();
-    if (error) console.error("Błąd pobierania powiadomień:", error);
+    if (error) console.error("Blad pobierania powiadomien:", error);
     else setNotifications((data || []) as AppNotification[]);
     setLoading(false);
   }
@@ -56,7 +56,7 @@ function NotificationsContent() {
         <div>
           <p style={eyebrowStyle}>Aplikacja CRSS</p>
           <h1 style={titleStyle}>Powiadomienia</h1>
-          <p style={subtitleStyle}>Najważniejsze komunikaty z CRM i pracy operacyjnej.</p>
+          <p style={subtitleStyle}>Najwazniejsze komunikaty z CRM i pracy operacyjnej.</p>
         </div>
         <button style={secondaryButtonStyle} onClick={markAllRead} disabled={unreadCount === 0}>Oznacz jako przeczytane</button>
       </section>
@@ -69,31 +69,34 @@ function NotificationsContent() {
 
       <section style={cardStyle}>
         {loading ? (
-          <div style={emptyStyle}>Ładowanie powiadomień...</div>
+          <div style={emptyStyle}>Ladowanie powiadomien...</div>
         ) : notifications.length === 0 ? (
-          <div style={emptyStyle}>Brak powiadomień.</div>
+          <div style={emptyStyle}>Brak powiadomien.</div>
         ) : (
           <div style={listStyle}>
-            {notifications.map((notification) => (
-              <article key={notification.id} style={notification.status === "unread" ? unreadItemStyle : itemStyle}>
-                <div style={itemHeaderStyle}>
-                  <div>
-                    <div style={itemTitleStyle}>{notification.title}</div>
-                    {notification.body && <p style={itemBodyStyle}>{notification.body}</p>}
+            {notifications.map((notification) => {
+              const publicToken = getPublicToken(notification);
+              return (
+                <article key={notification.id} style={notification.status === "unread" ? unreadItemStyle : itemStyle}>
+                  <div style={itemHeaderStyle}>
+                    <div>
+                      <div style={itemTitleStyle}>{notification.title}</div>
+                      {notification.body && <p style={itemBodyStyle}>{notification.body}</p>}
+                    </div>
+                    <div style={itemMetaStyle}>
+                      <span style={priorityBadgeStyle(notification.priority)}>{priorityLabel(notification.priority)}</span>
+                      <span>{formatDateTime(notification.created_at)}</span>
+                    </div>
                   </div>
-                  <div style={itemMetaStyle}>
-                    <span style={priorityBadgeStyle(notification.priority)}>{priorityLabel(notification.priority)}</span>
-                    <span>{formatDateTime(notification.created_at)}</span>
+                  <div style={itemActionsStyle}>
+                    {publicToken && (
+                      <a style={secondaryButtonStyle} href={`/oferta/${publicToken}`} target="_blank" rel="noreferrer">Otworz propozycje</a>
+                    )}
+                    {notification.status === "unread" && <button style={primaryButtonStyle} onClick={() => markRead(notification)}>Przeczytane</button>}
                   </div>
-                </div>
-                <div style={itemActionsStyle}>
-                  {notification.metadata?.public_token && (
-                    <a style={secondaryButtonStyle} href={`/oferta/${notification.metadata.public_token}`} target="_blank" rel="noreferrer">Otwórz propozycję</a>
-                  )}
-                  {notification.status === "unread" && <button style={primaryButtonStyle} onClick={() => markRead(notification)}>Przeczytane</button>}
-                </div>
-              </article>
-            ))}
+                </article>
+              );
+            })}
           </div>
         )}
       </section>
@@ -103,6 +106,11 @@ function NotificationsContent() {
 
 function SummaryCard({ label, value }: { label: string; value: string | number }) {
   return <div style={summaryCardStyle}><span>{label}</span><strong>{value}</strong></div>;
+}
+
+function getPublicToken(notification: AppNotification) {
+  const token = notification.metadata?.public_token;
+  return typeof token === "string" && token.length > 0 ? token : null;
 }
 
 function priorityLabel(priority: AppNotification["priority"]) {

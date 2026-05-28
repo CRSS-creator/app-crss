@@ -1,6 +1,7 @@
 import { supabase } from "@/lib/supabaseClient";
 
-export type CrmOfferStatus = "draft" | "published" | "accepted" | "expired";
+export type CrmOfferStatus = "draft" | "published" | "accepted" | "discussion_requested" | "rejected" | "expired";
+export type CrmOfferDecision = "accepted" | "discussion_requested" | "rejected";
 
 export type CrmOffer = {
   id: string;
@@ -32,7 +33,7 @@ export type CrmOffer = {
 export type CrmOfferEvent = {
   id: string;
   oferta_id: string;
-  event_type: "open" | "section_time" | "cta_click" | "pdf_download" | "accept";
+  event_type: "open" | "section_time" | "cta_click" | "pdf_download" | "accept" | "reject";
   section_key: string | null;
   visitor_id: string | null;
   duration_seconds: number | null;
@@ -166,11 +167,16 @@ export async function sendCrmOfferToN8n(offer: CrmOffer, lead?: CrmOfferLeadCont
   return { ok: true, error: null };
 }
 
-export async function markCrmOfferAccepted(offerId: string, visitorId?: string | null) {
-  return supabase.rpc("accept_crm_offer", {
+export async function recordCrmOfferDecision(offerId: string, decision: CrmOfferDecision, visitorId?: string | null) {
+  return supabase.rpc("record_crm_offer_decision", {
     public_offer_id: offerId,
+    public_decision: decision,
     public_visitor_id: visitorId || null,
   });
+}
+
+export async function markCrmOfferAccepted(offerId: string, visitorId?: string | null) {
+  return recordCrmOfferDecision(offerId, "accepted", visitorId);
 }
 
 export async function fetchPublicCrmOffer(token: string) {
@@ -178,7 +184,7 @@ export async function fetchPublicCrmOffer(token: string) {
     .from("crm_oferty")
     .select("*")
     .eq("public_token", token)
-    .in("status", ["published", "accepted"])
+    .in("status", ["published", "accepted", "discussion_requested", "rejected"])
     .single();
 }
 

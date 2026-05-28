@@ -12,7 +12,7 @@ alter table public.crm_oferta_events
   add constraint crm_oferta_events_event_type_check
   check (event_type in ('open', 'section_time', 'cta_click', 'pdf_download', 'accept', 'reject'));
 
-create table if not exists public.powiadomienia (=
+create table if not exists public.powiadomienia (
   id uuid primary key default gen_random_uuid(),
   type text not null default 'system',
   title text not null,

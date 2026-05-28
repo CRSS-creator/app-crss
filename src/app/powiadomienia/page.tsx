@@ -76,6 +76,7 @@ function NotificationsContent() {
           <div style={listStyle}>
             {notifications.map((notification) => {
               const publicToken = getPublicToken(notification);
+              const isTaskNotification = notification.type === "task_assigned" || notification.type === "task_due_today";
               return (
                 <article key={notification.id} style={notification.status === "unread" ? unreadItemStyle : itemStyle}>
                   <div style={itemHeaderStyle}>
@@ -92,6 +93,7 @@ function NotificationsContent() {
                     {publicToken && (
                       <a style={secondaryButtonStyle} href={`/oferta/${publicToken}`} target="_blank" rel="noreferrer">Otwórz propozycję</a>
                     )}
+                    {isTaskNotification && <a style={secondaryButtonStyle} href="/zadania">Otwórz zadania</a>}
                     {notification.status === "unread" && <button style={primaryButtonStyle} onClick={() => markRead(notification)}>Przeczytane</button>}
                   </div>
                 </article>

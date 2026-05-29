@@ -128,6 +128,24 @@ export async function uploadCrmOfferPdf(offerId: string, file: File) {
   });
 }
 
+export async function removeCrmOfferPdf(offer: CrmOffer) {
+  if (offer.pdf_storage_path) {
+    const removal = await supabase.storage
+      .from(CRM_OFFER_PDF_BUCKET)
+      .remove([offer.pdf_storage_path]);
+
+    if (removal.error) return { data: null, error: removal.error };
+  }
+
+  return updateCrmOffer(offer.id, {
+    pdf_url: null,
+    pdf_storage_path: null,
+    pdf_file_name: null,
+    pdf_file_size: null,
+    status: "draft",
+  });
+}
+
 export async function publishCrmOffer(offerId: string) {
   return supabase
     .from("crm_oferty")

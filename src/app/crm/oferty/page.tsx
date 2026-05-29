@@ -363,8 +363,8 @@ function Analytics({ offer, events }: { offer: CrmOffer; events: CrmOfferEvent[]
       <div style={analyticsStyle}>
         <Stat label="Otwarcia" value={countEvents(events, "open")} />
         <Stat label="Pobrania PDF" value={countEvents(events, "pdf_download")} />
-        <Stat label="Status propozycji" value={statusLabel(offer.status)} />
-        <Stat label="Najmocniejsza strona" value={strongestPage?.label || "Brak danych"} detail={strongestPage ? formatPageStatMeta(strongestPage.views, strongestPage.minutes) : undefined} />
+        <Stat label="Status propozycji" value={statusLabel(offer.status)} variant="badge" />
+        <Stat label="Najmocniejsza strona" value={strongestPage?.label || "Brak danych"} subtleValue />
       </div>
       {pageStats.length > 0 && (
         <div style={pageStatsStyle}>
@@ -384,8 +384,9 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   return <label style={fieldStyle}><span style={labelStyle}>{label}</span>{children}</label>;
 }
 
-function Stat({ label, value, detail }: { label: string | number; value: string | number; detail?: string }) {
-  return <div style={statStyle}><span>{label}</span><strong>{value}</strong>{detail && <small style={statDetailStyle}>{detail}</small>}</div>;
+function Stat({ label, value, detail, variant, subtleValue }: { label: string | number; value: string | number; detail?: string; variant?: "badge"; subtleValue?: boolean }) {
+  const valueStyle = variant === "badge" ? statBadgeValueStyle : subtleValue ? statSubtleValueStyle : undefined;
+  return <div style={statStyle}><span>{label}</span><strong style={valueStyle}>{value}</strong>{detail && <small style={statDetailStyle}>{detail}</small>}</div>;
 }
 
 function createOfferDraftFromLead(lead: Lead | null): OfferDraft {
@@ -513,6 +514,8 @@ const pageStatsStyle: React.CSSProperties = { display: "grid", gridTemplateColum
 const pageStatRowStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, padding: "12px", minHeight: "72px", display: "flex", flexDirection: "column", justifyContent: "center", gap: "5px", color: colors.text, fontWeight: 800 };
 const pageStatMetaStyle: React.CSSProperties = { color: colors.muted, fontSize: "13px", fontWeight: 650, lineHeight: 1.4 };
 const statStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, padding: "14px", minHeight: "84px", display: "flex", flexDirection: "column", justifyContent: "center", gap: "8px", color: colors.muted, fontWeight: 800 };
+const statBadgeValueStyle: React.CSSProperties = { display: "inline-flex", alignSelf: "flex-start", borderRadius: radius.badge, padding: "5px 8px", background: "rgba(23, 59, 115, 0.10)", color: colors.navy, fontWeight: 800, fontSize: "12px", lineHeight: 1.25 };
+const statSubtleValueStyle: React.CSSProperties = { color: colors.text, fontSize: "13px", fontWeight: 650, lineHeight: 1.4 };
 const statDetailStyle: React.CSSProperties = { color: colors.muted, fontSize: "13px", fontWeight: 650, lineHeight: 1.35 };
 const uploadPanelStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.inputBackground, padding: "22px", marginBottom: "18px", display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: "18px", alignItems: "center" };
 const panelEyebrowStyle: React.CSSProperties = { margin: "0 0 8px", color: colors.red, fontWeight: 850, fontSize: "13px" };

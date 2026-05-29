@@ -47,6 +47,7 @@ export type CrmOfferPayload = {
   przygotowana_dla?: string | null;
   osoba_kontaktowa?: string | null;
   rekomendowany_pakiet: string;
+  status?: CrmOfferStatus;
   warunki?: string | null;
   cta_label: string;
   cta_url?: string | null;

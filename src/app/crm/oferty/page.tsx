@@ -148,6 +148,7 @@ function CrmOffersContent() {
   async function publishOffer() {
     const savedOffer = offer || await saveOffer();
     if (!savedOffer) return;
+    if (savedOffer.status !== "draft" && savedOffer.status !== "expired") return;
     if (!savedOffer.pdf_url) {
       alert("Dodaj PDF przed publikacją linku dla klienta.");
       return;
@@ -266,6 +267,7 @@ function CrmOffersContent() {
   }
 
   const offerUrl = offer ? createOfferUrl(offer.public_token) : "";
+  const isLinkPublished = Boolean(offer && offer.status !== "draft" && offer.status !== "expired");
 
   return (
     <>
@@ -301,7 +303,7 @@ function CrmOffersContent() {
                 </div>
                 <div style={actionsStyle}>
                   <button style={primaryButtonStyle} onClick={saveOffer} disabled={saving}>{saving ? "Zapisywanie..." : "Zapisz"}</button>
-                  <button style={secondaryButtonStyle} onClick={publishOffer}>Opublikuj link</button>
+                  <button style={isLinkPublished ? disabledButtonStyle : secondaryButtonStyle} onClick={publishOffer} disabled={isLinkPublished}>{isLinkPublished ? "Opublikowano" : "Opublikuj link"}</button>
                   {offer && <button style={secondaryButtonStyle} onClick={() => navigator.clipboard.writeText(offerUrl)}>Kopiuj link</button>}
                   {offer && offer.status !== "draft" && offer.status !== "expired" && <button style={secondaryButtonStyle} onClick={() => window.open(offerUrl, "_blank", "noopener,noreferrer")}>Podgląd</button>}
                   {offer && offer.status !== "draft" && offer.status !== "expired" && <button style={dangerButtonStyle} onClick={invalidateOfferLink} disabled={expiring}>{expiring ? "Unieważnianie..." : "Unieważnij link"}</button>}
@@ -357,13 +359,14 @@ function CrmOffersContent() {
 
 function Analytics({ events }: { events: CrmOfferEvent[] }) {
   const pageStats = collectPageStats(events);
+  const strongestPage = findStrongestPage(pageStats);
   return (
     <section style={analyticsShellStyle}>
       <div style={analyticsStyle}>
         <Stat label="Otwarcia" value={countEvents(events, "open")} />
         <Stat label="Pobrania PDF" value={countEvents(events, "pdf_download")} />
         <Stat label="Chcą omówić" value={countEvents(events, "cta_click")} />
-        <Stat label="Najmocniejsza strona" value={pageStats[0]?.label || "Brak danych"} />
+        <Stat label="Najmocniejsza strona" value={strongestPage?.label || "Brak danych"} />
       </div>
       {pageStats.length > 0 && (
         <div style={pageStatsStyle}>
@@ -437,10 +440,10 @@ function countEvents(events: CrmOfferEvent[], type: CrmOfferEvent["event_type"])
 function collectPageStats(events: CrmOfferEvent[]) {
   const stats = events
     .filter((event) => event.event_type === "section_time" && event.section_key?.startsWith("pdf_page_"))
-    .reduce<Record<string, { key: string; label: string; views: number; seconds: number }>>((acc, event) => {
+    .reduce<Record<string, { key: string; label: string; pageNumber: number; views: number; seconds: number }>>((acc, event) => {
       const key = event.section_key || "pdf_page_0";
-      const pageNumber = key.replace("pdf_page_", "");
-      if (!acc[key]) acc[key] = { key, label: `Strona ${pageNumber}`, views: 0, seconds: 0 };
+      const pageNumber = Number(key.replace("pdf_page_", "")) || 0;
+      if (!acc[key]) acc[key] = { key, label: `Strona ${pageNumber}`, pageNumber, views: 0, seconds: 0 };
       if (Number(event.duration_seconds || 0) === 0) acc[key].views += 1;
       acc[key].seconds += Number(event.duration_seconds || 0);
       return acc;
@@ -448,7 +451,11 @@ function collectPageStats(events: CrmOfferEvent[]) {
 
   return Object.values(stats)
     .map((item) => ({ ...item, minutes: Math.round(item.seconds / 60) }))
-    .sort((first, second) => second.seconds - first.seconds || second.views - first.views);
+    .sort((first, second) => first.pageNumber - second.pageNumber);
+}
+
+function findStrongestPage<T extends { seconds: number; views: number }>(pages: T[]) {
+  return [...pages].sort((first, second) => second.seconds - first.seconds || second.views - first.views)[0];
 }
 
 function statusLabel(status: CrmOffer["status"]) {
@@ -485,13 +492,14 @@ const metaStyle: React.CSSProperties = { margin: "6px 0 0", color: colors.muted,
 const actionsStyle: React.CSSProperties = { display: "flex", flexWrap: "wrap", gap: "10px", justifyContent: "flex-end" };
 const primaryButtonStyle: React.CSSProperties = { border: "none", borderRadius: radius.button, padding: "11px 15px", minHeight: "42px", background: colors.red, color: colors.white, fontWeight: 800, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", textAlign: "center" };
 const secondaryButtonStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "10px 14px", minHeight: "42px", background: colors.white, color: colors.navy, fontWeight: 800, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", textAlign: "center" };
+const disabledButtonStyle: React.CSSProperties = { ...secondaryButtonStyle, background: "#eef2f7", color: "#64748b", cursor: "not-allowed" };
 const dangerButtonStyle: React.CSSProperties = { ...secondaryButtonStyle, border: "none", background: "rgba(220, 38, 38, 0.10)", color: colors.danger };
 const dangerTextButtonStyle: React.CSSProperties = { border: "none", background: "transparent", color: colors.danger, fontWeight: 850, cursor: "pointer", padding: "10px 0" };
-const analyticsShellStyle: React.CSSProperties = { marginBottom: "18px" };
+const analyticsShellStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, background: "#f8fbff", padding: "14px", marginBottom: "18px" };
 const analyticsStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "12px" };
-const pageStatsStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "10px", marginTop: "12px" };
-const pageStatRowStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, padding: "12px", display: "flex", flexDirection: "column", gap: "4px", color: colors.muted, fontWeight: 800 };
-const statStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "14px", display: "flex", flexDirection: "column", gap: "8px", color: colors.muted, fontWeight: 800 };
+const pageStatsStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "10px", marginTop: "12px" };
+const pageStatRowStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, padding: "12px", minHeight: "72px", display: "flex", flexDirection: "column", justifyContent: "center", gap: "5px", color: colors.muted, fontWeight: 800 };
+const statStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, padding: "14px", minHeight: "84px", display: "flex", flexDirection: "column", justifyContent: "center", gap: "8px", color: colors.muted, fontWeight: 800 };
 const uploadPanelStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.inputBackground, padding: "22px", marginBottom: "18px", display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: "18px", alignItems: "center" };
 const panelEyebrowStyle: React.CSSProperties = { margin: "0 0 8px", color: colors.red, fontWeight: 850, fontSize: "13px" };
 const panelTitleStyle: React.CSSProperties = { margin: 0, color: colors.navy, fontSize: "22px" };

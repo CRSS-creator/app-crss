@@ -62,13 +62,13 @@ export type CrmOfferPayload = {
 };
 
 export type CrmOfferLeadContext = {
+  id?: string | null;
   nazwa?: string | null;
   email?: string | null;
   osoba_kontaktowa?: string | null;
 };
 
 const CRM_OFFER_PDF_BUCKET = "crm-oferty-pdf";
-const CONFIGURED_N8N_WEBHOOK_URL = process.env.NEXT_PUBLIC_N8N_CRM_OFFER_WEBHOOK_URL || "";
 
 export async function fetchCrmOffers(crmId: string) {
   return supabase
@@ -138,32 +138,36 @@ export async function publishCrmOffer(offerId: string) {
 }
 
 export async function sendCrmOfferToN8n(offer: CrmOffer, lead?: CrmOfferLeadContext | null) {
-  const webhookUrl = offer.n8n_webhook_url || CONFIGURED_N8N_WEBHOOK_URL;
+  if (offer.status === "draft") {
+    return { ok: false, error: "Najpierw opublikuj link propozycji." };
+  }
 
-  if (!webhookUrl) {
-    return { ok: false, error: "Brak konfiguracji automatycznej wysylki maila." };
+  const recipientEmail = offer.email_recipient || lead?.email || null;
+
+  if (!recipientEmail) {
+    return { ok: false, error: "Uzupełnij adres e-mail odbiorcy." };
   }
 
   const publicUrl = typeof window === "undefined" ? `/oferta/${offer.public_token}` : `${window.location.origin}/oferta/${offer.public_token}`;
-  const response = await fetch(webhookUrl, {
+  const response = await fetch("/api/crm/oferty/send-mail", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      offer_id: offer.id,
-      title: offer.tytul,
-      company: offer.przygotowana_dla || lead?.nazwa || null,
-      contact_person: offer.osoba_kontaktowa || lead?.osoba_kontaktowa || null,
-      recipient: offer.email_recipient || lead?.email || null,
-      subject: offer.email_subject || `Propozycja wspolpracy CRSS dla ${offer.przygotowana_dla || lead?.nazwa || "Twojej firmy"}`,
-      offer_url: publicUrl,
-      pdf_url: offer.pdf_url,
-      cta_label: offer.cta_label,
-      cta_url: offer.cta_url,
+      offerId: offer.id,
+      leadId: offer.crm_id || lead?.id || null,
+      recipientEmail,
+      recipientName: offer.osoba_kontaktowa || lead?.osoba_kontaktowa || null,
+      companyName: offer.przygotowana_dla || lead?.nazwa || null,
+      subject: offer.email_subject || `Propozycja współpracy CRSS dla ${offer.przygotowana_dla || lead?.nazwa || "Państwa firmy"}`,
+      proposalTitle: offer.tytul,
+      proposalUrl: publicUrl,
+      validUntil: offer.wazna_do,
     }),
   });
 
   if (!response.ok) {
-    return { ok: false, error: `Automatyzacja zwrocila status ${response.status}.` };
+    const data = await response.json().catch(() => null);
+    return { ok: false, error: data?.error || `Automatyzacja zwróciła status ${response.status}.` };
   }
 
   await updateCrmOffer(offer.id, { email_sent_at: new Date().toISOString() });

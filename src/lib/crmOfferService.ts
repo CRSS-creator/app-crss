@@ -138,30 +138,38 @@ export async function publishCrmOffer(offerId: string) {
 }
 
 export async function sendCrmOfferToN8n(offer: CrmOffer, lead?: CrmOfferLeadContext | null) {
+  let offerToSend = offer;
+
   if (offer.status === "draft") {
-    return { ok: false, error: "Najpierw opublikuj link propozycji." };
+    const { data, error } = await publishCrmOffer(offer.id);
+
+    if (error || !data) {
+      return { ok: false, error: "Nie udało się opublikować linku propozycji." };
+    }
+
+    offerToSend = data as CrmOffer;
   }
 
-  const recipientEmail = offer.email_recipient || lead?.email || null;
+  const recipientEmail = offerToSend.email_recipient || lead?.email || null;
 
   if (!recipientEmail) {
     return { ok: false, error: "Uzupełnij adres e-mail odbiorcy." };
   }
 
-  const publicUrl = typeof window === "undefined" ? `/oferta/${offer.public_token}` : `${window.location.origin}/oferta/${offer.public_token}`;
+  const publicUrl = typeof window === "undefined" ? `/oferta/${offerToSend.public_token}` : `${window.location.origin}/oferta/${offerToSend.public_token}`;
   const response = await fetch("/api/crm/oferty/send-mail", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      offerId: offer.id,
-      leadId: offer.crm_id || lead?.id || null,
+      offerId: offerToSend.id,
+      leadId: offerToSend.crm_id || lead?.id || null,
       recipientEmail,
-      recipientName: offer.osoba_kontaktowa || lead?.osoba_kontaktowa || null,
-      companyName: offer.przygotowana_dla || lead?.nazwa || null,
-      subject: offer.email_subject || `Propozycja współpracy CRSS dla ${offer.przygotowana_dla || lead?.nazwa || "Państwa firmy"}`,
-      proposalTitle: offer.tytul,
+      recipientName: offerToSend.osoba_kontaktowa || lead?.osoba_kontaktowa || null,
+      companyName: offerToSend.przygotowana_dla || lead?.nazwa || null,
+      subject: offerToSend.email_subject || `Propozycja współpracy CRSS dla ${offerToSend.przygotowana_dla || lead?.nazwa || "Państwa firmy"}`,
+      proposalTitle: offerToSend.tytul,
       proposalUrl: publicUrl,
-      validUntil: offer.wazna_do,
+      validUntil: offerToSend.wazna_do,
     }),
   });
 
@@ -170,7 +178,7 @@ export async function sendCrmOfferToN8n(offer: CrmOffer, lead?: CrmOfferLeadCont
     return { ok: false, error: data?.error || `Automatyzacja zwróciła status ${response.status}.` };
   }
 
-  await updateCrmOffer(offer.id, { email_sent_at: new Date().toISOString() });
+  await updateCrmOffer(offerToSend.id, { email_sent_at: new Date().toISOString() });
   return { ok: true, error: null };
 }
 

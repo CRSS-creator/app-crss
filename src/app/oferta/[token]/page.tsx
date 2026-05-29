@@ -21,6 +21,14 @@ const PDFJS_SCRIPT = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf
 const PDFJS_WORKER = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 const DEFAULT_NEXT_STEP_TEXT =
   "Po wybraniu jednej z opcji opiekun CRSS skontaktuje się z Państwem, aby potwierdzić decyzję i ustalić dalsze kroki.";
+const REJECTION_REASONS = [
+  "Zakres propozycji nie odpowiada aktualnym potrzebom",
+  "Budżet jest za wysoki",
+  "Wybraliśmy inne rozwiązanie",
+  "Decyzja została odłożona w czasie",
+  "Brakuje nam elementów w propozycji",
+  "Inny powód",
+];
 
 export default function PublicOfferPage() {
   const params = useParams<{ token: string }>();
@@ -29,6 +37,8 @@ export default function PublicOfferPage() {
   const [decisionSaving, setDecisionSaving] = useState<CrmOfferDecision | null>(null);
   const [pdfDocument, setPdfDocument] = useState<any>(null);
   const [pdfError, setPdfError] = useState(false);
+  const [showRejectionReason, setShowRejectionReason] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState(REJECTION_REASONS[0]);
   const activePageRef = useRef<number | null>(null);
   const previousVisiblePageRef = useRef<number | null>(null);
   const visitorId = useMemo(() => getVisitorId(), []);
@@ -144,15 +154,21 @@ export default function PublicOfferPage() {
     setLoading(false);
   }
 
-  async function handleDecision(decision: CrmOfferDecision) {
+  async function handleDecision(decision: CrmOfferDecision, reason?: string | null) {
     if (!offer || decisionSaving) return;
+    if (decision === "rejected" && !reason) {
+      setShowRejectionReason(true);
+      return;
+    }
+
     setDecisionSaving(decision);
-    const { data, error } = await recordCrmOfferDecision(offer.id, decision, visitorId);
+    const { data, error } = await recordCrmOfferDecision(offer.id, decision, visitorId, reason || null);
     setDecisionSaving(null);
     if (error) {
       alert("Nie udało się zapisać decyzji. Spróbuj ponownie.");
       return;
     }
+    setShowRejectionReason(false);
     setOffer(data as CrmOffer);
   }
 
@@ -188,6 +204,24 @@ export default function PublicOfferPage() {
         </div>
         <DecisionButtons onDecision={handleDecision} saving={decisionSaving} status={offer.status} />
       </section>
+
+      {showRejectionReason && (
+        <section style={rejectionPanelStyle}>
+          <div>
+            <h2 style={rejectionTitleStyle}>Powód rezygnacji</h2>
+            <p style={rejectionTextStyle}>Wybór powodu pomoże nam lepiej odnieść się do Państwa decyzji.</p>
+          </div>
+          <select style={selectStyle} value={rejectionReason} onChange={(event) => setRejectionReason(event.target.value)}>
+            {REJECTION_REASONS.map((reason) => <option key={reason} value={reason}>{reason}</option>)}
+          </select>
+          <div style={rejectionActionsStyle}>
+            <button style={secondaryButtonStyle} onClick={() => setShowRejectionReason(false)} disabled={Boolean(decisionSaving)}>Anuluj</button>
+            <button style={rejectButtonStyle} onClick={() => handleDecision("rejected", rejectionReason)} disabled={Boolean(decisionSaving)}>
+              {decisionSaving === "rejected" ? "Zapisywanie..." : "Przekaż rezygnację"}
+            </button>
+          </div>
+        </section>
+      )}
 
       <section style={viewerShellStyle}>
         {offer.pdf_url && pdfDocument ? (
@@ -339,6 +373,11 @@ const footerActionsStyle: React.CSSProperties = { ...actionsStyle, minWidth: "36
 const primaryButtonStyle: React.CSSProperties = { border: "none", borderRadius: radius.button, padding: "13px 16px", minHeight: "44px", background: colors.red, color: colors.white, fontWeight: 850, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", textAlign: "center" };
 const secondaryButtonStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "12px 15px", minHeight: "44px", background: colors.white, color: colors.navy, fontWeight: 850, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", textAlign: "center" };
 const rejectButtonStyle: React.CSSProperties = { ...secondaryButtonStyle, color: colors.danger, background: "rgba(220, 38, 38, 0.06)" };
+const rejectionPanelStyle: React.CSSProperties = { maxWidth: "1240px", margin: "0 auto 18px", padding: "18px", background: colors.card, border: `1px solid ${colors.border}`, borderRadius: radius.card, boxShadow: shadow.soft, display: "grid", gridTemplateColumns: "minmax(260px, 1fr) minmax(280px, 420px) auto", gap: "14px", alignItems: "center" };
+const rejectionTitleStyle: React.CSSProperties = { margin: 0, color: colors.navy, fontSize: "20px" };
+const rejectionTextStyle: React.CSSProperties = { margin: "6px 0 0", color: colors.muted, lineHeight: 1.5 };
+const rejectionActionsStyle: React.CSSProperties = { display: "flex", gap: "10px", justifyContent: "flex-end", flexWrap: "wrap" };
+const selectStyle: React.CSSProperties = { width: "100%", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, color: colors.text, padding: "12px", fontWeight: 750 };
 const viewerShellStyle: React.CSSProperties = { maxWidth: "1240px", height: "calc(100vh - 210px)", minHeight: "620px", margin: "0 auto", background: "#eef2f7", border: `1px solid ${colors.border}`, borderRadius: radius.card, overflow: "auto", boxShadow: shadow.soft };
 const pdfPagesStyle: React.CSSProperties = { display: "flex", flexDirection: "column", gap: "22px", alignItems: "center", padding: "24px" };
 const pdfPageStyle: React.CSSProperties = { width: "min(100%, 920px)", display: "flex", flexDirection: "column", gap: "8px", alignItems: "center" };

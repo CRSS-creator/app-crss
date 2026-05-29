@@ -200,9 +200,13 @@ export default function PublicOfferPage() {
             Przygotowana dla: <strong>{offer.przygotowana_dla || "Twojej firmy"}</strong>
             {offer.osoba_kontaktowa ? ` · ${offer.osoba_kontaktowa}` : ""}
           </p>
+          {offer.wazna_do && <p style={validInlineStyle}>Ważna do: {formatDate(offer.wazna_do)}</p>}
           {decisionLabel && <p style={decisionStatusStyle}>{decisionLabel}</p>}
         </div>
-        <DecisionButtons onDecision={handleDecision} saving={decisionSaving} status={offer.status} />
+        <div style={topActionsStackStyle}>
+          {offer.pdf_url && <button style={downloadButtonStyle} onClick={handlePdfDownload}>Pobierz PDF</button>}
+          <DecisionButtons onDecision={handleDecision} saving={decisionSaving} status={offer.status} />
+        </div>
       </section>
 
       {showRejectionReason && (
@@ -248,7 +252,10 @@ export default function PublicOfferPage() {
           <p style={footerTextStyle}>{offer.warunki || DEFAULT_NEXT_STEP_TEXT}</p>
           {offer.wazna_do && <p style={validStyle}>Propozycja ważna do: {formatDate(offer.wazna_do)}</p>}
         </div>
-        <DecisionButtons onDecision={handleDecision} saving={decisionSaving} status={offer.status} compact />
+        <div style={footerActionStackStyle}>
+          {offer.pdf_url && <button style={downloadButtonStyle} onClick={handlePdfDownload}>Pobierz PDF</button>}
+          <DecisionButtons onDecision={handleDecision} saving={decisionSaving} status={offer.status} compact />
+        </div>
       </section>
     </main>
   );
@@ -367,11 +374,15 @@ const topBarStyle: React.CSSProperties = { maxWidth: "1240px", margin: "0 auto 1
 const eyebrowStyle: React.CSSProperties = { margin: "0 0 8px", color: colors.red, fontWeight: 850 };
 const titleStyle: React.CSSProperties = { margin: 0, color: colors.navy, fontSize: "42px", lineHeight: 1.08 };
 const subtitleStyle: React.CSSProperties = { margin: "10px 0 0", color: colors.muted, fontSize: "16px", lineHeight: 1.6 };
+const validInlineStyle: React.CSSProperties = { display: "inline-flex", margin: "10px 0 0", borderRadius: radius.badge, background: "rgba(23, 59, 115, 0.08)", color: colors.navy, padding: "7px 12px", fontWeight: 850, fontSize: "14px" };
 const decisionStatusStyle: React.CSSProperties = { display: "inline-flex", margin: "12px 0 0", borderRadius: radius.badge, background: "rgba(23, 59, 115, 0.10)", color: colors.navy, padding: "7px 12px", fontWeight: 850 };
 const actionsStyle: React.CSSProperties = { display: "flex", gap: "10px", flexWrap: "wrap", justifyContent: "flex-end" };
+const topActionsStackStyle: React.CSSProperties = { display: "flex", flexDirection: "column", gap: "10px", alignItems: "flex-end" };
+const footerActionStackStyle: React.CSSProperties = { display: "flex", flexDirection: "column", gap: "12px", width: "100%" };
 const footerActionsStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "12px", width: "100%" };
 const primaryButtonStyle: React.CSSProperties = { border: "none", borderRadius: radius.button, padding: "12px 14px", minHeight: "46px", background: colors.red, color: colors.white, fontWeight: 850, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", textAlign: "center", whiteSpace: "normal" };
 const secondaryButtonStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "12px 14px", minHeight: "46px", background: colors.white, color: colors.navy, fontWeight: 850, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", textAlign: "center", whiteSpace: "normal" };
+const downloadButtonStyle: React.CSSProperties = { ...secondaryButtonStyle, width: "100%", minWidth: "150px", background: "#f8fbff" };
 const rejectButtonStyle: React.CSSProperties = { ...secondaryButtonStyle, color: colors.danger, background: "rgba(220, 38, 38, 0.06)" };
 const rejectionPanelStyle: React.CSSProperties = { maxWidth: "1240px", margin: "0 auto 18px", padding: "18px", background: colors.card, border: `1px solid ${colors.border}`, borderRadius: radius.card, boxShadow: shadow.soft, display: "grid", gridTemplateColumns: "minmax(260px, 1fr) minmax(280px, 420px) auto", gap: "14px", alignItems: "center" };
 const rejectionTitleStyle: React.CSSProperties = { margin: 0, color: colors.navy, fontSize: "20px" };

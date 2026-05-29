@@ -7,6 +7,7 @@ import { colors, radius, shadow } from "@/app/design";
 import { fetchCrmLeads } from "@/lib/crmService";
 import {
   createCrmOffer,
+  expireCrmOffer,
   fetchCrmOfferEvents,
   fetchCrmOffers,
   publishCrmOffer,
@@ -55,6 +56,7 @@ function CrmOffersContent() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [sending, setSending] = useState(false);
+  const [expiring, setExpiring] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const selectedLead = useMemo(() => leads.find((lead) => lead.id === selectedLeadId) || null, [leads, selectedLeadId]);
   const [draft, setDraft] = useState<OfferDraft>(() => createOfferDraftFromLead(null));
@@ -159,6 +161,28 @@ function CrmOffersContent() {
     await loadLeadCtaStatuses(leads);
   }
 
+  async function invalidateOfferLink() {
+    if (!offer) return;
+    const confirmed = window.confirm(
+      `Unieważnić link do propozycji "${offer.tytul}"?\n\nKlient nie będzie mógł jej otworzyć z dotychczasowego maila.`
+    );
+    if (!confirmed) return;
+
+    setExpiring(true);
+    const { data, error } = await expireCrmOffer(offer.id);
+    setExpiring(false);
+
+    if (error) {
+      console.error("Błąd unieważnienia linku:", error);
+      alert("Nie udało się unieważnić linku.");
+      return;
+    }
+
+    setOffer(data as CrmOffer);
+    await loadLeadCtaStatuses(leads);
+    alert("Link został unieważniony.");
+  }
+
   async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -185,6 +209,18 @@ function CrmOffersContent() {
   }
 
   async function sendViaN8n() {
+    const recipientEmail = draft.email_recipient.trim() || selectedLead?.email || "";
+
+    if (!recipientEmail) {
+      alert("Uzupełnij adres e-mail odbiorcy.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Wysłać propozycję współpracy?\n\nOdbiorca: ${recipientEmail}\nFirma: ${draft.przygotowana_dla || selectedLead?.nazwa || "brak firmy"}\nTemat: ${draft.email_subject || "brak tematu"}`
+    );
+    if (!confirmed) return;
+
     const savedOffer = await saveOffer();
     if (!savedOffer) return;
     if (!savedOffer.pdf_url) {
@@ -205,7 +241,6 @@ function CrmOffersContent() {
   }
 
   const offerUrl = offer ? createOfferUrl(offer.public_token) : "";
-  const recipientDisplay = draft.osoba_kontaktowa.trim() || selectedLead?.osoba_kontaktowa || selectedLead?.email || "Brak osoby kontaktowej";
 
   return (
     <>
@@ -243,7 +278,8 @@ function CrmOffersContent() {
                   <button style={primaryButtonStyle} onClick={saveOffer} disabled={saving}>{saving ? "Zapisywanie..." : "Zapisz"}</button>
                   <button style={secondaryButtonStyle} onClick={publishOffer}>Opublikuj link</button>
                   {offer && <button style={secondaryButtonStyle} onClick={() => navigator.clipboard.writeText(offerUrl)}>Kopiuj link</button>}
-                  {offer && offer.status !== "draft" && <button style={secondaryButtonStyle} onClick={() => window.open(offerUrl, "_blank", "noopener,noreferrer")}>Podgląd</button>}
+                  {offer && offer.status !== "draft" && offer.status !== "expired" && <button style={secondaryButtonStyle} onClick={() => window.open(offerUrl, "_blank", "noopener,noreferrer")}>Podgląd</button>}
+                  {offer && offer.status !== "draft" && offer.status !== "expired" && <button style={dangerButtonStyle} onClick={invalidateOfferLink} disabled={expiring}>{expiring ? "Unieważnianie..." : "Unieważnij link"}</button>}
                 </div>
               </div>
 
@@ -272,12 +308,13 @@ function CrmOffersContent() {
               <section style={n8nPanelStyle}>
                 <div style={n8nHeaderStyle}>
                   <p style={panelEyebrowStyle}>Automatyczna wysyłka</p>
-                  <button style={primaryButtonStyle} onClick={sendViaN8n} disabled={sending}>{sending ? "Wysyłanie..." : "Wyślij maila"}</button>
+                  <button style={primaryButtonStyle} onClick={sendViaN8n} disabled={sending || offer?.status === "expired"}>{sending ? "Wysyłanie..." : "Wyślij maila"}</button>
                 </div>
                 <div style={formStyle}>
-                  <Field label="Odbiorca"><div style={readOnlyValueStyle}>{recipientDisplay}</div></Field>
+                  <Field label="Odbiorca"><input style={inputStyle} type="email" value={draft.email_recipient} onChange={(event) => updateDraft("email_recipient", event.target.value)} placeholder="mail klienta" /></Field>
                   <Field label="Temat maila"><input style={inputStyle} value={draft.email_subject} onChange={(event) => updateDraft("email_subject", event.target.value)} /></Field>
                 </div>
+                {offer?.status === "expired" && <p style={sentStyle}>Link jest unieważniony. Opublikuj link ponownie, żeby wrócić do wysyłki.</p>}
                 {offer?.email_sent_at && <p style={sentStyle}>Ostatnio wysłano maila: {formatDateTime(offer.email_sent_at)}</p>}
               </section>
             </>
@@ -418,6 +455,7 @@ const metaStyle: React.CSSProperties = { margin: "6px 0 0", color: colors.muted,
 const actionsStyle: React.CSSProperties = { display: "flex", flexWrap: "wrap", gap: "10px", justifyContent: "flex-end" };
 const primaryButtonStyle: React.CSSProperties = { border: "none", borderRadius: radius.button, padding: "11px 15px", minHeight: "42px", background: colors.red, color: colors.white, fontWeight: 800, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", textAlign: "center" };
 const secondaryButtonStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "10px 14px", minHeight: "42px", background: colors.white, color: colors.navy, fontWeight: 800, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", textAlign: "center" };
+const dangerButtonStyle: React.CSSProperties = { ...secondaryButtonStyle, border: "none", background: "rgba(220, 38, 38, 0.10)", color: colors.danger };
 const analyticsShellStyle: React.CSSProperties = { marginBottom: "18px" };
 const analyticsStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "12px" };
 const pageStatsStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "10px", marginTop: "12px" };
@@ -433,7 +471,6 @@ const formStyle: React.CSSProperties = { display: "flex", flexDirection: "column
 const fieldStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "190px 1fr", gap: "14px", alignItems: "start", borderBottom: `1px solid ${colors.border}`, paddingBottom: "12px" };
 const labelStyle: React.CSSProperties = { color: colors.muted, fontWeight: 800, fontSize: "14px", paddingTop: "10px" };
 const inputStyle: React.CSSProperties = { width: "100%", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, color: colors.text, padding: "11px 12px", fontWeight: 650 };
-const readOnlyValueStyle: React.CSSProperties = { ...inputStyle, minHeight: "44px", display: "flex", alignItems: "center" };
 const n8nPanelStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: "20px", marginTop: "18px", background: colors.white };
 const n8nHeaderStyle: React.CSSProperties = { display: "flex", justifyContent: "space-between", gap: "18px", alignItems: "center", marginBottom: "16px" };
 const sentStyle: React.CSSProperties = { margin: "14px 0 0", color: colors.muted, fontWeight: 800 };

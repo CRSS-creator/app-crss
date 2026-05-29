@@ -11,6 +11,7 @@ import {
   fetchCrmOfferEvents,
   fetchCrmOffers,
   publishCrmOffer,
+  removeCrmOfferPdf,
   sendCrmOfferToN8n,
   updateCrmOffer,
   uploadCrmOfferPdf,
@@ -57,6 +58,7 @@ function CrmOffersContent() {
   const [uploading, setUploading] = useState(false);
   const [sending, setSending] = useState(false);
   const [expiring, setExpiring] = useState(false);
+  const [removingPdf, setRemovingPdf] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const selectedLead = useMemo(() => leads.find((lead) => lead.id === selectedLeadId) || null, [leads, selectedLeadId]);
   const [draft, setDraft] = useState<OfferDraft>(() => createOfferDraftFromLead(null));
@@ -183,6 +185,29 @@ function CrmOffersContent() {
     alert("Link został unieważniony.");
   }
 
+  async function deletePdf() {
+    if (!offer?.pdf_url) return;
+    const confirmed = window.confirm(
+      `Usunąć PDF z propozycji "${offer.tytul}"?\n\nPropozycja wróci do szkicu i nie będzie gotowa do wysyłki, dopóki nie wgrasz nowego PDF.`
+    );
+    if (!confirmed) return;
+
+    setRemovingPdf(true);
+    const { data, error } = await removeCrmOfferPdf(offer);
+    setRemovingPdf(false);
+
+    if (error) {
+      console.error("Błąd usuwania PDF:", error);
+      alert("Nie udało się usunąć PDF.");
+      return;
+    }
+
+    setOffer(data as CrmOffer);
+    await loadLeadCtaStatuses(leads);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    alert("PDF został usunięty z propozycji.");
+  }
+
   async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -290,7 +315,12 @@ function CrmOffersContent() {
                   <p style={panelEyebrowStyle}>PDF propozycji</p>
                   <h3 style={panelTitleStyle}>{offer?.pdf_file_name || "Wgraj dokument propozycji"}</h3>
                   <p style={panelTextStyle}>{offer?.pdf_file_size ? `${formatFileSize(offer.pdf_file_size)} · link gotowy do śledzenia` : "Po wgraniu PDF klient zobaczy propozycję na prywatnej stronie, a CRM zapisze otwarcia, pobrania i czas oglądania."}</p>
-                  {offer?.pdf_url && <a style={linkStyle} href={offer.pdf_url} target="_blank" rel="noreferrer">Otwórz PDF</a>}
+                  {offer?.pdf_url && (
+                    <div style={pdfActionsStyle}>
+                      <a style={linkStyle} href={offer.pdf_url} target="_blank" rel="noreferrer">Otwórz PDF</a>
+                      <button style={dangerTextButtonStyle} type="button" onClick={deletePdf} disabled={removingPdf}>{removingPdf ? "Usuwanie..." : "Usuń PDF"}</button>
+                    </div>
+                  )}
                 </div>
                 <div style={uploadActionsStyle}>
                   <input ref={fileInputRef} type="file" accept="application/pdf" style={{ display: "none" }} onChange={handleFileChange} />
@@ -456,6 +486,7 @@ const actionsStyle: React.CSSProperties = { display: "flex", flexWrap: "wrap", g
 const primaryButtonStyle: React.CSSProperties = { border: "none", borderRadius: radius.button, padding: "11px 15px", minHeight: "42px", background: colors.red, color: colors.white, fontWeight: 800, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", textAlign: "center" };
 const secondaryButtonStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "10px 14px", minHeight: "42px", background: colors.white, color: colors.navy, fontWeight: 800, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", textAlign: "center" };
 const dangerButtonStyle: React.CSSProperties = { ...secondaryButtonStyle, border: "none", background: "rgba(220, 38, 38, 0.10)", color: colors.danger };
+const dangerTextButtonStyle: React.CSSProperties = { border: "none", background: "transparent", color: colors.danger, fontWeight: 850, cursor: "pointer", padding: "10px 0" };
 const analyticsShellStyle: React.CSSProperties = { marginBottom: "18px" };
 const analyticsStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "12px" };
 const pageStatsStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "10px", marginTop: "12px" };
@@ -466,7 +497,8 @@ const panelEyebrowStyle: React.CSSProperties = { margin: "0 0 8px", color: color
 const panelTitleStyle: React.CSSProperties = { margin: 0, color: colors.navy, fontSize: "22px" };
 const panelTextStyle: React.CSSProperties = { margin: "8px 0 0", color: colors.muted, lineHeight: 1.6 };
 const uploadActionsStyle: React.CSSProperties = { display: "flex", justifyContent: "flex-end" };
-const linkStyle: React.CSSProperties = { display: "inline-flex", marginTop: "10px", color: colors.navy, fontWeight: 850 };
+const pdfActionsStyle: React.CSSProperties = { display: "flex", flexWrap: "wrap", gap: "14px", alignItems: "center", marginTop: "10px" };
+const linkStyle: React.CSSProperties = { display: "inline-flex", color: colors.navy, fontWeight: 850 };
 const formStyle: React.CSSProperties = { display: "flex", flexDirection: "column", gap: "12px" };
 const fieldStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "190px 1fr", gap: "14px", alignItems: "start", borderBottom: `1px solid ${colors.border}`, paddingBottom: "12px" };
 const labelStyle: React.CSSProperties = { color: colors.muted, fontWeight: 800, fontSize: "14px", paddingTop: "10px" };

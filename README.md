@@ -1,5 +1,15 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## CRM proposal mail automation
+
+Set this server-side environment variable to connect the CRM proposal mail button with n8n:
+
+```bash
+N8N_CRM_OFFER_MAIL_WEBHOOK_URL=https://your-n8n-webhook-url
+```
+
+The CRM sends only the tracked proposal link and customer context to n8n. The email body and HTML signature should be handled in the n8n workflow template.
+
 ## Getting Started
 
 First, run the development server:

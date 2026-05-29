@@ -286,13 +286,15 @@ function PdfPageCanvas({ document, pageNumber }: { document: any; pageNumber: nu
 
     async function renderPage() {
       const page = await document.getPage(pageNumber);
-      const viewport = page.getViewport({ scale: 1.35 });
+      const viewport = page.getViewport({ scale: 2.1 });
       const canvas = canvasRef.current;
-      const context = canvas?.getContext("2d");
+      const context = canvas?.getContext("2d", { alpha: false });
       if (!canvas || !context || cancelled) return;
 
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
+      canvas.width = Math.floor(viewport.width);
+      canvas.height = Math.floor(viewport.height);
+      context.imageSmoothingEnabled = true;
+      context.imageSmoothingQuality = "high";
       await page.render({ canvasContext: context, viewport }).promise;
     }
 
@@ -389,11 +391,11 @@ const rejectionTitleStyle: React.CSSProperties = { margin: 0, color: colors.navy
 const rejectionTextStyle: React.CSSProperties = { margin: "6px 0 0", color: colors.muted, lineHeight: 1.5 };
 const rejectionActionsStyle: React.CSSProperties = { display: "flex", gap: "10px", justifyContent: "flex-end", flexWrap: "wrap" };
 const selectStyle: React.CSSProperties = { width: "100%", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, color: colors.text, padding: "12px", fontWeight: 750 };
-const viewerShellStyle: React.CSSProperties = { maxWidth: "1240px", height: "calc(100vh - 210px)", minHeight: "620px", margin: "0 auto", background: "#eef2f7", border: `1px solid ${colors.border}`, borderRadius: radius.card, overflow: "auto", boxShadow: shadow.soft };
-const pdfPagesStyle: React.CSSProperties = { display: "flex", flexDirection: "column", gap: "22px", alignItems: "center", padding: "24px" };
-const pdfPageStyle: React.CSSProperties = { width: "min(100%, 920px)", display: "flex", flexDirection: "column", gap: "8px", alignItems: "center" };
+const viewerShellStyle: React.CSSProperties = { maxWidth: "1240px", height: "calc(100vh - 210px)", minHeight: "620px", margin: "0 auto", background: "#edf2f7", border: `1px solid ${colors.border}`, borderRadius: radius.card, overflow: "auto", boxShadow: shadow.soft };
+const pdfPagesStyle: React.CSSProperties = { display: "flex", flexDirection: "column", gap: "30px", alignItems: "center", padding: "36px 32px 44px" };
+const pdfPageStyle: React.CSSProperties = { width: "min(100%, 780px)", display: "flex", flexDirection: "column", gap: "10px", alignItems: "center" };
 const pageLabelStyle: React.CSSProperties = { alignSelf: "flex-start", color: colors.muted, fontSize: "13px", fontWeight: 850 };
-const canvasStyle: React.CSSProperties = { width: "100%", height: "auto", background: colors.white, borderRadius: radius.input, boxShadow: shadow.soft };
+const canvasStyle: React.CSSProperties = { width: "100%", height: "auto", background: colors.white, borderRadius: radius.input, boxShadow: "0 18px 38px rgba(15, 23, 42, 0.12)", imageRendering: "auto" };
 const pdfFrameStyle: React.CSSProperties = { width: "100%", height: "100%", border: "none", display: "block", background: colors.white };
 const emptyPdfStyle: React.CSSProperties = { height: "100%", display: "grid", placeItems: "center", gap: "8px", color: colors.muted, textAlign: "center", padding: "32px" };
 const footerCtaStyle: React.CSSProperties = { maxWidth: "1240px", margin: "18px auto 0", padding: "22px", background: colors.card, border: `1px solid ${colors.border}`, borderRadius: radius.card, boxShadow: shadow.soft, display: "flex", flexDirection: "column", gap: "16px" };

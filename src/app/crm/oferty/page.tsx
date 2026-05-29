@@ -374,7 +374,7 @@ function Analytics({ events }: { events: CrmOfferEvent[] }) {
           {pageStats.map((page) => (
             <div key={page.key} style={pageStatRowStyle}>
               <strong>{page.label}</strong>
-              <span>{page.views} wejść · {page.minutes} min</span>
+              <span style={pageStatMetaStyle}>{formatPageStatMeta(page.views, page.minutes)}</span>
             </div>
           ))}
         </div>
@@ -472,6 +472,20 @@ function statusLabel(status: CrmOffer["status"]) {
   return "Szkic";
 }
 
+function formatPageStatMeta(views: number, minutes: number) {
+  return `${views} ${pluralizePolish(views, "wejście", "wejścia", "wejść")} · ${minutes} ${pluralizePolish(minutes, "minuta", "minuty", "minut")}`;
+}
+
+function pluralizePolish(value: number, one: string, few: string, many: string) {
+  const absolute = Math.abs(value);
+  const lastDigit = absolute % 10;
+  const lastTwoDigits = absolute % 100;
+
+  if (absolute === 1) return one;
+  if (lastDigit >= 2 && lastDigit <= 4 && !(lastTwoDigits >= 12 && lastTwoDigits <= 14)) return few;
+  return many;
+}
+
 function formatFileSize(value: number) {
   if (value < 1024 * 1024) return `${Math.round(value / 1024)} KB`;
   return `${(value / 1024 / 1024).toFixed(1)} MB`;
@@ -503,7 +517,8 @@ const dangerTextButtonStyle: React.CSSProperties = { border: "none", background:
 const analyticsShellStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, background: "#f8fbff", padding: "14px", marginBottom: "18px" };
 const analyticsStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "12px" };
 const pageStatsStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "10px", marginTop: "12px" };
-const pageStatRowStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, padding: "12px", minHeight: "72px", display: "flex", flexDirection: "column", justifyContent: "center", gap: "5px", color: colors.muted, fontWeight: 800 };
+const pageStatRowStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, padding: "12px", minHeight: "72px", display: "flex", flexDirection: "column", justifyContent: "center", gap: "5px", color: colors.text, fontWeight: 800 };
+const pageStatMetaStyle: React.CSSProperties = { color: colors.muted, fontSize: "13px", fontWeight: 650, lineHeight: 1.4 };
 const statStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, padding: "14px", minHeight: "84px", display: "flex", flexDirection: "column", justifyContent: "center", gap: "8px", color: colors.muted, fontWeight: 800 };
 const uploadPanelStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.inputBackground, padding: "22px", marginBottom: "18px", display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: "18px", alignItems: "center" };
 const panelEyebrowStyle: React.CSSProperties = { margin: "0 0 8px", color: colors.red, fontWeight: 850, fontSize: "13px" };

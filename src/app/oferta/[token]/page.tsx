@@ -19,6 +19,8 @@ declare global {
 
 const PDFJS_SCRIPT = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
 const PDFJS_WORKER = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+const DEFAULT_NEXT_STEP_TEXT =
+  "Po wybraniu jednej z opcji opiekun CRSS skontaktuje się z Państwem, aby potwierdzić decyzję i ustalić dalsze kroki.";
 
 export default function PublicOfferPage() {
   const params = useParams<{ token: string }>();
@@ -209,7 +211,7 @@ export default function PublicOfferPage() {
       <section style={footerCtaStyle}>
         <div>
           <h2 style={footerTitleStyle}>Następny krok</h2>
-          <p style={footerTextStyle}>{offer.warunki || "Po wyborze jednej z opcji opiekun propozycji otrzyma powiadomienie w CRM."}</p>
+          <p style={footerTextStyle}>{offer.warunki || DEFAULT_NEXT_STEP_TEXT}</p>
           {offer.wazna_do && <p style={validStyle}>Propozycja ważna do: {formatDate(offer.wazna_do)}</p>}
         </div>
         <DecisionButtons onDecision={handleDecision} saving={decisionSaving} status={offer.status} compact />
@@ -223,13 +225,13 @@ function DecisionButtons({ onDecision, saving, status, compact }: { onDecision: 
   return (
     <div style={compact ? footerActionsStyle : actionsStyle}>
       <button style={primaryButtonStyle} onClick={() => onDecision("accepted")} disabled={disabled || status === "accepted"}>
-        {saving === "accepted" ? "Zapisywanie..." : status === "accepted" ? "Propozycja zaakceptowana" : "Akceptuję propozycję"}
+        {saving === "accepted" ? "Zapisywanie..." : status === "accepted" ? "Współpraca potwierdzona" : "Potwierdzam rozpoczęcie współpracy"}
       </button>
       <button style={secondaryButtonStyle} onClick={() => onDecision("discussion_requested")} disabled={disabled || status === "discussion_requested"}>
-        {saving === "discussion_requested" ? "Zapisywanie..." : status === "discussion_requested" ? "Prośba wysłana" : "Chcę omówić propozycję"}
+        {saving === "discussion_requested" ? "Zapisywanie..." : status === "discussion_requested" ? "Prośba o kontakt wysłana" : "Proszę o kontakt w sprawie propozycji"}
       </button>
       <button style={rejectButtonStyle} onClick={() => onDecision("rejected")} disabled={disabled || status === "rejected"}>
-        {saving === "rejected" ? "Zapisywanie..." : status === "rejected" ? "Propozycja odrzucona" : "Odrzucam propozycję"}
+        {saving === "rejected" ? "Zapisywanie..." : status === "rejected" ? "Rezygnacja przekazana" : "Rezygnuję z propozycji"}
       </button>
     </div>
   );
@@ -319,9 +321,9 @@ function formatDate(value: string) {
 }
 
 function statusDecisionLabel(status: CrmOffer["status"]) {
-  if (status === "accepted") return "Status: zaakceptowana";
-  if (status === "discussion_requested") return "Status: klient chce omówić propozycję";
-  if (status === "rejected") return "Status: odrzucona";
+  if (status === "accepted") return "Dziękujemy za potwierdzenie. Opiekun CRSS skontaktuje się z Państwem, aby ustalić dalsze kroki.";
+  if (status === "discussion_requested") return "Dziękujemy. Opiekun CRSS skontaktuje się z Państwem, aby omówić propozycję.";
+  if (status === "rejected") return "Dziękujemy za informację. Opiekun CRSS odnotuje Państwa decyzję.";
   return null;
 }
 

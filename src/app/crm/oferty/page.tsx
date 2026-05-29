@@ -91,12 +91,7 @@ function CrmOffersContent() {
       const { data } = await fetchCrmOffers(lead.id);
       const currentOffer = (data?.[0] || null) as CrmOffer | null;
       if (!currentOffer) return [lead.id, "Brak propozycji"] as const;
-      if (currentOffer.status === "accepted") return [lead.id, "Współpraca potwierdzona"] as const;
-      if (currentOffer.status === "discussion_requested") return [lead.id, "Prośba o kontakt"] as const;
-      if (currentOffer.status === "rejected") return [lead.id, "Rezygnacja"] as const;
-      if (currentOffer.status === "published") return [lead.id, "Oczekuje"] as const;
-      if (currentOffer.status === "expired") return [lead.id, "Wygasła"] as const;
-      return [lead.id, "Szkic"] as const;
+      return [lead.id, statusLabel(currentOffer.status)] as const;
     }));
     setLeadCtaStatuses(Object.fromEntries(entries));
   }
@@ -110,7 +105,7 @@ function CrmOffersContent() {
     const currentOffer = (data?.[0] || null) as CrmOffer | null;
     setOffer(currentOffer);
     setDraft(currentOffer ? createOfferDraft(currentOffer, lead) : createOfferDraftFromLead(lead));
-    if (currentOffer) await loadEvents(currentOffer.id);
+    if (currentOffer?.pdf_url) await loadEvents(currentOffer.id);
     else setEvents([]);
   }
 
@@ -140,7 +135,8 @@ function CrmOffersContent() {
     }
     const savedOffer = result.data as CrmOffer;
     setOffer(savedOffer);
-    await loadEvents(savedOffer.id);
+    if (savedOffer.pdf_url) await loadEvents(savedOffer.id);
+    else setEvents([]);
     await loadLeadCtaStatuses(leads);
     return savedOffer;
   }
@@ -231,6 +227,7 @@ function CrmOffersContent() {
     }
 
     setOffer(data as CrmOffer);
+    setEvents([]);
     await loadLeadCtaStatuses(leads);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
@@ -311,7 +308,7 @@ function CrmOffersContent() {
                 </div>
               </div>
 
-              {offer && <Analytics events={events} />}
+              {offer?.pdf_url && <Analytics offer={offer} events={events} />}
 
               <section style={uploadPanelStyle}>
                 <div>
@@ -358,7 +355,7 @@ function CrmOffersContent() {
   );
 }
 
-function Analytics({ events }: { events: CrmOfferEvent[] }) {
+function Analytics({ offer, events }: { offer: CrmOffer; events: CrmOfferEvent[] }) {
   const pageStats = collectPageStats(events);
   const strongestPage = findStrongestPage(pageStats);
   return (
@@ -366,8 +363,8 @@ function Analytics({ events }: { events: CrmOfferEvent[] }) {
       <div style={analyticsStyle}>
         <Stat label="Otwarcia" value={countEvents(events, "open")} />
         <Stat label="Pobrania PDF" value={countEvents(events, "pdf_download")} />
-        <Stat label="Decyzje klienta" value={countDecisionEvents(events)} />
-        <Stat label="Najmocniejsza strona" value={strongestPage?.label || "Brak danych"} />
+        <Stat label="Status propozycji" value={statusLabel(offer.status)} />
+        <Stat label="Najmocniejsza strona" value={strongestPage?.label || "Brak danych"} detail={strongestPage ? formatPageStatMeta(strongestPage.views, strongestPage.minutes) : undefined} />
       </div>
       {pageStats.length > 0 && (
         <div style={pageStatsStyle}>
@@ -387,8 +384,8 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   return <label style={fieldStyle}><span style={labelStyle}>{label}</span>{children}</label>;
 }
 
-function Stat({ label, value }: { label: string | number; value: string | number }) {
-  return <div style={statStyle}><span>{label}</span><strong>{value}</strong></div>;
+function Stat({ label, value, detail }: { label: string | number; value: string | number; detail?: string }) {
+  return <div style={statStyle}><span>{label}</span><strong>{value}</strong>{detail && <small style={statDetailStyle}>{detail}</small>}</div>;
 }
 
 function createOfferDraftFromLead(lead: Lead | null): OfferDraft {
@@ -438,10 +435,6 @@ function countEvents(events: CrmOfferEvent[], type: CrmOfferEvent["event_type"])
   return events.filter((event) => event.event_type === type).length;
 }
 
-function countDecisionEvents(events: CrmOfferEvent[]) {
-  return events.filter((event) => ["accept", "cta_click", "reject"].includes(event.event_type)).length;
-}
-
 function collectPageStats(events: CrmOfferEvent[]) {
   const stats = events
     .filter((event) => event.event_type === "section_time" && event.section_key?.startsWith("pdf_page_"))
@@ -464,7 +457,7 @@ function findStrongestPage<T extends { seconds: number; views: number }>(pages: 
 }
 
 function statusLabel(status: CrmOffer["status"]) {
-  if (status === "published") return "Opublikowana";
+  if (status === "published") return "Czeka na decyzję";
   if (status === "accepted") return "Współpraca potwierdzona";
   if (status === "discussion_requested") return "Prośba o kontakt";
   if (status === "rejected") return "Rezygnacja";
@@ -520,6 +513,7 @@ const pageStatsStyle: React.CSSProperties = { display: "grid", gridTemplateColum
 const pageStatRowStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, padding: "12px", minHeight: "72px", display: "flex", flexDirection: "column", justifyContent: "center", gap: "5px", color: colors.text, fontWeight: 800 };
 const pageStatMetaStyle: React.CSSProperties = { color: colors.muted, fontSize: "13px", fontWeight: 650, lineHeight: 1.4 };
 const statStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, padding: "14px", minHeight: "84px", display: "flex", flexDirection: "column", justifyContent: "center", gap: "8px", color: colors.muted, fontWeight: 800 };
+const statDetailStyle: React.CSSProperties = { color: colors.muted, fontSize: "13px", fontWeight: 650, lineHeight: 1.35 };
 const uploadPanelStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.inputBackground, padding: "22px", marginBottom: "18px", display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: "18px", alignItems: "center" };
 const panelEyebrowStyle: React.CSSProperties = { margin: "0 0 8px", color: colors.red, fontWeight: 850, fontSize: "13px" };
 const panelTitleStyle: React.CSSProperties = { margin: 0, color: colors.navy, fontSize: "22px" };

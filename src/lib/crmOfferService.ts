@@ -137,8 +137,21 @@ export async function publishCrmOffer(offerId: string) {
     .single();
 }
 
+export async function expireCrmOffer(offerId: string) {
+  return supabase
+    .from("crm_oferty")
+    .update({ status: "expired" })
+    .eq("id", offerId)
+    .select("*")
+    .single();
+}
+
 export async function sendCrmOfferToN8n(offer: CrmOffer, lead?: CrmOfferLeadContext | null) {
   let offerToSend = offer;
+
+  if (offer.status === "expired") {
+    return { ok: false, error: "Link jest unieważniony. Najpierw opublikuj go ponownie." };
+  }
 
   if (offer.status === "draft") {
     const { data, error } = await publishCrmOffer(offer.id);

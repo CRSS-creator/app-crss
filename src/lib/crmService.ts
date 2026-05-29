@@ -13,6 +13,7 @@ export async function fetchCrmTasks() {
   return supabase
     .from("crm_zadania")
     .select("*")
+    .order("status", { ascending: true })
     .order("created_at", { ascending: true });
 }
 

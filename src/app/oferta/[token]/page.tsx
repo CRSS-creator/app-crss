@@ -194,7 +194,7 @@ export default function PublicOfferPage() {
     <main style={pageStyle}>
       <section style={topBarStyle}>
         <div>
-          <p style={eyebrowStyle}>Propozycja CRSS</p>
+          <p style={eyebrowStyle}>CRSS</p>
           <h1 style={titleStyle}>{offer.tytul}</h1>
           <p style={subtitleStyle}>
             Przygotowana dla: <strong>{offer.przygotowana_dla || "Twojej firmy"}</strong>

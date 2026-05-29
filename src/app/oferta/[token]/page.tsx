@@ -20,7 +20,7 @@ declare global {
 const PDFJS_SCRIPT = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
 const PDFJS_WORKER = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 const DEFAULT_NEXT_STEP_TEXT =
-  "Po wybraniu jednej z opcji opiekun CRSS skontaktuje się z Państwem, aby potwierdzić decyzję i ustalić dalsze kroki.";
+  "Wybierz preferowany dalszy krok. Po otrzymaniu decyzji opiekun CRSS wróci z potwierdzeniem i kolejnymi ustaleniami.";
 const REJECTION_REASONS = [
   "Zakres propozycji nie odpowiada aktualnym potrzebom",
   "Budżet jest za wysoki",
@@ -243,8 +243,8 @@ export default function PublicOfferPage() {
       </section>
 
       <section style={footerCtaStyle}>
-        <div>
-          <h2 style={footerTitleStyle}>Następny krok</h2>
+        <div style={footerIntroStyle}>
+          <h2 style={footerTitleStyle}>Co dalej?</h2>
           <p style={footerTextStyle}>{offer.warunki || DEFAULT_NEXT_STEP_TEXT}</p>
           {offer.wazna_do && <p style={validStyle}>Propozycja ważna do: {formatDate(offer.wazna_do)}</p>}
         </div>
@@ -259,13 +259,13 @@ function DecisionButtons({ onDecision, saving, status, compact }: { onDecision: 
   return (
     <div style={compact ? footerActionsStyle : actionsStyle}>
       <button style={primaryButtonStyle} onClick={() => onDecision("accepted")} disabled={disabled || status === "accepted"}>
-        {saving === "accepted" ? "Zapisywanie..." : status === "accepted" ? "Współpraca potwierdzona" : "Potwierdzam rozpoczęcie współpracy"}
+        {saving === "accepted" ? "Zapisywanie..." : status === "accepted" ? "Współpraca potwierdzona" : "Rozpocznij współpracę"}
       </button>
       <button style={secondaryButtonStyle} onClick={() => onDecision("discussion_requested")} disabled={disabled || status === "discussion_requested"}>
-        {saving === "discussion_requested" ? "Zapisywanie..." : status === "discussion_requested" ? "Prośba o kontakt wysłana" : "Proszę o kontakt w sprawie propozycji"}
+        {saving === "discussion_requested" ? "Zapisywanie..." : status === "discussion_requested" ? "Prośba o kontakt wysłana" : "Umów rozmowę"}
       </button>
       <button style={rejectButtonStyle} onClick={() => onDecision("rejected")} disabled={disabled || status === "rejected"}>
-        {saving === "rejected" ? "Zapisywanie..." : status === "rejected" ? "Rezygnacja przekazana" : "Rezygnuję z propozycji"}
+        {saving === "rejected" ? "Zapisywanie..." : status === "rejected" ? "Rezygnacja przekazana" : "Rezygnuję"}
       </button>
     </div>
   );
@@ -369,9 +369,9 @@ const titleStyle: React.CSSProperties = { margin: 0, color: colors.navy, fontSiz
 const subtitleStyle: React.CSSProperties = { margin: "10px 0 0", color: colors.muted, fontSize: "16px", lineHeight: 1.6 };
 const decisionStatusStyle: React.CSSProperties = { display: "inline-flex", margin: "12px 0 0", borderRadius: radius.badge, background: "rgba(23, 59, 115, 0.10)", color: colors.navy, padding: "7px 12px", fontWeight: 850 };
 const actionsStyle: React.CSSProperties = { display: "flex", gap: "10px", flexWrap: "wrap", justifyContent: "flex-end" };
-const footerActionsStyle: React.CSSProperties = { ...actionsStyle, minWidth: "360px" };
-const primaryButtonStyle: React.CSSProperties = { border: "none", borderRadius: radius.button, padding: "13px 16px", minHeight: "44px", background: colors.red, color: colors.white, fontWeight: 850, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", textAlign: "center" };
-const secondaryButtonStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "12px 15px", minHeight: "44px", background: colors.white, color: colors.navy, fontWeight: 850, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", textAlign: "center" };
+const footerActionsStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "12px", width: "100%" };
+const primaryButtonStyle: React.CSSProperties = { border: "none", borderRadius: radius.button, padding: "12px 14px", minHeight: "46px", background: colors.red, color: colors.white, fontWeight: 850, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", textAlign: "center", whiteSpace: "normal" };
+const secondaryButtonStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "12px 14px", minHeight: "46px", background: colors.white, color: colors.navy, fontWeight: 850, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", textAlign: "center", whiteSpace: "normal" };
 const rejectButtonStyle: React.CSSProperties = { ...secondaryButtonStyle, color: colors.danger, background: "rgba(220, 38, 38, 0.06)" };
 const rejectionPanelStyle: React.CSSProperties = { maxWidth: "1240px", margin: "0 auto 18px", padding: "18px", background: colors.card, border: `1px solid ${colors.border}`, borderRadius: radius.card, boxShadow: shadow.soft, display: "grid", gridTemplateColumns: "minmax(260px, 1fr) minmax(280px, 420px) auto", gap: "14px", alignItems: "center" };
 const rejectionTitleStyle: React.CSSProperties = { margin: 0, color: colors.navy, fontSize: "20px" };
@@ -385,7 +385,8 @@ const pageLabelStyle: React.CSSProperties = { alignSelf: "flex-start", color: co
 const canvasStyle: React.CSSProperties = { width: "100%", height: "auto", background: colors.white, borderRadius: radius.input, boxShadow: shadow.soft };
 const pdfFrameStyle: React.CSSProperties = { width: "100%", height: "100%", border: "none", display: "block", background: colors.white };
 const emptyPdfStyle: React.CSSProperties = { height: "100%", display: "grid", placeItems: "center", gap: "8px", color: colors.muted, textAlign: "center", padding: "32px" };
-const footerCtaStyle: React.CSSProperties = { maxWidth: "1240px", margin: "18px auto 0", padding: "22px", background: colors.card, border: `1px solid ${colors.border}`, borderRadius: radius.card, boxShadow: shadow.soft, display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: "18px", alignItems: "center" };
+const footerCtaStyle: React.CSSProperties = { maxWidth: "1240px", margin: "18px auto 0", padding: "22px", background: colors.card, border: `1px solid ${colors.border}`, borderRadius: radius.card, boxShadow: shadow.soft, display: "flex", flexDirection: "column", gap: "16px" };
+const footerIntroStyle: React.CSSProperties = { maxWidth: "760px" };
 const footerTitleStyle: React.CSSProperties = { margin: 0, color: colors.navy, fontSize: "24px" };
-const footerTextStyle: React.CSSProperties = { margin: "8px 0 0", color: colors.text, lineHeight: 1.7, whiteSpace: "pre-line" };
-const validStyle: React.CSSProperties = { color: colors.muted, fontWeight: 800 };
+const footerTextStyle: React.CSSProperties = { margin: "8px 0 0", color: colors.text, lineHeight: 1.6, whiteSpace: "pre-line" };
+const validStyle: React.CSSProperties = { margin: "10px 0 0", color: colors.muted, fontWeight: 800 };

@@ -91,9 +91,9 @@ function CrmOffersContent() {
       const { data } = await fetchCrmOffers(lead.id);
       const currentOffer = (data?.[0] || null) as CrmOffer | null;
       if (!currentOffer) return [lead.id, "Brak propozycji"] as const;
-      if (currentOffer.status === "accepted") return [lead.id, "Zaakceptowana"] as const;
-      if (currentOffer.status === "discussion_requested") return [lead.id, "Chce omówić"] as const;
-      if (currentOffer.status === "rejected") return [lead.id, "Odrzucona"] as const;
+      if (currentOffer.status === "accepted") return [lead.id, "Współpraca potwierdzona"] as const;
+      if (currentOffer.status === "discussion_requested") return [lead.id, "Prośba o kontakt"] as const;
+      if (currentOffer.status === "rejected") return [lead.id, "Rezygnacja"] as const;
       if (currentOffer.status === "published") return [lead.id, "Oczekuje"] as const;
       if (currentOffer.status === "expired") return [lead.id, "Wygasła"] as const;
       return [lead.id, "Szkic"] as const;
@@ -189,7 +189,7 @@ function CrmOffersContent() {
   async function deletePdf() {
     if (!offer?.pdf_url) return;
     const confirmed = window.confirm(
-      `Usunąć PDF z propozycji "${offer.tytul}"?\n\nPropozycja wróci do szkicu i nie będzie gotowa do wysyłki, dopóki nie wgrasz nowego PDF.`
+      `Usunąć PDF z propozycji "${offer.tytul}"?\n\nUsunięte zostaną też dotychczasowe statystyki oglądania i decyzje klienta dla tej propozycji.`
     );
     if (!confirmed) return;
 
@@ -204,9 +204,10 @@ function CrmOffersContent() {
     }
 
     setOffer(data as CrmOffer);
+    setEvents([]);
     await loadLeadCtaStatuses(leads);
     if (fileInputRef.current) fileInputRef.current.value = "";
-    alert("PDF został usunięty z propozycji.");
+    alert("PDF i dotychczasowe statystyki zostały usunięte z propozycji.");
   }
 
   async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
@@ -365,7 +366,7 @@ function Analytics({ events }: { events: CrmOfferEvent[] }) {
       <div style={analyticsStyle}>
         <Stat label="Otwarcia" value={countEvents(events, "open")} />
         <Stat label="Pobrania PDF" value={countEvents(events, "pdf_download")} />
-        <Stat label="Chcą omówić" value={countEvents(events, "cta_click")} />
+        <Stat label="Decyzje klienta" value={countDecisionEvents(events)} />
         <Stat label="Najmocniejsza strona" value={strongestPage?.label || "Brak danych"} />
       </div>
       {pageStats.length > 0 && (
@@ -419,7 +420,7 @@ function createOfferPayload(lead: Lead, draft: OfferDraft): CrmOfferPayload {
     przygotowana_dla: draft.przygotowana_dla.trim() || lead.nazwa || null,
     osoba_kontaktowa: draft.osoba_kontaktowa.trim() || lead.osoba_kontaktowa || null,
     rekomendowany_pakiet: "PDF",
-    cta_label: "Chcę omówić propozycję",
+    cta_label: "Proszę o kontakt w sprawie propozycji",
     cta_url: null,
     email_recipient: draft.email_recipient.trim() || lead.email || null,
     email_subject: draft.email_subject.trim() || `Propozycja współpracy CRSS dla ${draft.przygotowana_dla || lead.nazwa || "Państwa firmy"}`,
@@ -435,6 +436,10 @@ function createOfferUrl(token: string) {
 
 function countEvents(events: CrmOfferEvent[], type: CrmOfferEvent["event_type"]) {
   return events.filter((event) => event.event_type === type).length;
+}
+
+function countDecisionEvents(events: CrmOfferEvent[]) {
+  return events.filter((event) => ["accept", "cta_click", "reject"].includes(event.event_type)).length;
 }
 
 function collectPageStats(events: CrmOfferEvent[]) {
@@ -460,9 +465,9 @@ function findStrongestPage<T extends { seconds: number; views: number }>(pages: 
 
 function statusLabel(status: CrmOffer["status"]) {
   if (status === "published") return "Opublikowana";
-  if (status === "accepted") return "Zaakceptowana";
-  if (status === "discussion_requested") return "Klient chce omówić";
-  if (status === "rejected") return "Odrzucona";
+  if (status === "accepted") return "Współpraca potwierdzona";
+  if (status === "discussion_requested") return "Prośba o kontakt";
+  if (status === "rejected") return "Rezygnacja";
   if (status === "expired") return "Wygasła";
   return "Szkic";
 }

@@ -138,12 +138,8 @@ export async function removeCrmOfferPdf(offer: CrmOffer) {
     if (removal.error) return { data: null, error: removal.error };
   }
 
-  return updateCrmOffer(offer.id, {
-    pdf_url: null,
-    pdf_storage_path: null,
-    pdf_file_name: null,
-    pdf_file_size: null,
-    status: "draft",
+  return supabase.rpc("reset_crm_offer_after_pdf_removal", {
+    public_offer_id: offer.id,
   });
 }
 
@@ -214,11 +210,17 @@ export async function sendCrmOfferToN8n(offer: CrmOffer, lead?: CrmOfferLeadCont
   return { ok: true, error: null };
 }
 
-export async function recordCrmOfferDecision(offerId: string, decision: CrmOfferDecision, visitorId?: string | null) {
+export async function recordCrmOfferDecision(
+  offerId: string,
+  decision: CrmOfferDecision,
+  visitorId?: string | null,
+  rejectionReason?: string | null
+) {
   return supabase.rpc("record_crm_offer_decision", {
     public_offer_id: offerId,
     public_decision: decision,
     public_visitor_id: visitorId || null,
+    public_rejection_reason: rejectionReason || null,
   });
 }
 

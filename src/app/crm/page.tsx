@@ -8,6 +8,7 @@ import { colors, radius, shadow } from "@/app/design";
 import { supabase } from "@/lib/supabaseClient";
 import {
   createCrmTasks,
+  deleteCrmLead,
   fetchCrmLeads,
   fetchCrmTasks,
   updateCrmLeadStage,
@@ -180,6 +181,23 @@ function CrmContent() {
     }
   }
 
+  async function removeLead(lead: Lead) {
+    const confirmed = window.confirm(`Usunąć szansę sprzedaży "${lead.nazwa || "Bez nazwy"}"?\n\nUsunięte zostaną też jej zadania, pliki i propozycje współpracy.`);
+    if (!confirmed) return false;
+
+    const { error } = await deleteCrmLead(lead.id);
+    if (error) {
+      console.error("Błąd usuwania szansy:", error);
+      alert("Nie udało się usunąć szansy sprzedaży.");
+      return false;
+    }
+
+    setLeads((current) => current.filter((item) => item.id !== lead.id));
+    setTasks((current) => current.filter((task) => task.crm_id !== lead.id));
+    setSelectedLead(null);
+    return true;
+  }
+
   const filteredLeads = leads.filter((lead) => {
     const matchesStage = stageFilter === EMPTY_FILTER || lead.etap === stageFilter;
     const matchesStatus = statusFilter === EMPTY_FILTER || lead.status === statusFilter;
@@ -283,13 +301,14 @@ function CrmContent() {
       </section>
 
       {creatingLead && <LeadDrawer mode="create" tasks={[]} onClose={() => setCreatingLead(false)} onCreated={(lead) => { setLeads((current) => [lead, ...current]); setCreatingLead(false); }} />}
-      {selectedLead && <LeadDrawer mode="edit" lead={selectedLead} tasks={tasks.filter((task) => task.crm_id === selectedLead.id)} onClose={() => setSelectedLead(null)} onSaved={(lead) => { setLeads((current) => current.map((item) => item.id === lead.id ? lead : item)); setSelectedLead(lead); }} onToggleTaskStatus={toggleTaskStatus} />}
+      {selectedLead && <LeadDrawer mode="edit" lead={selectedLead} tasks={tasks.filter((task) => task.crm_id === selectedLead.id)} onClose={() => setSelectedLead(null)} onSaved={(lead) => { setLeads((current) => current.map((item) => item.id === lead.id ? lead : item)); setSelectedLead(lead); }} onDeleted={removeLead} onToggleTaskStatus={toggleTaskStatus} />}
     </>
   );
 }
 
-function LeadDrawer({ mode, lead, tasks, onClose, onCreated, onSaved, onToggleTaskStatus }: { mode: "create" | "edit"; lead?: Lead; tasks: CrmTask[]; onClose: () => void; onCreated?: (lead: Lead) => void; onSaved?: (lead: Lead) => void; onToggleTaskStatus?: (taskId: string) => void | Promise<void>; }) {
+function LeadDrawer({ mode, lead, tasks, onClose, onCreated, onSaved, onDeleted, onToggleTaskStatus }: { mode: "create" | "edit"; lead?: Lead; tasks: CrmTask[]; onClose: () => void; onCreated?: (lead: Lead) => void; onSaved?: (lead: Lead) => void; onDeleted?: (lead: Lead) => Promise<boolean>; onToggleTaskStatus?: (taskId: string) => void | Promise<void>; }) {
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [draft, setDraft] = useState<LeadDraft>(() => lead ? createDraft(lead) : createEmptyDraft());
   const [documents, setDocuments] = useState<CrmDocument[]>([]);
   const [documentsLoading, setDocumentsLoading] = useState(mode === "edit");
@@ -333,6 +352,14 @@ function LeadDrawer({ mode, lead, tasks, onClose, onCreated, onSaved, onToggleTa
     else onSaved?.(result.data as Lead);
   }
 
+  async function deleteLead() {
+    if (!lead || !onDeleted) return;
+    setDeleting(true);
+    const deleted = await onDeleted(lead);
+    setDeleting(false);
+    if (deleted) onClose();
+  }
+
   async function handleDocumentUpload(files: FileList | File[]) {
     if (!lead) return alert("Najpierw zapisz szansę, a potem dodaj pliki.");
     const filesToUpload = Array.from(files);
@@ -370,8 +397,9 @@ function LeadDrawer({ mode, lead, tasks, onClose, onCreated, onSaved, onToggleTa
           <button style={closeButtonStyle} onClick={onClose}><X size={20} /></button>
         </div>
         <div style={drawerActionsStyle}>
+          {mode === "edit" && onDeleted && <button style={dangerButtonStyle} onClick={deleteLead} disabled={saving || deleting}>{deleting ? "Usuwanie..." : "Usuń szansę"}</button>}
           <button style={secondaryButtonStyle} onClick={onClose}>Anuluj</button>
-          <button style={primarySmallButtonStyle} onClick={saveLead} disabled={saving}>{saving ? "Zapisywanie..." : "Zapisz"}</button>
+          <button style={primarySmallButtonStyle} onClick={saveLead} disabled={saving || deleting}>{saving ? "Zapisywanie..." : "Zapisz"}</button>
         </div>
 
         <div style={drawerContentStyle}>
@@ -524,7 +552,7 @@ const emptyStyle: React.CSSProperties = { border: `1px dashed ${colors.border}`,
 const drawerOverlayStyle: React.CSSProperties = { position: "fixed", inset: 0, zIndex: 50, background: "rgba(15, 23, 42, 0.32)", backdropFilter: "blur(3px)", display: "flex", justifyContent: "flex-end" };
 const drawerStyle: React.CSSProperties = { width: "560px", maxWidth: "100%", height: "100vh", background: colors.card, borderLeft: `1px solid ${colors.border}`, boxShadow: "-12px 0 30px rgba(15, 23, 42, 0.12)", padding: "28px", overflowY: "auto" };
 const drawerHeaderStyle: React.CSSProperties = { display: "flex", justifyContent: "space-between", gap: "18px", marginBottom: "16px" };
-const drawerActionsStyle: React.CSSProperties = { display: "flex", justifyContent: "flex-end", gap: "10px", marginBottom: "24px" };
+const drawerActionsStyle: React.CSSProperties = { display: "flex", justifyContent: "flex-end", gap: "10px", marginBottom: "24px", flexWrap: "wrap" };
 const drawerTitleStyle: React.CSSProperties = { margin: 0, color: colors.navy, fontSize: "28px", lineHeight: 1.15 };
 const closeButtonStyle: React.CSSProperties = { width: "40px", height: "40px", borderRadius: "999px", border: `1px solid ${colors.border}`, background: colors.white, color: colors.navy, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" };
 const drawerContentStyle: React.CSSProperties = { display: "flex", flexDirection: "column", gap: "18px" };

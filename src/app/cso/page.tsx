@@ -205,14 +205,14 @@ function CsoContent() {
   const [categoryFilter, setCategoryFilter] = useState<TopicCategory | "Wszystkie">("Wszystkie");
   const [topics, setTopics] = useState<ContentTopic[]>(createInitialTopics);
   const [draft, setDraft] = useState<DraftTopic>(() => createEmptyDraft());
-  const [selectedTopicId, setSelectedTopicId] = useState("topic-1");
+  const [noteTopicId, setNoteTopicId] = useState<string | null>(null);
 
   const filteredTopics = useMemo(() => {
     if (categoryFilter === "Wszystkie") return topics;
     return topics.filter((topic) => topic.category === categoryFilter);
   }, [categoryFilter, topics]);
 
-  const selectedTopic = topics.find((topic) => topic.id === selectedTopicId) ?? filteredTopics[0] ?? topics[0];
+  const noteTopic = noteTopicId ? topics.find((topic) => topic.id === noteTopicId) : null;
 
   function updateTopic(id: string, patch: Partial<ContentTopic>) {
     setTopics((current) => current.map((topic) => topic.id === id ? { ...topic, ...patch } : topic));
@@ -236,7 +236,7 @@ function CsoContent() {
       },
       ...current,
     ]);
-    setSelectedTopicId(id);
+    setNoteTopicId(id);
     setDraft(createEmptyDraft());
   }
 
@@ -258,7 +258,7 @@ function CsoContent() {
         <div style={panelHeaderStyle}>
           <div>
             <h2 style={sectionTitleStyle}>Plan contentowy</h2>
-            <p style={hintStyle}>Dodawaj tematy, wybieraj kategorię i zapisuj notatki robocze do każdego tematu.</p>
+            <p style={hintStyle}>Dodawaj tematy, wybieraj kategorię i zapisuj notatki robocze pod przyciskiem po prawej stronie.</p>
           </div>
           <select style={filterStyle} value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value as TopicCategory | "Wszystkie")}>
             <option>Wszystkie</option>
@@ -274,66 +274,64 @@ function CsoContent() {
           <button style={primaryButtonStyle} onClick={addTopic}>Dodaj temat</button>
         </div>
 
-        <div style={plannerGridStyle}>
-          <div style={tableShellStyle}>
-            <table style={tableStyle}>
-              <thead>
-                <tr>
-                  <Th>Kategoria</Th>
-                  <Th>Temat</Th>
-                  <Th>Status</Th>
-                  <Th>Notatka</Th>
-                  <Th>Akcje</Th>
+        <div style={tableShellStyle}>
+          <table style={tableStyle}>
+            <thead>
+              <tr>
+                <Th>Kategoria</Th>
+                <Th>Temat</Th>
+                <Th>Status</Th>
+                <Th>Akcje</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredTopics.map((topic) => (
+                <tr key={topic.id} style={rowStyle}>
+                  <Td><Badge>{topic.category}</Badge></Td>
+                  <Td strong>{topic.title}</Td>
+                  <Td>
+                    <select style={smallSelectStyle} value={topic.status} onChange={(event) => updateTopic(topic.id, { status: event.target.value as TopicStatus })}>
+                      <option value="pomysl">Pomysł</option>
+                      <option value="w_planie">W planie</option>
+                      <option value="opublikowane">Opublikowane</option>
+                    </select>
+                  </Td>
+                  <Td><button style={secondaryButtonStyle} onClick={() => setNoteTopicId(topic.id)}>Notatka</button></Td>
                 </tr>
-              </thead>
-              <tbody>
-                {filteredTopics.map((topic) => (
-                  <tr key={topic.id} style={topic.id === selectedTopic?.id ? selectedRowStyle : rowStyle}>
-                    <Td><Badge>{topic.category}</Badge></Td>
-                    <Td strong>{topic.title}</Td>
-                    <Td>
-                      <select style={smallSelectStyle} value={topic.status} onChange={(event) => updateTopic(topic.id, { status: event.target.value as TopicStatus })}>
-                        <option value="pomysl">Pomysł</option>
-                        <option value="w_planie">W planie</option>
-                        <option value="opublikowane">Opublikowane</option>
-                      </select>
-                    </Td>
-                    <Td>{topic.note ? <span style={notePreviewStyle}>{topic.note}</span> : <span style={mutedStyle}>Brak notatki</span>}</Td>
-                    <Td><button style={secondaryButtonStyle} onClick={() => setSelectedTopicId(topic.id)}>Notatka</button></Td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {selectedTopic && <TopicNote topic={selectedTopic} onChange={(note) => updateTopic(selectedTopic.id, { note })} />}
+              ))}
+            </tbody>
+          </table>
         </div>
       </section>
+
+      {noteTopic && <TopicNoteDialog topic={noteTopic} onClose={() => setNoteTopicId(null)} onChange={(note) => updateTopic(noteTopic.id, { note })} />}
     </>
   );
 }
 
-function TopicNote({ topic, onChange }: { topic: ContentTopic; onChange: (note: string) => void }) {
+function TopicNoteDialog({ topic, onClose, onChange }: { topic: ContentTopic; onClose: () => void; onChange: (note: string) => void }) {
   return (
-    <aside style={detailsStyle}>
-      <div style={detailsHeaderStyle}>
-        <div>
-          <p style={eyebrowStyle}>Notatka</p>
-          <h3 style={detailsTitleStyle}>{topic.title}</h3>
+    <div style={overlayStyle}>
+      <section style={dialogStyle}>
+        <div style={detailsHeaderStyle}>
+          <div>
+            <p style={eyebrowStyle}>Notatka</p>
+            <h3 style={detailsTitleStyle}>{topic.title}</h3>
+          </div>
+          <button style={secondaryButtonStyle} onClick={onClose}>Zamknij</button>
         </div>
         <Badge>{topic.category}</Badge>
-      </div>
-
-      <div style={noteBoxStyle}>
-        <label style={labelStyle}>Notatka do tematu</label>
-        <textarea
-          style={textareaStyle}
-          value={topic.note}
-          onChange={(event) => onChange(event.target.value)}
-          placeholder="Wpisz robocze założenia, linki, pomysły, strukturę wpisu albo uwagi do przygotowania materiału."
-        />
-      </div>
-    </aside>
+        <div style={noteBoxStyle}>
+          <label style={labelStyle}>Notatka do tematu</label>
+          <textarea
+            style={textareaStyle}
+            value={topic.note}
+            onChange={(event) => onChange(event.target.value)}
+            placeholder="Wpisz robocze założenia, linki, pomysły, strukturę wpisu albo uwagi do przygotowania materiału."
+          />
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -360,20 +358,17 @@ const addPanelStyle: CSSProperties = { display: "grid", gridTemplateColumns: "22
 const inputStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, padding: "10px 12px", fontWeight: 700, minHeight: "42px", width: "100%" };
 const primaryButtonStyle: CSSProperties = { border: "none", borderRadius: radius.button, background: colors.red, color: colors.white, padding: "11px 15px", minHeight: "42px", fontWeight: 850, cursor: "pointer", whiteSpace: "nowrap" };
 const secondaryButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.navy, padding: "9px 12px", fontWeight: 850, cursor: "pointer", whiteSpace: "nowrap" };
-const plannerGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1.45fr) minmax(360px, 0.9fr)", gap: "18px", alignItems: "start" };
 const tableShellStyle: CSSProperties = { overflowX: "auto", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white };
 const tableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse" };
 const thStyle: CSSProperties = { textAlign: "left", padding: "13px 14px", color: colors.muted, fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: `1px solid ${colors.border}` };
-const tdStyle: CSSProperties = { padding: "14px", borderBottom: `1px solid ${colors.border}`, color: colors.text, verticalAlign: "top" };
+const tdStyle: CSSProperties = { padding: "14px", borderBottom: `1px solid ${colors.border}`, color: colors.text, verticalAlign: "middle" };
 const rowStyle: CSSProperties = { background: colors.white };
-const selectedRowStyle: CSSProperties = { background: "rgba(23, 59, 115, 0.06)" };
 const smallSelectStyle: CSSProperties = { ...inputStyle, minWidth: "145px" };
 const badgeStyle: CSSProperties = { display: "inline-flex", alignItems: "center", borderRadius: radius.badge, padding: "6px 10px", background: "rgba(23, 59, 115, 0.10)", color: colors.navy, fontSize: "12px", fontWeight: 850, whiteSpace: "nowrap" };
-const detailsStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "18px", position: "sticky", top: "18px" };
+const overlayStyle: CSSProperties = { position: "fixed", inset: 0, zIndex: 50, background: "rgba(5, 15, 35, 0.32)", display: "flex", justifyContent: "flex-end", padding: "28px" };
+const dialogStyle: CSSProperties = { width: "min(620px, 100%)", height: "100%", overflowY: "auto", border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.card, padding: "22px", boxShadow: shadow.strong };
 const detailsHeaderStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "flex-start", marginBottom: "14px" };
-const detailsTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "21px", lineHeight: 1.25 };
-const noteBoxStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, padding: "14px" };
+const detailsTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "22px", lineHeight: 1.25 };
+const noteBoxStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "14px", marginTop: "14px" };
 const labelStyle: CSSProperties = { display: "block", color: colors.text, fontWeight: 850, marginBottom: "8px" };
-const textareaStyle: CSSProperties = { ...inputStyle, minHeight: "300px", resize: "vertical", lineHeight: 1.55, fontWeight: 650 };
-const notePreviewStyle: CSSProperties = { display: "block", maxWidth: "360px", color: colors.text, fontSize: "13px", lineHeight: 1.4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" };
-const mutedStyle: CSSProperties = { color: colors.muted, fontSize: "13px", fontWeight: 700 };
+const textareaStyle: CSSProperties = { ...inputStyle, minHeight: "430px", resize: "vertical", lineHeight: 1.55, fontWeight: 650 };

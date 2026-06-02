@@ -36,6 +36,8 @@ export async function createCrmTasks(
     etap: string;
     tytul: string;
     status: CrmTaskStatus;
+    opis?: string | null;
+    termin?: string | null;
   }[]
 ) {
   return supabase
@@ -81,8 +83,7 @@ export async function deleteCrmLead(leadId: string) {
     if (storageResult.error) return { error: storageResult.error };
   }
 
-  return supabase
-    .from("crm_szanse_sprzedazy")
-    .delete()
-    .eq("id", leadId);
+  return supabase.rpc("delete_crm_lead", {
+    public_lead_id: leadId,
+  });
 }

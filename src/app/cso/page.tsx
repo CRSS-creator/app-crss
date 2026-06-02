@@ -5,9 +5,24 @@ import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
 import { colors, radius, shadow } from "@/app/design";
 
-type TabKey = "content" | "calendar";
+const categories = [
+  "Ceny i koszty",
+  "Problemy",
+  "Porównania i zestawienia",
+  "Recenzje",
+  "Najlepsze w swojej klasie",
+  "Inne",
+] as const;
+
+const formats = ["Wpis z grafiką", "Wpis bez grafiki", "Filmik"] as const;
+const tabs = [
+  { key: "content", label: "Plan contentowy" },
+  { key: "calendar", label: "Kalendarz" },
+] as const;
+
+type TabKey = typeof tabs[number]["key"];
 type TopicStatus = "pomysl" | "w_planie" | "opublikowane";
-type TopicFormat = "Wpis z grafiką" | "Wpis bez grafiki" | "Filmik";
+type TopicFormat = typeof formats[number];
 type TopicCategory = typeof categories[number];
 
 type ContentTopic = {
@@ -35,22 +50,6 @@ type RawTopic = {
   title: string;
   format?: TopicFormat;
 };
-
-const tabs: { key: TabKey; label: string }[] = [
-  { key: "content", label: "Plan contentowy" },
-  { key: "calendar", label: "Kalendarz" },
-];
-
-const categories = [
-  "Ceny i koszty",
-  "Problemy",
-  "Porównania i zestawienia",
-  "Recenzje",
-  "Najlepsze w swojej klasie",
-  "Inne",
-] as const;
-
-const formats: TopicFormat[] = ["Wpis z grafiką", "Wpis bez grafiki", "Filmik"];
 
 const rawTopics: RawTopic[] = [
   ...topicGroup("Ceny i koszty", [
@@ -204,6 +203,33 @@ const rawTopics: RawTopic[] = [
   ], "Filmik"),
 ];
 
+const detailStages = [
+  {
+    day: "Poniedziałek",
+    channel: "Blog",
+    title: "Wpis bazowy",
+    description: "Pełne wyjaśnienie pytania klienta. Ten materiał jest osią komunikacji na cały tydzień.",
+  },
+  {
+    day: "Wtorek",
+    channel: "FB",
+    title: "Problem i konsekwencje",
+    description: "Krótki wpis pokazujący, jak problem wygląda w firmie właścicielskiej i co może kosztować jego ignorowanie.",
+  },
+  {
+    day: "Czwartek",
+    channel: "FB",
+    title: "Podejście CRSS",
+    description: "Wpis pokazujący, jak CRSS podchodzi do tematu, porządkuje proces i ogranicza ryzyko po stronie klienta.",
+  },
+  {
+    day: "Piątek",
+    channel: "FB",
+    title: "CTA tygodnia",
+    description: "Podsumowanie komunikacji z delikatnym zaproszeniem do kontaktu, jeśli podobny problem pojawia się u klienta.",
+  },
+];
+
 function topicGroup(category: TopicCategory, titles: string[], format?: TopicFormat): RawTopic[] {
   return titles.map((title) => ({ category, title, format }));
 }
@@ -247,12 +273,15 @@ function CsoContent() {
   const [categoryFilter, setCategoryFilter] = useState<TopicCategory | "Wszystkie">("Wszystkie");
   const [topics, setTopics] = useState<ContentTopic[]>(createInitialTopics);
   const [draft, setDraft] = useState<DraftTopic>(() => createEmptyDraft());
+  const [selectedTopicId, setSelectedTopicId] = useState("topic-1");
   const [calendarMonth, setCalendarMonth] = useState(() => getCurrentMonthValue());
 
   const filteredTopics = useMemo(() => {
     if (categoryFilter === "Wszystkie") return topics;
     return topics.filter((topic) => topic.category === categoryFilter);
   }, [categoryFilter, topics]);
+
+  const selectedTopic = topics.find((topic) => topic.id === selectedTopicId) ?? filteredTopics[0] ?? topics[0];
 
   function updateTopic(id: string, patch: Partial<ContentTopic>) {
     setTopics((current) => current.map((topic) => topic.id === id ? { ...topic, ...patch } : topic));
@@ -265,9 +294,10 @@ function CsoContent() {
       return;
     }
 
+    const id = `topic-${Date.now()}`;
     setTopics((current) => [
       {
-        id: `topic-${Date.now()}`,
+        id,
         category: draft.category,
         title,
         fb: draft.fb,
@@ -278,6 +308,7 @@ function CsoContent() {
       },
       ...current,
     ]);
+    setSelectedTopicId(id);
     setDraft(createEmptyDraft());
   }
 
@@ -330,56 +361,101 @@ function CsoContent() {
             <button style={primaryButtonStyle} onClick={addTopic}>Dodaj temat</button>
           </div>
 
-          <div style={categoryGridStyle}>
-            {categories.map((category) => {
-              const count = topics.filter((topic) => topic.category === category).length;
-              return <div key={category} style={categoryCardStyle}><strong>{category}</strong><span>{count} tematów</span></div>;
-            })}
-          </div>
-
-          <div style={tableShellStyle}>
-            <table style={tableStyle}>
-              <thead>
-                <tr>
-                  <Th>Data</Th>
-                  <Th>FB</Th>
-                  <Th>Blog</Th>
-                  <Th>Kategoria</Th>
-                  <Th>Temat</Th>
-                  <Th>Format</Th>
-                  <Th>Status</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredTopics.map((topic) => (
-                  <tr key={topic.id} style={rowStyle}>
-                    <Td><input style={dateInputStyle} type="date" value={topic.publishDate} onChange={(event) => updateTopic(topic.id, { publishDate: event.target.value })} /></Td>
-                    <Td center><input type="checkbox" checked={topic.fb} onChange={(event) => updateTopic(topic.id, { fb: event.target.checked })} /></Td>
-                    <Td center><input type="checkbox" checked={topic.blog} onChange={(event) => updateTopic(topic.id, { blog: event.target.checked })} /></Td>
-                    <Td><Badge>{topic.category}</Badge></Td>
-                    <Td strong>{topic.title}</Td>
-                    <Td>
-                      <select style={smallSelectStyle} value={topic.format} onChange={(event) => updateTopic(topic.id, { format: event.target.value as TopicFormat })}>
-                        {formats.map((format) => <option key={format}>{format}</option>)}
-                      </select>
-                    </Td>
-                    <Td>
-                      <select style={smallSelectStyle} value={topic.status} onChange={(event) => updateTopic(topic.id, { status: event.target.value as TopicStatus })}>
-                        <option value="pomysl">Pomysł</option>
-                        <option value="w_planie">W planie</option>
-                        <option value="opublikowane">Opublikowane</option>
-                      </select>
-                    </Td>
+          <div style={plannerGridStyle}>
+            <div style={tableShellStyle}>
+              <table style={tableStyle}>
+                <thead>
+                  <tr>
+                    <Th>Data</Th>
+                    <Th>FB</Th>
+                    <Th>Blog</Th>
+                    <Th>Kategoria</Th>
+                    <Th>Temat</Th>
+                    <Th>Format</Th>
+                    <Th>Status</Th>
+                    <Th>Akcje</Th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {filteredTopics.map((topic) => (
+                    <tr key={topic.id} style={topic.id === selectedTopic?.id ? selectedRowStyle : rowStyle}>
+                      <Td><input style={dateInputStyle} type="date" value={topic.publishDate} onChange={(event) => updateTopic(topic.id, { publishDate: event.target.value })} /></Td>
+                      <Td center><input type="checkbox" checked={topic.fb} onChange={(event) => updateTopic(topic.id, { fb: event.target.checked })} /></Td>
+                      <Td center><input type="checkbox" checked={topic.blog} onChange={(event) => updateTopic(topic.id, { blog: event.target.checked })} /></Td>
+                      <Td><Badge>{topic.category}</Badge></Td>
+                      <Td strong>{topic.title}</Td>
+                      <Td>
+                        <select style={smallSelectStyle} value={topic.format} onChange={(event) => updateTopic(topic.id, { format: event.target.value as TopicFormat })}>
+                          {formats.map((format) => <option key={format}>{format}</option>)}
+                        </select>
+                      </Td>
+                      <Td>
+                        <select style={smallSelectStyle} value={topic.status} onChange={(event) => updateTopic(topic.id, { status: event.target.value as TopicStatus })}>
+                          <option value="pomysl">Pomysł</option>
+                          <option value="w_planie">W planie</option>
+                          <option value="opublikowane">Opublikowane</option>
+                        </select>
+                      </Td>
+                      <Td><button style={secondaryButtonStyle} onClick={() => setSelectedTopicId(topic.id)}>Szczegóły</button></Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {selectedTopic && <TopicDetails topic={selectedTopic} />}
           </div>
         </section>
       )}
 
       {activeTab === "calendar" && <CalendarTab topics={topics} month={calendarMonth} onMonthChange={setCalendarMonth} />}
     </>
+  );
+}
+
+function TopicDetails({ topic }: { topic: ContentTopic }) {
+  return (
+    <aside style={detailsStyle}>
+      <div style={detailsHeaderStyle}>
+        <div>
+          <p style={eyebrowStyle}>Szczegóły tematu</p>
+          <h3 style={detailsTitleStyle}>{topic.title}</h3>
+        </div>
+        <Badge>{topic.category}</Badge>
+      </div>
+
+      <div style={detailsMetaStyle}>
+        <Summary label="Format" value={topic.format} />
+        <Summary label="Status" value={statusLabels[topic.status]} />
+        <Summary label="Data" value={topic.publishDate || "Nie ustawiono"} />
+      </div>
+
+      <div style={briefStyle}>
+        <strong>Założenie komunikacji</strong>
+        <p>
+          Traktuj temat jako motyw przewodni tygodnia. Blog wyjaśnia temat szerzej, a komunikacja na FB pokazuje problem,
+          konsekwencje oraz sposób pracy CRSS bez agresywnego języka sprzedażowego.
+        </p>
+      </div>
+
+      <div style={stageGridStyle}>
+        {detailStages.map((stage) => (
+          <div key={`${stage.day}-${stage.title}`} style={stageCardStyle}>
+            <span style={stageDayStyle}>{stage.day} / {stage.channel}</span>
+            <strong>{stage.title}</strong>
+            <p>{stage.description}</p>
+          </div>
+        ))}
+      </div>
+
+      <div style={briefStyle}>
+        <strong>Standard wpisu</strong>
+        <p>
+          Każdy wpis powinien mieć naturalny początek oparty na problemie, prosty mechanizm działania, konsekwencję dla właściciela
+          firmy oraz spokojny wniosek. W treści unikaj emotikon, hashtagów i sztucznego call to action.
+        </p>
+      </div>
+    </aside>
   );
 }
 
@@ -441,6 +517,11 @@ function getCurrentMonthValue() {
 }
 
 const weekdays = ["Pon", "Wt", "Śr", "Czw", "Pt", "Sob", "Nd"];
+const statusLabels: Record<TopicStatus, string> = {
+  pomysl: "Pomysł",
+  w_planie: "W planie",
+  opublikowane: "Opublikowane",
+};
 
 function buildMonthDays(month: string) {
   const [yearValue, monthValue] = month.split("-").map(Number);
@@ -481,16 +562,25 @@ const addPanelStyle: CSSProperties = { display: "grid", gridTemplateColumns: "18
 const inputStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, padding: "10px 12px", fontWeight: 700, minHeight: "42px", width: "100%" };
 const checkLabelStyle: CSSProperties = { display: "inline-flex", alignItems: "center", gap: "7px", color: colors.text, fontWeight: 800, whiteSpace: "nowrap" };
 const primaryButtonStyle: CSSProperties = { border: "none", borderRadius: radius.button, background: colors.red, color: colors.white, padding: "11px 15px", minHeight: "42px", fontWeight: 850, cursor: "pointer", whiteSpace: "nowrap" };
-const categoryGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "10px", marginBottom: "18px" };
-const categoryCardStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "13px", background: colors.inputBackground, display: "flex", flexDirection: "column", gap: "5px", color: colors.text, fontWeight: 800 };
+const secondaryButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.navy, padding: "9px 12px", fontWeight: 850, cursor: "pointer", whiteSpace: "nowrap" };
+const plannerGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1.55fr) minmax(360px, 0.85fr)", gap: "18px", alignItems: "start" };
 const tableShellStyle: CSSProperties = { overflowX: "auto", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white };
 const tableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse" };
 const thStyle: CSSProperties = { textAlign: "left", padding: "13px 14px", color: colors.muted, fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: `1px solid ${colors.border}` };
 const tdStyle: CSSProperties = { padding: "14px", borderBottom: `1px solid ${colors.border}`, color: colors.text, verticalAlign: "top" };
 const rowStyle: CSSProperties = { background: colors.white };
+const selectedRowStyle: CSSProperties = { background: "rgba(23, 59, 115, 0.06)" };
 const dateInputStyle: CSSProperties = { ...inputStyle, minWidth: "145px" };
 const smallSelectStyle: CSSProperties = { ...inputStyle, minWidth: "150px" };
 const badgeStyle: CSSProperties = { display: "inline-flex", alignItems: "center", borderRadius: radius.badge, padding: "6px 10px", background: "rgba(23, 59, 115, 0.10)", color: colors.navy, fontSize: "12px", fontWeight: 850, whiteSpace: "nowrap" };
+const detailsStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "18px", position: "sticky", top: "18px" };
+const detailsHeaderStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "flex-start", marginBottom: "14px" };
+const detailsTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "21px", lineHeight: 1.25 };
+const detailsMetaStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "10px", marginBottom: "14px" };
+const briefStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, padding: "14px", color: colors.text, lineHeight: 1.55, marginBottom: "14px" };
+const stageGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "10px", marginBottom: "14px" };
+const stageCardStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, padding: "13px", display: "flex", flexDirection: "column", gap: "8px", color: colors.text, lineHeight: 1.45 };
+const stageDayStyle: CSSProperties = { color: colors.red, fontSize: "12px", fontWeight: 850, textTransform: "uppercase", letterSpacing: "0.04em" };
 const calendarHeaderStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: "8px", marginBottom: "8px", color: colors.muted, fontSize: "13px", textAlign: "center" };
 const calendarGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: "8px" };
 const dayCardStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, minHeight: "132px", padding: "10px", display: "flex", flexDirection: "column", gap: "8px" };

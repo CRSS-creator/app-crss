@@ -207,6 +207,14 @@ export async function sendCrmOfferToN8n(offer: CrmOffer, lead?: CrmOfferLeadCont
   }
 
   await updateCrmOffer(offerToSend.id, { email_sent_at: new Date().toISOString() });
+  const followup = await supabase.rpc("schedule_crm_offer_followup", {
+    public_offer_id: offerToSend.id,
+  });
+
+  if (followup.error) {
+    console.error("Błąd tworzenia follow-upu po wysłaniu propozycji:", followup.error);
+  }
+
   return { ok: true, error: null };
 }
 

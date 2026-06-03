@@ -59,10 +59,29 @@ export async function fetchRecurringTasks() {
     .order("created_at", { ascending: false });
 }
 
+export async function fetchRecurringTaskTemplates() {
+  return supabase
+    .from("zadania_cykliczne")
+    .select(RECURRING_TASK_SELECT)
+    .is("klient_id", null)
+    .order("aktywne", { ascending: false })
+    .order("dzien_miesiaca", { ascending: true })
+    .order("created_at", { ascending: false });
+}
+
 export async function createRecurringTask(payload: RecurringTaskPayload) {
   return supabase
     .from("zadania_cykliczne")
     .insert(payload)
+    .select(RECURRING_TASK_SELECT)
+    .single();
+}
+
+export async function updateRecurringTask(taskId: string, payload: Partial<RecurringTaskPayload>) {
+  return supabase
+    .from("zadania_cykliczne")
+    .update(payload)
+    .eq("id", taskId)
     .select(RECURRING_TASK_SELECT)
     .single();
 }

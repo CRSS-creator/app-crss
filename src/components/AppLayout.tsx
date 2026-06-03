@@ -63,7 +63,7 @@ const menu = [
   },
   {
     title: "Ustawienia",
-    items: [{ href: "/uzytkownicy", label: "Użytkownicy", icon: UserCog, page: "uzytkownicy" }],
+    items: [{ href: "/uzytkownicy", label: "Ustawienia", icon: UserCog, page: "uzytkownicy" }],
   },
 ] as const;
 

@@ -20,6 +20,8 @@ import {
   deleteRecurringTask,
   fetchActiveRecurringTaskTimers,
   fetchRecurringTasks,
+  recurringScopeLabel,
+  recurringTaskMatchesClient,
   startRecurringTaskTimer,
   stopRecurringTaskTimer,
   type RecurringTask,
@@ -170,6 +172,9 @@ function SettlementsContent() {
       osoba_id: client.opiekun_id || null,
       forma_prawna: draft.scope === "matching" ? client.forma_prawna || null : null,
       forma_opodatkowania: draft.scope === "matching" ? client.forma_opodatkowania || null : null,
+      formy_prawne: draft.scope === "matching" && client.forma_prawna ? [client.forma_prawna] : null,
+      formy_opodatkowania: draft.scope === "matching" && client.forma_opodatkowania ? [client.forma_opodatkowania] : null,
+      wymaga_czynnego_vat: null,
       aktywne: true,
     });
     if (result.error) {
@@ -337,7 +342,7 @@ function SettlementDrawer({ settlement, progress, recurringTasks, activeTimers, 
           <section style={drawerSectionStyle}>
             <h3 style={drawerSectionTitleStyle}>Zadania cykliczne</h3>
             <ProgressBadge progress={progress.progress} done={progress.done_tasks} total={progress.total_tasks} large />
-            <div style={clientContextStyle}><span>Forma prawna: <strong>{client?.forma_prawna || "Brak"}</strong></span><span>Opodatkowanie: <strong>{client?.forma_opodatkowania || "Brak"}</strong></span></div>
+            <div style={clientContextStyle}><span>Forma prawna: <strong>{client?.forma_prawna || "Brak"}</strong></span><span>Opodatkowanie: <strong>{client?.forma_opodatkowania || "Brak"}</strong></span><span>VAT: <strong>{client?.czynny_vat ? "czynny" : "nie"}</strong></span></div>
             <div style={recurringListStyle}>
               {recurringTasks.length === 0 ? <div style={emptyStateStyle}>Brak zadań cyklicznych dla tego klienta.</div> : recurringTasks.map((task) => {
                 const activeTimer = activeTimers.find((entry) => entry.zadanie_cykliczne_id === task.id && entry.klient_id === client?.id && entry.miesiac_rozliczeniowy === settlement.okres);
@@ -370,10 +375,8 @@ function getClient(value: MonthlySettlement["klienci"]) { return Array.isArray(v
 function getCaregiverName(client: ReturnType<typeof getClient>) { return client?.profiles?.[0]?.full_name || client?.profiles?.[0]?.email || "Brak opiekuna"; }
 function currentMonthInput() { return new Date().toISOString().slice(0, 7); }
 function formatMonth(value: string) { return new Intl.DateTimeFormat("pl-PL", { month: "long", year: "numeric" }).format(new Date(`${value}-01T12:00:00`)); }
-function statusLabel(status: SettlementStatus) { return STATUS_OPTIONS.find((item) => item.value === status)?.label || status; }
 function priorityLabel(priority: TaskPriority) { return PRIORITY_OPTIONS.find((item) => item.value === priority)?.label || priority; }
-function recurringScopeLabel(task: RecurringTask) { return task.klient_id ? "Zadanie klienta" : [task.forma_prawna, task.forma_opodatkowania].filter(Boolean).join(" · ") || "Szablon globalny"; }
-function getMatchingRecurringTasks(tasks: RecurringTask[], client: ReturnType<typeof getClient>) { return tasks.filter((task) => task.klient_id ? task.klient_id === client?.id : (!task.forma_prawna || task.forma_prawna === client?.forma_prawna) && (!task.forma_opodatkowania || task.forma_opodatkowania === client?.forma_opodatkowania)); }
+function getMatchingRecurringTasks(tasks: RecurringTask[], client: ReturnType<typeof getClient>) { return tasks.filter((task) => recurringTaskMatchesClient(task, client)); }
 function statusSelectStyle(status: SettlementStatus): CSSProperties { if (status === "czeka_na_dokumenty") return { background: "#ffd8d8", color: "#991b1b" }; if (status === "dokumenty_kompletne_biuro") return { background: "#ffe7b8", color: "#92400e" }; if (status === "w_trakcie_ksiegowania") return { background: "#ffe3c4", color: "#9a3412" }; if (status === "do_sprawdzenia") return { background: "#efd4f5", color: "#7e22ce" }; if (status === "sprawdzone_zatwierdzone") return { background: "#cbe7f5", color: "#075985" }; return { background: "#c9f2d2", color: "#166534" }; }
 
 const headerStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "24px", alignItems: "flex-start", marginBottom: "30px" };

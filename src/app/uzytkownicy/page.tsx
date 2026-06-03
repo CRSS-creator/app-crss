@@ -6,17 +6,18 @@ import AccessGuard from "@/components/AccessGuard";
 import { colors, radius, shadow } from "@/app/design";
 import { supabase } from "@/lib/supabaseClient";
 import { fetchClientCaregivers, fetchClients } from "@/lib/clientService";
+import { LEGAL_FORM_OPTIONS, TAXATION_FORM_OPTIONS } from "@/lib/clientDictionaries";
 import {
   createRecurringTask,
   deleteRecurringTask,
   fetchRecurringTaskTemplates,
+  recurringTaskMatchesClient,
+  recurringScopeLabel,
   updateRecurringTask,
   type RecurringTask,
 } from "@/lib/recurringTasksService";
 import type { TaskPriority, ProfileSummary } from "@/lib/taskService";
 
-const LEGAL_FORM_OPTIONS = ["", "JDG", "sp. z o.o.", "spółka cywilna", "inna"];
-const TAXATION_OPTIONS = ["", "Skala podatkowa", "Podatek liniowy", "Ryczałt", "CIT", "Karta podatkowa", "Inne"];
 const PRIORITY_OPTIONS: { value: TaskPriority; label: string }[] = [
   { value: "niski", label: "Niski" },
   { value: "normalny", label: "Normalny" },
@@ -29,16 +30,23 @@ const ROLE_OPTIONS = [
   { value: "admin", label: "Admin" },
   { value: "accountant", label: "Accountant" },
 ];
+const VAT_OPTIONS = [
+  { value: "any", label: "Dowolny VAT" },
+  { value: "active", label: "Tylko czynny VAT" },
+  { value: "inactive", label: "Tylko bez VAT" },
+] as const;
 
 type SettingsTab = "templates" | "users";
+type VatMode = typeof VAT_OPTIONS[number]["value"];
 type UserProfile = ProfileSummary & { id: string; role: string | null };
-type ClientRow = { id: string; nazwa: string | null; forma_prawna: string | null; forma_opodatkowania: string | null; opiekun_id: string | null };
+type ClientRow = { id: string; nazwa: string | null; forma_prawna: string | null; forma_opodatkowania: string | null; czynny_vat: boolean | null; opiekun_id: string | null };
 type TemplateDraft = {
   id: string | null;
   tytul: string;
   opis: string;
-  forma_prawna: string;
-  forma_opodatkowania: string;
+  formy_prawne: string[];
+  formy_opodatkowania: string[];
+  vatMode: VatMode;
   dzien_miesiaca: string;
   priorytet: TaskPriority;
   osoba_id: string;
@@ -49,8 +57,9 @@ const emptyDraft: TemplateDraft = {
   id: null,
   tytul: "",
   opis: "",
-  forma_prawna: "",
-  forma_opodatkowania: "",
+  formy_prawne: [],
+  formy_opodatkowania: [],
+  vatMode: "any",
   dzien_miesiaca: "10",
   priorytet: "normalny",
   osoba_id: "",
@@ -114,8 +123,11 @@ function SettingsContent() {
       klient_id: null,
       tytul: draft.tytul.trim(),
       opis: draft.opis.trim() || null,
-      forma_prawna: draft.forma_prawna || null,
-      forma_opodatkowania: draft.forma_opodatkowania || null,
+      forma_prawna: draft.formy_prawne.length === 1 ? draft.formy_prawne[0] : null,
+      forma_opodatkowania: draft.formy_opodatkowania.length === 1 ? draft.formy_opodatkowania[0] : null,
+      formy_prawne: draft.formy_prawne.length ? draft.formy_prawne : null,
+      formy_opodatkowania: draft.formy_opodatkowania.length ? draft.formy_opodatkowania : null,
+      wymaga_czynnego_vat: vatModeToValue(draft.vatMode),
       dzien_miesiaca: day,
       priorytet: draft.priorytet,
       osoba_id: draft.osoba_id || null,
@@ -168,8 +180,9 @@ function SettingsContent() {
       id: template.id,
       tytul: template.tytul,
       opis: template.opis || "",
-      forma_prawna: template.forma_prawna || "",
-      forma_opodatkowania: template.forma_opodatkowania || "",
+      formy_prawne: template.formy_prawne?.length ? template.formy_prawne : template.forma_prawna ? [template.forma_prawna] : [],
+      formy_opodatkowania: template.formy_opodatkowania?.length ? template.formy_opodatkowania : template.forma_opodatkowania ? [template.forma_opodatkowania] : [],
+      vatMode: valueToVatMode(template.wymaga_czynnego_vat),
       dzien_miesiaca: String(template.dzien_miesiaca || 10),
       priorytet: template.priorytet,
       osoba_id: template.osoba_id || "",
@@ -238,17 +251,18 @@ function TemplatesTab({ templates, clients, assignees, draft, loading, saving, s
       <div style={panelHeaderStyle}>
         <div>
           <h2 style={sectionTitleStyle}>Szablony zadań cyklicznych</h2>
-          <p style={hintStyle}>Szablon działa dla każdego klienta, którego forma prawna i opodatkowanie pasują do ustawionych warunków.</p>
+          <p style={hintStyle}>Szablon działa dla klientów spełniających zaznaczone warunki. Brak zaznaczenia oznacza: każda forma lub każde opodatkowanie.</p>
         </div>
       </div>
 
       <div style={formGridStyle}>
         <Field label="Nazwa zadania"><input style={inputStyle} value={draft.tytul} onChange={(event) => setDraft((current) => ({ ...current, tytul: event.target.value }))} placeholder="np. Sprawdzenie kompletu dokumentów" /></Field>
-        <Field label="Forma prawna"><Select value={draft.forma_prawna} options={LEGAL_FORM_OPTIONS} emptyLabel="Każda forma" onChange={(value) => setDraft((current) => ({ ...current, forma_prawna: value }))} /></Field>
-        <Field label="Opodatkowanie"><Select value={draft.forma_opodatkowania} options={TAXATION_OPTIONS} emptyLabel="Każde opodatkowanie" onChange={(value) => setDraft((current) => ({ ...current, forma_opodatkowania: value }))} /></Field>
         <Field label="Dzień miesiąca"><input style={inputStyle} type="number" min={1} max={31} value={draft.dzien_miesiaca} onChange={(event) => setDraft((current) => ({ ...current, dzien_miesiaca: event.target.value }))} /></Field>
         <Field label="Priorytet"><select style={inputStyle} value={draft.priorytet} onChange={(event) => setDraft((current) => ({ ...current, priorytet: event.target.value as TaskPriority }))}>{PRIORITY_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field>
         <Field label="Osoba odpowiedzialna"><select style={inputStyle} value={draft.osoba_id} onChange={(event) => setDraft((current) => ({ ...current, osoba_id: event.target.value }))}><option value="">Opiekun klienta / bez przypisania</option>{assignees.map((user) => <option key={user.id} value={user.id}>{profileName(user)}</option>)}</select></Field>
+        <CheckboxGroup label="Forma prawna" options={LEGAL_FORM_OPTIONS} selected={draft.formy_prawne} onChange={(formy_prawne) => setDraft((current) => ({ ...current, formy_prawne }))} />
+        <CheckboxGroup label="Forma opodatkowania" options={TAXATION_FORM_OPTIONS} selected={draft.formy_opodatkowania} onChange={(formy_opodatkowania) => setDraft((current) => ({ ...current, formy_opodatkowania }))} />
+        <Field label="VAT"><select style={inputStyle} value={draft.vatMode} onChange={(event) => setDraft((current) => ({ ...current, vatMode: event.target.value as VatMode }))}>{VAT_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field>
         <label style={switchStyle}><input type="checkbox" checked={draft.aktywne} onChange={(event) => setDraft((current) => ({ ...current, aktywne: event.target.checked }))} /> Aktywny szablon</label>
         <Field label="Opis"><textarea style={textareaStyle} value={draft.opis} onChange={(event) => setDraft((current) => ({ ...current, opis: event.target.value }))} placeholder="Krótki opis czynności dla księgowości" /></Field>
       </div>
@@ -279,7 +293,7 @@ function TemplatesTab({ templates, clients, assignees, draft, loading, saving, s
             ) : sortedTemplates.map((template) => (
               <tr key={template.id} style={rowStyle}>
                 <Td strong>{template.tytul}<Small>{template.opis || "Brak opisu"}</Small></Td>
-                <Td>{template.forma_prawna || "Każda forma"}<Small>{template.forma_opodatkowania || "Każde opodatkowanie"}</Small></Td>
+                <Td>{recurringScopeLabel(template)}</Td>
                 <Td>{template.dzien_miesiaca}</Td>
                 <Td><Badge>{priorityLabel(template.priorytet)}</Badge></Td>
                 <Td>{matchingClientsCount(template, clients)} klientów</Td>
@@ -327,9 +341,26 @@ function UsersTab({ users, loading, onRoleChange }: { users: UserProfile[]; load
   );
 }
 
-function Select({ value, options, emptyLabel, onChange }: { value: string; options: string[]; emptyLabel: string; onChange: (value: string) => void }) {
-  return <select style={inputStyle} value={value} onChange={(event) => onChange(event.target.value)}>{options.map((option) => <option key={option || "empty"} value={option}>{option || emptyLabel}</option>)}</select>;
+function CheckboxGroup({ label, options, selected, onChange }: { label: string; options: readonly { value: string; label: string }[]; selected: string[]; onChange: (value: string[]) => void }) {
+  function toggle(value: string) {
+    onChange(selected.includes(value) ? selected.filter((item) => item !== value) : [...selected, value]);
+  }
+
+  return (
+    <div style={checkboxGroupStyle}>
+      <span style={labelStyle}>{label}</span>
+      <div style={checkboxGridStyle}>
+        {options.map((option) => (
+          <label key={option.value} style={checkboxOptionStyle}>
+            <input type="checkbox" checked={selected.includes(option.value)} onChange={() => toggle(option.value)} />
+            <span>{option.label}</span>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
 }
+
 function Field({ label, children }: { label: string; children: ReactNode }) { return <label style={fieldStyle}><span style={labelStyle}>{label}</span>{children}</label>; }
 function Summary({ label, value }: { label: string; value: string | number }) { return <div style={summaryStyle}><span>{label}</span><strong>{value}</strong></div>; }
 function Th({ children }: { children: ReactNode }) { return <th style={thStyle}>{children}</th>; }
@@ -339,13 +370,9 @@ function Small({ children }: { children: ReactNode }) { return <small style={sma
 
 function profileName(user: UserProfile | ProfileSummary) { return user.full_name || user.email || "Użytkownik"; }
 function priorityLabel(priority: TaskPriority) { return PRIORITY_OPTIONS.find((item) => item.value === priority)?.label || priority; }
-function matchingClientsCount(template: RecurringTask, clients: ClientRow[]) {
-  return clients.filter((client) => {
-    const legalMatch = !template.forma_prawna || template.forma_prawna === client.forma_prawna;
-    const taxMatch = !template.forma_opodatkowania || template.forma_opodatkowania === client.forma_opodatkowania;
-    return legalMatch && taxMatch;
-  }).length;
-}
+function vatModeToValue(mode: VatMode) { return mode === "active" ? true : mode === "inactive" ? false : null; }
+function valueToVatMode(value: boolean | null | undefined): VatMode { return value === true ? "active" : value === false ? "inactive" : "any"; }
+function matchingClientsCount(template: RecurringTask, clients: ClientRow[]) { return clients.filter((client) => recurringTaskMatchesClient(template, client)).length; }
 
 const headerStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "24px", alignItems: "flex-start", marginBottom: "24px", flexWrap: "wrap" };
 const eyebrowStyle: CSSProperties = { margin: "0 0 8px", color: colors.red, fontWeight: 850 };
@@ -360,11 +387,14 @@ const panelStyle: CSSProperties = { border: `1px solid ${colors.border}`, border
 const panelHeaderStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "18px", alignItems: "flex-start", marginBottom: "18px", flexWrap: "wrap" };
 const sectionTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "24px" };
 const hintStyle: CSSProperties = { margin: "8px 0 0", color: colors.muted, lineHeight: 1.65 };
-const formGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(260px, 2fr) repeat(3, minmax(150px, 1fr))", gap: "12px", alignItems: "end", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "14px", marginBottom: "14px" };
+const formGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(260px, 2fr) repeat(3, minmax(150px, 1fr))", gap: "12px", alignItems: "start", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "14px", marginBottom: "14px" };
 const fieldStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "7px" };
 const labelStyle: CSSProperties = { color: colors.muted, fontSize: "13px", fontWeight: 850 };
 const inputStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, padding: "10px 12px", fontWeight: 700, minHeight: "42px", width: "100%" };
 const textareaStyle: CSSProperties = { ...inputStyle, minHeight: "80px", resize: "vertical", gridColumn: "1 / -1", lineHeight: 1.5 };
+const checkboxGroupStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "8px", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, padding: "12px", gridColumn: "span 2" };
+const checkboxGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "8px" };
+const checkboxOptionStyle: CSSProperties = { display: "flex", alignItems: "center", gap: "8px", color: colors.text, fontWeight: 750, fontSize: "13px" };
 const switchStyle: CSSProperties = { minHeight: "42px", display: "flex", alignItems: "center", gap: "9px", color: colors.text, fontWeight: 850 };
 const buttonRowStyle: CSSProperties = { display: "flex", gap: "10px", marginBottom: "18px", flexWrap: "wrap" };
 const primaryButtonStyle: CSSProperties = { border: "none", borderRadius: radius.button, background: colors.red, color: colors.white, padding: "11px 15px", minHeight: "42px", fontWeight: 850, cursor: "pointer", whiteSpace: "nowrap" };

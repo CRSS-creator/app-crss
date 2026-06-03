@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabaseClient";
-import type { TaskPriority } from "@/lib/taskService";
+import type { TaskPriority, TimeEntry } from "@/lib/taskService";
 
 export type RecurringTask = {
   id: string;
@@ -41,6 +41,15 @@ const RECURRING_TASK_SELECT = `
   )
 `;
 
+const TIME_ENTRY_SELECT = `
+  *,
+  profiles!czas_pracy_osoba_id_fkey (
+    full_name,
+    email,
+    role
+  )
+`;
+
 export async function fetchRecurringTasks() {
   return supabase
     .from("zadania_cykliczne")
@@ -63,4 +72,48 @@ export async function deleteRecurringTask(taskId: string) {
     .from("zadania_cykliczne")
     .delete()
     .eq("id", taskId);
+}
+
+export async function fetchActiveRecurringTaskTimers(userId: string) {
+  return supabase
+    .from("czas_pracy")
+    .select(TIME_ENTRY_SELECT)
+    .eq("osoba_id", userId)
+    .is("ended_at", null)
+    .not("zadanie_cykliczne_id", "is", null)
+    .order("started_at", { ascending: false });
+}
+
+export async function startRecurringTaskTimer({
+  taskId,
+  clientId,
+  userId,
+  settlementMonth,
+}: {
+  taskId: string;
+  clientId: string | null;
+  userId: string;
+  settlementMonth: string | null;
+}) {
+  return supabase
+    .from("czas_pracy")
+    .insert({
+      zadanie_cykliczne_id: taskId,
+      klient_id: clientId,
+      osoba_id: userId,
+      started_at: new Date().toISOString(),
+      miesiac_rozliczeniowy: settlementMonth,
+      czy_wewnetrzne: !clientId,
+    })
+    .select(TIME_ENTRY_SELECT)
+    .single();
+}
+
+export async function stopRecurringTaskTimer(timeEntryId: string) {
+  return supabase
+    .from("czas_pracy")
+    .update({ ended_at: new Date().toISOString() })
+    .eq("id", timeEntryId)
+    .select(TIME_ENTRY_SELECT)
+    .single<TimeEntry>();
 }

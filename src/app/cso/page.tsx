@@ -204,6 +204,8 @@ export default function CsoPage() {
 function CsoContent() {
   const [categoryFilter, setCategoryFilter] = useState<TopicCategory | "Wszystkie">("Wszystkie");
   const [topics, setTopics] = useState<ContentTopic[]>(createInitialTopics);
+  const [facebookTopics, setFacebookTopics] = useState<Record<string, boolean>>({});
+  const [blogTopics, setBlogTopics] = useState<Record<string, boolean>>({});
   const [draft, setDraft] = useState<DraftTopic>(() => createEmptyDraft());
   const [noteTopicId, setNoteTopicId] = useState<string | null>(null);
 
@@ -216,6 +218,11 @@ function CsoContent() {
 
   function updateTopic(id: string, patch: Partial<ContentTopic>) {
     setTopics((current) => current.map((topic) => topic.id === id ? { ...topic, ...patch } : topic));
+  }
+
+  function toggleChecked(kind: "facebook" | "blog", id: string) {
+    const setter = kind === "facebook" ? setFacebookTopics : setBlogTopics;
+    setter((current) => ({ ...current, [id]: !current[id] }));
   }
 
   function addTopic() {
@@ -258,7 +265,7 @@ function CsoContent() {
         <div style={panelHeaderStyle}>
           <div>
             <h2 style={sectionTitleStyle}>Plan contentowy</h2>
-            <p style={hintStyle}>Dodawaj tematy, wybieraj kategorię i zapisuj notatki robocze pod przyciskiem po prawej stronie.</p>
+            <p style={hintStyle}>Dodawaj tematy, oznaczaj publikację na FB i Blogu oraz zapisuj notatki robocze pod przyciskiem po prawej stronie.</p>
           </div>
           <select style={filterStyle} value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value as TopicCategory | "Wszystkie")}>
             <option>Wszystkie</option>
@@ -279,6 +286,8 @@ function CsoContent() {
             <thead>
               <tr>
                 <Th>Kategoria</Th>
+                <Th compact>FB</Th>
+                <Th compact>Blog</Th>
                 <Th>Temat</Th>
                 <Th>Status</Th>
                 <Th>Akcje</Th>
@@ -288,6 +297,12 @@ function CsoContent() {
               {filteredTopics.map((topic) => (
                 <tr key={topic.id} style={rowStyle}>
                   <Td><Badge>{topic.category}</Badge></Td>
+                  <Td compact>
+                    <ChannelCheckbox checked={Boolean(facebookTopics[topic.id])} label="FB" onChange={() => toggleChecked("facebook", topic.id)} />
+                  </Td>
+                  <Td compact>
+                    <ChannelCheckbox checked={Boolean(blogTopics[topic.id])} label="Blog" onChange={() => toggleChecked("blog", topic.id)} />
+                  </Td>
                   <Td strong>{topic.title}</Td>
                   <Td>
                     <select style={smallSelectStyle} value={topic.status} onChange={(event) => updateTopic(topic.id, { status: event.target.value as TopicStatus })}>
@@ -306,6 +321,14 @@ function CsoContent() {
 
       {noteTopic && <TopicNoteDialog topic={noteTopic} onClose={() => setNoteTopicId(null)} onChange={(note) => updateTopic(noteTopic.id, { note })} />}
     </>
+  );
+}
+
+function ChannelCheckbox({ checked, label, onChange }: { checked: boolean; label: string; onChange: () => void }) {
+  return (
+    <label style={checkboxLabelStyle} title={label}>
+      <input type="checkbox" checked={checked} onChange={onChange} style={checkboxInputStyle} />
+    </label>
   );
 }
 
@@ -339,9 +362,17 @@ function Summary({ label, value }: { label: string; value: string | number }) {
   return <div style={summaryStyle}><span>{label}</span><strong>{value}</strong></div>;
 }
 
-function Th({ children }: { children: ReactNode }) { return <th style={thStyle}>{children}</th>; }
-function Td({ children, strong }: { children: ReactNode; strong?: boolean }) { return <td style={{ ...tdStyle, fontWeight: strong ? 800 : 600 }}>{children}</td>; }
-function Badge({ children }: { children: ReactNode }) { return <span style={badgeStyle}>{children}</span>; }
+function Th({ children, compact }: { children: ReactNode; compact?: boolean }) {
+  return <th style={{ ...thStyle, width: compact ? "72px" : undefined, textAlign: compact ? "center" : "left" }}>{children}</th>;
+}
+
+function Td({ children, strong, compact }: { children: ReactNode; strong?: boolean; compact?: boolean }) {
+  return <td style={{ ...tdStyle, width: compact ? "72px" : undefined, textAlign: compact ? "center" : "left", fontWeight: strong ? 800 : 600 }}>{children}</td>;
+}
+
+function Badge({ children }: { children: ReactNode }) {
+  return <span style={badgeStyle}>{children}</span>;
+}
 
 const headerStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "24px", alignItems: "flex-start", marginBottom: "24px", flexWrap: "wrap" };
 const eyebrowStyle: CSSProperties = { margin: "0 0 8px", color: colors.red, fontWeight: 850 };
@@ -365,6 +396,8 @@ const tdStyle: CSSProperties = { padding: "14px", borderBottom: `1px solid ${col
 const rowStyle: CSSProperties = { background: colors.white };
 const smallSelectStyle: CSSProperties = { ...inputStyle, minWidth: "145px" };
 const badgeStyle: CSSProperties = { display: "inline-flex", alignItems: "center", borderRadius: radius.badge, padding: "6px 10px", background: "rgba(23, 59, 115, 0.10)", color: colors.navy, fontSize: "12px", fontWeight: 850, whiteSpace: "nowrap" };
+const checkboxLabelStyle: CSSProperties = { display: "inline-flex", alignItems: "center", justifyContent: "center", width: "34px", height: "34px", borderRadius: radius.badge, background: colors.inputBackground, border: `1px solid ${colors.border}`, cursor: "pointer" };
+const checkboxInputStyle: CSSProperties = { width: "17px", height: "17px", accentColor: colors.red, cursor: "pointer" };
 const overlayStyle: CSSProperties = { position: "fixed", inset: 0, zIndex: 50, background: "rgba(5, 15, 35, 0.32)", display: "flex", justifyContent: "flex-end", padding: "28px" };
 const dialogStyle: CSSProperties = { width: "min(620px, 100%)", height: "100%", overflowY: "auto", border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.card, padding: "22px", boxShadow: shadow.soft };
 const detailsHeaderStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "flex-start", marginBottom: "14px" };

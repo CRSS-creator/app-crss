@@ -8,6 +8,9 @@ export type RecurringTask = {
   opis: string | null;
   forma_prawna: string | null;
   forma_opodatkowania: string | null;
+  formy_prawne: string[] | null;
+  formy_opodatkowania: string[] | null;
+  wymaga_czynnego_vat: boolean | null;
   dzien_miesiaca: number;
   osoba_id: string | null;
   priorytet: TaskPriority;
@@ -27,10 +30,20 @@ export type RecurringTaskPayload = {
   opis?: string | null;
   forma_prawna?: string | null;
   forma_opodatkowania?: string | null;
+  formy_prawne?: string[] | null;
+  formy_opodatkowania?: string[] | null;
+  wymaga_czynnego_vat?: boolean | null;
   dzien_miesiaca: number;
   osoba_id?: string | null;
   priorytet: TaskPriority;
   aktywne?: boolean;
+};
+
+export type RecurringTaskClientContext = {
+  id?: string | null;
+  forma_prawna?: string | null;
+  forma_opodatkowania?: string | null;
+  czynny_vat?: boolean | null;
 };
 
 const RECURRING_TASK_SELECT = `
@@ -91,6 +104,30 @@ export async function deleteRecurringTask(taskId: string) {
     .from("zadania_cykliczne")
     .delete()
     .eq("id", taskId);
+}
+
+export function recurringTaskMatchesClient(task: RecurringTask, client: RecurringTaskClientContext | null | undefined) {
+  if (task.klient_id) return task.klient_id === client?.id;
+
+  const legalForms = task.formy_prawne?.length ? task.formy_prawne : task.forma_prawna ? [task.forma_prawna] : [];
+  const taxationForms = task.formy_opodatkowania?.length ? task.formy_opodatkowania : task.forma_opodatkowania ? [task.forma_opodatkowania] : [];
+  const legalMatch = legalForms.length === 0 || legalForms.includes(client?.forma_prawna || "");
+  const taxMatch = taxationForms.length === 0 || taxationForms.includes(client?.forma_opodatkowania || "");
+  const vatMatch = task.wymaga_czynnego_vat === null || task.wymaga_czynnego_vat === undefined || task.wymaga_czynnego_vat === Boolean(client?.czynny_vat);
+
+  return legalMatch && taxMatch && vatMatch;
+}
+
+export function recurringScopeLabel(task: RecurringTask) {
+  if (task.klient_id) return "Zadanie klienta";
+  const legalForms = task.formy_prawne?.length ? task.formy_prawne : task.forma_prawna ? [task.forma_prawna] : [];
+  const taxationForms = task.formy_opodatkowania?.length ? task.formy_opodatkowania : task.forma_opodatkowania ? [task.forma_opodatkowania] : [];
+  const vatLabel = task.wymaga_czynnego_vat === true ? "czynny VAT" : task.wymaga_czynnego_vat === false ? "bez VAT" : null;
+  return [
+    legalForms.length ? legalForms.join(", ") : "każda forma",
+    taxationForms.length ? taxationForms.join(", ") : "każde opodatkowanie",
+    vatLabel,
+  ].filter(Boolean).join(" · ");
 }
 
 export async function fetchActiveRecurringTaskTimers(userId: string) {

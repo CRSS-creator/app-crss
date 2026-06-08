@@ -7,7 +7,6 @@ import AccessGuard from "@/components/AccessGuard";
 import { colors, radius, shadow } from "@/app/design";
 import { supabase } from "@/lib/supabaseClient";
 import {
-  createCrmTasks,
   deleteCrmLead,
   fetchCrmLeads,
   fetchCrmTasks,
@@ -95,13 +94,6 @@ const PIPELINE_LABELS: Record<string, string> = {
   propozycja_wspolpracy_wyslana: "Propozycja współpracy wysłana",
   decyzja: "Decyzja",
 };
-const DEFAULT_TASKS_BY_STAGE: Record<string, string[]> = {
-  nowy_lead: ["Uzupełnij źródło leada", "Skontaktuj się z leadem do 30 minut"],
-  kontakt_proba_kontaktu: ["Zadzwoń lub odpisz i zaproponuj termin rozmowy online", "Jeśli brak odpowiedzi, ustaw kolejne zadanie follow-up", "Zapisz wynik kontaktu"],
-  rozmowa_online: ["Zapisz powód kontaktu", "Zbierz minimum danych do wyceny", "Zapisz, czy przygotowujemy propozycję"],
-  propozycja_wspolpracy_wyslana: ["Zapisz datę wysłania propozycji", "Ustaw follow-up D+2", "Ustaw follow-up D+5"],
-  decyzja: ["Zamknij szansę jako wygrana albo przegrana", "Jeśli przegrana, zapisz powód"],
-};
 const STATUSES = [
   { value: "otwarta", label: "Otwarta" },
   { value: "wygrana", label: "Wygrana" },
@@ -143,6 +135,12 @@ function CrmContent() {
     setLoading(false);
   }
 
+  async function refreshCrmTasks() {
+    const tasksResult = await fetchCrmTasks();
+    if (tasksResult.error) console.error("Błąd pobierania zadań CRM:", tasksResult.error);
+    else setTasks((tasksResult.data || []) as CrmTask[]);
+  }
+
   async function moveLeadToStage(leadId: string, newStage: string) {
     const previousLeads = leads;
     setLeads((current) => current.map((lead) => lead.id === leadId ? { ...lead, etap: newStage } : lead));
@@ -153,19 +151,7 @@ function CrmContent() {
       alert("Nie udało się zmienić etapu.");
       return;
     }
-    await createDefaultTasksForStage(leadId, newStage);
-  }
-
-  async function createDefaultTasksForStage(leadId: string, stage: string) {
-    const defaults = DEFAULT_TASKS_BY_STAGE[stage] || [];
-    const existing = tasks.filter((task) => task.crm_id === leadId && task.etap === stage);
-    const toCreate = defaults
-      .filter((title) => !existing.some((task) => task.tytul === title))
-      .map((title) => ({ crm_id: leadId, etap: stage, tytul: title, status: "do_zrobienia" as const }));
-    if (toCreate.length === 0) return;
-    const { data, error } = await createCrmTasks(toCreate);
-    if (error) console.error("Błąd tworzenia zadań CRM:", error);
-    else setTasks((current) => [...current, ...((data || []) as CrmTask[])]);
+    await refreshCrmTasks();
   }
 
   async function toggleTaskStatus(taskId: string) {
@@ -300,8 +286,8 @@ function CrmContent() {
         )}
       </section>
 
-      {creatingLead && <LeadDrawer mode="create" tasks={[]} onClose={() => setCreatingLead(false)} onCreated={(lead) => { setLeads((current) => [lead, ...current]); setCreatingLead(false); }} />}
-      {selectedLead && <LeadDrawer mode="edit" lead={selectedLead} tasks={tasks.filter((task) => task.crm_id === selectedLead.id)} onClose={() => setSelectedLead(null)} onSaved={(lead) => { setLeads((current) => current.map((item) => item.id === lead.id ? lead : item)); setSelectedLead(lead); }} onDeleted={removeLead} onToggleTaskStatus={toggleTaskStatus} />}
+      {creatingLead && <LeadDrawer mode="create" tasks={[]} onClose={() => setCreatingLead(false)} onCreated={(lead) => { setLeads((current) => [lead, ...current]); setCreatingLead(false); void loadInitialData(); }} />}
+      {selectedLead && <LeadDrawer mode="edit" lead={selectedLead} tasks={tasks.filter((task) => task.crm_id === selectedLead.id)} onClose={() => setSelectedLead(null)} onSaved={(lead) => { setLeads((current) => current.map((item) => item.id === lead.id ? lead : item)); setSelectedLead(lead); void loadInitialData(); }} onDeleted={removeLead} onToggleTaskStatus={toggleTaskStatus} />}
     </>
   );
 }

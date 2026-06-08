@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
 import { colors, radius, shadow } from "@/app/design";
@@ -13,6 +13,8 @@ const categories = [
   "Najlepsze w swojej klasie",
   "Inne",
 ] as const;
+
+const STORAGE_KEY = "crss-cso-content-plan";
 
 type TopicStatus = "pomysl" | "w_planie" | "opublikowane";
 type TopicCategory = typeof categories[number];
@@ -28,6 +30,12 @@ type ContentTopic = {
 type DraftTopic = {
   category: TopicCategory;
   title: string;
+};
+
+type StoredContentPlan = {
+  topics?: ContentTopic[];
+  facebookTopics?: Record<string, boolean>;
+  blogTopics?: Record<string, boolean>;
 };
 
 type RawTopic = {
@@ -191,6 +199,24 @@ function createEmptyDraft(): DraftTopic {
   };
 }
 
+function readSavedPlan(): StoredContentPlan | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const savedPlan = window.localStorage.getItem(STORAGE_KEY);
+    return savedPlan ? JSON.parse(savedPlan) as StoredContentPlan : null;
+  } catch {
+    return null;
+  }
+}
+
+function mergeSavedTopics(initialTopics: ContentTopic[], savedTopics: ContentTopic[]) {
+  const initialById = new Map(initialTopics.map((topic) => [topic.id, topic]));
+  const savedById = new Map(savedTopics.map((topic) => [topic.id, topic]));
+  const mergedInitialTopics = initialTopics.map((topic) => ({ ...topic, ...savedById.get(topic.id) }));
+  const customTopics = savedTopics.filter((topic) => !initialById.has(topic.id));
+  return [...customTopics, ...mergedInitialTopics];
+}
+
 export default function CsoPage() {
   return (
     <AppLayout activePage="cso">
@@ -208,11 +234,33 @@ function CsoContent() {
   const [blogTopics, setBlogTopics] = useState<Record<string, boolean>>({});
   const [draft, setDraft] = useState<DraftTopic>(() => createEmptyDraft());
   const [noteTopicId, setNoteTopicId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isReady, setIsReady] = useState(false);
+
+  useEffect(() => {
+    const savedPlan = readSavedPlan();
+    if (savedPlan) {
+      const initialTopics = createInitialTopics();
+      setTopics(mergeSavedTopics(initialTopics, savedPlan.topics || []));
+      setFacebookTopics(savedPlan.facebookTopics || {});
+      setBlogTopics(savedPlan.blogTopics || {});
+    }
+    setIsReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isReady) return;
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ topics, facebookTopics, blogTopics }));
+  }, [blogTopics, facebookTopics, isReady, topics]);
 
   const filteredTopics = useMemo(() => {
-    if (categoryFilter === "Wszystkie") return topics;
-    return topics.filter((topic) => topic.category === categoryFilter);
-  }, [categoryFilter, topics]);
+    const query = searchQuery.trim().toLowerCase();
+    return topics.filter((topic) => {
+      const matchesCategory = categoryFilter === "Wszystkie" || topic.category === categoryFilter;
+      const matchesSearch = !query || [topic.category, topic.title, topic.note].join(" ").toLowerCase().includes(query);
+      return matchesCategory && matchesSearch;
+    });
+  }, [categoryFilter, searchQuery, topics]);
 
   const noteTopic = noteTopicId ? topics.find((topic) => topic.id === noteTopicId) : null;
 
@@ -273,6 +321,13 @@ function CsoContent() {
           </select>
         </div>
 
+        <input
+          style={searchInputStyle}
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+          placeholder="Szukaj po temacie, kategorii lub notatce"
+        />
+
         <div style={addPanelStyle}>
           <select style={inputStyle} value={draft.category} onChange={(event) => setDraft((current) => ({ ...current, category: event.target.value as TopicCategory }))}>
             {categories.map((category) => <option key={category}>{category}</option>)}
@@ -305,7 +360,7 @@ function CsoContent() {
                   </Td>
                   <Td strong>{topic.title}</Td>
                   <Td>
-                    <select style={smallSelectStyle} value={topic.status} onChange={(event) => updateTopic(topic.id, { status: event.target.value as TopicStatus })}>
+                    <select style={{ ...smallSelectStyle, ...statusStyle(topic.status) }} value={topic.status} onChange={(event) => updateTopic(topic.id, { status: event.target.value as TopicStatus })}>
                       <option value="pomysl">Pomysł</option>
                       <option value="w_planie">W planie</option>
                       <option value="opublikowane">Opublikowane</option>
@@ -374,6 +429,12 @@ function Badge({ children }: { children: ReactNode }) {
   return <span style={badgeStyle}>{children}</span>;
 }
 
+function statusStyle(status: TopicStatus): CSSProperties {
+  if (status === "w_planie") return { background: "#eef5ff", borderColor: "#bdd3f2", color: colors.navy };
+  if (status === "opublikowane") return { background: "#d8f5df", borderColor: "#a8e3b7", color: colors.success };
+  return { background: colors.white, borderColor: colors.border, color: colors.text };
+}
+
 const headerStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "24px", alignItems: "flex-start", marginBottom: "24px", flexWrap: "wrap" };
 const eyebrowStyle: CSSProperties = { margin: "0 0 8px", color: colors.red, fontWeight: 850 };
 const titleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "42px", lineHeight: 1.05 };
@@ -385,6 +446,7 @@ const panelHeaderStyle: CSSProperties = { display: "flex", justifyContent: "spac
 const sectionTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "24px" };
 const hintStyle: CSSProperties = { margin: "8px 0 0", color: colors.muted, lineHeight: 1.65 };
 const filterStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.inputBackground, color: colors.text, padding: "11px 14px", fontWeight: 750, minWidth: "210px" };
+const searchInputStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, color: colors.text, padding: "12px 14px", fontWeight: 700, minHeight: "44px", width: "100%", marginBottom: "14px" };
 const addPanelStyle: CSSProperties = { display: "grid", gridTemplateColumns: "220px minmax(260px, 1fr) auto", gap: "10px", alignItems: "center", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "14px", marginBottom: "18px" };
 const inputStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, padding: "10px 12px", fontWeight: 700, minHeight: "42px", width: "100%" };
 const primaryButtonStyle: CSSProperties = { border: "none", borderRadius: radius.button, background: colors.red, color: colors.white, padding: "11px 15px", minHeight: "42px", fontWeight: 850, cursor: "pointer", whiteSpace: "nowrap" };

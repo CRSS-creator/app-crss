@@ -80,8 +80,8 @@ const CONTRACT_STATUSES: { value: CrmContractStatus; label: string }[] = [
 
 export default function CrmContractsPage() {
   return (
-    <AppLayout activePage="crm">
-      <AccessGuard moduleName="crm">
+    <AppLayout activePage="umowy">
+      <AccessGuard moduleName="umowy">
         <CrmContractsContent />
       </AccessGuard>
     </AppLayout>
@@ -217,10 +217,28 @@ function ContractDrawer({ contract, leads, clients, onClose, onSaved }: { contra
   const signedInputRef = useRef<HTMLInputElement | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [leadSearchQuery, setLeadSearchQuery] = useState("");
   const [draft, setDraft] = useState<ContractDraft>(() => contract ? createDraft(contract) : createEmptyDraft());
 
   const selectedLead = useMemo(() => leads.find((lead) => lead.id === draft.crm_id) || null, [leads, draft.crm_id]);
   const selectedClient = useMemo(() => clients.find((client) => client.id === draft.klient_id) || null, [clients, draft.klient_id]);
+  const filteredLeads = useMemo(() => {
+    const query = leadSearchQuery.trim().toLowerCase();
+    if (!query) return leads;
+
+    return leads.filter((lead) =>
+      [lead.nazwa, lead.osoba_kontaktowa, lead.email, lead.nip]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(query)
+    );
+  }, [leads, leadSearchQuery]);
+  const visibleLeadOptions = useMemo(() => {
+    if (!draft.crm_id || filteredLeads.some((lead) => lead.id === draft.crm_id)) return filteredLeads;
+    const currentLead = leads.find((lead) => lead.id === draft.crm_id);
+    return currentLead ? [currentLead, ...filteredLeads] : filteredLeads;
+  }, [draft.crm_id, filteredLeads, leads]);
 
   function updateDraft<K extends keyof ContractDraft>(key: K, value: ContractDraft[K]) {
     setDraft((current) => ({ ...current, [key]: value }));
@@ -359,7 +377,8 @@ function ContractDrawer({ contract, leads, clients, onClose, onSaved }: { contra
 
         <div style={drawerContentStyle}>
           <FormSection title="Powiązanie">
-            <EditableSelect label="Szansa CRM" value={draft.crm_id} onChange={fillFromLead} options={[{ value: "", label: "Bez szansy" }, ...leads.map((lead) => ({ value: lead.id, label: lead.nazwa || "Bez nazwy" }))]} />
+            <EditableInput label="Szukaj szansy" value={leadSearchQuery} onChange={setLeadSearchQuery} />
+            <EditableSelect label="Szansa CRM" value={draft.crm_id} onChange={fillFromLead} options={[{ value: "", label: "Bez szansy" }, ...visibleLeadOptions.map((lead) => ({ value: lead.id, label: lead.nazwa || "Bez nazwy" }))]} />
             <EditableSelect label="Klient" value={draft.klient_id} onChange={fillFromClient} options={[{ value: "", label: "Bez klienta" }, ...clients.map((client) => ({ value: client.id, label: client.nazwa || "Bez nazwy" }))]} />
             <EditableSelect label="Typ umowy" value={draft.typ_umowy} onChange={(value) => updateDraft("typ_umowy", value as CrmContractType)} options={CONTRACT_TYPES.map((item) => ({ value: item.value, label: item.label }))} />
             <EditableSelect label="Status" value={draft.status} onChange={(value) => updateDraft("status", value as CrmContractStatus)} options={CONTRACT_STATUSES} />
@@ -494,7 +513,7 @@ function buildContractHtml(draft: ContractDraft, lead: Lead | null, client: Clie
         <div class="row"><span class="label">Reprezentant:</span> ${escapeHtml(draft.reprezentant || "........................................")}</div>
         <p>a CRSS spółka z ograniczoną odpowiedzialnością z siedzibą w Śremie, KRS: 0000989511, NIP: 785-181-40-25, reprezentowaną przez Mateusza Marcinkowskiego, Prezesa Zarządu.</p>
         <h3>Przedmiot i pierwszy okres obsługi</h3>
-        <p>Pierwszym okresem rozliczeniowym objętym Umową jest ${escapeHtml(draft.pierwszy_okres || "........................................")}.</p>
+        <p>Pierwszym okresem rozliczeniowym objętą Umową jest ${escapeHtml(draft.pierwszy_okres || "........................................")}.</p>
         <h3>Wynagrodzenie</h3>
         <p>Miesięczny abonament za obsługę księgową wynosi ${escapeHtml(draft.abonament_netto || "........................................")} zł netto.</p>
         <p>Abonament obejmuje obsługę księgową do limitu ${escapeHtml(draft.limit_dokumentow || "........................................")} ${limitLabel} miesięcznie.</p>

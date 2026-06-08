@@ -11,6 +11,7 @@ export type AppModule =
   | "onboarding"
   | "zamykanie-roku"
   | "crm"
+  | "umowy"
   | "cso"
   | "cfo"
   | "aml"
@@ -28,6 +29,7 @@ const moduleAccess: Record<AppModule, string[]> = {
   onboarding: ["owner", "manager", "admin", "accountant"],
   "zamykanie-roku": ["owner", "manager", "admin"],
   crm: ["owner"],
+  umowy: ["owner"],
   cso: ["owner"],
   cfo: ["owner"],
   aml: ["owner", "manager"],

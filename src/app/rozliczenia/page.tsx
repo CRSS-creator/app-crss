@@ -373,7 +373,12 @@ function Td({ children, strong }: { children: ReactNode; strong?: boolean }) { r
 
 function getClient(value: MonthlySettlement["klienci"]) { return Array.isArray(value) ? value[0] : value; }
 function getCaregiverName(client: ReturnType<typeof getClient>) { return client?.profiles?.[0]?.full_name || client?.profiles?.[0]?.email || "Brak opiekuna"; }
-function currentMonthInput() { return new Date().toISOString().slice(0, 7); }
+function currentMonthInput() { 
+  const today = new Date();
+  const year = today.getMonth() === 0 ? today.getFullYear() - 1 : today.getFullYear();
+  const month = today.getMonth() === 0 ? 12 : today.getMonth();
+  return `${year}-${String(month).padStart(2, "0")}`;
+}
 function formatMonth(value: string) { return new Intl.DateTimeFormat("pl-PL", { month: "long", year: "numeric" }).format(new Date(`${value}-01T12:00:00`)); }
 function priorityLabel(priority: TaskPriority) { return PRIORITY_OPTIONS.find((item) => item.value === priority)?.label || priority; }
 function getMatchingRecurringTasks(tasks: RecurringTask[], client: ReturnType<typeof getClient>) { return tasks.filter((task) => recurringTaskMatchesClient(task, client)); }

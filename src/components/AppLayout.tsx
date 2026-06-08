@@ -20,6 +20,7 @@ import {
   LockKeyhole,
   UserCog,
   BriefcaseBusiness,
+  FileText,
   Bell,
   Megaphone,
 } from "lucide-react";
@@ -55,6 +56,7 @@ const menu = [
     title: "Zarządzanie",
     items: [
       { href: "/crm", label: "CRM", icon: BriefcaseBusiness, page: "crm" },
+      { href: "/crm/umowy", label: "Umowy", icon: FileText, page: "crm" },
       { href: "/cso", label: "CSO", icon: Megaphone, page: "cso" },
       { href: "/cfo", label: "CFO", icon: Wallet, page: "cfo" },
       { href: "/aml", label: "AML", icon: ShieldCheck, page: "aml" },

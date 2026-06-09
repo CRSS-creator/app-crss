@@ -7,6 +7,7 @@ import { useCurrentUserRole } from "@/hooks/useCurrentUserRole";
 import { canAccessModule, type AppModule } from "@/lib/permissions";
 import { createDueTaskNotifications, fetchUnreadNotificationsCount } from "@/lib/notificationService";
 import UnsignedContractDeleteWidget from "@/components/UnsignedContractDeleteWidget";
+import ContractRegisterSplitWidget from "@/components/ContractRegisterSplitWidget";
 import {
   Home,
   Users,
@@ -142,6 +143,7 @@ export default function AppLayout({ children, activePage }: AppLayoutProps) {
 
       <section data-active-page={activePage} style={contentStyle}>
         {children}
+        {activePage === "umowy" && <ContractRegisterSplitWidget />}
         {activePage === "umowy" && <UnsignedContractDeleteWidget />}
       </section>
     </main>

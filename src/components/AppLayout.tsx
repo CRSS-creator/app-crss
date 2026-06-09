@@ -139,7 +139,7 @@ export default function AppLayout({ children, activePage }: AppLayoutProps) {
         </button>
       </aside>
 
-      <section style={contentStyle}>{children}</section>
+      <section data-active-page={activePage} style={contentStyle}>{children}</section>
     </main>
   );
 }

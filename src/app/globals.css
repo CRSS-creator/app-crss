@@ -24,3 +24,7 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+section[data-active-page="umowy"] > section:first-child a[href="/crm"] {
+  display: none !important;
+}

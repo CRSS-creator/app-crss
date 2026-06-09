@@ -1,0 +1,143 @@
+name: Apply unsigned contract delete UI patch
+
+on:
+  push:
+    paths:
+      - .github/workflows/apply-contract-delete-ui.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch contract UI
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const file = 'src/app/crm/umowy/page.tsx';
+          const workflow = '.github/workflows/apply-contract-delete-ui.yml';
+          let text = fs.readFileSync(file, 'utf8');
+
+          function replaceOnce(needle, replacement) {
+            if (!text.includes(needle)) {
+              throw new Error(`Patch marker not found: ${needle.slice(0, 120)}`);
+            }
+            text = text.replace(needle, replacement);
+          }
+
+          text = text.replace('import Link from "next/link";\n', '');
+          text = text.replace('  createCrmContractSignedUrl,\n', '  createCrmContractSignedUrl,\n  deleteUnsignedCrmContract,\n');
+          text = text.replace('          <Link href="/crm" style={secondaryButtonStyle}>Wróć do CRM</Link>\n', '');
+
+          replaceOnce(`  function handleSaved(contract: CrmContract) {
+    setContracts((current) => {
+      const exists = current.some((item) => item.id === contract.id);
+      return exists ? current.map((item) => item.id === contract.id ? contract : item) : [contract, ...current];
+    });
+    setCreatingContract(false);
+    setSelectedContract(contract);
+    void loadInitialData();
+  }
+`, `  function handleSaved(contract: CrmContract) {
+    setContracts((current) => {
+      const exists = current.some((item) => item.id === contract.id);
+      return exists ? current.map((item) => item.id === contract.id ? contract : item) : [contract, ...current];
+    });
+    setCreatingContract(false);
+    setSelectedContract(contract);
+    void loadInitialData();
+  }
+
+  function handleDeleted(contractId: string) {
+    setContracts((current) => current.filter((item) => item.id !== contractId));
+    setCreatingContract(false);
+    setSelectedContract(null);
+    void loadInitialData();
+  }
+`);
+
+          replaceOnce(`          onSaved={handleSaved}
+        />`, `          onSaved={handleSaved}
+          onDeleted={handleDeleted}
+        />`);
+
+          replaceOnce(`function ContractDrawer({ contract, leads, clients, onClose, onSaved }: { contract: CrmContract | null; leads: Lead[]; clients: Client[]; onClose: () => void; onSaved: (contract: CrmContract) => void }) {`, `function ContractDrawer({ contract, leads, clients, onClose, onSaved, onDeleted }: { contract: CrmContract | null; leads: Lead[]; clients: Client[]; onClose: () => void; onSaved: (contract: CrmContract) => void; onDeleted: (contractId: string) => void }) {`);
+
+          replaceOnce(`  const [generating, setGenerating] = useState(false);
+
+  const selectedLead`, `  const [generating, setGenerating] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const selectedLead`);
+
+          replaceOnce(`  const wonLeads = useMemo(() => leads.filter((lead) => lead.status === "wygrana"), [leads]);
+
+  function updateDraft`, `  const wonLeads = useMemo(() => leads.filter((lead) => lead.status === "wygrana"), [leads]);
+  const canDeleteContract = Boolean(contract && contract.status !== "podpisana" && !contract.podpisany_pdf_path);
+
+  function updateDraft`);
+
+          replaceOnce(`  async function openStoredPdf(path: string | null) {
+    if (!path) return;
+    const { data, error } = await createCrmContractSignedUrl(path);
+    if (error || !data?.signedUrl) {
+      alert("Nie udało się otworzyć PDF.");
+      return;
+    }
+    window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+  }
+
+  return (`, `  async function openStoredPdf(path: string | null) {
+    if (!path) return;
+    const { data, error } = await createCrmContractSignedUrl(path);
+    if (error || !data?.signedUrl) {
+      alert("Nie udało się otworzyć PDF.");
+      return;
+    }
+    window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+  }
+
+  async function deleteContract() {
+    if (!contract || !canDeleteContract) return;
+    const confirmed = window.confirm("Usunąć tę umowę i wygenerowany PDF? Tej operacji nie można cofnąć.");
+    if (!confirmed) return;
+
+    setDeleting(true);
+    const result = await deleteUnsignedCrmContract(contract);
+    setDeleting(false);
+
+    if (result.error) {
+      console.error("Błąd usuwania umowy:", result.error);
+      alert("Nie udało się usunąć umowy.");
+      return;
+    }
+
+    onDeleted(contract.id);
+  }
+
+  return (`);
+
+          replaceOnce(`          <button style={secondaryButtonStyle} onClick={generateContractPdf} disabled={saving || generating}>{generating ? "Generowanie..." : "Generuj PDF"}</button>
+          <button style={primarySmallButtonStyle} onClick={() => saveContract()} disabled={saving || generating}>{saving ? "Zapisywanie..." : "Zapisz"}</button>`, `          <button style={secondaryButtonStyle} onClick={generateContractPdf} disabled={saving || generating}>{generating ? "Generowanie..." : "Generuj PDF"}</button>
+          {canDeleteContract && <button style={dangerButtonStyle} onClick={deleteContract} disabled={deleting}>{deleting ? "Usuwanie..." : "Usuń umowę"}</button>}
+          <button style={primarySmallButtonStyle} onClick={() => saveContract()} disabled={saving || generating}>{saving ? "Zapisywanie..." : "Zapisz"}</button>`);
+
+          replaceOnce(`const secondaryButtonStyle: React.CSSProperties = { border: \`1px solid ${colors.border}\`, borderRadius: radius.button, padding: "10px 14px", minHeight: "42px", background: colors.white, color: colors.navy, fontWeight: 800, cursor: "pointer", textDecoration: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", textAlign: "center" };
+`, `const secondaryButtonStyle: React.CSSProperties = { border: \`1px solid ${colors.border}\`, borderRadius: radius.button, padding: "10px 14px", minHeight: "42px", background: colors.white, color: colors.navy, fontWeight: 800, cursor: "pointer", textDecoration: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", textAlign: "center" };
+const dangerButtonStyle: React.CSSProperties = { ...secondaryButtonStyle, background: "#fff1f2", borderColor: "#fecdd3", color: "#be123c" };
+`);
+
+          fs.writeFileSync(file, text);
+          fs.unlinkSync(workflow);
+          NODE
+      - name: Commit patch
+        run: |
+          git config user.name "CRSS automation"
+          git config user.email "actions@github.com"
+          git add src/app/crm/umowy/page.tsx .github/workflows/apply-contract-delete-ui.yml
+          git commit -m "Add unsigned contract delete button"
+          git push

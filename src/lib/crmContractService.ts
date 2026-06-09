@@ -143,7 +143,21 @@ export async function createCrmContractSignedUrl(path: string) {
 
 export async function deleteUnsignedCrmContract(contract: CrmContract) {
   if (contract.status === "podpisana" || contract.podpisany_pdf_path) {
-    return { error: new Error("Nie można usunąć podpisanej umowy.") };
+    return { data: null, error: new Error("Nie można usunąć podpisanej umowy.") };
+  }
+
+  const deleteResult = await supabase
+    .from("crm_umowy")
+    .delete()
+    .eq("id", contract.id)
+    .neq("status", "podpisana")
+    .is("podpisany_pdf_path", null)
+    .select("id")
+    .maybeSingle();
+
+  if (deleteResult.error) return { data: null, error: deleteResult.error };
+  if (!deleteResult.data) {
+    return { data: null, error: new Error("Umowa nie została usunięta. Sprawdź status umowy lub uprawnienia w Supabase.") };
   }
 
   const paths = [
@@ -156,15 +170,12 @@ export async function deleteUnsignedCrmContract(contract: CrmContract) {
       .from(CRM_CONTRACTS_BUCKET)
       .remove(paths);
 
-    if (storageResult.error) return { error: storageResult.error };
+    if (storageResult.error) {
+      console.warn("Umowa została usunięta z rejestru, ale nie udało się usunąć pliku PDF:", storageResult.error);
+    }
   }
 
-  return supabase
-    .from("crm_umowy")
-    .delete()
-    .eq("id", contract.id)
-    .neq("status", "podpisana")
-    .is("podpisany_pdf_path", null);
+  return { data: deleteResult.data, error: null };
 }
 
 function sanitizeFileName(value: string) {

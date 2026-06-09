@@ -52,12 +52,15 @@ function splitContractRegister() {
   if (typeIndex < 0) return;
 
   const sourceWrapper = table.closest<HTMLElement>("div");
-  if (!sourceWrapper || sourceWrapper.dataset.contractRegisterSource === "true") return;
+  if (!sourceWrapper) return;
 
   const rows = Array.from(table.querySelectorAll<HTMLTableRowElement>("tbody tr"));
   if (!rows.length) return;
 
-  card.querySelector<HTMLElement>('[data-contract-register-split="true"]')?.remove();
+  const signature = rows.map((row) => row.textContent?.trim()).join("|");
+  const existingSplit = card.querySelector<HTMLElement>('[data-contract-register-split="true"]');
+  if (sourceWrapper.dataset.contractRegisterSignature === signature && existingSplit) return;
+  existingSplit?.remove();
 
   const khRows: RegisterRow[] = [];
   const kuRows: RegisterRow[] = [];
@@ -86,6 +89,7 @@ function splitContractRegister() {
   splitRoot.appendChild(buildRegisterSection("Rejestr KU", "Uproszczona księgowość", kuRows));
 
   sourceWrapper.dataset.contractRegisterSource = "true";
+  sourceWrapper.dataset.contractRegisterSignature = signature;
   sourceWrapper.style.display = "none";
   sourceWrapper.insertAdjacentElement("afterend", splitRoot);
 }

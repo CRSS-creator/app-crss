@@ -26,6 +26,7 @@ type Lead = {
   email: string | null;
   nip: string | null;
   forma_prawna: string | null;
+  status: string | null;
   szacowany_mrr: number | null;
   liczba_dokumentow: number | null;
   czy_kadry: boolean | null;
@@ -217,28 +218,11 @@ function ContractDrawer({ contract, leads, clients, onClose, onSaved }: { contra
   const signedInputRef = useRef<HTMLInputElement | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [leadSearchQuery, setLeadSearchQuery] = useState("");
   const [draft, setDraft] = useState<ContractDraft>(() => contract ? createDraft(contract) : createEmptyDraft());
 
   const selectedLead = useMemo(() => leads.find((lead) => lead.id === draft.crm_id) || null, [leads, draft.crm_id]);
   const selectedClient = useMemo(() => clients.find((client) => client.id === draft.klient_id) || null, [clients, draft.klient_id]);
-  const filteredLeads = useMemo(() => {
-    const query = leadSearchQuery.trim().toLowerCase();
-    if (!query) return leads;
-
-    return leads.filter((lead) =>
-      [lead.nazwa, lead.osoba_kontaktowa, lead.email, lead.nip]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase()
-        .includes(query)
-    );
-  }, [leads, leadSearchQuery]);
-  const visibleLeadOptions = useMemo(() => {
-    if (!draft.crm_id || filteredLeads.some((lead) => lead.id === draft.crm_id)) return filteredLeads;
-    const currentLead = leads.find((lead) => lead.id === draft.crm_id);
-    return currentLead ? [currentLead, ...filteredLeads] : filteredLeads;
-  }, [draft.crm_id, filteredLeads, leads]);
+  const wonLeads = useMemo(() => leads.filter((lead) => lead.status === "wygrana"), [leads]);
 
   function updateDraft<K extends keyof ContractDraft>(key: K, value: ContractDraft[K]) {
     setDraft((current) => ({ ...current, [key]: value }));
@@ -377,8 +361,7 @@ function ContractDrawer({ contract, leads, clients, onClose, onSaved }: { contra
 
         <div style={drawerContentStyle}>
           <FormSection title="Powiązanie">
-            <EditableInput label="Szukaj szansy" value={leadSearchQuery} onChange={setLeadSearchQuery} />
-            <EditableSelect label="Szansa CRM" value={draft.crm_id} onChange={fillFromLead} options={[{ value: "", label: "Bez szansy" }, ...visibleLeadOptions.map((lead) => ({ value: lead.id, label: lead.nazwa || "Bez nazwy" }))]} />
+            <SearchableLeadSelect label="Szansa CRM" value={draft.crm_id} leads={wonLeads} onChange={fillFromLead} />
             <EditableSelect label="Klient" value={draft.klient_id} onChange={fillFromClient} options={[{ value: "", label: "Bez klienta" }, ...clients.map((client) => ({ value: client.id, label: client.nazwa || "Bez nazwy" }))]} />
             <EditableSelect label="Typ umowy" value={draft.typ_umowy} onChange={(value) => updateDraft("typ_umowy", value as CrmContractType)} options={CONTRACT_TYPES.map((item) => ({ value: item.value, label: item.label }))} />
             <EditableSelect label="Status" value={draft.status} onChange={(value) => updateDraft("status", value as CrmContractStatus)} options={CONTRACT_STATUSES} />
@@ -513,7 +496,7 @@ function buildContractHtml(draft: ContractDraft, lead: Lead | null, client: Clie
         <div class="row"><span class="label">Reprezentant:</span> ${escapeHtml(draft.reprezentant || "........................................")}</div>
         <p>a CRSS spółka z ograniczoną odpowiedzialnością z siedzibą w Śremie, KRS: 0000989511, NIP: 785-181-40-25, reprezentowaną przez Mateusza Marcinkowskiego, Prezesa Zarządu.</p>
         <h3>Przedmiot i pierwszy okres obsługi</h3>
-        <p>Pierwszym okresem rozliczeniowym objętą Umową jest ${escapeHtml(draft.pierwszy_okres || "........................................")}.</p>
+        <p>Pierwszym okresem rozliczeniowym objętym Umową jest ${escapeHtml(draft.pierwszy_okres || "........................................")}.</p>
         <h3>Wynagrodzenie</h3>
         <p>Miesięczny abonament za obsługę księgową wynosi ${escapeHtml(draft.abonament_netto || "........................................")} zł netto.</p>
         <p>Abonament obejmuje obsługę księgową do limitu ${escapeHtml(draft.limit_dokumentow || "........................................")} ${limitLabel} miesięcznie.</p>
@@ -571,6 +554,77 @@ function SummaryCard({ label, value }: { label: string; value: string | number }
 function FormSection({ title, children }: { title: string; children: React.ReactNode }) { return <section style={drawerSectionStyle}><h3>{title}</h3>{children}</section>; }
 function EditableInput({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (value: string) => void; type?: "text" | "number" | "email" | "date" }) { return <label style={editableRowStyle}><span>{label}</span><input type={type} value={value} onChange={(event) => onChange(event.target.value)} style={inputStyle} /></label>; }
 function EditableSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: { value: string; label: string }[] }) { return <label style={editableRowStyle}><span>{label}</span><select value={value} onChange={(event) => onChange(event.target.value)} style={inputStyle}>{options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>; }
+function SearchableLeadSelect({ label, value, leads, onChange }: { label: string; value: string; leads: Lead[]; onChange: (value: string) => void }) {
+  const selectedLead = leads.find((lead) => lead.id === value) || null;
+  const [query, setQuery] = useState(selectedLead?.nazwa || "");
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    setQuery(selectedLead?.nazwa || "");
+  }, [selectedLead?.id, selectedLead?.nazwa]);
+
+  const visibleLeads = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    const filtered = normalizedQuery
+      ? leads.filter((lead) =>
+          [lead.nazwa, lead.osoba_kontaktowa, lead.email, lead.nip]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase()
+            .includes(normalizedQuery)
+        )
+      : leads;
+
+    return filtered.slice(0, 8);
+  }, [leads, query]);
+
+  function chooseLead(lead: Lead) {
+    setQuery(lead.nazwa || "Bez nazwy");
+    setOpen(false);
+    onChange(lead.id);
+  }
+
+  function clearLead() {
+    setQuery("");
+    setOpen(false);
+    onChange("");
+  }
+
+  return (
+    <div style={editableRowStyle}>
+      <span>{label}</span>
+      <div style={comboWrapStyle}>
+        <input
+          value={query}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            setOpen(true);
+            if (value) onChange("");
+          }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setTimeout(() => setOpen(false), 120)}
+          placeholder="Wpisz nazwę wygranej szansy"
+          style={{ ...inputStyle, paddingRight: query ? "88px" : inputStyle.padding }}
+        />
+        {query && <button type="button" style={clearComboButtonStyle} onMouseDown={(event) => event.preventDefault()} onClick={clearLead}>Wyczyść</button>}
+        {open && (
+          <div style={comboListStyle}>
+            {visibleLeads.length === 0 ? (
+              <div style={comboEmptyStyle}>Brak wygranych szans pasujących do wpisanego tekstu.</div>
+            ) : (
+              visibleLeads.map((lead) => (
+                <button key={lead.id} type="button" style={comboOptionStyle} onMouseDown={(event) => event.preventDefault()} onClick={() => chooseLead(lead)}>
+                  <strong>{lead.nazwa || "Bez nazwy"}</strong>
+                  <span>{[lead.osoba_kontaktowa, lead.email, lead.nip].filter(Boolean).join(" · ") || "Wygrana szansa"}</span>
+                </button>
+              ))
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 function EditableCheckbox({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) { return <label style={editableRowStyle}><span>{label}</span><input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} /></label>; }
 function EditableTextarea({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) { return <label style={textareaRowStyle}><span>{label}</span><textarea value={value} onChange={(event) => onChange(event.target.value)} style={textareaStyle} rows={4} /></label>; }
 function FileRow({ label, name, onOpen }: { label: string; name: string | null; onOpen: () => void }) { return <div style={fileRowStyle}><div><strong>{label}</strong><span>{name || "PDF"}</span></div><button style={secondaryButtonStyle} onClick={onOpen}>Otwórz</button></div>; }
@@ -610,6 +664,11 @@ const editableRowStyle: React.CSSProperties = { display: "grid", gridTemplateCol
 const textareaRowStyle: React.CSSProperties = { display: "flex", flexDirection: "column", gap: "8px", color: colors.muted, fontWeight: 700 };
 const inputStyle: React.CSSProperties = { width: "100%", border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "10px 12px", background: colors.inputBackground, color: colors.text, fontWeight: 650, outline: "none" };
 const textareaStyle: React.CSSProperties = { ...inputStyle, resize: "vertical", minHeight: "96px", lineHeight: 1.6 };
+const comboWrapStyle: React.CSSProperties = { position: "relative" };
+const clearComboButtonStyle: React.CSSProperties = { position: "absolute", right: "8px", top: "50%", transform: "translateY(-50%)", border: "none", borderRadius: radius.badge, padding: "6px 10px", background: "#eef2f7", color: colors.navy, fontWeight: 800, cursor: "pointer" };
+const comboListStyle: React.CSSProperties = { position: "absolute", zIndex: 80, top: "calc(100% + 6px)", left: 0, right: 0, maxHeight: "260px", overflowY: "auto", background: colors.white, border: `1px solid ${colors.border}`, borderRadius: radius.input, boxShadow: shadow.soft, padding: "6px" };
+const comboOptionStyle: React.CSSProperties = { width: "100%", border: "none", borderRadius: radius.input, padding: "10px 12px", background: "transparent", color: colors.text, cursor: "pointer", textAlign: "left", display: "flex", flexDirection: "column", gap: "4px", fontWeight: 700 };
+const comboEmptyStyle: React.CSSProperties = { padding: "12px", color: colors.muted, fontWeight: 700, lineHeight: 1.5 };
 const fileActionsPanelStyle: React.CSSProperties = { display: "flex", gap: "10px", flexWrap: "wrap", marginBottom: "12px" };
 const fileRowStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "12px", display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", marginTop: "10px" };
 const hintStyle: React.CSSProperties = { color: colors.muted, fontSize: "13px", lineHeight: 1.6 };

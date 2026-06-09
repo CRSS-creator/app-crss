@@ -33,7 +33,7 @@ function splitContractRegister() {
   const title = Array.from(page.querySelectorAll<HTMLHeadingElement>("h2"))
     .find((heading) => heading.textContent?.trim() === "Rejestr umów");
   const card = title?.closest<HTMLElement>("section");
-  if (!card || card.dataset.contractRegisterSplit === "true") return;
+  if (!card) return;
 
   const table = card.querySelector<HTMLTableElement>("table");
   if (!table) return;
@@ -51,13 +51,13 @@ function splitContractRegister() {
   const khRows = rows.filter((row) => row.children[typeIndex]?.textContent?.trim() === "KH");
   const kuRows = rows.filter((row) => row.children[typeIndex]?.textContent?.trim() === "KU");
   const splitRoot = document.createElement("div");
+  splitRoot.dataset.contractRegisterSplit = "true";
   splitRoot.style.display = "grid";
   splitRoot.style.gap = "18px";
   splitRoot.appendChild(buildRegisterSection("Rejestr KH", "Pełna księgowość", khRows, typeIndex));
   splitRoot.appendChild(buildRegisterSection("Rejestr KU", "Uproszczona księgowość", kuRows, typeIndex));
 
   wrapper.replaceWith(splitRoot);
-  card.dataset.contractRegisterSplit = "true";
 }
 
 function buildRegisterSection(title: string, subtitle: string, rows: HTMLTableRowElement[], typeIndex: number) {

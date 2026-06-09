@@ -2,8 +2,19 @@
 
 import { useEffect } from "react";
 
-const LONG_FIELDS = ["Powód kontaktu", "Powód zmiany biura", "Notatki"];
-const RIGHT_FIELDS = ["Data telefonu", "Data spotkania online", "Data wysłania propozycji", "Data follow-up", "Powód przegranej"];
+const LARGE_FIELD_ROWS: Record<string, string> = {
+  "Powód kontaktu": "2 / span 3",
+  "Powód zmiany biura": "5 / span 3",
+  "Notatki": "8 / span 4",
+};
+
+const RIGHT_FIELD_ROWS: Record<string, string> = {
+  "Data telefonu": "2",
+  "Data spotkania online": "3",
+  "Data wysłania propozycji": "4",
+  "Data follow-up": "5",
+  "Powód przegranej": "6 / span 3",
+};
 
 export default function CrmLeadDrawerLayoutWidget() {
   useEffect(() => {
@@ -41,47 +52,38 @@ function enhanceDrawerLayout() {
 
   const section = Array.from(drawer.querySelectorAll<HTMLElement>("section"))
     .find((candidate) => candidate.querySelector("h3")?.textContent?.trim() === "Terminy i notatki");
-  if (!section || section.dataset.crmLeadNotesEnhanced === "true") return;
+  if (!section) return;
 
-  const labels = Array.from(section.querySelectorAll<HTMLLabelElement>("label"));
-  const leftColumn = document.createElement("div");
-  const rightColumn = document.createElement("div");
-  leftColumn.style.display = "flex";
-  leftColumn.style.flexDirection = "column";
-  leftColumn.style.gap = "14px";
-  rightColumn.style.display = "flex";
-  rightColumn.style.flexDirection = "column";
-  rightColumn.style.gap = "10px";
+  section.style.display = "grid";
+  section.style.gridTemplateColumns = "minmax(0, 1.25fr) minmax(360px, 0.75fr)";
+  section.style.gridAutoRows = "minmax(42px, auto)";
+  section.style.gap = "12px 22px";
+  section.style.alignItems = "start";
 
-  labels.forEach((label) => {
+  const heading = section.querySelector<HTMLElement>("h3");
+  if (heading) {
+    heading.style.gridColumn = "1 / -1";
+    heading.style.marginBottom = "2px";
+  }
+
+  Array.from(section.querySelectorAll<HTMLLabelElement>("label")).forEach((label) => {
     const labelText = label.querySelector("span")?.textContent?.trim() || "";
-    if (LONG_FIELDS.includes(labelText)) {
-      prepareLargeTextField(label);
-      leftColumn.appendChild(label);
+    label.style.minWidth = "0";
+
+    if (LARGE_FIELD_ROWS[labelText]) {
+      prepareLargeTextField(label, LARGE_FIELD_ROWS[labelText]);
       return;
     }
 
-    if (RIGHT_FIELDS.includes(labelText)) {
-      if (labelText === "Powód przegranej") prepareMediumTextField(label);
-      rightColumn.appendChild(label);
-      return;
+    if (RIGHT_FIELD_ROWS[labelText]) {
+      prepareRightField(label, RIGHT_FIELD_ROWS[labelText], labelText === "Powód przegranej");
     }
-
-    rightColumn.appendChild(label);
   });
-
-  const grid = document.createElement("div");
-  grid.style.display = "grid";
-  grid.style.gridTemplateColumns = "minmax(0, 1.25fr) minmax(360px, 0.75fr)";
-  grid.style.gap = "22px";
-  grid.style.alignItems = "start";
-  grid.append(leftColumn, rightColumn);
-
-  section.appendChild(grid);
-  section.dataset.crmLeadNotesEnhanced = "true";
 }
 
-function prepareLargeTextField(label: HTMLLabelElement) {
+function prepareLargeTextField(label: HTMLLabelElement, gridRow: string) {
+  label.style.gridColumn = "1";
+  label.style.gridRow = gridRow;
   label.style.display = "flex";
   label.style.flexDirection = "column";
   label.style.gap = "8px";
@@ -92,12 +94,18 @@ function prepareLargeTextField(label: HTMLLabelElement) {
 
   const textarea = label.querySelector<HTMLTextAreaElement>("textarea");
   if (!textarea) return;
-  textarea.style.minHeight = "210px";
+  textarea.style.minHeight = "190px";
   textarea.style.width = "100%";
   textarea.style.lineHeight = "1.65";
 }
 
-function prepareMediumTextField(label: HTMLLabelElement) {
+function prepareRightField(label: HTMLLabelElement, gridRow: string, isTextarea = false) {
+  label.style.gridColumn = "2";
+  label.style.gridRow = gridRow;
+  label.style.minWidth = "0";
+
+  if (!isTextarea) return;
+
   label.style.display = "flex";
   label.style.flexDirection = "column";
   label.style.gap = "8px";

@@ -242,7 +242,9 @@ export default function UnsignedContractDeleteWidget() {
 }
 
 function readContractDraftFromDrawer(): ContractDraftFromDrawer | null {
-  const drawer = document.querySelector<HTMLElement>("aside");
+  const drawer = Array.from(document.querySelectorAll<HTMLElement>("aside"))
+    .find((aside) => Array.from(aside.querySelectorAll("span"))
+      .some((span) => span.textContent?.trim() === "Numer umowy"));
   if (!drawer) return null;
 
   const read = (label: string) => {
@@ -252,8 +254,8 @@ function readContractDraftFromDrawer(): ContractDraftFromDrawer | null {
     return field?.value?.trim() || "";
   };
 
-  const typeValue = read("Typ umowy");
-  const typ_umowy: CrmContractType = typeValue === "KU" ? "KU" : "KH";
+  const typeValue = read("Typ umowy").toUpperCase();
+  const typ_umowy: CrmContractType = typeValue.includes("KU") ? "KU" : "KH";
 
   return {
     typ_umowy,

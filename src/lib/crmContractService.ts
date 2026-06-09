@@ -141,6 +141,32 @@ export async function createCrmContractSignedUrl(path: string) {
     .createSignedUrl(path, 60 * 10);
 }
 
+export async function deleteUnsignedCrmContract(contract: CrmContract) {
+  if (contract.status === "podpisana" || contract.podpisany_pdf_path) {
+    return { error: new Error("Nie można usunąć podpisanej umowy.") };
+  }
+
+  const paths = [
+    contract.wygenerowany_pdf_path,
+    contract.podpisany_pdf_path,
+  ].filter(Boolean) as string[];
+
+  if (paths.length > 0) {
+    const storageResult = await supabase.storage
+      .from(CRM_CONTRACTS_BUCKET)
+      .remove(paths);
+
+    if (storageResult.error) return { error: storageResult.error };
+  }
+
+  return supabase
+    .from("crm_umowy")
+    .delete()
+    .eq("id", contract.id)
+    .neq("status", "podpisana")
+    .is("podpisany_pdf_path", null);
+}
+
 function sanitizeFileName(value: string) {
   const cleaned = value
     .normalize("NFKD")

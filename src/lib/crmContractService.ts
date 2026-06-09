@@ -107,7 +107,21 @@ export async function uploadCrmContractPdf(
   file: File,
   field: "generated" | "signed"
 ) {
-  const fileName = sanitizeFileName(file.name || "umowa.pdf");
+  const contractResult = field === "generated"
+    ? await supabase
+        .from("crm_umowy")
+        .select("numer_umowy, nazwa_klienta")
+        .eq("id", contractId)
+        .maybeSingle()
+    : { data: null, error: null };
+
+  if (contractResult.error) return { data: null, error: contractResult.error };
+
+  const generatedFileName = contractResult.data
+    ? buildGeneratedContractFileName(contractResult.data.numer_umowy, contractResult.data.nazwa_klienta)
+    : null;
+  const fileName = sanitizeFileName(generatedFileName || file.name || "umowa.pdf");
+  const displayFileName = field === "generated" ? fileName : file.name || fileName;
   const storagePath = `${contractId}/${field}/${Date.now()}-${fileName}`;
   const upload = await supabase.storage
     .from(CRM_CONTRACTS_BUCKET)
@@ -123,13 +137,13 @@ export async function uploadCrmContractPdf(
     ? {
         status: "podpisana",
         podpisany_pdf_path: storagePath,
-        podpisany_pdf_name: file.name || fileName,
+        podpisany_pdf_name: displayFileName,
         podpisana_at: new Date().toISOString(),
       }
     : {
         status: "wygenerowana",
         wygenerowany_pdf_path: storagePath,
-        wygenerowany_pdf_name: file.name || fileName,
+        wygenerowany_pdf_name: displayFileName,
       };
 
   return updateCrmContract(contractId, payload);
@@ -176,6 +190,21 @@ export async function deleteUnsignedCrmContract(contract: CrmContract) {
   }
 
   return { data: deleteResult.data, error: null };
+}
+
+function buildGeneratedContractFileName(contractNumber: string | null, contractorName: string | null) {
+  const numberPart = sanitizeFileNamePart(contractNumber || "bez-numeru");
+  const contractorPart = sanitizeFileNamePart(contractorName || "kontrahent");
+  return `umowa_${numberPart}_${contractorPart}.pdf`;
+}
+
+function sanitizeFileNamePart(value: string) {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "") || "brak";
 }
 
 function sanitizeFileName(value: string) {

@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+
+type ContractType = "KH" | "KU";
 
 type RegisterRow = {
   number: string;
@@ -14,12 +16,14 @@ type RegisterRow = {
 const HEADER_LABELS = ["Numer", "Klient", "Status", "Abonament", "Pliki", "Akcje"];
 
 export default function ContractRegisterSplitWidget() {
+  const [activeTab, setActiveTab] = useState<ContractType>("KH");
+
   useEffect(() => {
     let frame = 0;
 
     function scheduleSplit() {
       window.cancelAnimationFrame(frame);
-      frame = window.requestAnimationFrame(splitContractRegister);
+      frame = window.requestAnimationFrame(() => splitContractRegister(activeTab, setActiveTab));
     }
 
     scheduleSplit();
@@ -30,12 +34,12 @@ export default function ContractRegisterSplitWidget() {
       window.cancelAnimationFrame(frame);
       observer.disconnect();
     };
-  }, []);
+  }, [activeTab]);
 
   return null;
 }
 
-function splitContractRegister() {
+function splitContractRegister(activeTab: ContractType, setActiveTab: (tab: ContractType) => void) {
   const page = document.querySelector<HTMLElement>('[data-active-page="umowy"]');
   if (!page) return;
 
@@ -57,36 +61,32 @@ function splitContractRegister() {
   const rows = Array.from(table.querySelectorAll<HTMLTableRowElement>("tbody tr"));
   if (!rows.length) return;
 
-  const signature = rows.map((row) => row.textContent?.trim()).join("|");
+  const signature = `${activeTab}:${rows.map((row) => row.textContent?.trim()).join("|")}`;
   const existingSplit = card.querySelector<HTMLElement>('[data-contract-register-split="true"]');
   if (sourceWrapper.dataset.contractRegisterSignature === signature && existingSplit) return;
   existingSplit?.remove();
 
-  const khRows: RegisterRow[] = [];
-  const kuRows: RegisterRow[] = [];
+  const groupedRows: Record<ContractType, RegisterRow[]> = { KH: [], KU: [] };
   rows.forEach((row) => {
     const cells = Array.from(row.children) as HTMLElement[];
-    const type = cells[typeIndex]?.textContent?.trim();
+    const type = cells[typeIndex]?.textContent?.trim() as ContractType;
+    if (type !== "KH" && type !== "KU") return;
+
     const detailsButton = row.querySelector<HTMLButtonElement>("button");
-    const item: RegisterRow = {
+    groupedRows[type].push({
       number: cells[0]?.textContent?.trim() || "Bez numeru",
       client: cells[1]?.textContent?.trim() || "—",
       statusNode: cells[3]?.firstElementChild?.cloneNode(true) || document.createTextNode(cells[3]?.textContent?.trim() || "—"),
       subscription: cells[4]?.textContent?.trim() || "—",
       files: cells[5]?.textContent?.trim() || "—",
       openDetails: () => detailsButton?.click(),
-    };
-
-    if (type === "KH") khRows.push(item);
-    if (type === "KU") kuRows.push(item);
+    });
   });
 
   const splitRoot = document.createElement("div");
   splitRoot.dataset.contractRegisterSplit = "true";
-  splitRoot.style.display = "grid";
-  splitRoot.style.gap = "18px";
-  splitRoot.appendChild(buildRegisterSection("Rejestr KH", "Pełna księgowość", khRows));
-  splitRoot.appendChild(buildRegisterSection("Rejestr KU", "Uproszczona księgowość", kuRows));
+  splitRoot.appendChild(buildTabs(activeTab, groupedRows, setActiveTab));
+  splitRoot.appendChild(buildRegisterSection(activeTab === "KH" ? "Pełna księgowość" : "Uproszczona księgowość", groupedRows[activeTab]));
 
   sourceWrapper.dataset.contractRegisterSource = "true";
   sourceWrapper.dataset.contractRegisterSignature = signature;
@@ -94,7 +94,33 @@ function splitContractRegister() {
   sourceWrapper.insertAdjacentElement("afterend", splitRoot);
 }
 
-function buildRegisterSection(title: string, subtitle: string, rows: RegisterRow[]) {
+function buildTabs(activeTab: ContractType, rows: Record<ContractType, RegisterRow[]>, setActiveTab: (tab: ContractType) => void) {
+  const tabs = document.createElement("div");
+  tabs.style.display = "flex";
+  tabs.style.gap = "10px";
+  tabs.style.flexWrap = "wrap";
+  tabs.style.margin = "0 0 18px";
+
+  (["KH", "KU"] as ContractType[]).forEach((tab) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = `Rejestr ${tab} (${rows[tab].length})`;
+    button.style.border = "1px solid #cbd7e6";
+    button.style.borderRadius = "14px";
+    button.style.padding = "11px 16px";
+    button.style.minHeight = "44px";
+    button.style.background = activeTab === tab ? "#173b73" : "#fff";
+    button.style.color = activeTab === tab ? "#fff" : "#102a5c";
+    button.style.fontWeight = "850";
+    button.style.cursor = "pointer";
+    button.addEventListener("click", () => setActiveTab(tab));
+    tabs.appendChild(button);
+  });
+
+  return tabs;
+}
+
+function buildRegisterSection(subtitle: string, rows: RegisterRow[]) {
   const section = document.createElement("section");
   section.style.border = "1px solid #cbd7e6";
   section.style.borderRadius = "16px";
@@ -108,20 +134,12 @@ function buildRegisterSection(title: string, subtitle: string, rows: RegisterRow
   header.style.gap = "16px";
   header.style.marginBottom = "12px";
 
-  const textWrap = document.createElement("div");
-  const heading = document.createElement("h3");
-  heading.textContent = title;
-  heading.style.margin = "0";
-  heading.style.color = "#102a5c";
-  heading.style.fontSize = "21px";
-  heading.style.fontWeight = "700";
-
   const description = document.createElement("p");
   description.textContent = subtitle;
-  description.style.margin = "6px 0 0";
+  description.style.margin = "0";
   description.style.color = "#4b5d78";
   description.style.fontSize = "14px";
-  description.style.fontWeight = "650";
+  description.style.fontWeight = "700";
 
   const count = document.createElement("strong");
   count.textContent = `${rows.length} ${rows.length === 1 ? "umowa" : "umów"}`;
@@ -132,8 +150,7 @@ function buildRegisterSection(title: string, subtitle: string, rows: RegisterRow
   count.style.fontSize = "13px";
   count.style.whiteSpace = "nowrap";
 
-  textWrap.append(heading, description);
-  header.append(textWrap, count);
+  header.append(description, count);
   section.appendChild(header);
 
   if (!rows.length) {

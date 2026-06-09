@@ -47,11 +47,31 @@ export default function UnsignedContractDeleteWidget() {
   const [loading, setLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const removableContracts = useMemo(
     () => contracts.filter((contract) => contract.status !== "podpisana" && !contract.podpisany_pdf_path),
     [contracts]
   );
+
+  const filteredRemovableContracts = useMemo(() => {
+    const query = normalize(searchQuery);
+    if (!query) return removableContracts;
+
+    return removableContracts.filter((contract) =>
+      [
+        contract.numer_umowy,
+        contract.nazwa_klienta,
+        contract.wygenerowany_pdf_name,
+        contract.typ_umowy,
+        statusLabel(contract.status),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(query)
+    );
+  }, [removableContracts, searchQuery]);
 
   useEffect(() => {
     function interceptGenerateClick(event: MouseEvent) {
@@ -70,6 +90,7 @@ export default function UnsignedContractDeleteWidget() {
 
   async function openPanel() {
     setOpen(true);
+    setSearchQuery("");
     setLoading(true);
     const result = await fetchCrmContracts();
     setLoading(false);
@@ -155,6 +176,7 @@ export default function UnsignedContractDeleteWidget() {
     }
 
     setContracts((current) => current.filter((item) => item.id !== contract.id));
+    window.location.reload();
   }
 
   return (
@@ -173,13 +195,22 @@ export default function UnsignedContractDeleteWidget() {
               <button type="button" style={closeStyle} onClick={() => setOpen(false)}>×</button>
             </div>
 
+            <input
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Szukaj po numerze, kliencie, statusie lub PDF"
+              style={searchInputStyle}
+            />
+
             {loading ? (
               <div style={emptyStyle}>Ładowanie umów...</div>
             ) : removableContracts.length === 0 ? (
               <div style={emptyStyle}>Brak umów możliwych do usunięcia.</div>
+            ) : filteredRemovableContracts.length === 0 ? (
+              <div style={emptyStyle}>Brak umów pasujących do wyszukiwania.</div>
             ) : (
               <div style={listStyle}>
-                {removableContracts.map((contract) => (
+                {filteredRemovableContracts.map((contract) => (
                   <div key={contract.id} style={itemStyle}>
                     <div>
                       <strong style={itemTitleStyle}>{contract.numer_umowy || contract.nazwa_klienta || "Umowa bez numeru"}</strong>
@@ -448,6 +479,7 @@ const eyebrowStyle: React.CSSProperties = { color: colors.red, fontWeight: 850, 
 const titleStyle: React.CSSProperties = { margin: 0, color: colors.navy, fontSize: "28px", lineHeight: 1.15 };
 const subtitleStyle: React.CSSProperties = { margin: "10px 0 0", color: colors.muted, lineHeight: 1.55 };
 const closeStyle: React.CSSProperties = { width: "42px", height: "42px", borderRadius: "999px", border: `1px solid ${colors.border}`, background: colors.white, color: colors.navy, fontSize: "24px", cursor: "pointer" };
+const searchInputStyle: React.CSSProperties = { width: "100%", border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "12px 14px", marginBottom: "16px", background: colors.inputBackground, color: colors.text, fontWeight: 700, outline: "none" };
 const emptyStyle: React.CSSProperties = { border: `1px dashed ${colors.border}`, borderRadius: radius.input, padding: "18px", color: colors.muted, fontWeight: 750, textAlign: "center" };
 const listStyle: React.CSSProperties = { display: "flex", flexDirection: "column", gap: "12px" };
 const itemStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "14px", display: "flex", justifyContent: "space-between", gap: "14px", alignItems: "center", background: colors.white };

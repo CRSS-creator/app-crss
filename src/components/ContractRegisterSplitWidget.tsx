@@ -2,6 +2,15 @@
 
 import { useEffect } from "react";
 
+type RegisterRow = {
+  number: string;
+  client: string;
+  statusNode: Node | null;
+  subscription: string;
+  files: string;
+  openDetails: () => void;
+};
+
 const HEADER_LABELS = ["Numer", "Klient", "Status", "Abonament", "Pliki", "Akcje"];
 
 export default function ContractRegisterSplitWidget() {
@@ -42,25 +51,46 @@ function splitContractRegister() {
   const typeIndex = headers.findIndex((header) => header.textContent?.trim().toLowerCase() === "typ");
   if (typeIndex < 0) return;
 
+  const sourceWrapper = table.closest<HTMLElement>("div");
+  if (!sourceWrapper || sourceWrapper.dataset.contractRegisterSource === "true") return;
+
   const rows = Array.from(table.querySelectorAll<HTMLTableRowElement>("tbody tr"));
   if (!rows.length) return;
 
-  const wrapper = table.closest<HTMLElement>("div");
-  if (!wrapper) return;
+  card.querySelector<HTMLElement>('[data-contract-register-split="true"]')?.remove();
 
-  const khRows = rows.filter((row) => row.children[typeIndex]?.textContent?.trim() === "KH");
-  const kuRows = rows.filter((row) => row.children[typeIndex]?.textContent?.trim() === "KU");
+  const khRows: RegisterRow[] = [];
+  const kuRows: RegisterRow[] = [];
+  rows.forEach((row) => {
+    const cells = Array.from(row.children) as HTMLElement[];
+    const type = cells[typeIndex]?.textContent?.trim();
+    const detailsButton = row.querySelector<HTMLButtonElement>("button");
+    const item: RegisterRow = {
+      number: cells[0]?.textContent?.trim() || "Bez numeru",
+      client: cells[1]?.textContent?.trim() || "—",
+      statusNode: cells[3]?.firstElementChild?.cloneNode(true) || document.createTextNode(cells[3]?.textContent?.trim() || "—"),
+      subscription: cells[4]?.textContent?.trim() || "—",
+      files: cells[5]?.textContent?.trim() || "—",
+      openDetails: () => detailsButton?.click(),
+    };
+
+    if (type === "KH") khRows.push(item);
+    if (type === "KU") kuRows.push(item);
+  });
+
   const splitRoot = document.createElement("div");
   splitRoot.dataset.contractRegisterSplit = "true";
   splitRoot.style.display = "grid";
   splitRoot.style.gap = "18px";
-  splitRoot.appendChild(buildRegisterSection("Rejestr KH", "Pełna księgowość", khRows, typeIndex));
-  splitRoot.appendChild(buildRegisterSection("Rejestr KU", "Uproszczona księgowość", kuRows, typeIndex));
+  splitRoot.appendChild(buildRegisterSection("Rejestr KH", "Pełna księgowość", khRows));
+  splitRoot.appendChild(buildRegisterSection("Rejestr KU", "Uproszczona księgowość", kuRows));
 
-  wrapper.replaceWith(splitRoot);
+  sourceWrapper.dataset.contractRegisterSource = "true";
+  sourceWrapper.style.display = "none";
+  sourceWrapper.insertAdjacentElement("afterend", splitRoot);
 }
 
-function buildRegisterSection(title: string, subtitle: string, rows: HTMLTableRowElement[], typeIndex: number) {
+function buildRegisterSection(title: string, subtitle: string, rows: RegisterRow[]) {
   const section = document.createElement("section");
   section.style.border = "1px solid #cbd7e6";
   section.style.borderRadius = "16px";
@@ -123,29 +153,73 @@ function buildRegisterSection(title: string, subtitle: string, rows: HTMLTableRo
 
   const thead = document.createElement("thead");
   const headRow = document.createElement("tr");
-  HEADER_LABELS.forEach((label) => {
-    const th = document.createElement("th");
-    th.textContent = label;
-    th.style.textAlign = "left";
-    th.style.padding = "14px 16px";
-    th.style.color = "#4b5d78";
-    th.style.fontSize = "13px";
-    th.style.textTransform = "uppercase";
-    th.style.letterSpacing = "0.04em";
-    th.style.borderBottom = "1px solid #cbd7e6";
-    headRow.appendChild(th);
-  });
+  HEADER_LABELS.forEach((label) => headRow.appendChild(buildHeaderCell(label)));
   thead.appendChild(headRow);
 
   const tbody = document.createElement("tbody");
-  rows.forEach((row) => {
-    const typeCell = row.children[typeIndex] as HTMLElement | undefined;
-    if (typeCell) typeCell.style.display = "none";
-    tbody.appendChild(row);
-  });
+  rows.forEach((row) => tbody.appendChild(buildTableRow(row)));
 
   table.append(thead, tbody);
   tableWrapper.appendChild(table);
   section.appendChild(tableWrapper);
   return section;
+}
+
+function buildHeaderCell(label: string) {
+  const th = document.createElement("th");
+  th.textContent = label;
+  th.style.textAlign = "left";
+  th.style.padding = "14px 16px";
+  th.style.color = "#4b5d78";
+  th.style.fontSize = "13px";
+  th.style.textTransform = "uppercase";
+  th.style.letterSpacing = "0.04em";
+  th.style.borderBottom = "1px solid #cbd7e6";
+  return th;
+}
+
+function buildTableRow(row: RegisterRow) {
+  const tr = document.createElement("tr");
+  tr.style.borderBottom = "1px solid #cbd7e6";
+  tr.appendChild(buildTextCell(row.number, true));
+  tr.appendChild(buildTextCell(row.client));
+
+  const statusCell = buildBaseCell();
+  if (row.statusNode) statusCell.appendChild(row.statusNode);
+  tr.appendChild(statusCell);
+
+  tr.appendChild(buildTextCell(row.subscription));
+  tr.appendChild(buildTextCell(row.files));
+
+  const actionCell = buildBaseCell();
+  const button = document.createElement("button");
+  button.textContent = "Szczegóły";
+  button.type = "button";
+  button.style.border = "1px solid #cbd7e6";
+  button.style.borderRadius = "14px";
+  button.style.padding = "10px 14px";
+  button.style.minHeight = "42px";
+  button.style.background = "#fff";
+  button.style.color = "#102a5c";
+  button.style.fontWeight = "800";
+  button.style.cursor = "pointer";
+  button.addEventListener("click", row.openDetails);
+  actionCell.appendChild(button);
+  tr.appendChild(actionCell);
+  return tr;
+}
+
+function buildTextCell(text: string, strong = false) {
+  const td = buildBaseCell();
+  td.textContent = text;
+  td.style.fontWeight = strong ? "800" : "500";
+  return td;
+}
+
+function buildBaseCell() {
+  const td = document.createElement("td");
+  td.style.padding = "16px";
+  td.style.color = "#0f2147";
+  td.style.verticalAlign = "middle";
+  return td;
 }

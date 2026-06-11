@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
 import { colors, radius, shadow } from "@/app/design";
@@ -18,13 +17,6 @@ import {
   type CrmContractType,
 } from "@/lib/crmContractService";
 import { X } from "lucide-react";
-
-declare global {
-  interface Window {
-    PDFLib?: any;
-    fontkit?: any;
-  }
-}
 
 type Lead = {
   id: string;
@@ -57,13 +49,9 @@ type ContractDraft = {
   typ_umowy: CrmContractType;
   status: CrmContractStatus;
   numer_umowy: string;
-  data_zawarcia: string;
-  miejsce_zawarcia: string;
   pierwszy_okres: string;
   nazwa_klienta: string;
   siedziba: string;
-  rejestr: string;
-  krs: string;
   nip: string;
   reprezentant: string;
   email_klienta: string;
@@ -85,11 +73,6 @@ const CONTRACT_STATUSES: { value: CrmContractStatus; label: string }[] = [
   { value: "podpisana", label: "Podpisana" },
   { value: "anulowana", label: "Anulowana" },
 ];
-
-const PDF_LIB_SCRIPT = "https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js";
-const PDF_FONTKIT_SCRIPT = "https://cdn.jsdelivr.net/npm/@pdf-lib/fontkit@1.1.1/dist/fontkit.umd.min.js";
-const PDF_FONT_REGULAR = "https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/hinted/ttf/NotoSans/NotoSans-Regular.ttf";
-const PDF_FONT_BOLD = "https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/hinted/ttf/NotoSans/NotoSans-Bold.ttf";
 
 export default function CrmContractsPage() {
   return (
@@ -154,10 +137,9 @@ function CrmContractsContent() {
         <div>
           <p style={eyebrowStyle}>CRM</p>
           <h1 style={titleStyle}>Umowy</h1>
-          <p style={subtitleStyle}>Rejestr umów, dane do wzorów KH/KU, pliki PDF i status podpisu.</p>
+          <p style={subtitleStyle}>Rejestr umów, dane do szablonów DOCX, pliki PDF i status podpisu.</p>
         </div>
         <div style={headerActionsStyle}>
-          <Link href="/crm" style={secondaryButtonStyle}>Wróć do CRM</Link>
           <button style={primaryButtonStyle} onClick={() => setCreatingContract(true)}>Dodaj umowę</button>
         </div>
       </section>
@@ -231,10 +213,7 @@ function ContractDrawer({ contract, leads, clients, onClose, onSaved }: { contra
   const [draft, setDraft] = useState<ContractDraft>(() => contract ? createDraft(contract) : createEmptyDraft());
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [generating, setGenerating] = useState(false);
 
-  const selectedLead = useMemo(() => leads.find((lead) => lead.id === draft.crm_id) || null, [leads, draft.crm_id]);
-  const selectedClient = useMemo(() => clients.find((client) => client.id === draft.klient_id) || null, [clients, draft.klient_id]);
   const wonLeads = useMemo(() => leads.filter((lead) => lead.status === "wygrana"), [leads]);
 
   function updateDraft<K extends keyof ContractDraft>(key: K, value: ContractDraft[K]) {
@@ -245,6 +224,7 @@ function ContractDrawer({ contract, leads, clients, onClose, onSaved }: { contra
     updateDraft("crm_id", leadId);
     const lead = leads.find((item) => item.id === leadId);
     if (!lead) return;
+
     setDraft((current) => ({
       ...current,
       crm_id: leadId,
@@ -262,6 +242,7 @@ function ContractDrawer({ contract, leads, clients, onClose, onSaved }: { contra
     updateDraft("klient_id", clientId);
     const client = clients.find((item) => item.id === clientId);
     if (!client) return;
+
     setDraft((current) => ({
       ...current,
       klient_id: clientId,
@@ -288,13 +269,13 @@ function ContractDrawer({ contract, leads, clients, onClose, onSaved }: { contra
       typ_umowy: draft.typ_umowy,
       status: nextStatus || draft.status,
       numer_umowy: emptyToNull(draft.numer_umowy),
-      data_zawarcia: draft.data_zawarcia || null,
-      miejsce_zawarcia: emptyToNull(draft.miejsce_zawarcia),
+      data_zawarcia: null,
+      miejsce_zawarcia: null,
       pierwszy_okres: emptyToNull(draft.pierwszy_okres),
       nazwa_klienta: draft.nazwa_klienta.trim(),
       siedziba: emptyToNull(draft.siedziba),
-      rejestr: emptyToNull(draft.rejestr),
-      krs: emptyToNull(draft.krs),
+      rejestr: null,
+      krs: null,
       nip: emptyToNull(draft.nip),
       reprezentant: emptyToNull(draft.reprezentant),
       email_klienta: emptyToNull(draft.email_klienta),
@@ -316,29 +297,6 @@ function ContractDrawer({ contract, leads, clients, onClose, onSaved }: { contra
     const savedContract = result.data as CrmContract;
     onSaved(savedContract);
     return savedContract;
-  }
-
-  async function generateContractPdf() {
-    const savedContract = await saveContract("wygenerowana");
-    if (!savedContract) return;
-
-    setGenerating(true);
-    try {
-      const file = await buildGeneratedContractPdf(draft, selectedLead, selectedClient);
-      const result = await uploadCrmContractPdf(savedContract.id, file, "generated");
-      if (result.error || !result.data) {
-        console.error("Błąd generowania umowy PDF:", result.error);
-        alert("Nie udało się wygenerować PDF umowy.");
-        return;
-      }
-      onSaved(result.data as CrmContract);
-      alert("Umowa PDF została wygenerowana i dodana do rejestru.");
-    } catch (error) {
-      console.error("Błąd generatora PDF:", error);
-      alert("Nie udało się wygenerować PDF. Spróbuj ponownie za chwilę.");
-    } finally {
-      setGenerating(false);
-    }
   }
 
   async function uploadPdf(file: File, field: "generated" | "signed") {
@@ -367,6 +325,7 @@ function ContractDrawer({ contract, leads, clients, onClose, onSaved }: { contra
       alert("Nie udało się otworzyć PDF.");
       return;
     }
+
     window.open(data.signedUrl, "_blank", "noopener,noreferrer");
   }
 
@@ -382,9 +341,7 @@ function ContractDrawer({ contract, leads, clients, onClose, onSaved }: { contra
         </div>
 
         <div style={drawerActionsStyle}>
-          <button style={secondaryButtonStyle} onClick={() => openDraftPreview(draft)}>Podgląd roboczy</button>
-          <button style={secondaryButtonStyle} onClick={generateContractPdf} disabled={saving || generating}>{generating ? "Generowanie..." : "Generuj PDF"}</button>
-          <button style={primarySmallButtonStyle} onClick={() => saveContract()} disabled={saving || generating}>{saving ? "Zapisywanie..." : "Zapisz"}</button>
+          <button style={primarySmallButtonStyle} onClick={() => saveContract()} disabled={saving}>{saving ? "Zapisywanie..." : "Zapisz"}</button>
         </div>
 
         <div style={drawerContentStyle}>
@@ -397,16 +354,12 @@ function ContractDrawer({ contract, leads, clients, onClose, onSaved }: { contra
 
           <FormSection title="Dane umowy">
             <EditableInput label="Numer umowy" value={draft.numer_umowy} onChange={(value) => updateDraft("numer_umowy", value)} />
-            <EditableInput label="Data zawarcia" type="date" value={draft.data_zawarcia} onChange={(value) => updateDraft("data_zawarcia", value)} />
-            <EditableInput label="Miejsce zawarcia" value={draft.miejsce_zawarcia} onChange={(value) => updateDraft("miejsce_zawarcia", value)} />
             <EditableInput label="Pierwszy okres" value={draft.pierwszy_okres} onChange={(value) => updateDraft("pierwszy_okres", value)} />
           </FormSection>
 
           <FormSection title="Dane klienta">
             <EditableInput label="Nazwa klienta" value={draft.nazwa_klienta} onChange={(value) => updateDraft("nazwa_klienta", value)} />
             <EditableInput label="Siedziba" value={draft.siedziba} onChange={(value) => updateDraft("siedziba", value)} />
-            <EditableInput label="Rejestr" value={draft.rejestr} onChange={(value) => updateDraft("rejestr", value)} />
-            <EditableInput label="KRS" value={draft.krs} onChange={(value) => updateDraft("krs", value)} />
             <EditableInput label="NIP" value={draft.nip} onChange={(value) => updateDraft("nip", value)} />
             <EditableInput label="Reprezentant" value={draft.reprezentant} onChange={(value) => updateDraft("reprezentant", value)} />
             <EditableInput label="Email klienta" type="email" value={draft.email_klienta} onChange={(value) => updateDraft("email_klienta", value)} />
@@ -443,13 +396,9 @@ function createEmptyDraft(): ContractDraft {
     typ_umowy: "KH",
     status: "szkic",
     numer_umowy: `...../KH/...../${new Date().getFullYear()}`,
-    data_zawarcia: new Date().toISOString().slice(0, 10),
-    miejsce_zawarcia: "Śrem",
     pierwszy_okres: "",
     nazwa_klienta: "",
     siedziba: "",
-    rejestr: "",
-    krs: "",
     nip: "",
     reprezentant: "",
     email_klienta: "",
@@ -467,13 +416,9 @@ function createDraft(contract: CrmContract): ContractDraft {
     typ_umowy: contract.typ_umowy,
     status: contract.status,
     numer_umowy: contract.numer_umowy || "",
-    data_zawarcia: contract.data_zawarcia || "",
-    miejsce_zawarcia: contract.miejsce_zawarcia || "",
     pierwszy_okres: contract.pierwszy_okres || "",
     nazwa_klienta: contract.nazwa_klienta || "",
     siedziba: contract.siedziba || "",
-    rejestr: contract.rejestr || "",
-    krs: contract.krs || "",
     nip: contract.nip || "",
     reprezentant: contract.reprezentant || "",
     email_klienta: contract.email_klienta || "",
@@ -484,212 +429,13 @@ function createDraft(contract: CrmContract): ContractDraft {
   };
 }
 
-async function buildGeneratedContractPdf(draft: ContractDraft, lead: Lead | null, client: Client | null) {
-  const PDFLib = await loadPdfLib();
-  const fontkit = await loadPdfFontkit();
-  const pdfDoc = await PDFLib.PDFDocument.create();
-  pdfDoc.registerFontkit(fontkit);
-
-  const [regularFontBytes, boldFontBytes] = await Promise.all([
-    fetchArrayBuffer(PDF_FONT_REGULAR),
-    fetchArrayBuffer(PDF_FONT_BOLD),
-  ]);
-  const regularFont = await pdfDoc.embedFont(regularFontBytes, { subset: true });
-  const boldFont = await pdfDoc.embedFont(boldFontBytes, { subset: true });
-  const navy = PDFLib.rgb(0.06, 0.16, 0.37);
-  const muted = PDFLib.rgb(0.28, 0.34, 0.45);
-  const a4: [number, number] = [595.28, 841.89];
-  const margin = 54;
-  let page = pdfDoc.addPage(a4);
-  let y = 792;
-
-  function ensureSpace(height = 80) {
-    if (y - height > 64) return;
-    page = pdfDoc.addPage(a4);
-    y = 792;
-  }
-
-  function drawHeading(text: string, size = 14) {
-    ensureSpace(64);
-    y -= 10;
-    page.drawText(text, { x: margin, y, size, font: boldFont, color: navy });
-    y -= size + 18;
-  }
-
-  function drawParagraph(text: string, size = 10.5, lineHeight = 15) {
-    const lines = wrapPdfText(text, regularFont, size, a4[0] - margin * 2);
-    ensureSpace(lines.length * lineHeight + 16);
-    for (const line of lines) {
-      page.drawText(line, { x: margin, y, size, font: regularFont, color: muted });
-      y -= lineHeight;
-    }
-    y -= 6;
-  }
-
-  function drawField(label: string, value: string) {
-    drawParagraph(`${label}: ${value || "........................................"}`);
-  }
-
-  const contractKind = draft.typ_umowy === "KH"
-    ? "W ZAKRESIE KSIĄG RACHUNKOWYCH ORAZ OBSŁUGI KADROWO-PŁACOWEJ"
-    : "W ZAKRESIE UPROSZCZONEJ KSIĘGOWOŚCI ORAZ OBSŁUGI KADROWO-PŁACOWEJ";
-  const subject = draft.typ_umowy === "KH"
-    ? "prowadzenia ksiąg rachunkowych oraz bieżących rozliczeń podatkowych"
-    : "prowadzenia uproszczonej księgowości oraz bieżących rozliczeń podatkowych";
-  const limitLabel = draft.typ_umowy === "KH" ? "dokumentów księgowych" : "pozycji księgowych";
-
-  page.drawText("UMOWA O ŚWIADCZENIE USŁUG KSIĘGOWYCH", { x: margin, y, size: 18, font: boldFont, color: navy });
-  y -= 26;
-  page.drawText(contractKind, { x: margin, y, size: 10.5, font: boldFont, color: navy });
-  y -= 24;
-  page.drawText(`NR ${draft.numer_umowy || "……"}`, { x: margin, y, size: 12, font: boldFont, color: navy });
-  y -= 34;
-
-  drawParagraph(`zawarta w dniu ${formatDisplayDate(draft.data_zawarcia) || "........................................"} roku w ${draft.miejsce_zawarcia || "........................................"} pomiędzy:`);
-  drawField("Klient", draft.nazwa_klienta);
-  drawField("Siedziba", draft.siedziba);
-  drawField("Rejestr", draft.rejestr);
-  if (draft.typ_umowy === "KH") drawField("KRS", draft.krs);
-  drawField("NIP", draft.nip);
-  drawField("Reprezentowany przez", draft.reprezentant);
-  drawParagraph("zwanym dalej „Klientem”,");
-  drawParagraph("a CRSS spółka z ograniczoną odpowiedzialnością z siedzibą w Śremie, KRS: 0000989511, NIP: 785-181-40-25, reprezentowaną przez Mateusza Marcinkowskiego, Prezesa Zarządu, zwaną dalej „CRSS” albo „Biurem Rachunkowym”.");
-
-  drawHeading("§ 1. Przedmiot umowy");
-  drawParagraph(`Klient zleca, a CRSS przyjmuje do wykonania stałą obsługę księgową Klienta w zakresie ${subject}.`);
-  drawParagraph(`Pierwszym okresem rozliczeniowym objętym Umową jest ${draft.pierwszy_okres || "........................................"}.`);
-  drawParagraph("CRSS rozpoczyna świadczenie usług po podpisaniu Umowy, zawarciu umowy powierzenia przetwarzania danych osobowych oraz przekazaniu przez Klienta informacji i dostępów niezbędnych do rozpoczęcia obsługi.");
-
-  drawHeading("§ 2. Obowiązki Klienta");
-  drawParagraph("Klient przekazuje dokumenty i informacje terminowo, kompletnie i zgodnie ze stanem faktycznym. Terminowość i rzetelność dokumentów są warunkiem prawidłowego wykonania usług przez CRSS.");
-  drawParagraph("Klient odpowiada za merytoryczną poprawność, kompletność oraz zgodność z rzeczywistością dokumentów i informacji przekazanych CRSS.");
-
-  drawHeading("§ 3. Wynagrodzenie");
-  drawParagraph(`Miesięczny abonament za obsługę księgową wynosi ${draft.abonament_netto || "........................................"} zł netto.`);
-  drawParagraph(`Abonament obejmuje obsługę księgową do limitu ${draft.limit_dokumentow || "........................................"} ${limitLabel} miesięcznie.`);
-  drawParagraph("Czynności dodatkowe, prace wykraczające poza standardową obsługę oraz dokumenty ponad ustalony limit mogą być rozliczane odrębnie, zgodnie z ustaleniami Stron.");
-
-  drawHeading("§ 4. Obsługa kadrowo-płacowa");
-  drawParagraph(`Obsługa kadrowo-płacowa: ${draft.obsluga_kadrowa ? "tak" : "nie"}. Jeżeli zostanie uruchomiona, jej zakres i wynagrodzenie są ustalane według liczby osób objętych obsługą oraz indywidualnych ustaleń Stron.`);
-
-  drawHeading("§ 5. Komunikacja");
-  drawParagraph(`Adres e-mail Klienta do komunikacji: ${draft.email_klienta || "........................................"}.`);
-  drawParagraph("Adres e-mail CRSS do komunikacji: biuro@crss.com.pl.");
-  drawParagraph("Podstawowym kanałem komunikacji Stron jest poczta elektroniczna oraz narzędzia wskazane przez CRSS do obsługi księgowej, obiegu dokumentów i komunikacji.");
-
-  drawHeading("§ 6. Ustalenia indywidualne");
-  drawParagraph(draft.ustalenia_indywidualne || "Brak ustaleń indywidualnych oznacza, że Strony stosują standardowe zasady określone w Umowie i w bieżących ustaleniach operacyjnych.");
-
-  drawHeading("§ 7. Podpisy");
-  y -= 42;
-  page.drawText("Klient", { x: margin, y, size: 11, font: boldFont, color: navy });
-  page.drawText("CRSS", { x: 360, y, size: 11, font: boldFont, color: navy });
-  y -= 38;
-  page.drawLine({ start: { x: margin, y }, end: { x: 230, y }, thickness: 1, color: navy });
-  page.drawLine({ start: { x: 360, y }, end: { x: 536, y }, thickness: 1, color: navy });
-  y -= 14;
-  page.drawText("podpis", { x: margin + 68, y, size: 9, font: regularFont, color: muted });
-  page.drawText("podpis", { x: 430, y, size: 9, font: regularFont, color: muted });
-
-  const bytes = await pdfDoc.save();
-  const fallbackName = lead?.nazwa || client?.nazwa || "klient";
-  const fileName = sanitizePdfFileName(`Umowa CRSS ${draft.typ_umowy} ${draft.nazwa_klienta || fallbackName}.pdf`);
-  const blob = new Blob([bytes], { type: "application/pdf" });
-  return new File([blob], fileName, { type: "application/pdf" });
-}
-
-function openDraftPreview(draft: ContractDraft) {
-  const win = window.open("", "_blank", "noopener,noreferrer");
-  if (!win) return;
-  win.document.write(buildContractHtml(draft));
-  win.document.close();
-  win.focus();
-  setTimeout(() => win.print(), 300);
-}
-
-function buildContractHtml(draft: ContractDraft) {
-  const limitLabel = draft.typ_umowy === "KH" ? "dokumentów księgowych" : "pozycji księgowych";
-  return `<!doctype html><html><head><meta charset="utf-8"><title>Umowa CRSS</title><style>body{font-family:Arial,sans-serif;color:#102a5c;line-height:1.55;padding:42px}h1{font-size:24px}h2{font-size:18px;margin-top:28px}.line{margin-top:48px;border-top:1px solid #102a5c;width:220px;text-align:center;padding-top:8px}.signatures{display:flex;gap:80px;margin-top:36px}</style></head><body><h1>Umowa o świadczenie usług księgowych</h1><p><strong>Numer:</strong> ${escapeHtml(draft.numer_umowy || "")}</p><p>Zawarta w dniu ${escapeHtml(formatDisplayDate(draft.data_zawarcia))} w ${escapeHtml(draft.miejsce_zawarcia)}.</p><h2>Strony</h2><p><strong>Klient:</strong> ${escapeHtml(draft.nazwa_klienta)}</p><p><strong>Siedziba:</strong> ${escapeHtml(draft.siedziba)}</p><p><strong>NIP:</strong> ${escapeHtml(draft.nip)}</p><p><strong>Reprezentant:</strong> ${escapeHtml(draft.reprezentant)}</p><h2>Warunki</h2><p>Abonament netto: ${escapeHtml(draft.abonament_netto || "")} zł.</p><p>Limit: ${escapeHtml(draft.limit_dokumentow || "")} ${limitLabel} miesięcznie.</p><p>Obsługa kadrowa: ${draft.obsluga_kadrowa ? "tak" : "nie"}.</p><h2>Ustalenia indywidualne</h2><p>${escapeHtml(draft.ustalenia_indywidualne || "Brak ustaleń indywidualnych.")}</p><div class="signatures"><div class="line">Klient</div><div class="line">CRSS</div></div></body></html>`;
-}
-
 function emptyToNull(value: string) {
   return value.trim() ? value.trim() : null;
-}
-
-function escapeHtml(value: string) {
-  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
 function formatMoney(value: number | null) {
   if (value === null || value === undefined) return "—";
   return `${Number(value).toLocaleString("pl-PL")} zł`;
-}
-
-function formatDisplayDate(value: string) {
-  if (!value) return "";
-  return new Date(value).toLocaleDateString("pl-PL");
-}
-
-function wrapPdfText(text: string, font: any, size: number, maxWidth: number) {
-  const words = text.replace(/\s+/g, " ").trim().split(" ");
-  const lines: string[] = [];
-  let currentLine = "";
-
-  for (const word of words) {
-    const candidate = currentLine ? `${currentLine} ${word}` : word;
-    if (font.widthOfTextAtSize(candidate, size) <= maxWidth) currentLine = candidate;
-    else {
-      if (currentLine) lines.push(currentLine);
-      currentLine = word;
-    }
-  }
-
-  if (currentLine) lines.push(currentLine);
-  return lines.length ? lines : [""];
-}
-
-async function loadPdfLib() {
-  if (!window.PDFLib) await loadExternalScript(PDF_LIB_SCRIPT);
-  if (!window.PDFLib) throw new Error("PDF-lib nie jest dostępny.");
-  return window.PDFLib;
-}
-
-async function loadPdfFontkit() {
-  if (!window.fontkit) await loadExternalScript(PDF_FONTKIT_SCRIPT);
-  if (!window.fontkit) throw new Error("Fontkit nie jest dostępny.");
-  return window.fontkit;
-}
-
-function loadExternalScript(src: string) {
-  return new Promise<void>((resolve, reject) => {
-    const existing = document.querySelector<HTMLScriptElement>(`script[src="${src}"]`);
-    if (existing) {
-      if (existing.dataset.loaded === "true") resolve();
-      else existing.addEventListener("load", () => resolve(), { once: true });
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.src = src;
-    script.async = true;
-    script.onload = () => {
-      script.dataset.loaded = "true";
-      resolve();
-    };
-    script.onerror = () => reject(new Error(`Nie udało się załadować ${src}`));
-    document.head.appendChild(script);
-  });
-}
-
-async function fetchArrayBuffer(url: string) {
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`Nie udało się pobrać zasobu PDF: ${url}`);
-  return response.arrayBuffer();
-}
-
-function sanitizePdfFileName(value: string) {
-  const cleaned = value.replace(/[\\/:*?"<>|]/g, "-").replace(/\s+/g, " ").trim();
-  return cleaned.toLowerCase().endsWith(".pdf") ? cleaned : `${cleaned || "umowa"}.pdf`;
 }
 
 function statusLabel(status: CrmContractStatus) {
@@ -715,7 +461,7 @@ function FormSection({ title, children }: { title: string; children: React.React
   return <section style={drawerSectionStyle}><h3 style={formSectionTitleStyle}>{title}</h3>{children}</section>;
 }
 
-function EditableInput({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (value: string) => void; type?: "text" | "number" | "email" | "date" }) {
+function EditableInput({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (value: string) => void; type?: "text" | "number" | "email" }) {
   return <label style={editableRowStyle}><span>{label}</span><input type={type} value={value} onChange={(event) => onChange(event.target.value)} style={inputStyle} /></label>;
 }
 

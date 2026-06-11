@@ -7,6 +7,7 @@ type GenerateContractRequest = {
 
 const WEBHOOK_URL = process.env.CRSS_CONTRACT_GENERATION_WEBHOOK_URL;
 const CALLBACK_SECRET = process.env.CRSS_CONTRACT_CALLBACK_SECRET;
+const PUBLIC_APP_URL = process.env.CRSS_APP_URL;
 
 export async function POST(request: NextRequest) {
   if (!WEBHOOK_URL) {
@@ -37,7 +38,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const origin = request.nextUrl.origin;
+  const origin = resolvePublicOrigin(request);
   const fileName = buildGeneratedContractFileName(contract.numer_umowy, contract.nazwa_klienta);
   const webhookPayload = {
     template: "umowa_crss_kh_n8n",
@@ -75,6 +76,23 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json({ ok: true, fileName });
+}
+
+function resolvePublicOrigin(request: NextRequest) {
+  if (PUBLIC_APP_URL) return PUBLIC_APP_URL.replace(/\/$/, "");
+
+  const forwardedHost = request.headers.get("x-forwarded-host");
+  const forwardedProto = request.headers.get("x-forwarded-proto") || "https";
+  if (forwardedHost && !forwardedHost.includes("localhost")) {
+    return `${forwardedProto}://${forwardedHost}`;
+  }
+
+  const host = request.headers.get("host");
+  if (host && !host.includes("localhost")) {
+    return `https://${host}`;
+  }
+
+  return "https://app.crss.com.pl";
 }
 
 function buildGeneratedContractFileName(contractNumber: string | null, contractorName: string | null) {

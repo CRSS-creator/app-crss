@@ -66,7 +66,7 @@ export default function ContractDocxGenerationWidget() {
   return (
     <>
       <button type="button" style={triggerStyle} onClick={openPanel}>
-        Generuj DOCX
+        Generuj
       </button>
 
       {open && (

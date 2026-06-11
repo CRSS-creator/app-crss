@@ -14,7 +14,6 @@ type RegisterRow = {
 };
 
 const HEADER_LABELS = ["Numer", "Klient", "Status", "Abonament", "Pliki", "Akcje"];
-const ELECTRONIC_SIGNING_HIDDEN_FIELDS = ["Data zawarcia", "Miejsce zawarcia", "Rejestr", "KRS"];
 
 export default function ContractRegisterSplitWidget() {
   const [activeTab, setActiveTab] = useState<ContractType>("KH");
@@ -25,7 +24,6 @@ export default function ContractRegisterSplitWidget() {
     function scheduleSplit() {
       window.cancelAnimationFrame(frame);
       frame = window.requestAnimationFrame(() => {
-        sanitizeContractElectronicSigningFields();
         splitContractRegister(activeTab, setActiveTab);
       });
     }
@@ -41,26 +39,6 @@ export default function ContractRegisterSplitWidget() {
   }, [activeTab]);
 
   return null;
-}
-
-function sanitizeContractElectronicSigningFields() {
-  const page = document.querySelector<HTMLElement>('[data-active-page="umowy"]');
-  if (!page) return;
-
-  const rows = Array.from(page.querySelectorAll<HTMLElement>("label, div"));
-  rows.forEach((row) => {
-    const label = row.querySelector("span")?.textContent?.trim();
-    if (!label || !ELECTRONIC_SIGNING_HIDDEN_FIELDS.includes(label)) return;
-
-    const field = row.querySelector<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>("input, textarea, select");
-    if (field && field.value) {
-      field.value = "";
-      field.dispatchEvent(new Event("input", { bubbles: true }));
-      field.dispatchEvent(new Event("change", { bubbles: true }));
-    }
-
-    row.style.display = "none";
-  });
 }
 
 function splitContractRegister(activeTab: ContractType, setActiveTab: (tab: ContractType) => void) {

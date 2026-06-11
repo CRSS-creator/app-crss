@@ -78,6 +78,24 @@ export type CrmContractPayload = {
 
 const CRM_CONTRACTS_BUCKET = "crm-umowy";
 
+export async function requestCrmContractGeneration(contract: CrmContract) {
+  const response = await fetch("/api/crm/contracts/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ contract }),
+  });
+
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    return {
+      data: null,
+      error: new Error(payload?.error || "Nie udało się uruchomić generowania umowy."),
+    };
+  }
+
+  return { data: payload, error: null };
+}
+
 export async function fetchCrmContracts() {
   return supabase
     .from("crm_umowy")

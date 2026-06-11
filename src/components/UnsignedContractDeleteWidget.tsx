@@ -1,52 +1,19 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   createCrmContractSignedUrl,
   deleteUnsignedCrmContract,
   fetchCrmContracts,
-  uploadCrmContractPdf,
   type CrmContract,
-  type CrmContractType,
 } from "@/lib/crmContractService";
 import { colors, radius, shadow } from "@/app/design";
-
-declare global {
-  interface Window {
-    PDFLib?: any;
-    fontkit?: any;
-  }
-}
-
-type ContractDraftFromDrawer = {
-  typ_umowy: CrmContractType;
-  numer_umowy: string;
-  data_zawarcia: string;
-  miejsce_zawarcia: string;
-  pierwszy_okres: string;
-  nazwa_klienta: string;
-  siedziba: string;
-  rejestr: string;
-  krs: string;
-  nip: string;
-  reprezentant: string;
-  email_klienta: string;
-  abonament_netto: string;
-  limit_dokumentow: string;
-  ustalenia_indywidualne: string;
-};
-
-const PDF_LIB_SCRIPT = "https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js";
-const PDF_FONTKIT_SCRIPT = "https://cdn.jsdelivr.net/npm/@pdf-lib/fontkit@1.1.1/dist/fontkit.umd.min.js";
-const PDF_FONT_REGULAR = "https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/hinted/ttf/NotoSans/NotoSans-Regular.ttf";
-const PDF_FONT_BOLD = "https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/hinted/ttf/NotoSans/NotoSans-Bold.ttf";
 
 export default function UnsignedContractDeleteWidget() {
   const [open, setOpen] = useState(false);
   const [contracts, setContracts] = useState<CrmContract[]>([]);
   const [loading, setLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [generating, setGenerating] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
   const removableContracts = useMemo(
@@ -73,21 +40,6 @@ export default function UnsignedContractDeleteWidget() {
     );
   }, [removableContracts, searchQuery]);
 
-  useEffect(() => {
-    function interceptGenerateClick(event: MouseEvent) {
-      const button = (event.target as HTMLElement | null)?.closest("button");
-      if (!button || button.textContent?.trim() !== "Generuj PDF") return;
-
-      event.preventDefault();
-      event.stopPropagation();
-      event.stopImmediatePropagation();
-      void generateFromCurrentDrawer();
-    }
-
-    document.addEventListener("click", interceptGenerateClick, true);
-    return () => document.removeEventListener("click", interceptGenerateClick, true);
-  }, []);
-
   async function openPanel() {
     setOpen(true);
     setSearchQuery("");
@@ -102,52 +54,6 @@ export default function UnsignedContractDeleteWidget() {
     }
 
     setContracts((result.data || []) as CrmContract[]);
-  }
-
-  async function generateFromCurrentDrawer() {
-    if (generating) return;
-
-    const draft = readContractDraftFromDrawer();
-    if (!draft) {
-      alert("Otwórz szczegóły zapisanej umowy i spróbuj ponownie.");
-      return;
-    }
-
-    setGenerating(true);
-    const contractsResult = await fetchCrmContracts();
-
-    if (contractsResult.error) {
-      setGenerating(false);
-      console.error("Błąd pobierania umów:", contractsResult.error);
-      alert("Nie udało się pobrać umowy z rejestru.");
-      return;
-    }
-
-    const matchingContract = findMatchingContract((contractsResult.data || []) as CrmContract[], draft);
-    if (!matchingContract) {
-      setGenerating(false);
-      alert("Najpierw zapisz umowę w rejestrze, a potem wygeneruj PDF z wzoru.");
-      return;
-    }
-
-    try {
-      const file = await buildTemplateContractPdf(draft);
-      const uploadResult = await uploadCrmContractPdf(matchingContract.id, file, "generated");
-
-      if (uploadResult.error || !uploadResult.data) {
-        console.error("Błąd zapisu PDF umowy:", uploadResult.error);
-        alert("Nie udało się zapisać wygenerowanego PDF.");
-        return;
-      }
-
-      alert("Umowa została wygenerowana na oryginalnym wzorze PDF. Zmienione są tylko wykropkowane pola.");
-      window.location.reload();
-    } catch (error) {
-      console.error("Błąd generowania PDF z wzoru:", error);
-      alert("Nie udało się wygenerować PDF z wzoru.");
-    } finally {
-      setGenerating(false);
-    }
   }
 
   async function openPdf(path: string | null) {
@@ -239,191 +145,6 @@ export default function UnsignedContractDeleteWidget() {
       )}
     </>
   );
-}
-
-function readContractDraftFromDrawer(): ContractDraftFromDrawer | null {
-  const drawer = Array.from(document.querySelectorAll<HTMLElement>("aside"))
-    .find((aside) => Array.from(aside.querySelectorAll("span"))
-      .some((span) => span.textContent?.trim() === "Numer umowy"));
-  if (!drawer) return null;
-
-  const read = (label: string) => {
-    const rows = Array.from(drawer.querySelectorAll<HTMLElement>("label, div"));
-    const row = rows.find((item) => item.querySelector("span")?.textContent?.trim() === label);
-    const field = row?.querySelector<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("input, select, textarea");
-    return field?.value?.trim() || "";
-  };
-
-  const typeValue = read("Typ umowy").toUpperCase();
-  const typ_umowy: CrmContractType = typeValue.includes("KU") ? "KU" : "KH";
-
-  return {
-    typ_umowy,
-    numer_umowy: read("Numer umowy"),
-    data_zawarcia: read("Data zawarcia"),
-    miejsce_zawarcia: read("Miejsce zawarcia"),
-    pierwszy_okres: read("Pierwszy okres"),
-    nazwa_klienta: read("Nazwa klienta"),
-    siedziba: read("Siedziba"),
-    rejestr: read("Rejestr"),
-    krs: read("KRS"),
-    nip: read("NIP"),
-    reprezentant: read("Reprezentant"),
-    email_klienta: read("Email klienta"),
-    abonament_netto: read("Abonament netto"),
-    limit_dokumentow: read("Limit dokumentów") || read("Limit pozycji"),
-    ustalenia_indywidualne: read("Ustalenia indywidualne"),
-  };
-}
-
-function findMatchingContract(contracts: CrmContract[], draft: ContractDraftFromDrawer) {
-  const byNumber = draft.numer_umowy
-    ? contracts.find((contract) => normalize(contract.numer_umowy) === normalize(draft.numer_umowy))
-    : null;
-  if (byNumber) return byNumber;
-
-  return contracts.find((contract) =>
-    contract.typ_umowy === draft.typ_umowy &&
-    normalize(contract.nazwa_klienta) === normalize(draft.nazwa_klienta)
-  ) || null;
-}
-
-async function buildTemplateContractPdf(draft: ContractDraftFromDrawer) {
-  const PDFLib = await loadPdfLib();
-  const fontkit = await loadPdfFontkit();
-  const templatePath = draft.typ_umowy === "KH" ? "/templates/umowa-crss-kh.pdf" : "/templates/umowa-crss-ku.pdf";
-  const pdfDoc = await PDFLib.PDFDocument.load(await fetchArrayBuffer(templatePath));
-  pdfDoc.registerFontkit(fontkit);
-
-  const [regularFontBytes, boldFontBytes] = await Promise.all([
-    fetchArrayBuffer(PDF_FONT_REGULAR),
-    fetchArrayBuffer(PDF_FONT_BOLD),
-  ]);
-  const regularFont = await pdfDoc.embedFont(regularFontBytes, { subset: true });
-  const boldFont = await pdfDoc.embedFont(boldFontBytes, { subset: true });
-  const textColor = PDFLib.rgb(0.06, 0.16, 0.37);
-  const white = PDFLib.rgb(1, 1, 1);
-  const pages = pdfDoc.getPages();
-
-  const draw = (pageIndex: number, text: string, x: number, y: number, width: number, options: { size?: number; bold?: boolean } = {}) => {
-    const value = text?.trim();
-    if (!value || !pages[pageIndex]) return;
-    const size = options.size || 10.3;
-    const page = pages[pageIndex];
-    page.drawRectangle({ x: x - 1, y: y - 2, width, height: size + 6, color: white });
-    page.drawText(value, { x, y, size, font: options.bold ? boldFont : regularFont, color: textColor, maxWidth: width - 4 });
-  };
-
-  const drawMultiline = (pageIndex: number, text: string, x: number, y: number, width: number, lineHeight = 13.8, maxLines = 5) => {
-    const value = text?.trim();
-    if (!value || !pages[pageIndex]) return;
-    const page = pages[pageIndex];
-    page.drawRectangle({ x: x - 1, y: y - (lineHeight * (maxLines - 1)) - 4, width, height: lineHeight * maxLines + 8, color: white });
-    wrapText(value, regularFont, 10.1, width - 4).slice(0, maxLines).forEach((line, index) => {
-      page.drawText(line, { x, y: y - index * lineHeight, size: 10.1, font: regularFont, color: textColor });
-    });
-  };
-
-  draw(0, draft.numer_umowy, 245, 636.7, 160, { size: 12.5, bold: true });
-  draw(0, formatDisplayDate(draft.data_zawarcia), 141, 591.1, 110);
-  draw(0, draft.miejsce_zawarcia, 319, 591.1, 130);
-  draw(0, draft.nazwa_klienta, 62.4, 571.3, 480);
-  draw(0, draft.siedziba, 128, 551.5, 390);
-  draw(0, draft.rejestr, 120, 531.5, 395);
-
-  if (draft.typ_umowy === "KH") {
-    draw(0, draft.krs, 144, 511.8, 160);
-    draw(0, draft.nip, 144, 491.9, 160);
-    draw(0, draft.reprezentant, 181, 472.1, 320);
-    draw(1, draft.pierwszy_okres, 375, 475.3, 105);
-    draw(4, draft.abonament_netto, 374, 192.4, 105);
-    draw(4, draft.limit_dokumentow, 385, 178.6, 95);
-    draw(9, draft.email_klienta, 313, 572.1, 210);
-    drawMultiline(9, draft.ustalenia_indywidualne, 62.4, 366.3, 470);
-  } else {
-    draw(0, draft.nip, 144, 511.8, 160);
-    draw(0, draft.reprezentant, 181, 491.9, 320);
-    draw(1, draft.pierwszy_okres, 375, 419.9, 105);
-    draw(5, draft.abonament_netto, 374, 544.4, 105);
-    draw(5, draft.limit_dokumentow, 385, 530.6, 95);
-    draw(9, draft.email_klienta, 313, 469.1, 210);
-    drawMultiline(9, draft.ustalenia_indywidualne, 62.4, 263.3, 470);
-  }
-
-  const bytes = await pdfDoc.save();
-  const fileName = sanitizePdfFileName(`Umowa CRSS ${draft.typ_umowy} ${draft.nazwa_klienta || "klient"}.pdf`);
-  return new File([new Blob([bytes], { type: "application/pdf" })], fileName, { type: "application/pdf" });
-}
-
-async function loadPdfLib() {
-  if (!window.PDFLib) await loadExternalScript(PDF_LIB_SCRIPT);
-  if (!window.PDFLib) throw new Error("PDF-lib nie jest dostępny.");
-  return window.PDFLib;
-}
-
-async function loadPdfFontkit() {
-  if (!window.fontkit) await loadExternalScript(PDF_FONTKIT_SCRIPT);
-  if (!window.fontkit) throw new Error("Fontkit nie jest dostępny.");
-  return window.fontkit;
-}
-
-function loadExternalScript(src: string) {
-  return new Promise<void>((resolve, reject) => {
-    const existing = document.querySelector<HTMLScriptElement>(`script[src="${src}"]`);
-    if (existing) {
-      if (existing.dataset.loaded === "true") resolve();
-      else existing.addEventListener("load", () => resolve(), { once: true });
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.src = src;
-    script.async = true;
-    script.onload = () => {
-      script.dataset.loaded = "true";
-      resolve();
-    };
-    script.onerror = () => reject(new Error(`Nie udało się załadować ${src}`));
-    document.head.appendChild(script);
-  });
-}
-
-async function fetchArrayBuffer(url: string) {
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`Nie udało się pobrać zasobu PDF: ${url}`);
-  return response.arrayBuffer();
-}
-
-function wrapText(text: string, font: any, size: number, maxWidth: number) {
-  const words = text.replace(/\s+/g, " ").trim().split(" ");
-  const lines: string[] = [];
-  let currentLine = "";
-
-  for (const word of words) {
-    const candidate = currentLine ? `${currentLine} ${word}` : word;
-    if (font.widthOfTextAtSize(candidate, size) <= maxWidth) {
-      currentLine = candidate;
-    } else {
-      if (currentLine) lines.push(currentLine);
-      currentLine = word;
-    }
-  }
-
-  if (currentLine) lines.push(currentLine);
-  return lines.length ? lines : [""];
-}
-
-function formatDisplayDate(value: string) {
-  if (!value) return "";
-  return new Date(value).toLocaleDateString("pl-PL");
-}
-
-function sanitizePdfFileName(value: string) {
-  const cleaned = value
-    .replace(/[\\/:*?"<>|]/g, "-")
-    .replace(/\s+/g, " ")
-    .trim();
-  return cleaned.toLowerCase().endsWith(".pdf") ? cleaned : `${cleaned || "umowa"}.pdf`;
 }
 
 function normalize(value: string | null | undefined) {

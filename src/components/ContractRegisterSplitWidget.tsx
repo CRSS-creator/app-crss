@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import ContractDocxGenerationWidget from "@/components/ContractDocxGenerationWidget";
 
 type ContractType = "KH" | "KU";
 
@@ -38,7 +39,7 @@ export default function ContractRegisterSplitWidget() {
     };
   }, [activeTab]);
 
-  return null;
+  return <ContractDocxGenerationWidget />;
 }
 
 function splitContractRegister(activeTab: ContractType, setActiveTab: (tab: ContractType) => void) {

@@ -63,8 +63,8 @@ export default function ContractDocxGenerationWidget() {
       return;
     }
 
-    await loadContracts();
     alert("Umowa została wygenerowana i zapisana w rejestrze.");
+    window.location.reload();
   }
 
   return (

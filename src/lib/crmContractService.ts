@@ -89,7 +89,7 @@ export async function requestCrmContractGeneration(contract: CrmContract) {
   if (!response.ok) {
     return {
       data: null,
-      error: new Error(payload?.error || "Nie udało się uruchomić generowania umowy."),
+      error: new Error(payload?.error || "Nie udało się wygenerować umowy."),
     };
   }
 

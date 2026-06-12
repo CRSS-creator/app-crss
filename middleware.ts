@@ -2,6 +2,10 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function middleware(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+  const isLoginPage = pathname === "/login";
+  const isPublicOfferPage = pathname.startsWith("/oferta/");
+
   let response = NextResponse.next({
     request,
   });
@@ -35,9 +39,7 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isLoginPage = request.nextUrl.pathname === "/login";
-
-  if (!user && !isLoginPage) {
+  if (!user && !isLoginPage && !isPublicOfferPage) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 

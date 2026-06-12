@@ -17,21 +17,20 @@ export default function ContractDocxGenerationWidget() {
 
   const visibleContracts = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    return contracts
-      .filter((contract) => contract.typ_umowy === "KH")
-      .filter((contract) => {
-        if (!query) return true;
-        return [
-          contract.numer_umowy,
-          contract.nazwa_klienta,
-          contract.nip,
-          contract.email_klienta,
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase()
-          .includes(query);
-      });
+    return contracts.filter((contract) => {
+      if (!query) return true;
+      return [
+        contract.numer_umowy,
+        contract.nazwa_klienta,
+        contract.nip,
+        contract.email_klienta,
+        contract.typ_umowy,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(query);
+    });
   }, [contracts, searchQuery]);
 
   async function openPanel() {
@@ -79,10 +78,10 @@ export default function ContractDocxGenerationWidget() {
           <aside style={panelStyle} onClick={(event) => event.stopPropagation()}>
             <div style={headerStyle}>
               <div>
-                <p style={eyebrowStyle}>Umowy KH</p>
+                <p style={eyebrowStyle}>Umowy</p>
                 <h2 style={titleStyle}>Generowanie z DOCX</h2>
                 <p style={subtitleStyle}>
-                  Wybierz zapisaną umowę KH. Aplikacja uzupełni wyłącznie znaczniki z szablonu i zapisze gotowy PDF w rejestrze.
+                  Wybierz zapisaną umowę. Aplikacja uzupełni wyłącznie znaczniki z odpowiedniego szablonu i zapisze gotowy PDF w rejestrze.
                 </p>
               </div>
               <button type="button" style={closeStyle} onClick={() => setOpen(false)}>×</button>
@@ -91,21 +90,21 @@ export default function ContractDocxGenerationWidget() {
             <input
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Szukaj po numerze, kliencie, NIP lub emailu"
+              placeholder="Szukaj po numerze, kliencie, typie, NIP lub emailu"
               style={searchInputStyle}
             />
 
             {loading ? (
               <div style={emptyStyle}>Ładowanie umów...</div>
             ) : visibleContracts.length === 0 ? (
-              <div style={emptyStyle}>Brak zapisanych umów KH pasujących do wyszukiwania.</div>
+              <div style={emptyStyle}>Brak zapisanych umów pasujących do wyszukiwania.</div>
             ) : (
               <div style={listStyle}>
                 {visibleContracts.map((contract) => (
                   <div key={contract.id} style={itemStyle}>
                     <div>
                       <strong style={itemTitleStyle}>{contract.numer_umowy || "Umowa bez numeru"}</strong>
-                      <p style={itemMetaStyle}>{contract.nazwa_klienta || "Bez klienta"}</p>
+                      <p style={itemMetaStyle}>{contract.nazwa_klienta || "Bez klienta"} · {contract.typ_umowy}</p>
                       <p style={itemMetaStyle}>{contract.wygenerowany_pdf_name || "Brak wygenerowanego PDF"}</p>
                     </div>
                     <button

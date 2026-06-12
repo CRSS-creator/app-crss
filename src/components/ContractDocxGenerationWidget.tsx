@@ -36,6 +36,10 @@ export default function ContractDocxGenerationWidget() {
 
   async function openPanel() {
     setOpen(true);
+    await loadContracts();
+  }
+
+  async function loadContracts() {
     setLoading(true);
     const result = await fetchCrmContracts();
     setLoading(false);
@@ -60,7 +64,8 @@ export default function ContractDocxGenerationWidget() {
       return;
     }
 
-    alert("Generowanie zostało uruchomione. Po zakończeniu n8n zapisze PDF w rejestrze tej umowy.");
+    await loadContracts();
+    alert("Umowa została wygenerowana i zapisana w rejestrze.");
   }
 
   return (
@@ -77,7 +82,7 @@ export default function ContractDocxGenerationWidget() {
                 <p style={eyebrowStyle}>Umowy KH</p>
                 <h2 style={titleStyle}>Generowanie z DOCX</h2>
                 <p style={subtitleStyle}>
-                  Wybierz zapisaną umowę KH. Aplikacja przekaże dane do n8n, a gotowy PDF wróci do rejestru.
+                  Wybierz zapisaną umowę KH. Aplikacja uzupełni wyłącznie znaczniki z szablonu i zapisze gotowy PDF w rejestrze.
                 </p>
               </div>
               <button type="button" style={closeStyle} onClick={() => setOpen(false)}>×</button>
@@ -109,7 +114,7 @@ export default function ContractDocxGenerationWidget() {
                       onClick={() => generateContract(contract)}
                       disabled={generatingId === contract.id}
                     >
-                      {generatingId === contract.id ? "Uruchamianie..." : "Generuj"}
+                      {generatingId === contract.id ? "Generowanie..." : "Generuj"}
                     </button>
                   </div>
                 ))}

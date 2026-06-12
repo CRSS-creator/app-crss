@@ -9,6 +9,7 @@ import { createDueTaskNotifications, fetchUnreadNotificationsCount } from "@/lib
 import UnsignedContractDeleteWidget from "@/components/UnsignedContractDeleteWidget";
 import ContractRegisterSplitWidget from "@/components/ContractRegisterSplitWidget";
 import CrmLeadDrawerLayoutWidget from "@/components/CrmLeadDrawerLayoutWidget";
+import CrmOfferLeadContextBridge from "@/components/CrmOfferLeadContextBridge";
 import {
   Home,
   Users,
@@ -143,6 +144,7 @@ export default function AppLayout({ children, activePage }: AppLayoutProps) {
       </aside>
 
       <section data-active-page={activePage} style={contentStyle}>
+        {activePage === "crm" && <CrmOfferLeadContextBridge />}
         {children}
         {activePage === "crm" && <CrmLeadDrawerLayoutWidget />}
         {activePage === "umowy" && <ContractRegisterSplitWidget />}

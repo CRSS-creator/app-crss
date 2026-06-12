@@ -121,6 +121,9 @@ function resolveTemplatePath(contractType: CrmContract["typ_umowy"]) {
 }
 
 function buildTemplateFields(contract: CrmContract) {
+  const abonament = formatTemplateValue(contract.abonament_netto);
+  const limitDokumentow = formatTemplateValue(contract.limit_dokumentow);
+
   return {
     numer_umowy: contract.numer_umowy || "",
     pierwszy_okres: contract.pierwszy_okres || "",
@@ -129,8 +132,10 @@ function buildTemplateFields(contract: CrmContract) {
     nip: contract.nip || "",
     reprezentant: contract.reprezentant || "",
     email_klienta: contract.email_klienta || "",
-    abonament_netto: formatTemplateValue(contract.abonament_netto),
-    limit_dokumentow: formatTemplateValue(contract.limit_dokumentow),
+    abonament,
+    abonament_netto: abonament,
+    limit_dokumentow: limitDokumentow,
+    liczba_dokumentow: limitDokumentow,
     obsluga_kadrowa: contract.obsluga_kadrowa ? "tak" : "nie",
     ustalenia_indywidualne: contract.ustalenia_indywidualne || "",
   };

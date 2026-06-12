@@ -10,6 +10,7 @@ import UnsignedContractDeleteWidget from "@/components/UnsignedContractDeleteWid
 import ContractRegisterSplitWidget from "@/components/ContractRegisterSplitWidget";
 import CrmLeadDrawerLayoutWidget from "@/components/CrmLeadDrawerLayoutWidget";
 import CrmOfferLeadContextBridge from "@/components/CrmOfferLeadContextBridge";
+import TaskDeleteBridge from "@/components/TaskDeleteBridge";
 import {
   Home,
   Users,
@@ -145,6 +146,7 @@ export default function AppLayout({ children, activePage }: AppLayoutProps) {
 
       <section data-active-page={activePage} style={contentStyle}>
         {activePage === "crm" && <CrmOfferLeadContextBridge />}
+        {activePage === "zadania" && <TaskDeleteBridge />}
         {children}
         {activePage === "crm" && <CrmLeadDrawerLayoutWidget />}
         {activePage === "umowy" && <ContractRegisterSplitWidget />}

@@ -411,7 +411,7 @@ function ContractDrawer({ contract, leads, clients, onClose, onSaved }: { contra
                 label="Wygenerowany PDF"
                 name={contract.wygenerowany_pdf_name}
                 onOpen={() => openStoredPdf(contract.wygenerowany_pdf_path)}
-                onDownload={() => downloadStoredPdf(contract.wygenerowany_pdf_path, contract.wygenerowany_pdf_name || buildContractDownloadFileName(contract))}
+                onDownload={() => downloadStoredPdf(contract.wygenerowany_pdf_path, buildContractDownloadFileName(contract))}
               />
             )}
             {contract?.podpisany_pdf_path && (

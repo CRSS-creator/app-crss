@@ -124,6 +124,54 @@ export async function updateTask(taskId: string, payload: Partial<TaskPayload>) 
     .single();
 }
 
+export async function deleteTask(taskId: string) {
+  const documentsResult = await supabase
+    .from("zadania_dokumenty")
+    .select("sciezka")
+    .eq("zadanie_id", taskId);
+
+  if (documentsResult.error) {
+    return { error: documentsResult.error };
+  }
+
+  const documentPaths = (documentsResult.data || [])
+    .map((document) => document.sciezka)
+    .filter(Boolean);
+
+  if (documentPaths.length > 0) {
+    const storageResult = await supabase.storage
+      .from("zadania-dokumenty")
+      .remove(documentPaths);
+
+    if (storageResult.error) {
+      return { error: storageResult.error };
+    }
+  }
+
+  const timeResult = await supabase
+    .from("czas_pracy")
+    .delete()
+    .eq("zadanie_id", taskId);
+
+  if (timeResult.error) {
+    return { error: timeResult.error };
+  }
+
+  const documentsDeleteResult = await supabase
+    .from("zadania_dokumenty")
+    .delete()
+    .eq("zadanie_id", taskId);
+
+  if (documentsDeleteResult.error) {
+    return { error: documentsDeleteResult.error };
+  }
+
+  return supabase
+    .from("zadania")
+    .delete()
+    .eq("id", taskId);
+}
+
 export async function fetchTaskTimeEntries(taskId: string) {
   return supabase
     .from("czas_pracy")

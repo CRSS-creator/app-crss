@@ -329,6 +329,33 @@ function ContractDrawer({ contract, leads, clients, onClose, onSaved }: { contra
     window.open(data.signedUrl, "_blank", "noopener,noreferrer");
   }
 
+  async function downloadStoredPdf(path: string | null, fileName: string | null) {
+    if (!path) return;
+    const { data, error } = await createCrmContractSignedUrl(path);
+    if (error || !data?.signedUrl) {
+      alert("Nie udało się pobrać PDF.");
+      return;
+    }
+
+    try {
+      const response = await fetch(data.signedUrl);
+      if (!response.ok) throw new Error("Nie udało się pobrać pliku.");
+
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = fileName || "umowa.pdf";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch (error) {
+      console.error("Błąd pobierania PDF:", error);
+      alert("Nie udało się pobrać PDF.");
+    }
+  }
+
   return (
     <div style={drawerOverlayStyle} onClick={onClose}>
       <aside style={drawerStyle} onClick={(event) => event.stopPropagation()}>
@@ -379,8 +406,22 @@ function ContractDrawer({ contract, leads, clients, onClose, onSaved }: { contra
               <button style={secondaryButtonStyle} onClick={() => generatedInputRef.current?.click()} disabled={uploading || !contract}>{uploading ? "Dodawanie..." : "Dodaj wygenerowany PDF"}</button>
               <button style={primarySmallButtonStyle} onClick={() => signedInputRef.current?.click()} disabled={uploading || !contract}>{uploading ? "Dodawanie..." : "Dodaj podpisany PDF"}</button>
             </div>
-            {contract?.wygenerowany_pdf_path && <FileRow label="Wygenerowany PDF" name={contract.wygenerowany_pdf_name} onOpen={() => openStoredPdf(contract.wygenerowany_pdf_path)} />}
-            {contract?.podpisany_pdf_path && <FileRow label="Podpisany PDF" name={contract.podpisany_pdf_name} onOpen={() => openStoredPdf(contract.podpisany_pdf_path)} />}
+            {contract?.wygenerowany_pdf_path && (
+              <FileRow
+                label="Wygenerowany PDF"
+                name={contract.wygenerowany_pdf_name}
+                onOpen={() => openStoredPdf(contract.wygenerowany_pdf_path)}
+                onDownload={() => downloadStoredPdf(contract.wygenerowany_pdf_path, contract.wygenerowany_pdf_name || buildContractDownloadFileName(contract))}
+              />
+            )}
+            {contract?.podpisany_pdf_path && (
+              <FileRow
+                label="Podpisany PDF"
+                name={contract.podpisany_pdf_name}
+                onOpen={() => openStoredPdf(contract.podpisany_pdf_path)}
+                onDownload={() => downloadStoredPdf(contract.podpisany_pdf_path, contract.podpisany_pdf_name || buildContractDownloadFileName(contract))}
+              />
+            )}
             {!contract && <p style={hintStyle}>Najpierw zapisz umowę, aby dodać pliki PDF do rejestru.</p>}
           </FormSection>
         </div>
@@ -440,6 +481,21 @@ function formatMoney(value: number | null) {
 
 function statusLabel(status: CrmContractStatus) {
   return CONTRACT_STATUSES.find((item) => item.value === status)?.label || status;
+}
+
+function buildContractDownloadFileName(contract: CrmContract) {
+  const numberPart = sanitizeFileNamePart(contract.numer_umowy || "bez-numeru");
+  const contractorPart = sanitizeFileNamePart(contract.nazwa_klienta || "kontrahent");
+  return `umowa_${numberPart}_${contractorPart}.pdf`;
+}
+
+function sanitizeFileNamePart(value: string) {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "") || "brak";
 }
 
 function StatusBadge({ status }: { status: CrmContractStatus }) {
@@ -526,8 +582,19 @@ function EditableTextarea({ label, value, onChange }: { label: string; value: st
   return <label style={textareaRowStyle}><span>{label}</span><textarea value={value} onChange={(event) => onChange(event.target.value)} style={textareaStyle} rows={4} /></label>;
 }
 
-function FileRow({ label, name, onOpen }: { label: string; name: string | null; onOpen: () => void }) {
-  return <div style={fileRowStyle}><div><strong>{label}</strong><span>{name || "PDF"}</span></div><button style={secondaryButtonStyle} onClick={onOpen}>Otwórz</button></div>;
+function FileRow({ label, name, onOpen, onDownload }: { label: string; name: string | null; onOpen: () => void; onDownload: () => void }) {
+  return (
+    <div style={fileRowStyle}>
+      <div>
+        <strong>{label}</strong>
+        <span>{name || "PDF"}</span>
+      </div>
+      <div style={fileRowActionsStyle}>
+        <button style={secondaryButtonStyle} onClick={onOpen}>Otwórz</button>
+        <button style={primarySmallButtonStyle} onClick={onDownload}>Pobierz</button>
+      </div>
+    </div>
+  );
 }
 
 function Th({ children }: { children: React.ReactNode }) { return <th style={thStyle}>{children}</th>; }
@@ -574,4 +641,5 @@ const comboOptionStyle: React.CSSProperties = { width: "100%", border: "none", b
 const comboEmptyStyle: React.CSSProperties = { padding: "12px", color: colors.muted, fontWeight: 700, lineHeight: 1.5 };
 const fileActionsPanelStyle: React.CSSProperties = { display: "flex", gap: "10px", flexWrap: "wrap", marginBottom: "12px" };
 const fileRowStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "12px", display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", marginTop: "10px" };
+const fileRowActionsStyle: React.CSSProperties = { display: "flex", gap: "8px", flexWrap: "wrap", justifyContent: "flex-end" };
 const hintStyle: React.CSSProperties = { color: colors.muted, fontSize: "13px", lineHeight: 1.6 };

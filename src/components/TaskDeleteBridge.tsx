@@ -14,13 +14,13 @@ export default function TaskDeleteBridge() {
   }, [busy]);
 
   useEffect(() => {
-    function findDrawer() {
-      return document.querySelector("aside");
-    }
-
     function getTaskTitle(drawer: Element) {
       const title = drawer.querySelector("h2")?.textContent?.trim() || "";
       return title === "Dodaj zadanie" ? "" : title;
+    }
+
+    function findDrawer() {
+      return Array.from(document.querySelectorAll("aside")).find((drawer) => Boolean(getTaskTitle(drawer))) || null;
     }
 
     async function handleDelete(drawer: Element) {
@@ -69,7 +69,7 @@ export default function TaskDeleteBridge() {
 
     function injectButton() {
       const drawer = findDrawer();
-      if (!drawer || !getTaskTitle(drawer) || drawer.querySelector(`#${BRIDGE_BUTTON_ID}`)) return;
+      if (!drawer || drawer.querySelector(`#${BRIDGE_BUTTON_ID}`)) return;
 
       const header = drawer.querySelector("header");
       if (!header) return;

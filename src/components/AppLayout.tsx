@@ -11,6 +11,7 @@ import ContractRegisterSplitWidget from "@/components/ContractRegisterSplitWidge
 import CrmLeadDrawerLayoutWidget from "@/components/CrmLeadDrawerLayoutWidget";
 import CrmOfferLeadContextBridge from "@/components/CrmOfferLeadContextBridge";
 import CrmFollowUpTaskBridge from "@/components/CrmFollowUpTaskBridge";
+import CrmUiAdjustmentsBridge from "@/components/CrmUiAdjustmentsBridge";
 import TaskDeleteBridge from "@/components/TaskDeleteBridge";
 import {
   Home,
@@ -148,6 +149,7 @@ export default function AppLayout({ children, activePage }: AppLayoutProps) {
       <section data-active-page={activePage} style={contentStyle}>
         {activePage === "crm" && <CrmOfferLeadContextBridge />}
         {activePage === "crm" && <CrmFollowUpTaskBridge />}
+        {activePage === "crm" && <CrmUiAdjustmentsBridge />}
         {activePage === "zadania" && <TaskDeleteBridge />}
         {children}
         {activePage === "crm" && <CrmLeadDrawerLayoutWidget />}

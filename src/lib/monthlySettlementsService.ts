@@ -15,6 +15,7 @@ type SettlementClient = {
   opiekun_id: string | null;
   forma_prawna: string | null;
   forma_opodatkowania: string | null;
+  model_fakturowania: string | null;
   czynny_vat: boolean | null;
   profiles?: {
     full_name: string | null;
@@ -61,6 +62,7 @@ const SETTLEMENT_SELECT = `
     opiekun_id,
     forma_prawna,
     forma_opodatkowania,
+    model_fakturowania,
     czynny_vat,
     profiles!klienci_opiekun_id_fkey (
       full_name,

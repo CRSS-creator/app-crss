@@ -470,9 +470,8 @@ function LeadDrawer({ mode, lead, tasks, onClose, onCreated, onSaved, onDeleted,
             <EditableInput label="Data wysłania propozycji" type="date" value={draft.data_wyslania_oferty} onChange={(value) => updateDraft("data_wyslania_oferty", value)} />
             <EditableInput label="Data follow-up" type="date" value={draft.data_follow_up} onChange={(value) => updateDraft("data_follow_up", value)} />
             <EditableTextarea label="Powód kontaktu" value={draft.powod_kontaktu} onChange={(value) => updateDraft("powod_kontaktu", value)} />
-            <EditableTextarea label="Powód zmiany biura" value={draft.powod_zmiany_biura} onChange={(value) => updateDraft("powod_zmiany_biura", value)} />
             <EditableTextarea label="Powód przegranej" value={draft.powod_przegranej} onChange={(value) => updateDraft("powod_przegranej", value)} />
-            <EditableTextarea label="Notatki" value={draft.notatki} onChange={(value) => updateDraft("notatki", value)} />
+            <EditableTextarea label="Notatki" value={draft.notatki} onChange={(value) => updateDraft("notatki", value)} rows={8} />
           </FormSection>
         </div>
       </aside>
@@ -501,7 +500,7 @@ function FormSection({ title, children }: { title: string; children: React.React
 function EditableInput({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (value: string) => void; type?: "text" | "number" | "email" | "date" }) { return <label style={editableRowStyle}><span>{label}</span><input type={type} value={value} onChange={(event) => onChange(event.target.value)} style={inputStyle} /></label>; }
 function EditableSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: { value: string; label: string }[] }) { return <label style={editableRowStyle}><span>{label}</span><select value={value} onChange={(event) => onChange(event.target.value)} style={inputStyle}>{options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>; }
 function EditableCheckbox({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) { return <label style={editableRowStyle}><span>{label}</span><input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} /></label>; }
-function EditableTextarea({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) { return <label style={textareaRowStyle}><span>{label}</span><textarea value={value} onChange={(event) => onChange(event.target.value)} style={textareaStyle} rows={4} /></label>; }
+function EditableTextarea({ label, value, onChange, rows = 4 }: { label: string; value: string; onChange: (value: string) => void; rows?: number }) { return <label style={textareaRowStyle}><span>{label}</span><textarea value={value} onChange={(event) => onChange(event.target.value)} style={textareaStyle} rows={rows} /></label>; }
 function Th({ children }: { children: React.ReactNode }) { return <th style={thStyle}>{children}</th>; }
 function Td({ children, strong }: { children: React.ReactNode; strong?: boolean }) { return <td style={{ ...tdStyle, fontWeight: strong ? 800 : 500 }}>{children}</td>; }
 function Badge({ children }: { children: React.ReactNode }) { return <span style={badgeStyle}>{children}</span>; }

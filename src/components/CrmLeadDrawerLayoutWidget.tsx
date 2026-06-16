@@ -4,7 +4,7 @@ import { useEffect } from "react";
 
 const LARGE_FIELD_ROWS: Record<string, string> = {
   "Powód kontaktu": "2 / span 3",
-  "Notatki": "5 / span 6",
+  "Notatki": "5 / span 9",
 };
 
 const RIGHT_FIELD_ROWS: Record<string, string> = {
@@ -93,7 +93,7 @@ function prepareLargeTextField(label: HTMLLabelElement, gridRow: string, isNotes
 
   const textarea = label.querySelector<HTMLTextAreaElement>("textarea");
   if (!textarea) return;
-  textarea.style.minHeight = isNotes ? "360px" : "190px";
+  textarea.style.minHeight = isNotes ? "520px" : "190px";
   textarea.style.width = "100%";
   textarea.style.lineHeight = "1.65";
 }

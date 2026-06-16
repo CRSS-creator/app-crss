@@ -64,7 +64,6 @@ function NotificationsContent() {
       <section style={summaryGridStyle}>
         <SummaryCard label="Nieprzeczytane" value={unreadCount} />
         <SummaryCard label="Wszystkie" value={notifications.length} />
-        <SummaryCard label="Pilne" value={notifications.filter((item) => item.priority === "high").length} />
       </section>
 
       <section style={cardStyle}>
@@ -135,7 +134,7 @@ const headerStyle: React.CSSProperties = { display: "flex", justifyContent: "spa
 const eyebrowStyle: React.CSSProperties = { margin: "0 0 8px", color: colors.red, fontWeight: 800 };
 const titleStyle: React.CSSProperties = { margin: 0, color: colors.navy, fontSize: "42px", lineHeight: 1.05 };
 const subtitleStyle: React.CSSProperties = { maxWidth: "760px", color: colors.muted, fontSize: "17px", lineHeight: 1.7 };
-const summaryGridStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "18px", marginBottom: "24px" };
+const summaryGridStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "18px", marginBottom: "24px" };
 const summaryCardStyle: React.CSSProperties = { background: colors.card, border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: "22px", boxShadow: shadow.soft, display: "flex", flexDirection: "column", gap: "10px", color: colors.muted, fontWeight: 800 };
 const cardStyle: React.CSSProperties = { background: colors.card, border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: "24px", boxShadow: shadow.soft };
 const emptyStyle: React.CSSProperties = { border: `1px dashed ${colors.border}`, borderRadius: radius.input, padding: "22px", color: colors.muted, fontWeight: 800, textAlign: "center" };

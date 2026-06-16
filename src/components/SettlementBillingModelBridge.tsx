@@ -55,11 +55,11 @@ function enhanceSettlements(clients: ClientBillingRow[], filterRef: React.Mutabl
   const page = document.querySelector<HTMLElement>('[data-active-page="rozliczenia"]');
   if (!page) return;
 
-  addFilter(page, filterRef);
+  addFilter(page, clients, filterRef);
   addBillingColumn(page, clients, filterRef.current);
 }
 
-function addFilter(page: HTMLElement, filterRef: React.MutableRefObject<string>) {
+function addFilter(page: HTMLElement, clients: ClientBillingRow[], filterRef: React.MutableRefObject<string>) {
   const filtersRow = Array.from(page.querySelectorAll<HTMLElement>("div")).find((element) => element.textContent?.trim().startsWith("Filtry:"));
   if (!filtersRow || filtersRow.querySelector('[data-crss-billing-filter="1"]')) return;
 
@@ -87,7 +87,7 @@ function addFilter(page: HTMLElement, filterRef: React.MutableRefObject<string>)
 
   select.addEventListener("change", () => {
     filterRef.current = select.value;
-    addBillingColumn(page, getClientsFromRows(page), filterRef.current);
+    addBillingColumn(page, clients, filterRef.current);
   });
 
   filtersRow.appendChild(select);
@@ -149,8 +149,4 @@ function buildBadge(model: string) {
 function findClientForRow(row: HTMLTableRowElement, clients: ClientBillingRow[]) {
   const text = row.children[0]?.textContent || "";
   return clients.find((client) => client.nip && text.includes(client.nip)) || null;
-}
-
-function getClientsFromRows(_page: HTMLElement) {
-  return [] as ClientBillingRow[];
 }

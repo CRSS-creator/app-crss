@@ -11,6 +11,7 @@ export type RecurringTask = {
   formy_prawne: string[] | null;
   formy_opodatkowania: string[] | null;
   wymaga_czynnego_vat: boolean | null;
+  wymaga_vat_ue: boolean | null;
   czestotliwosc: "miesieczne" | "roczne";
   miesiac_roczny: number | null;
   dzien_miesiaca: number;
@@ -35,6 +36,7 @@ export type RecurringTaskPayload = {
   formy_prawne?: string[] | null;
   formy_opodatkowania?: string[] | null;
   wymaga_czynnego_vat?: boolean | null;
+  wymaga_vat_ue?: boolean | null;
   czestotliwosc?: "miesieczne" | "roczne";
   miesiac_roczny?: number | null;
   dzien_miesiaca: number;
@@ -48,6 +50,7 @@ export type RecurringTaskClientContext = {
   forma_prawna?: string | null;
   forma_opodatkowania?: string | null;
   czynny_vat?: boolean | null;
+  vat_ue?: boolean | null;
 };
 
 const RECURRING_TASK_SELECT = `
@@ -128,8 +131,9 @@ export function recurringTaskMatchesClient(task: RecurringTask, client: Recurrin
   const legalMatch = legalForms.length === 0 || legalForms.includes(client?.forma_prawna || "");
   const taxMatch = taxationForms.length === 0 || taxationForms.includes(client?.forma_opodatkowania || "");
   const vatMatch = task.wymaga_czynnego_vat === null || task.wymaga_czynnego_vat === undefined || task.wymaga_czynnego_vat === Boolean(client?.czynny_vat);
+  const vatUeMatch = task.wymaga_vat_ue === null || task.wymaga_vat_ue === undefined || task.wymaga_vat_ue === Boolean(client?.vat_ue);
 
-  return legalMatch && taxMatch && vatMatch;
+  return legalMatch && taxMatch && vatMatch && vatUeMatch;
 }
 
 export function recurringScopeLabel(task: RecurringTask) {
@@ -137,10 +141,12 @@ export function recurringScopeLabel(task: RecurringTask) {
   const legalForms = task.formy_prawne?.length ? task.formy_prawne : task.forma_prawna ? [task.forma_prawna] : [];
   const taxationForms = task.formy_opodatkowania?.length ? task.formy_opodatkowania : task.forma_opodatkowania ? [task.forma_opodatkowania] : [];
   const vatLabel = task.wymaga_czynnego_vat === true ? "czynny VAT" : task.wymaga_czynnego_vat === false ? "bez VAT" : null;
+  const vatUeLabel = task.wymaga_vat_ue === true ? "VAT-UE" : task.wymaga_vat_ue === false ? "bez VAT-UE" : null;
   return [
     legalForms.length ? legalForms.join(", ") : "każda forma",
     taxationForms.length ? taxationForms.join(", ") : "każde opodatkowanie",
     vatLabel,
+    vatUeLabel,
   ].filter(Boolean).join(" · ");
 }
 

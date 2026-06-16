@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type MutableRefObject } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
 type ClientBillingRow = {
@@ -54,7 +54,7 @@ export default function SettlementBillingModelBridge() {
   return null;
 }
 
-function addFilter(page: HTMLElement, clientsRef: React.MutableRefObject<ClientBillingRow[]>, filterRef: React.MutableRefObject<string>) {
+function addFilter(page: HTMLElement, clientsRef: MutableRefObject<ClientBillingRow[]>, filterRef: MutableRefObject<string>) {
   const filtersRow = Array.from(page.querySelectorAll<HTMLElement>("div")).find((element) => element.textContent?.trim().startsWith("Filtry:"));
   if (!filtersRow || filtersRow.querySelector('[data-crss-billing-filter="1"]')) return;
 

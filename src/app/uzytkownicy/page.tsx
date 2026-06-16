@@ -18,14 +18,7 @@ import {
   updateRecurringTask,
   type RecurringTask,
 } from "@/lib/recurringTasksService";
-import type { ProfileSummary, TaskPriority } from "@/lib/taskService";
-
-const PRIORITY_OPTIONS: { value: TaskPriority; label: string }[] = [
-  { value: "niski", label: "Niski" },
-  { value: "normalny", label: "Normalny" },
-  { value: "wysoki", label: "Wysoki" },
-  { value: "pilne", label: "Pilne" },
-];
+import type { ProfileSummary } from "@/lib/taskService";
 
 const ROLE_OPTIONS = [
   { value: "owner", label: "Owner" },
@@ -86,7 +79,6 @@ type TemplateDraft = {
   czestotliwosc: FrequencyMode;
   miesiac_roczny: string;
   dzien_miesiaca: string;
-  priorytet: TaskPriority;
   aktywne: boolean;
 };
 
@@ -102,7 +94,6 @@ const emptyDraft: TemplateDraft = {
   czestotliwosc: "miesieczne",
   miesiac_roczny: "3",
   dzien_miesiaca: "10",
-  priorytet: "normalny",
   aktywne: true,
 };
 
@@ -164,7 +155,7 @@ function SettingsContent() {
       czestotliwosc: draft.czestotliwosc,
       miesiac_roczny: annualMonth,
       dzien_miesiaca: day,
-      priorytet: draft.priorytet,
+      priorytet: "normalny" as const,
       osoba_id: null,
       aktywne: draft.aktywne,
     };
@@ -216,7 +207,6 @@ function SettingsContent() {
       czestotliwosc: template.czestotliwosc || "miesieczne",
       miesiac_roczny: String(template.miesiac_roczny || 3),
       dzien_miesiaca: String(template.dzien_miesiaca || 10),
-      priorytet: template.priorytet,
       aktywne: template.aktywne,
     });
   }
@@ -309,7 +299,6 @@ function TemplatesTab({ templates, clients, draft, loading, saving, setDraft, on
         <Field label="Cykl"><select style={inputStyle} value={draft.czestotliwosc} onChange={(event) => setDraft((current) => ({ ...current, czestotliwosc: event.target.value as FrequencyMode }))}>{FREQUENCY_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field>
         {draft.czestotliwosc === "roczne" && <Field label="Miesiąc"><select style={inputStyle} value={draft.miesiac_roczny} onChange={(event) => setDraft((current) => ({ ...current, miesiac_roczny: event.target.value }))}>{MONTH_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field>}
         <Field label="Dzień miesiąca"><input style={inputStyle} type="number" min={1} max={31} value={draft.dzien_miesiaca} onChange={(event) => setDraft((current) => ({ ...current, dzien_miesiaca: event.target.value }))} /></Field>
-        <Field label="Priorytet"><select style={inputStyle} value={draft.priorytet} onChange={(event) => setDraft((current) => ({ ...current, priorytet: event.target.value as TaskPriority }))}>{PRIORITY_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field>
         <Field label="Osoba odpowiedzialna"><div style={staticValueStyle}>Opiekun klienta</div></Field>
 
         <ClientPicker
@@ -336,15 +325,14 @@ function TemplatesTab({ templates, clients, draft, loading, saving, setDraft, on
 
       <div style={tableShellStyle}>
         <table style={tableStyle}>
-          <thead><tr><Th>Zadanie</Th><Th>Zakres</Th><Th>Cykl</Th><Th>Termin</Th><Th>Priorytet</Th><Th>Obejmuje</Th><Th>Status</Th><Th>Akcje</Th></tr></thead>
+          <thead><tr><Th>Zadanie</Th><Th>Zakres</Th><Th>Cykl</Th><Th>Termin</Th><Th>Obejmuje</Th><Th>Status</Th><Th>Akcje</Th></tr></thead>
           <tbody>
-            {loading ? <tr><Td colSpan={8}>Ładowanie ustawień...</Td></tr> : sortedTemplates.length === 0 ? <tr><Td colSpan={8}>Brak szablonów cyklicznych.</Td></tr> : sortedTemplates.map((template) => (
+            {loading ? <tr><Td colSpan={7}>Ładowanie ustawień...</Td></tr> : sortedTemplates.length === 0 ? <tr><Td colSpan={7}>Brak szablonów cyklicznych.</Td></tr> : sortedTemplates.map((template) => (
               <tr key={template.id} style={rowStyle}>
                 <Td strong>{template.tytul}<Small>{template.opis || "Brak opisu"}</Small></Td>
                 <Td>{scopeLabel(template, clients)}</Td>
                 <Td><Badge>{recurringFrequencyLabel(template)}</Badge></Td>
                 <Td>{template.czestotliwosc === "roczne" ? `${monthLabel(template.miesiac_roczny)} · ${template.dzien_miesiaca}` : `Dzień ${template.dzien_miesiaca}`}</Td>
-                <Td><Badge>{priorityLabel(template.priorytet)}</Badge></Td>
                 <Td>{matchingClientsCount(template, clients)} klientów</Td>
                 <Td><span style={template.aktywne ? activeBadgeStyle : inactiveBadgeStyle}>{template.aktywne ? "Aktywny" : "Wyłączony"}</span></Td>
                 <Td><div style={actionsStyle}><button style={secondaryButtonStyle} onClick={() => onEdit(template)}>Edytuj</button><button style={secondaryButtonStyle} onClick={() => onToggle(template)}>{template.aktywne ? "Wyłącz" : "Włącz"}</button><button style={dangerButtonStyle} onClick={() => onRemove(template)}>Usuń</button></div></Td>
@@ -408,7 +396,6 @@ function Badge({ children }: { children: ReactNode }) { return <span style={badg
 function Small({ children }: { children: ReactNode }) { return <small style={smallTextStyle}>{children}</small>; }
 
 function profileName(user: UserProfile | ProfileSummary) { return user.full_name || user.email || "Użytkownik"; }
-function priorityLabel(priority: TaskPriority) { return PRIORITY_OPTIONS.find((item) => item.value === priority)?.label || priority; }
 function monthLabel(month: number | null | undefined) { return MONTH_OPTIONS.find((item) => item.value === month)?.label || "Rok"; }
 function vatModeToValue(mode: VatMode) { return mode === "active" ? true : mode === "inactive" ? false : null; }
 function valueToVatMode(value: boolean | null | undefined): VatMode { return value === true ? "active" : value === false ? "inactive" : "any"; }

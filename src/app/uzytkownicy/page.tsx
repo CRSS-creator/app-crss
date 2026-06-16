@@ -1,14 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
 import { colors, radius, shadow } from "@/app/design";
 import { supabase } from "@/lib/supabaseClient";
-import { fetchClientCaregivers, fetchClients } from "@/lib/clientService";
+import { fetchClients } from "@/lib/clientService";
 import { LEGAL_FORM_OPTIONS, TAXATION_FORM_OPTIONS } from "@/lib/clientDictionaries";
 import {
   createRecurringTask,
+  createRecurringTasks,
   deleteRecurringTask,
   fetchRecurringTaskTemplates,
   recurringTaskMatchesClient,
@@ -16,7 +17,7 @@ import {
   updateRecurringTask,
   type RecurringTask,
 } from "@/lib/recurringTasksService";
-import type { TaskPriority, ProfileSummary } from "@/lib/taskService";
+import type { ProfileSummary, TaskPriority } from "@/lib/taskService";
 
 const PRIORITY_OPTIONS: { value: TaskPriority; label: string }[] = [
   { value: "niski", label: "Niski" },
@@ -24,12 +25,14 @@ const PRIORITY_OPTIONS: { value: TaskPriority; label: string }[] = [
   { value: "wysoki", label: "Wysoki" },
   { value: "pilne", label: "Pilne" },
 ];
+
 const ROLE_OPTIONS = [
   { value: "owner", label: "Owner" },
   { value: "manager", label: "Manager" },
   { value: "admin", label: "Admin" },
   { value: "accountant", label: "Accountant" },
 ];
+
 const VAT_OPTIONS = [
   { value: "any", label: "Dowolny VAT" },
   { value: "active", label: "Tylko czynny VAT" },
@@ -39,17 +42,27 @@ const VAT_OPTIONS = [
 type SettingsTab = "templates" | "users";
 type VatMode = typeof VAT_OPTIONS[number]["value"];
 type UserProfile = ProfileSummary & { id: string; role: string | null };
-type ClientRow = { id: string; nazwa: string | null; forma_prawna: string | null; forma_opodatkowania: string | null; czynny_vat: boolean | null; opiekun_id: string | null };
+type ClientRow = {
+  id: string;
+  nazwa: string | null;
+  nip: string | null;
+  forma_prawna: string | null;
+  forma_opodatkowania: string | null;
+  czynny_vat: boolean | null;
+  opiekun_id: string | null;
+};
+
 type TemplateDraft = {
   id: string | null;
   tytul: string;
   opis: string;
+  klient_ids: string[];
+  clientSearch: string;
   formy_prawne: string[];
   formy_opodatkowania: string[];
   vatMode: VatMode;
   dzien_miesiaca: string;
   priorytet: TaskPriority;
-  osoba_id: string;
   aktywne: boolean;
 };
 
@@ -57,12 +70,13 @@ const emptyDraft: TemplateDraft = {
   id: null,
   tytul: "",
   opis: "",
+  klient_ids: [],
+  clientSearch: "",
   formy_prawne: [],
   formy_opodatkowania: [],
   vatMode: "any",
   dzien_miesiaca: "10",
   priorytet: "normalny",
-  osoba_id: "",
   aktywne: true,
 };
 
@@ -81,7 +95,6 @@ function SettingsContent() {
   const [templates, setTemplates] = useState<RecurringTask[]>([]);
   const [clients, setClients] = useState<ClientRow[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
-  const [assignees, setAssignees] = useState<UserProfile[]>([]);
   const [draft, setDraft] = useState<TemplateDraft>(emptyDraft);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -92,61 +105,57 @@ function SettingsContent() {
 
   async function loadSettings() {
     setLoading(true);
-    const [templatesResult, clientsResult, usersResult, assigneesResult] = await Promise.all([
+    const [templatesResult, clientsResult, usersResult] = await Promise.all([
       fetchRecurringTaskTemplates(),
       fetchClients(),
       supabase.from("profiles").select("id, full_name, email, role").order("full_name", { ascending: true }),
-      fetchClientCaregivers(),
     ]);
 
     if (templatesResult.error) console.error("Błąd pobierania szablonów:", templatesResult.error);
     if (clientsResult.error) console.error("Błąd pobierania klientów:", clientsResult.error);
     if (usersResult.error) console.error("Błąd pobierania użytkowników:", usersResult.error);
-    if (assigneesResult.error) console.error("Błąd pobierania osób:", assigneesResult.error);
 
     setTemplates((templatesResult.data || []) as RecurringTask[]);
     setClients((clientsResult.data || []) as ClientRow[]);
     setUsers((usersResult.data || []) as UserProfile[]);
-    setAssignees((assigneesResult.data || []) as UserProfile[]);
     setLoading(false);
   }
 
-  const activeTemplates = templates.filter((template) => template.aktywne).length;
-  const inactiveTemplates = templates.length - activeTemplates;
-
   async function saveTemplate() {
     if (!draft.tytul.trim()) return alert("Wpisz nazwę zadania cyklicznego.");
-    const day = Math.min(31, Math.max(1, Number(draft.dzien_miesiaca || 10)));
-    setSaving(true);
 
+    const day = Math.min(31, Math.max(1, Number(draft.dzien_miesiaca || 10)));
+    const hasClientSelection = draft.klient_ids.length > 0;
     const payload = {
-      klient_id: null,
       tytul: draft.tytul.trim(),
       opis: draft.opis.trim() || null,
-      forma_prawna: draft.formy_prawne.length === 1 ? draft.formy_prawne[0] : null,
-      forma_opodatkowania: draft.formy_opodatkowania.length === 1 ? draft.formy_opodatkowania[0] : null,
-      formy_prawne: draft.formy_prawne.length ? draft.formy_prawne : null,
-      formy_opodatkowania: draft.formy_opodatkowania.length ? draft.formy_opodatkowania : null,
-      wymaga_czynnego_vat: vatModeToValue(draft.vatMode),
+      forma_prawna: !hasClientSelection && draft.formy_prawne.length === 1 ? draft.formy_prawne[0] : null,
+      forma_opodatkowania: !hasClientSelection && draft.formy_opodatkowania.length === 1 ? draft.formy_opodatkowania[0] : null,
+      formy_prawne: !hasClientSelection && draft.formy_prawne.length ? draft.formy_prawne : null,
+      formy_opodatkowania: !hasClientSelection && draft.formy_opodatkowania.length ? draft.formy_opodatkowania : null,
+      wymaga_czynnego_vat: hasClientSelection ? null : vatModeToValue(draft.vatMode),
       dzien_miesiaca: day,
       priorytet: draft.priorytet,
-      osoba_id: draft.osoba_id || null,
+      osoba_id: null,
       aktywne: draft.aktywne,
     };
 
+    setSaving(true);
     const result = draft.id
-      ? await updateRecurringTask(draft.id, payload)
-      : await createRecurringTask(payload);
-
+      ? await updateRecurringTask(draft.id, { ...payload, klient_id: draft.klient_ids[0] || null })
+      : hasClientSelection
+        ? await createRecurringTasks(draft.klient_ids.map((clientId) => ({ ...payload, klient_id: clientId })))
+        : await createRecurringTask({ ...payload, klient_id: null });
     setSaving(false);
+
     if (result.error) {
       console.error("Błąd zapisu szablonu:", result.error);
       alert("Nie udało się zapisać szablonu.");
       return;
     }
 
-    const saved = result.data as RecurringTask;
-    setTemplates((current) => draft.id ? current.map((item) => item.id === saved.id ? saved : item) : [saved, ...current]);
+    const savedRows = Array.isArray(result.data) ? result.data as RecurringTask[] : [result.data as RecurringTask];
+    setTemplates((current) => draft.id ? current.map((item) => item.id === savedRows[0].id ? savedRows[0] : item) : [...savedRows, ...current]);
     setDraft(emptyDraft);
   }
 
@@ -165,6 +174,22 @@ function SettingsContent() {
     if (draft.id === template.id) setDraft(emptyDraft);
   }
 
+  function editTemplate(template: RecurringTask) {
+    setDraft({
+      id: template.id,
+      tytul: template.tytul,
+      opis: template.opis || "",
+      klient_ids: template.klient_id ? [template.klient_id] : [],
+      clientSearch: "",
+      formy_prawne: template.formy_prawne?.length ? template.formy_prawne : template.forma_prawna ? [template.forma_prawna] : [],
+      formy_opodatkowania: template.formy_opodatkowania?.length ? template.formy_opodatkowania : template.forma_opodatkowania ? [template.forma_opodatkowania] : [],
+      vatMode: valueToVatMode(template.wymaga_czynnego_vat),
+      dzien_miesiaca: String(template.dzien_miesiaca || 10),
+      priorytet: template.priorytet,
+      aktywne: template.aktywne,
+    });
+  }
+
   async function updateUserRole(user: UserProfile, role: string) {
     const result = await supabase.from("profiles").update({ role }).eq("id", user.id).select("id, full_name, email, role").single();
     if (result.error) {
@@ -175,20 +200,7 @@ function SettingsContent() {
     setUsers((current) => current.map((item) => item.id === user.id ? result.data as UserProfile : item));
   }
 
-  function editTemplate(template: RecurringTask) {
-    setDraft({
-      id: template.id,
-      tytul: template.tytul,
-      opis: template.opis || "",
-      formy_prawne: template.formy_prawne?.length ? template.formy_prawne : template.forma_prawna ? [template.forma_prawna] : [],
-      formy_opodatkowania: template.formy_opodatkowania?.length ? template.formy_opodatkowania : template.forma_opodatkowania ? [template.forma_opodatkowania] : [],
-      vatMode: valueToVatMode(template.wymaga_czynnego_vat),
-      dzien_miesiaca: String(template.dzien_miesiaca || 10),
-      priorytet: template.priorytet,
-      osoba_id: template.osoba_id || "",
-      aktywne: template.aktywne,
-    });
-  }
+  const activeTemplates = templates.filter((template) => template.aktywne).length;
 
   return (
     <>
@@ -196,11 +208,11 @@ function SettingsContent() {
         <div>
           <p style={eyebrowStyle}>Administracja</p>
           <h1 style={titleStyle}>Ustawienia</h1>
-          <p style={subtitleStyle}>Zarządzanie użytkownikami i stałymi szablonami pracy operacyjnej.</p>
+          <p style={subtitleStyle}>Szablony cykliczne i użytkownicy aplikacji.</p>
         </div>
         <div style={summaryGridStyle}>
-          <Summary label="Szablony aktywne" value={activeTemplates} />
-          <Summary label="Szablony wyłączone" value={inactiveTemplates} />
+          <Summary label="Szablony" value={templates.length} />
+          <Summary label="Aktywne" value={activeTemplates} />
           <Summary label="Użytkownicy" value={users.length} />
         </div>
       </section>
@@ -214,7 +226,6 @@ function SettingsContent() {
         <TemplatesTab
           templates={templates}
           clients={clients}
-          assignees={assignees}
           draft={draft}
           loading={loading}
           saving={saving}
@@ -231,27 +242,34 @@ function SettingsContent() {
   );
 }
 
-function TemplatesTab({ templates, clients, assignees, draft, loading, saving, setDraft, onSave, onEdit, onToggle, onRemove }: {
+function TemplatesTab({ templates, clients, draft, loading, saving, setDraft, onSave, onEdit, onToggle, onRemove }: {
   templates: RecurringTask[];
   clients: ClientRow[];
-  assignees: UserProfile[];
   draft: TemplateDraft;
   loading: boolean;
   saving: boolean;
-  setDraft: React.Dispatch<React.SetStateAction<TemplateDraft>>;
+  setDraft: Dispatch<SetStateAction<TemplateDraft>>;
   onSave: () => void;
   onEdit: (template: RecurringTask) => void;
   onToggle: (template: RecurringTask) => void;
   onRemove: (template: RecurringTask) => void;
 }) {
   const sortedTemplates = useMemo(() => [...templates].sort((a, b) => Number(b.aktywne) - Number(a.aktywne) || a.dzien_miesiaca - b.dzien_miesiaca), [templates]);
+  const selectedClients = clients.filter((client) => draft.klient_ids.includes(client.id));
+  const search = draft.clientSearch.trim().toLowerCase();
+  const suggestions = search
+    ? clients
+        .filter((client) => !draft.klient_ids.includes(client.id))
+        .filter((client) => [client.nazwa, client.nip].filter(Boolean).join(" ").toLowerCase().includes(search))
+        .slice(0, 8)
+    : [];
 
   return (
     <section style={panelStyle}>
       <div style={panelHeaderStyle}>
         <div>
           <h2 style={sectionTitleStyle}>Szablony zadań cyklicznych</h2>
-          <p style={hintStyle}>Szablon działa dla klientów spełniających zaznaczone warunki. Brak zaznaczenia oznacza: każda forma lub każde opodatkowanie.</p>
+          <p style={hintStyle}>Dodawaj szablony tylko tutaj. Możesz przypisać je do konkretnych klientów albo zostawić warunki według formy prawnej, opodatkowania i VAT.</p>
         </div>
       </div>
 
@@ -259,10 +277,21 @@ function TemplatesTab({ templates, clients, assignees, draft, loading, saving, s
         <Field label="Nazwa zadania"><input style={inputStyle} value={draft.tytul} onChange={(event) => setDraft((current) => ({ ...current, tytul: event.target.value }))} placeholder="np. Sprawdzenie kompletu dokumentów" /></Field>
         <Field label="Dzień miesiąca"><input style={inputStyle} type="number" min={1} max={31} value={draft.dzien_miesiaca} onChange={(event) => setDraft((current) => ({ ...current, dzien_miesiaca: event.target.value }))} /></Field>
         <Field label="Priorytet"><select style={inputStyle} value={draft.priorytet} onChange={(event) => setDraft((current) => ({ ...current, priorytet: event.target.value as TaskPriority }))}>{PRIORITY_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field>
-        <Field label="Osoba odpowiedzialna"><select style={inputStyle} value={draft.osoba_id} onChange={(event) => setDraft((current) => ({ ...current, osoba_id: event.target.value }))}><option value="">Opiekun klienta / bez przypisania</option>{assignees.map((user) => <option key={user.id} value={user.id}>{profileName(user)}</option>)}</select></Field>
-        <CheckboxGroup label="Forma prawna" options={LEGAL_FORM_OPTIONS} selected={draft.formy_prawne} onChange={(formy_prawne) => setDraft((current) => ({ ...current, formy_prawne }))} />
-        <CheckboxGroup label="Forma opodatkowania" options={TAXATION_FORM_OPTIONS} selected={draft.formy_opodatkowania} onChange={(formy_opodatkowania) => setDraft((current) => ({ ...current, formy_opodatkowania }))} />
-        <Field label="VAT"><select style={inputStyle} value={draft.vatMode} onChange={(event) => setDraft((current) => ({ ...current, vatMode: event.target.value as VatMode }))}>{VAT_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field>
+        <Field label="Osoba odpowiedzialna"><div style={staticValueStyle}>Opiekun klienta</div></Field>
+
+        <ClientPicker
+          clients={clients}
+          selectedClients={selectedClients}
+          suggestions={suggestions}
+          search={draft.clientSearch}
+          onSearch={(clientSearch) => setDraft((current) => ({ ...current, clientSearch }))}
+          onAdd={(clientId) => setDraft((current) => ({ ...current, klient_ids: [...current.klient_ids, clientId], clientSearch: "" }))}
+          onRemove={(clientId) => setDraft((current) => ({ ...current, klient_ids: current.klient_ids.filter((id) => id !== clientId) }))}
+        />
+
+        <CheckboxGroup label="Forma prawna" disabled={draft.klient_ids.length > 0} options={LEGAL_FORM_OPTIONS} selected={draft.formy_prawne} onChange={(formy_prawne) => setDraft((current) => ({ ...current, formy_prawne }))} />
+        <CheckboxGroup label="Forma opodatkowania" disabled={draft.klient_ids.length > 0} options={TAXATION_FORM_OPTIONS} selected={draft.formy_opodatkowania} onChange={(formy_opodatkowania) => setDraft((current) => ({ ...current, formy_opodatkowania }))} />
+        <Field label="VAT"><select style={inputStyle} disabled={draft.klient_ids.length > 0} value={draft.vatMode} onChange={(event) => setDraft((current) => ({ ...current, vatMode: event.target.value as VatMode }))}>{VAT_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field>
         <label style={switchStyle}><input type="checkbox" checked={draft.aktywne} onChange={(event) => setDraft((current) => ({ ...current, aktywne: event.target.checked }))} /> Aktywny szablon</label>
         <Field label="Opis"><textarea style={textareaStyle} value={draft.opis} onChange={(event) => setDraft((current) => ({ ...current, opis: event.target.value }))} placeholder="Krótki opis czynności dla księgowości" /></Field>
       </div>
@@ -274,66 +303,55 @@ function TemplatesTab({ templates, clients, assignees, draft, loading, saving, s
 
       <div style={tableShellStyle}>
         <table style={tableStyle}>
-          <thead>
-            <tr>
-              <Th>Zadanie</Th>
-              <Th>Warunki</Th>
-              <Th>Dzień</Th>
-              <Th>Priorytet</Th>
-              <Th>Obejmuje</Th>
-              <Th>Status</Th>
-              <Th>Akcje</Th>
-            </tr>
-          </thead>
+          <thead><tr><Th>Zadanie</Th><Th>Zakres</Th><Th>Dzień</Th><Th>Priorytet</Th><Th>Obejmuje</Th><Th>Status</Th><Th>Akcje</Th></tr></thead>
           <tbody>
-            {loading ? (
-              <tr><Td colSpan={7}>Ładowanie ustawień...</Td></tr>
-            ) : sortedTemplates.length === 0 ? (
-              <tr><Td colSpan={7}>Brak szablonów cyklicznych.</Td></tr>
-            ) : sortedTemplates.map((template) => (
+            {loading ? <tr><Td colSpan={7}>Ładowanie ustawień...</Td></tr> : sortedTemplates.length === 0 ? <tr><Td colSpan={7}>Brak szablonów cyklicznych.</Td></tr> : sortedTemplates.map((template) => (
               <tr key={template.id} style={rowStyle}>
                 <Td strong>{template.tytul}<Small>{template.opis || "Brak opisu"}</Small></Td>
-                <Td>{recurringScopeLabel(template)}</Td>
+                <Td>{scopeLabel(template, clients)}</Td>
                 <Td>{template.dzien_miesiaca}</Td>
                 <Td><Badge>{priorityLabel(template.priorytet)}</Badge></Td>
                 <Td>{matchingClientsCount(template, clients)} klientów</Td>
                 <Td><span style={template.aktywne ? activeBadgeStyle : inactiveBadgeStyle}>{template.aktywne ? "Aktywny" : "Wyłączony"}</span></Td>
-                <Td>
-                  <div style={actionsStyle}>
-                    <button style={secondaryButtonStyle} onClick={() => onEdit(template)}>Edytuj</button>
-                    <button style={secondaryButtonStyle} onClick={() => onToggle(template)}>{template.aktywne ? "Wyłącz" : "Włącz"}</button>
-                    <button style={dangerButtonStyle} onClick={() => onRemove(template)}>Usuń</button>
-                  </div>
-                </Td>
+                <Td><div style={actionsStyle}><button style={secondaryButtonStyle} onClick={() => onEdit(template)}>Edytuj</button><button style={secondaryButtonStyle} onClick={() => onToggle(template)}>{template.aktywne ? "Wyłącz" : "Włącz"}</button><button style={dangerButtonStyle} onClick={() => onRemove(template)}>Usuń</button></div></Td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
     </section>
+  );
+}
+
+function ClientPicker({ clients, selectedClients, suggestions, search, onSearch, onAdd, onRemove }: {
+  clients: ClientRow[];
+  selectedClients: ClientRow[];
+  suggestions: ClientRow[];
+  search: string;
+  onSearch: (value: string) => void;
+  onAdd: (clientId: string) => void;
+  onRemove: (clientId: string) => void;
+}) {
+  return (
+    <div style={clientPickerStyle}>
+      <span style={labelStyle}>Klienci</span>
+      <input style={inputStyle} value={search} onChange={(event) => onSearch(event.target.value)} placeholder="Wyszukaj klienta po nazwie albo NIP" />
+      {suggestions.length > 0 && <div style={suggestionsStyle}>{suggestions.map((client) => <button key={client.id} type="button" style={suggestionButtonStyle} onClick={() => onAdd(client.id)}><span>{client.nazwa || "Klient"}</span><small>{client.nip || "Brak NIP"}</small></button>)}</div>}
+      {selectedClients.length > 0 ? <div style={selectedClientsStyle}>{selectedClients.map((client) => <span key={client.id} style={clientPillStyle}>{client.nazwa || "Klient"}<button type="button" onClick={() => onRemove(client.id)} style={pillRemoveStyle}>×</button></span>)}</div> : <small style={smallTextStyle}>Brak wyboru oznacza szablon według warunków poniżej.</small>}
+      <small style={smallTextStyle}>{clients.length} klientów w bazie.</small>
+    </div>
   );
 }
 
 function UsersTab({ users, loading, onRoleChange }: { users: UserProfile[]; loading: boolean; onRoleChange: (user: UserProfile, role: string) => void }) {
   return (
     <section style={panelStyle}>
-      <div style={panelHeaderStyle}>
-        <div>
-          <h2 style={sectionTitleStyle}>Użytkownicy</h2>
-          <p style={hintStyle}>Lista osób z dostępem do aplikacji oraz ich role w CRM.</p>
-        </div>
-      </div>
+      <div style={panelHeaderStyle}><div><h2 style={sectionTitleStyle}>Użytkownicy</h2><p style={hintStyle}>Lista osób z dostępem do aplikacji oraz ich role.</p></div></div>
       <div style={tableShellStyle}>
         <table style={tableStyle}>
           <thead><tr><Th>Użytkownik</Th><Th>Email</Th><Th>Rola</Th></tr></thead>
           <tbody>
-            {loading ? <tr><Td colSpan={3}>Ładowanie użytkowników...</Td></tr> : users.map((user) => (
-              <tr key={user.id} style={rowStyle}>
-                <Td strong>{user.full_name || "Brak nazwy"}</Td>
-                <Td>{user.email || "Brak emaila"}</Td>
-                <Td><select style={roleSelectStyle} value={user.role || "accountant"} onChange={(event) => onRoleChange(user, event.target.value)}>{ROLE_OPTIONS.map((role) => <option key={role.value} value={role.value}>{role.label}</option>)}</select></Td>
-              </tr>
-            ))}
+            {loading ? <tr><Td colSpan={3}>Ładowanie użytkowników...</Td></tr> : users.map((user) => <tr key={user.id} style={rowStyle}><Td strong>{profileName(user)}</Td><Td>{user.email || "Brak emaila"}</Td><Td><select style={roleSelectStyle} value={user.role || "accountant"} onChange={(event) => onRoleChange(user, event.target.value)}>{ROLE_OPTIONS.map((role) => <option key={role.value} value={role.value}>{role.label}</option>)}</select></Td></tr>)}
           </tbody>
         </table>
       </div>
@@ -341,24 +359,11 @@ function UsersTab({ users, loading, onRoleChange }: { users: UserProfile[]; load
   );
 }
 
-function CheckboxGroup({ label, options, selected, onChange }: { label: string; options: readonly { value: string; label: string }[]; selected: string[]; onChange: (value: string[]) => void }) {
+function CheckboxGroup({ label, options, selected, disabled, onChange }: { label: string; options: readonly { value: string; label: string }[]; selected: string[]; disabled?: boolean; onChange: (value: string[]) => void }) {
   function toggle(value: string) {
     onChange(selected.includes(value) ? selected.filter((item) => item !== value) : [...selected, value]);
   }
-
-  return (
-    <div style={checkboxGroupStyle}>
-      <span style={labelStyle}>{label}</span>
-      <div style={checkboxGridStyle}>
-        {options.map((option) => (
-          <label key={option.value} style={checkboxOptionStyle}>
-            <input type="checkbox" checked={selected.includes(option.value)} onChange={() => toggle(option.value)} />
-            <span>{option.label}</span>
-          </label>
-        ))}
-      </div>
-    </div>
-  );
+  return <div style={checkboxGroupStyle}><span style={labelStyle}>{label}</span><div style={checkboxGridStyle}>{options.map((option) => <label key={option.value} style={checkboxOptionStyle}><input type="checkbox" disabled={disabled} checked={selected.includes(option.value)} onChange={() => toggle(option.value)} /><span>{option.label}</span></label>)}</div></div>;
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) { return <label style={fieldStyle}><span style={labelStyle}>{label}</span>{children}</label>; }
@@ -373,6 +378,7 @@ function priorityLabel(priority: TaskPriority) { return PRIORITY_OPTIONS.find((i
 function vatModeToValue(mode: VatMode) { return mode === "active" ? true : mode === "inactive" ? false : null; }
 function valueToVatMode(value: boolean | null | undefined): VatMode { return value === true ? "active" : value === false ? "inactive" : "any"; }
 function matchingClientsCount(template: RecurringTask, clients: ClientRow[]) { return clients.filter((client) => recurringTaskMatchesClient(template, client)).length; }
+function scopeLabel(template: RecurringTask, clients: ClientRow[]) { return template.klient_id ? clients.find((client) => client.id === template.klient_id)?.nazwa || "Wybrany klient" : recurringScopeLabel(template); }
 
 const headerStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "24px", alignItems: "flex-start", marginBottom: "24px", flexWrap: "wrap" };
 const eyebrowStyle: CSSProperties = { margin: "0 0 8px", color: colors.red, fontWeight: 850 };
@@ -391,10 +397,17 @@ const formGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "mi
 const fieldStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "7px" };
 const labelStyle: CSSProperties = { color: colors.muted, fontSize: "13px", fontWeight: 850 };
 const inputStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, padding: "10px 12px", fontWeight: 700, minHeight: "42px", width: "100%" };
+const staticValueStyle: CSSProperties = { ...inputStyle, display: "flex", alignItems: "center", color: colors.navy };
 const textareaStyle: CSSProperties = { ...inputStyle, minHeight: "80px", resize: "vertical", gridColumn: "1 / -1", lineHeight: 1.5 };
 const checkboxGroupStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "8px", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, padding: "12px", gridColumn: "span 2" };
 const checkboxGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "8px" };
 const checkboxOptionStyle: CSSProperties = { display: "flex", alignItems: "center", gap: "8px", color: colors.text, fontWeight: 750, fontSize: "13px" };
+const clientPickerStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "8px", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, padding: "12px", gridColumn: "span 2" };
+const suggestionsStyle: CSSProperties = { display: "grid", gap: "6px", maxHeight: "190px", overflowY: "auto" };
+const suggestionButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, color: colors.text, padding: "9px 10px", textAlign: "left", cursor: "pointer", display: "flex", justifyContent: "space-between", gap: "10px", fontWeight: 800 };
+const selectedClientsStyle: CSSProperties = { display: "flex", gap: "7px", flexWrap: "wrap" };
+const clientPillStyle: CSSProperties = { display: "inline-flex", alignItems: "center", gap: "7px", borderRadius: radius.badge, background: "rgba(23, 59, 115, 0.10)", color: colors.navy, padding: "7px 9px", fontWeight: 850, fontSize: "12px" };
+const pillRemoveStyle: CSSProperties = { border: "none", background: "transparent", color: colors.navy, cursor: "pointer", fontWeight: 900, fontSize: "15px", lineHeight: 1 };
 const switchStyle: CSSProperties = { minHeight: "42px", display: "flex", alignItems: "center", gap: "9px", color: colors.text, fontWeight: 850 };
 const buttonRowStyle: CSSProperties = { display: "flex", gap: "10px", marginBottom: "18px", flexWrap: "wrap" };
 const primaryButtonStyle: CSSProperties = { border: "none", borderRadius: radius.button, background: colors.red, color: colors.white, padding: "11px 15px", minHeight: "42px", fontWeight: 850, cursor: "pointer", whiteSpace: "nowrap" };

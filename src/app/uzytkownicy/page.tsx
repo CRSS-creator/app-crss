@@ -33,6 +33,12 @@ const VAT_OPTIONS = [
   { value: "inactive", label: "Tylko bez VAT" },
 ] as const;
 
+const VAT_UE_OPTIONS = [
+  { value: "any", label: "Dowolny VAT-UE" },
+  { value: "active", label: "Tylko VAT-UE" },
+  { value: "inactive", label: "Tylko bez VAT-UE" },
+] as const;
+
 const FREQUENCY_OPTIONS = [
   { value: "miesieczne", label: "Miesięczne" },
   { value: "roczne", label: "Roczne" },
@@ -55,6 +61,7 @@ const MONTH_OPTIONS = [
 
 type SettingsTab = "templates" | "users";
 type VatMode = typeof VAT_OPTIONS[number]["value"];
+type VatUeMode = typeof VAT_UE_OPTIONS[number]["value"];
 type FrequencyMode = typeof FREQUENCY_OPTIONS[number]["value"];
 type UserProfile = ProfileSummary & { id: string; role: string | null };
 type ClientRow = {
@@ -64,6 +71,7 @@ type ClientRow = {
   forma_prawna: string | null;
   forma_opodatkowania: string | null;
   czynny_vat: boolean | null;
+  vat_ue: boolean | null;
   opiekun_id: string | null;
 };
 
@@ -76,9 +84,11 @@ type TemplateDraft = {
   formy_prawne: string[];
   formy_opodatkowania: string[];
   vatMode: VatMode;
+  vatUeMode: VatUeMode;
   czestotliwosc: FrequencyMode;
   miesiac_roczny: string;
   dzien_miesiaca: string;
+  osoba_id: string;
   aktywne: boolean;
 };
 
@@ -91,9 +101,11 @@ const emptyDraft: TemplateDraft = {
   formy_prawne: [],
   formy_opodatkowania: [],
   vatMode: "any",
+  vatUeMode: "any",
   czestotliwosc: "miesieczne",
   miesiac_roczny: "3",
   dzien_miesiaca: "10",
+  osoba_id: "",
   aktywne: true,
 };
 
@@ -152,11 +164,12 @@ function SettingsContent() {
       formy_prawne: !hasClientSelection && draft.formy_prawne.length ? draft.formy_prawne : null,
       formy_opodatkowania: !hasClientSelection && draft.formy_opodatkowania.length ? draft.formy_opodatkowania : null,
       wymaga_czynnego_vat: hasClientSelection ? null : vatModeToValue(draft.vatMode),
+      wymaga_vat_ue: hasClientSelection ? null : vatUeModeToValue(draft.vatUeMode),
       czestotliwosc: draft.czestotliwosc,
       miesiac_roczny: annualMonth,
       dzien_miesiaca: day,
       priorytet: "normalny" as const,
-      osoba_id: null,
+      osoba_id: draft.osoba_id || null,
       aktywne: draft.aktywne,
     };
 
@@ -204,9 +217,11 @@ function SettingsContent() {
       formy_prawne: template.formy_prawne?.length ? template.formy_prawne : template.forma_prawna ? [template.forma_prawna] : [],
       formy_opodatkowania: template.formy_opodatkowania?.length ? template.formy_opodatkowania : template.forma_opodatkowania ? [template.forma_opodatkowania] : [],
       vatMode: valueToVatMode(template.wymaga_czynnego_vat),
+      vatUeMode: valueToVatUeMode(template.wymaga_vat_ue),
       czestotliwosc: template.czestotliwosc || "miesieczne",
       miesiac_roczny: String(template.miesiac_roczny || 3),
       dzien_miesiaca: String(template.dzien_miesiaca || 10),
+      osoba_id: template.osoba_id || "",
       aktywne: template.aktywne,
     });
   }
@@ -247,6 +262,7 @@ function SettingsContent() {
         <TemplatesTab
           templates={templates}
           clients={clients}
+          users={users}
           draft={draft}
           loading={loading}
           saving={saving}
@@ -263,9 +279,10 @@ function SettingsContent() {
   );
 }
 
-function TemplatesTab({ templates, clients, draft, loading, saving, setDraft, onSave, onEdit, onToggle, onRemove }: {
+function TemplatesTab({ templates, clients, users, draft, loading, saving, setDraft, onSave, onEdit, onToggle, onRemove }: {
   templates: RecurringTask[];
   clients: ClientRow[];
+  users: UserProfile[];
   draft: TemplateDraft;
   loading: boolean;
   saving: boolean;
@@ -290,7 +307,7 @@ function TemplatesTab({ templates, clients, draft, loading, saving, setDraft, on
       <div style={panelHeaderStyle}>
         <div>
           <h2 style={sectionTitleStyle}>Szablony zadań cyklicznych</h2>
-          <p style={hintStyle}>Dodawaj szablony tylko tutaj. Możesz przypisać je do konkretnych klientów albo zostawić warunki według formy prawnej, opodatkowania i VAT.</p>
+          <p style={hintStyle}>Dodawaj szablony tylko tutaj. Możesz przypisać je do konkretnych klientów albo zostawić warunki według formy prawnej, opodatkowania, VAT i VAT-UE.</p>
         </div>
       </div>
 
@@ -299,7 +316,7 @@ function TemplatesTab({ templates, clients, draft, loading, saving, setDraft, on
         <Field label="Cykl"><select style={inputStyle} value={draft.czestotliwosc} onChange={(event) => setDraft((current) => ({ ...current, czestotliwosc: event.target.value as FrequencyMode }))}>{FREQUENCY_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field>
         {draft.czestotliwosc === "roczne" && <Field label="Miesiąc"><select style={inputStyle} value={draft.miesiac_roczny} onChange={(event) => setDraft((current) => ({ ...current, miesiac_roczny: event.target.value }))}>{MONTH_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field>}
         <Field label="Dzień miesiąca"><input style={inputStyle} type="number" min={1} max={31} value={draft.dzien_miesiaca} onChange={(event) => setDraft((current) => ({ ...current, dzien_miesiaca: event.target.value }))} /></Field>
-        <Field label="Osoba odpowiedzialna"><div style={staticValueStyle}>Opiekun klienta</div></Field>
+        <Field label="Osoba odpowiedzialna"><select style={inputStyle} value={draft.osoba_id} onChange={(event) => setDraft((current) => ({ ...current, osoba_id: event.target.value }))}><option value="">Opiekun klienta</option>{users.map((user) => <option key={user.id} value={user.id}>{profileName(user)}</option>)}</select></Field>
 
         <ClientPicker
           clients={clients}
@@ -314,6 +331,7 @@ function TemplatesTab({ templates, clients, draft, loading, saving, setDraft, on
         <CheckboxGroup label="Forma prawna" disabled={draft.klient_ids.length > 0} options={LEGAL_FORM_OPTIONS} selected={draft.formy_prawne} onChange={(formy_prawne) => setDraft((current) => ({ ...current, formy_prawne }))} />
         <CheckboxGroup label="Forma opodatkowania" disabled={draft.klient_ids.length > 0} options={TAXATION_FORM_OPTIONS} selected={draft.formy_opodatkowania} onChange={(formy_opodatkowania) => setDraft((current) => ({ ...current, formy_opodatkowania }))} />
         <Field label="VAT"><select style={inputStyle} disabled={draft.klient_ids.length > 0} value={draft.vatMode} onChange={(event) => setDraft((current) => ({ ...current, vatMode: event.target.value as VatMode }))}>{VAT_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field>
+        <Field label="VAT-UE"><select style={inputStyle} disabled={draft.klient_ids.length > 0} value={draft.vatUeMode} onChange={(event) => setDraft((current) => ({ ...current, vatUeMode: event.target.value as VatUeMode }))}>{VAT_UE_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field>
         <label style={switchStyle}><input type="checkbox" checked={draft.aktywne} onChange={(event) => setDraft((current) => ({ ...current, aktywne: event.target.checked }))} /> Aktywny szablon</label>
         <Field label="Opis"><textarea style={textareaStyle} value={draft.opis} onChange={(event) => setDraft((current) => ({ ...current, opis: event.target.value }))} placeholder="Krótki opis czynności dla księgowości" /></Field>
       </div>
@@ -399,6 +417,8 @@ function profileName(user: UserProfile | ProfileSummary) { return user.full_name
 function monthLabel(month: number | null | undefined) { return MONTH_OPTIONS.find((item) => item.value === month)?.label || "Rok"; }
 function vatModeToValue(mode: VatMode) { return mode === "active" ? true : mode === "inactive" ? false : null; }
 function valueToVatMode(value: boolean | null | undefined): VatMode { return value === true ? "active" : value === false ? "inactive" : "any"; }
+function vatUeModeToValue(mode: VatUeMode) { return mode === "active" ? true : mode === "inactive" ? false : null; }
+function valueToVatUeMode(value: boolean | null | undefined): VatUeMode { return value === true ? "active" : value === false ? "inactive" : "any"; }
 function matchingClientsCount(template: RecurringTask, clients: ClientRow[]) { return clients.filter((client) => recurringTaskMatchesClient(template, client)).length; }
 function scopeLabel(template: RecurringTask, clients: ClientRow[]) { return template.klient_id ? clients.find((client) => client.id === template.klient_id)?.nazwa || "Wybrany klient" : recurringScopeLabel(template); }
 
@@ -419,7 +439,6 @@ const formGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "mi
 const fieldStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "7px" };
 const labelStyle: CSSProperties = { color: colors.muted, fontSize: "13px", fontWeight: 850 };
 const inputStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, padding: "10px 12px", fontWeight: 700, minHeight: "42px", width: "100%" };
-const staticValueStyle: CSSProperties = { ...inputStyle, display: "flex", alignItems: "center", color: colors.navy };
 const textareaStyle: CSSProperties = { ...inputStyle, minHeight: "80px", resize: "vertical", gridColumn: "1 / -1", lineHeight: 1.5 };
 const checkboxGroupStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "8px", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, padding: "12px", gridColumn: "span 2" };
 const checkboxGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "8px" };

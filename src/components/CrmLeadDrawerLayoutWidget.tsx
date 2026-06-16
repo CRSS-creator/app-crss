@@ -4,8 +4,7 @@ import { useEffect } from "react";
 
 const LARGE_FIELD_ROWS: Record<string, string> = {
   "Powód kontaktu": "2 / span 3",
-  "Powód zmiany biura": "5 / span 3",
-  "Notatki": "8 / span 4",
+  "Notatki": "5 / span 4",
 };
 
 const RIGHT_FIELD_ROWS: Record<string, string> = {

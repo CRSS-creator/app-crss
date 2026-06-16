@@ -11,6 +11,8 @@ export type RecurringTask = {
   formy_prawne: string[] | null;
   formy_opodatkowania: string[] | null;
   wymaga_czynnego_vat: boolean | null;
+  czestotliwosc: "miesieczne" | "roczne";
+  miesiac_roczny: number | null;
   dzien_miesiaca: number;
   osoba_id: string | null;
   priorytet: TaskPriority;
@@ -33,6 +35,8 @@ export type RecurringTaskPayload = {
   formy_prawne?: string[] | null;
   formy_opodatkowania?: string[] | null;
   wymaga_czynnego_vat?: boolean | null;
+  czestotliwosc?: "miesieczne" | "roczne";
+  miesiac_roczny?: number | null;
   dzien_miesiaca: number;
   osoba_id?: string | null;
   priorytet: TaskPriority;
@@ -68,6 +72,8 @@ export async function fetchRecurringTasks() {
     .from("zadania_cykliczne")
     .select(RECURRING_TASK_SELECT)
     .eq("aktywne", true)
+    .order("czestotliwosc", { ascending: true })
+    .order("miesiac_roczny", { ascending: true, nullsFirst: true })
     .order("dzien_miesiaca", { ascending: true })
     .order("created_at", { ascending: false });
 }
@@ -77,6 +83,8 @@ export async function fetchRecurringTaskTemplates() {
     .from("zadania_cykliczne")
     .select(RECURRING_TASK_SELECT)
     .order("aktywne", { ascending: false })
+    .order("czestotliwosc", { ascending: true })
+    .order("miesiac_roczny", { ascending: true, nullsFirst: true })
     .order("dzien_miesiaca", { ascending: true })
     .order("created_at", { ascending: false });
 }
@@ -134,6 +142,13 @@ export function recurringScopeLabel(task: RecurringTask) {
     taxationForms.length ? taxationForms.join(", ") : "każde opodatkowanie",
     vatLabel,
   ].filter(Boolean).join(" · ");
+}
+
+export function recurringFrequencyLabel(task: Pick<RecurringTask, "czestotliwosc" | "miesiac_roczny">) {
+  if (task.czestotliwosc === "roczne") {
+    return task.miesiac_roczny ? `Roczne · miesiąc ${task.miesiac_roczny}` : "Roczne";
+  }
+  return "Miesięczne";
 }
 
 export async function fetchActiveRecurringTaskTimers(userId: string) {

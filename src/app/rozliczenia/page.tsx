@@ -208,7 +208,7 @@ function SettlementsContent() {
         {loading ? <div style={emptyStateStyle}>Ładowanie rozliczeń...</div> : visibleSettlements.length === 0 ? <div style={emptyStateStyle}>Brak rozliczeń do wyświetlenia.</div> : (
           <div style={tableWrapperStyle}>
             <table style={tableStyle}>
-              <thead><tr><Th width="21%">Klient</Th><Th width="17%">Status</Th><Th width="10%">L. dokumentów</Th><Th width="10%">L. pracowników</Th><Th width="12%">L. zleceniobiorców</Th><Th width="12%">Zadania cykliczne</Th><Th width="10%">Faktura</Th><Th width="8%">Akcje</Th></tr></thead>
+              <thead><tr><Th width="210px">Klient</Th><Th width="230px">Status</Th><Th width="130px">L. dokumentów</Th><Th width="140px">L. pracowników</Th><Th width="155px">L. zleceniobiorców</Th><Th width="150px">Zadania cykliczne</Th><Th width="135px">Faktura</Th><Th width="120px">Akcje</Th></tr></thead>
               <tbody>
                 {visibleSettlements.map((settlement) => {
                   const client = getClient(settlement.klienci);
@@ -340,8 +340,8 @@ const filtersRowStyle: CSSProperties = { display: "flex", alignItems: "center", 
 const filtersLabelStyle: CSSProperties = { color: colors.muted, fontWeight: 800, fontSize: "14px" };
 const filterStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, color: colors.text, padding: "10px 38px 10px 14px", minWidth: "190px", fontSize: "14px", fontWeight: 500 };
 const tableWrapperStyle: CSSProperties = { overflowX: "auto" };
-const tableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse", tableLayout: "fixed" };
-const thStyle: CSSProperties = { textAlign: "left", padding: "13px 10px", color: colors.muted, fontSize: "13px", borderBottom: `1px solid ${colors.border}`, lineHeight: 1.25, fontWeight: 800 };
+const tableStyle: CSSProperties = { width: "100%", minWidth: "1270px", borderCollapse: "collapse", tableLayout: "fixed" };
+const thStyle: CSSProperties = { textAlign: "left", padding: "13px 10px", color: colors.muted, fontSize: "12px", borderBottom: `1px solid ${colors.border}`, lineHeight: 1.25, fontWeight: 800, whiteSpace: "nowrap" };
 const rowStyle: CSSProperties = { borderBottom: `1px solid ${colors.border}` };
 const tdStyle: CSSProperties = { padding: "15px 10px", color: colors.text, verticalAlign: "middle", fontSize: "15px" };
 const inputStyle: CSSProperties = { width: "100%", border: `1px solid ${colors.border}`, borderRadius: radius.input, color: colors.text, padding: "10px 12px", fontWeight: 500, fontSize: "14px" };

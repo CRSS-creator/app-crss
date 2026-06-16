@@ -22,6 +22,7 @@ export async function fetchClients() {
       obsluga_kadrowa,
       status_klienta,
       abonament,
+      model_fakturowania,
       czynny_vat,
       vat_ue,
       schemat_zus,

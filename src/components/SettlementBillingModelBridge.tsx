@@ -23,6 +23,11 @@ export default function SettlementBillingModelBridge() {
     let frame = 0;
     let disposed = false;
 
+    function scheduleEnhance() {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => enhanceSettlements(clientsRef, filterRef));
+    }
+
     async function loadClients() {
       const { data, error } = await supabase
         .from("klienci")
@@ -31,13 +36,7 @@ export default function SettlementBillingModelBridge() {
       scheduleEnhance();
     }
 
-    function scheduleEnhance() {
-      window.cancelAnimationFrame(frame);
-      frame = window.requestAnimationFrame(() => enhanceSettlements(clientsRef.current, filterRef));
-    }
-
     void loadClients();
-    scheduleEnhance();
     const observer = new MutationObserver(scheduleEnhance);
     observer.observe(document.body, { childList: true, subtree: true });
 
@@ -51,15 +50,15 @@ export default function SettlementBillingModelBridge() {
   return null;
 }
 
-function enhanceSettlements(clients: ClientBillingRow[], filterRef: MutableRefObject<string>) {
+function enhanceSettlements(clientsRef: MutableRefObject<ClientBillingRow[]>, filterRef: MutableRefObject<string>) {
   const page = document.querySelector<HTMLElement>('[data-active-page="rozliczenia"]');
   if (!page) return;
 
-  addFilter(page, clients, filterRef);
-  addBillingColumn(page, clients, filterRef.current);
+  addFilter(page, clientsRef, filterRef);
+  addBillingColumn(page, clientsRef.current, filterRef.current);
 }
 
-function addFilter(page: HTMLElement, clients: ClientBillingRow[], filterRef: MutableRefObject<string>) {
+function addFilter(page: HTMLElement, clientsRef: MutableRefObject<ClientBillingRow[]>, filterRef: MutableRefObject<string>) {
   const filtersRow = Array.from(page.querySelectorAll<HTMLElement>("div")).find((element) => element.textContent?.trim().startsWith("Filtry:"));
   if (!filtersRow || filtersRow.querySelector('[data-crss-billing-filter="1"]')) return;
 
@@ -87,7 +86,7 @@ function addFilter(page: HTMLElement, clients: ClientBillingRow[], filterRef: Mu
 
   select.addEventListener("change", () => {
     filterRef.current = select.value;
-    addBillingColumn(page, clients, filterRef.current);
+    addBillingColumn(page, clientsRef.current, filterRef.current);
   });
 
   filtersRow.appendChild(select);

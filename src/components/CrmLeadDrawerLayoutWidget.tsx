@@ -4,7 +4,7 @@ import { useEffect } from "react";
 
 const LARGE_FIELD_ROWS: Record<string, string> = {
   "Powód kontaktu": "2 / span 3",
-  "Notatki": "5 / span 4",
+  "Notatki": "5 / span 6",
 };
 
 const RIGHT_FIELD_ROWS: Record<string, string> = {
@@ -70,7 +70,7 @@ function enhanceDrawerLayout() {
     label.style.minWidth = "0";
 
     if (LARGE_FIELD_ROWS[labelText]) {
-      prepareLargeTextField(label, LARGE_FIELD_ROWS[labelText]);
+      prepareLargeTextField(label, LARGE_FIELD_ROWS[labelText], labelText === "Notatki");
       return;
     }
 
@@ -80,7 +80,7 @@ function enhanceDrawerLayout() {
   });
 }
 
-function prepareLargeTextField(label: HTMLLabelElement, gridRow: string) {
+function prepareLargeTextField(label: HTMLLabelElement, gridRow: string, isNotes = false) {
   label.style.gridColumn = "1";
   label.style.gridRow = gridRow;
   label.style.display = "flex";
@@ -93,7 +93,7 @@ function prepareLargeTextField(label: HTMLLabelElement, gridRow: string) {
 
   const textarea = label.querySelector<HTMLTextAreaElement>("textarea");
   if (!textarea) return;
-  textarea.style.minHeight = "190px";
+  textarea.style.minHeight = isNotes ? "360px" : "190px";
   textarea.style.width = "100%";
   textarea.style.lineHeight = "1.65";
 }

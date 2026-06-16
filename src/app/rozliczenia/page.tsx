@@ -16,8 +16,6 @@ import {
   type SettlementStatus,
 } from "@/lib/monthlySettlementsService";
 import {
-  createRecurringTask,
-  deleteRecurringTask,
   fetchActiveRecurringTaskTimers,
   fetchRecurringTasks,
   recurringScopeLabel,
@@ -43,16 +41,6 @@ const PRIORITY_OPTIONS: { value: TaskPriority; label: string }[] = [
   { value: "wysoki", label: "Wysoki" },
   { value: "pilne", label: "Pilne" },
 ];
-
-type RecurringTaskDraft = {
-  tytul: string;
-  opis: string;
-  dzien_miesiaca: string;
-  priorytet: TaskPriority;
-  scope: "client" | "matching";
-};
-
-const emptyDraft: RecurringTaskDraft = { tytul: "", opis: "", dzien_miesiaca: "10", priorytet: "normalny", scope: "client" };
 
 export default function SettlementsPage() {
   return (
@@ -159,43 +147,6 @@ function SettlementsContent() {
     setSelected((current) => current?.id === updated.id ? updated : current);
   }
 
-  async function addRecurringTask(settlement: MonthlySettlement, draft: RecurringTaskDraft) {
-    const client = getClient(settlement.klienci);
-    if (!client?.id) return;
-    if (!draft.tytul.trim()) return alert("Wpisz nazwę zadania cyklicznego.");
-    const result = await createRecurringTask({
-      klient_id: draft.scope === "matching" ? null : client.id,
-      tytul: draft.tytul.trim(),
-      opis: draft.opis.trim() || null,
-      dzien_miesiaca: Number(draft.dzien_miesiaca || 10),
-      priorytet: draft.priorytet,
-      osoba_id: client.opiekun_id || null,
-      forma_prawna: draft.scope === "matching" ? client.forma_prawna || null : null,
-      forma_opodatkowania: draft.scope === "matching" ? client.forma_opodatkowania || null : null,
-      formy_prawne: draft.scope === "matching" && client.forma_prawna ? [client.forma_prawna] : null,
-      formy_opodatkowania: draft.scope === "matching" && client.forma_opodatkowania ? [client.forma_opodatkowania] : null,
-      wymaga_czynnego_vat: null,
-      aktywne: true,
-    });
-    if (result.error) {
-      console.error("Błąd dodawania zadania cyklicznego:", result.error);
-      alert("Nie udało się dodać zadania cyklicznego.");
-      return;
-    }
-    setRecurringTasks((current) => [result.data as RecurringTask, ...current]);
-  }
-
-  async function removeRecurringTask(task: RecurringTask) {
-    if (!confirm("Usunąć zadanie cykliczne?")) return;
-    const result = await deleteRecurringTask(task.id);
-    if (result.error) {
-      console.error("Błąd usuwania zadania cyklicznego:", result.error);
-      alert("Nie udało się usunąć zadania cyklicznego.");
-      return;
-    }
-    setRecurringTasks((current) => current.filter((item) => item.id !== task.id));
-  }
-
   async function toggleRecurringTimer(settlement: MonthlySettlement, task: RecurringTask) {
     if (!currentUserId) {
       alert("Nie udało się rozpoznać użytkownika. Zaloguj się ponownie.");
@@ -291,8 +242,6 @@ function SettlementsContent() {
           onClose={() => setSelected(null)}
           onSave={patchSettlement}
           onInvoice={markInvoiceIssued}
-          onAddRecurring={addRecurringTask}
-          onDeleteRecurring={removeRecurringTask}
           onToggleRecurringTimer={toggleRecurringTimer}
           saving={savingId === selected.id}
         />
@@ -301,7 +250,7 @@ function SettlementsContent() {
   );
 }
 
-function SettlementDrawer({ settlement, progress, recurringTasks, activeTimers, onClose, onSave, onInvoice, onAddRecurring, onDeleteRecurring, onToggleRecurringTimer, saving }: {
+function SettlementDrawer({ settlement, progress, recurringTasks, activeTimers, onClose, onSave, onInvoice, onToggleRecurringTimer, saving }: {
   settlement: MonthlySettlement;
   progress: SettlementProgress;
   recurringTasks: RecurringTask[];
@@ -309,19 +258,11 @@ function SettlementDrawer({ settlement, progress, recurringTasks, activeTimers, 
   onClose: () => void;
   onSave: (settlement: MonthlySettlement, payload: Partial<MonthlySettlement>) => void;
   onInvoice: (settlement: MonthlySettlement) => void;
-  onAddRecurring: (settlement: MonthlySettlement, draft: RecurringTaskDraft) => Promise<void>;
-  onDeleteRecurring: (task: RecurringTask) => void;
   onToggleRecurringTimer: (settlement: MonthlySettlement, task: RecurringTask) => void;
   saving: boolean;
 }) {
   const client = getClient(settlement.klienci);
   const locked = settlement.faktura_wystawiona;
-  const [draft, setDraft] = useState<RecurringTaskDraft>(emptyDraft);
-
-  async function submitRecurringTask() {
-    await onAddRecurring(settlement, draft);
-    setDraft(emptyDraft);
-  }
 
   return (
     <div style={drawerOverlayStyle}>
@@ -346,10 +287,9 @@ function SettlementDrawer({ settlement, progress, recurringTasks, activeTimers, 
             <div style={recurringListStyle}>
               {recurringTasks.length === 0 ? <div style={emptyStateStyle}>Brak zadań cyklicznych dla tego klienta.</div> : recurringTasks.map((task) => {
                 const activeTimer = activeTimers.find((entry) => entry.zadanie_cykliczne_id === task.id && entry.klient_id === client?.id && entry.miesiac_rozliczeniowy === settlement.okres);
-                return <article key={task.id} style={recurringItemStyle}><div><strong>{task.tytul}</strong><p style={recurringMetaStyle}>{recurringScopeLabel(task)} · dzień {task.dzien_miesiaca} · {priorityLabel(task.priorytet)}</p></div><div style={recurringActionsStyle}><button style={activeTimer ? timerActiveButtonStyle : timerButtonStyle} onClick={() => onToggleRecurringTimer(settlement, task)} title={activeTimer ? "Zatrzymaj liczenie czasu" : "Rozpocznij liczenie czasu"}>{activeTimer ? <Square size={16} /> : <Play size={16} />}{activeTimer ? "Stop" : "Start"}</button><button style={deleteButtonStyle} onClick={() => onDeleteRecurring(task)}>Usuń</button></div></article>;
+                return <article key={task.id} style={recurringItemStyle}><div><strong>{task.tytul}</strong><p style={recurringMetaStyle}>{recurringScopeLabel(task)} · dzień {task.dzien_miesiaca} · {priorityLabel(task.priorytet)}</p></div><div style={recurringActionsStyle}><button style={activeTimer ? timerActiveButtonStyle : timerButtonStyle} onClick={() => onToggleRecurringTimer(settlement, task)} title={activeTimer ? "Zatrzymaj liczenie czasu" : "Rozpocznij liczenie czasu"}>{activeTimer ? <Square size={16} /> : <Play size={16} />}{activeTimer ? "Stop" : "Start"}</button></div></article>;
               })}
             </div>
-            {!locked && <div style={recurringFormStyle}><Field label="Nowe zadanie cykliczne"><input style={inputStyle} value={draft.tytul} onChange={(event) => setDraft((current) => ({ ...current, tytul: event.target.value }))} placeholder="np. Księgowanie dokumentów" /></Field><label style={scopeToggleStyle}><input type="checkbox" checked={draft.scope === "matching"} onChange={(event) => setDraft((current) => ({ ...current, scope: event.target.checked ? "matching" : "client" }))} /><span>Dodaj jako wzorzec dla tej formy prawnej i opodatkowania</span></label><div style={twoColumnsStyle}><Field label="Dzień miesiąca"><input style={inputStyle} type="number" min={1} max={31} value={draft.dzien_miesiaca} onChange={(event) => setDraft((current) => ({ ...current, dzien_miesiaca: event.target.value }))} /></Field><Field label="Priorytet"><select style={inputStyle} value={draft.priorytet} onChange={(event) => setDraft((current) => ({ ...current, priorytet: event.target.value as TaskPriority }))}>{PRIORITY_OPTIONS.map((priority) => <option key={priority.value} value={priority.value}>{priority.label}</option>)}</select></Field></div><Field label="Opis"><textarea style={textareaStyle} value={draft.opis} onChange={(event) => setDraft((current) => ({ ...current, opis: event.target.value }))} /></Field><button style={lockButtonStyle} onClick={submitRecurringTask}>Dodaj zadanie cykliczne</button></div>}
           </section>
 
           <section style={drawerSectionStyle}><h3 style={drawerSectionTitleStyle}>Faktura</h3><div style={invoiceRowStyle}><span style={locked ? invoiceIssuedStyle : invoiceOpenStyle}>{locked ? "Wystawiona" : "Nie wystawiona"}</span>{!locked && <button style={lockButtonStyle} onClick={() => onInvoice(settlement)} disabled={saving}>Oznacz jako wystawioną</button>}</div></section>
@@ -415,7 +355,6 @@ const invoiceIssuedStyle: CSSProperties = { display: "inline-flex", borderRadius
 const invoiceOpenStyle: CSSProperties = { display: "inline-flex", borderRadius: radius.badge, background: "#f1f5f9", color: colors.muted, padding: "7px 10px", fontWeight: 850, fontSize: "14px" };
 const detailsButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "9px 12px", background: colors.card, color: colors.navy, fontWeight: 800, cursor: "pointer" };
 const lockButtonStyle: CSSProperties = { ...detailsButtonStyle, background: colors.red, color: colors.white, borderColor: colors.red };
-const deleteButtonStyle: CSSProperties = { ...detailsButtonStyle, color: colors.danger };
 const timerButtonStyle: CSSProperties = { ...detailsButtonStyle, display: "inline-flex", alignItems: "center", gap: "7px", padding: "9px 11px", background: "#eef5ff", borderColor: "#c8d8f0" };
 const timerActiveButtonStyle: CSSProperties = { ...timerButtonStyle, background: colors.success, borderColor: colors.success, color: colors.white };
 const emptyStateStyle: CSSProperties = { padding: "18px", borderRadius: radius.input, background: colors.inputBackground, border: `1px dashed ${colors.border}`, color: colors.muted, textAlign: "center", fontWeight: 800 };
@@ -431,7 +370,6 @@ const drawerSectionTitleStyle: CSSProperties = { margin: "0 0 14px", color: colo
 const fieldStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "7px", marginBottom: "14px" };
 const labelStyle: CSSProperties = { color: colors.muted, fontSize: "13px", fontWeight: 800 };
 const threeColumnsStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "14px" };
-const twoColumnsStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "14px" };
 const lockedNoticeStyle: CSSProperties = { borderRadius: radius.input, background: "#fff3df", color: "#92400e", padding: "14px", fontWeight: 850 };
 const invoiceRowStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "14px", alignItems: "center" };
 const clientContextStyle: CSSProperties = { display: "flex", gap: "10px", flexWrap: "wrap", margin: "12px 0", color: colors.muted, fontSize: "13px" };
@@ -439,5 +377,3 @@ const recurringListStyle: CSSProperties = { display: "flex", flexDirection: "col
 const recurringItemStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "12px", background: colors.inputBackground };
 const recurringMetaStyle: CSSProperties = { margin: "5px 0 0", color: colors.muted, fontWeight: 700, fontSize: "13px" };
 const recurringActionsStyle: CSSProperties = { display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "8px", flexWrap: "wrap" };
-const recurringFormStyle: CSSProperties = { borderTop: `1px solid ${colors.border}`, marginTop: "18px", paddingTop: "18px" };
-const scopeToggleStyle: CSSProperties = { display: "flex", alignItems: "center", gap: "10px", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, color: colors.text, padding: "11px 12px", marginBottom: "14px", fontWeight: 800, fontSize: "13px" };

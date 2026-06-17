@@ -27,6 +27,8 @@ export async function fetchClients() {
       vat_ue,
       schemat_zus,
       limit_dokumentow,
+      pierwszy_okres_rozliczeniowy,
+      ostatni_okres_rozliczeniowy,
       dodatkowe_uslugi,
       notatki,
       opiekun_id,

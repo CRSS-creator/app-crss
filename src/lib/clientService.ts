@@ -29,6 +29,8 @@ export async function fetchClients() {
       limit_dokumentow,
       pierwszy_okres_rozliczeniowy,
       ostatni_okres_rozliczeniowy,
+      koszt_obslugi_pracownika,
+      koszt_obslugi_zleceniobiorcy,
       dodatkowe_uslugi,
       notatki,
       opiekun_id,

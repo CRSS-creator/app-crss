@@ -13,26 +13,18 @@ type Caregiver = {
   role: string | null;
 };
 
-type ClientDraft = {
-  nazwa: string;
-  nip: string;
+type ClientOnboardingDraft = {
   telefon: string;
-  email: string;
   forma_prawna: string;
   forma_opodatkowania: string;
   status_klienta: string;
   opiekun_id: string;
-  obsluga_kadrowa: boolean;
   czynny_vat: boolean;
   vat_ue: boolean;
   schemat_zus: string;
-  abonament: string;
-  limit_dokumentow: string;
-  pierwszy_okres_rozliczeniowy: string;
   ostatni_okres_rozliczeniowy: string;
   koszt_obslugi_pracownika: string;
   koszt_obslugi_zleceniobiorcy: string;
-  dodatkowe_uslugi: string;
   notatki: string;
 };
 
@@ -49,10 +41,10 @@ const ZUS_OPTIONS = ["", "Brak", "Preferencyjny", "Mały ZUS Plus", "Pełny ZUS"
 export default function ContractClientOnboardingPanel({ contract, onCreated }: Props) {
   const [caregivers, setCaregivers] = useState<Caregiver[]>([]);
   const [saving, setSaving] = useState(false);
-  const [draft, setDraft] = useState<ClientDraft>(() => createDraftFromContract(contract));
+  const [draft, setDraft] = useState<ClientOnboardingDraft>(() => createEmptyDraft(contract));
 
   useEffect(() => {
-    setDraft(createDraftFromContract(contract));
+    setDraft(createEmptyDraft(contract));
   }, [contract.id]);
 
   useEffect(() => {
@@ -76,38 +68,38 @@ export default function ContractClientOnboardingPanel({ contract, onCreated }: P
 
   if (!canCreate) return null;
 
-  function updateDraft<K extends keyof ClientDraft>(key: K, value: ClientDraft[K]) {
+  function updateDraft<K extends keyof ClientOnboardingDraft>(key: K, value: ClientOnboardingDraft[K]) {
     setDraft((current) => ({ ...current, [key]: value }));
   }
 
   async function createClientFromContract() {
-    if (!draft.nazwa.trim()) {
-      alert("Uzupełnij nazwę klienta.");
+    if (!contract.nazwa_klienta.trim()) {
+      alert("Umowa nie ma nazwy klienta. Uzupełnij ją w danych umowy.");
       return;
     }
 
     setSaving(true);
 
     const clientResult = await createClientRecord({
-      nazwa: draft.nazwa.trim(),
-      nip: emptyToNull(draft.nip),
+      nazwa: contract.nazwa_klienta.trim(),
+      nip: nullableToNull(contract.nip),
       telefon: emptyToNull(draft.telefon),
-      email: emptyToNull(draft.email),
+      email: nullableToNull(contract.email_klienta),
       forma_prawna: emptyToNull(draft.forma_prawna),
       forma_opodatkowania: emptyToNull(draft.forma_opodatkowania),
       status_klienta: draft.status_klienta || "W onboarding",
       opiekun_id: emptyToNull(draft.opiekun_id),
-      obsluga_kadrowa: draft.obsluga_kadrowa,
+      obsluga_kadrowa: Boolean(contract.obsluga_kadrowa),
       czynny_vat: draft.czynny_vat,
       vat_ue: draft.vat_ue,
       schemat_zus: emptyToNull(draft.schemat_zus),
-      abonament: numberOrNull(draft.abonament),
-      limit_dokumentow: numberOrNull(draft.limit_dokumentow),
-      pierwszy_okres_rozliczeniowy: normalizeMonth(draft.pierwszy_okres_rozliczeniowy),
+      abonament: contract.abonament_netto ?? null,
+      limit_dokumentow: contract.limit_dokumentow ?? null,
+      pierwszy_okres_rozliczeniowy: normalizeMonth(monthInputFromText(contract.pierwszy_okres)),
       ostatni_okres_rozliczeniowy: normalizeMonth(draft.ostatni_okres_rozliczeniowy),
       koszt_obslugi_pracownika: numberOrNull(draft.koszt_obslugi_pracownika),
       koszt_obslugi_zleceniobiorcy: numberOrNull(draft.koszt_obslugi_zleceniobiorcy),
-      dodatkowe_uslugi: emptyToNull(draft.dodatkowe_uslugi),
+      dodatkowe_uslugi: nullableToNull(contract.ustalenia_indywidualne),
       notatki: emptyToNull(draft.notatki),
     });
 
@@ -141,7 +133,7 @@ export default function ContractClientOnboardingPanel({ contract, onCreated }: P
       <div style={sectionHeaderStyle}>
         <div>
           <p style={eyebrowStyle}>Onboarding klienta</p>
-          <h3 style={titleStyle}>Utwórz klienta z podpisanej umowy</h3>
+          <h3 style={titleStyle}>Uzupełnij dane operacyjne klienta</h3>
         </div>
         <button type="button" style={primaryButtonStyle} onClick={createClientFromContract} disabled={saving}>
           {saving ? "Tworzenie..." : "Utwórz klienta"}
@@ -149,59 +141,38 @@ export default function ContractClientOnboardingPanel({ contract, onCreated }: P
       </div>
 
       <div style={gridStyle}>
-        <TextField label="Nazwa klienta" value={draft.nazwa} onChange={(value) => updateDraft("nazwa", value)} />
-        <TextField label="NIP" value={draft.nip} onChange={(value) => updateDraft("nip", value)} />
-        <TextField label="Email" type="email" value={draft.email} onChange={(value) => updateDraft("email", value)} />
         <TextField label="Telefon" value={draft.telefon} onChange={(value) => updateDraft("telefon", value)} />
+        <SelectField label="Opiekun" value={draft.opiekun_id} onChange={(value) => updateDraft("opiekun_id", value)} options={[{ value: "", label: "Do uzupełnienia" }, ...caregivers.map((caregiver) => ({ value: caregiver.id, label: caregiver.full_name || caregiver.email || "Użytkownik" }))]} />
         <SelectField label="Forma prawna" value={draft.forma_prawna} onChange={(value) => updateDraft("forma_prawna", value)} options={[{ value: "", label: "Do uzupełnienia" }, ...LEGAL_FORM_OPTIONS]} />
         <SelectField label="Opodatkowanie" value={draft.forma_opodatkowania} onChange={(value) => updateDraft("forma_opodatkowania", value)} options={[{ value: "", label: "Do uzupełnienia" }, ...TAXATION_FORM_OPTIONS]} />
         <SelectField label="Status klienta" value={draft.status_klienta} onChange={(value) => updateDraft("status_klienta", value)} options={CLIENT_STATUSES.map((status) => ({ value: status, label: status }))} />
-        <SelectField
-          label="Opiekun"
-          value={draft.opiekun_id}
-          onChange={(value) => updateDraft("opiekun_id", value)}
-          options={[{ value: "", label: "Do uzupełnienia" }, ...caregivers.map((caregiver) => ({ value: caregiver.id, label: caregiver.full_name || caregiver.email || "Użytkownik" }))]}
-        />
-        <TextField label="Abonament netto" type="number" value={draft.abonament} onChange={(value) => updateDraft("abonament", value)} />
-        <TextField label="Limit dokumentów" type="number" value={draft.limit_dokumentow} onChange={(value) => updateDraft("limit_dokumentow", value)} />
-        <TextField label="Pierwszy okres" type="month" value={draft.pierwszy_okres_rozliczeniowy} onChange={(value) => updateDraft("pierwszy_okres_rozliczeniowy", value)} />
+        <SelectField label="Schemat ZUS" value={draft.schemat_zus} onChange={(value) => updateDraft("schemat_zus", value)} options={ZUS_OPTIONS.map((option) => ({ value: option, label: option || "Do uzupełnienia" }))} />
         <TextField label="Ostatni okres" type="month" value={draft.ostatni_okres_rozliczeniowy} onChange={(value) => updateDraft("ostatni_okres_rozliczeniowy", value)} />
         <TextField label="Koszt pracownika" type="number" value={draft.koszt_obslugi_pracownika} onChange={(value) => updateDraft("koszt_obslugi_pracownika", value)} />
         <TextField label="Koszt zleceniobiorcy" type="number" value={draft.koszt_obslugi_zleceniobiorcy} onChange={(value) => updateDraft("koszt_obslugi_zleceniobiorcy", value)} />
-        <SelectField label="Schemat ZUS" value={draft.schemat_zus} onChange={(value) => updateDraft("schemat_zus", value)} options={ZUS_OPTIONS.map((option) => ({ value: option, label: option || "Do uzupełnienia" }))} />
         <div style={checkboxGroupStyle}>
-          <CheckboxField label="Obsługa kadr" checked={draft.obsluga_kadrowa} onChange={(value) => updateDraft("obsluga_kadrowa", value)} />
           <CheckboxField label="Czynny VAT" checked={draft.czynny_vat} onChange={(value) => updateDraft("czynny_vat", value)} />
           <CheckboxField label="VAT-UE" checked={draft.vat_ue} onChange={(value) => updateDraft("vat_ue", value)} />
         </div>
-        <TextareaField label="Dodatkowe usługi" value={draft.dodatkowe_uslugi} onChange={(value) => updateDraft("dodatkowe_uslugi", value)} />
         <TextareaField label="Notatki" value={draft.notatki} onChange={(value) => updateDraft("notatki", value)} />
       </div>
     </section>
   );
 }
 
-function createDraftFromContract(contract: CrmContract): ClientDraft {
+function createEmptyDraft(contract: CrmContract): ClientOnboardingDraft {
   return {
-    nazwa: contract.nazwa_klienta || "",
-    nip: contract.nip || "",
     telefon: "",
-    email: contract.email_klienta || "",
     forma_prawna: "",
     forma_opodatkowania: contract.typ_umowy === "KH" ? "CIT" : "",
     status_klienta: "W onboarding",
     opiekun_id: "",
-    obsluga_kadrowa: Boolean(contract.obsluga_kadrowa),
     czynny_vat: false,
     vat_ue: false,
     schemat_zus: "",
-    abonament: contract.abonament_netto ? String(contract.abonament_netto) : "",
-    limit_dokumentow: contract.limit_dokumentow ? String(contract.limit_dokumentow) : "",
-    pierwszy_okres_rozliczeniowy: monthInputFromText(contract.pierwszy_okres),
     ostatni_okres_rozliczeniowy: "",
     koszt_obslugi_pracownika: "",
     koszt_obslugi_zleceniobiorcy: "",
-    dodatkowe_uslugi: contract.ustalenia_indywidualne || "",
     notatki: contract.numer_umowy ? `Klient utworzony z umowy ${contract.numer_umowy}.` : "Klient utworzony z podpisanej umowy.",
   };
 }
@@ -224,6 +195,10 @@ function normalizeMonth(value: string) {
 
 function emptyToNull(value: string) {
   return value.trim() ? value.trim() : null;
+}
+
+function nullableToNull(value: string | null | undefined) {
+  return value?.trim() ? value.trim() : null;
 }
 
 function numberOrNull(value: string) {
@@ -362,7 +337,7 @@ const textareaStyle: CSSProperties = {
 
 const checkboxGroupStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
   gap: "10px",
   alignItems: "center",
   alignSelf: "end",

@@ -1,0 +1,51 @@
+name: Codex contract client onboarding patch
+
+on:
+  push:
+    paths:
+      - .github/workflows/codex-contract-client-onboarding.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Patch contracts page
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const pagePath = 'src/app/crm/umowy/page.tsx';
+          const workflowPath = '.github/workflows/codex-contract-client-onboarding.yml';
+          let text = fs.readFileSync(pagePath, 'utf8');
+
+          if (!text.includes('ContractClientOnboardingPanel')) {
+            text = text.replace(
+              'import AccessGuard from "@/components/AccessGuard";\n',
+              'import AccessGuard from "@/components/AccessGuard";\nimport ContractClientOnboardingPanel from "@/components/ContractClientOnboardingPanel";\n'
+            );
+          }
+
+          if (!text.includes('<ContractClientOnboardingPanel')) {
+            text = text.replace(
+              '          <FormSection title="Warunki finansowe">\n',
+              '          {contract && contract.status === "podpisana" && !contract.klient_id && (\n            <ContractClientOnboardingPanel contract={contract} onCreated={(updatedContract) => onSaved(updatedContract)} />\n          )}\n\n          <FormSection title="Warunki finansowe">\n'
+            );
+          }
+
+          fs.writeFileSync(pagePath, text);
+          fs.rmSync(workflowPath, { force: true });
+          NODE
+      - name: Commit patch
+        run: |
+          git config user.name "codex"
+          git config user.email "codex@openai.com"
+          if ! git diff --quiet; then
+            git add src/app/crm/umowy/page.tsx .github/workflows/codex-contract-client-onboarding.yml
+            git commit -m "Wire signed contract client onboarding"
+            git push origin main
+          fi

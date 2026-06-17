@@ -22,6 +22,12 @@ type Client = {
   email: string | null;
 };
 
+type SearchOption = {
+  value: string;
+  label: string;
+  description?: string;
+};
+
 type RodoDraft = {
   klient_id: string;
   umowa_ksiegowa_id: string;
@@ -172,21 +178,48 @@ function RodoContent() {
 function RodoDrawer({ contract, clients, accountingContracts, onClose, onSaved }: { contract: RodoProcessingContract | null; clients: Client[]; accountingContracts: CrmContract[]; onClose: () => void; onSaved: (contract: RodoProcessingContract) => void }) {
   const [draft, setDraft] = useState<RodoDraft>(() => contract ? createDraft(contract) : createEmptyDraft());
   const [saving, setSaving] = useState(false);
+  const [accountingSearch, setAccountingSearch] = useState(() => selectedAccountingContractLabel(contract, accountingContracts));
+  const [clientSearch, setClientSearch] = useState(() => selectedClientLabel(contract, clients));
 
   const signedAccountingContracts = useMemo(() => {
     return accountingContracts.filter((item) => item.status === "podpisana" || item.podpisany_pdf_path);
   }, [accountingContracts]);
 
+  const accountingOptions = useMemo<SearchOption[]>(() => {
+    return signedAccountingContracts.map((item) => ({
+      value: item.id,
+      label: `${item.numer_umowy || "Bez numeru"} - ${item.nazwa_klienta || "Bez klienta"}`,
+      description: [item.nip, item.email_klienta].filter(Boolean).join(" · "),
+    }));
+  }, [signedAccountingContracts]);
+
+  const clientOptions = useMemo<SearchOption[]>(() => {
+    return clients.map((client) => ({
+      value: client.id,
+      label: client.nazwa || "Bez nazwy",
+      description: [client.nip, client.email].filter(Boolean).join(" · "),
+    }));
+  }, [clients]);
+
   function updateDraft<K extends keyof RodoDraft>(key: K, value: RodoDraft[K]) {
     setDraft((current) => ({ ...current, [key]: value }));
+  }
+
+  function clearAccountingContract() {
+    updateDraft("umowa_ksiegowa_id", "");
+    setAccountingSearch("");
   }
 
   function fillFromAccountingContract(contractId: string) {
     const accountingContract = accountingContracts.find((item) => item.id === contractId);
     if (!accountingContract) {
-      updateDraft("umowa_ksiegowa_id", "");
+      clearAccountingContract();
       return;
     }
+
+    setAccountingSearch(`${accountingContract.numer_umowy || "Bez numeru"} - ${accountingContract.nazwa_klienta || "Bez klienta"}`);
+    const matchedClient = accountingContract.klient_id ? clients.find((item) => item.id === accountingContract.klient_id) : null;
+    if (matchedClient) setClientSearch(clientLabel(matchedClient));
 
     setDraft((current) => ({
       ...current,
@@ -201,13 +234,19 @@ function RodoDrawer({ contract, clients, accountingContracts, onClose, onSaved }
     }));
   }
 
+  function clearClient() {
+    updateDraft("klient_id", "");
+    setClientSearch("");
+  }
+
   function fillFromClient(clientId: string) {
     const client = clients.find((item) => item.id === clientId);
     if (!client) {
-      updateDraft("klient_id", "");
+      clearClient();
       return;
     }
 
+    setClientSearch(clientLabel(client));
     setDraft((current) => ({
       ...current,
       klient_id: clientId,
@@ -268,8 +307,30 @@ function RodoDrawer({ contract, clients, accountingContracts, onClose, onSaved }
 
         <div style={drawerContentStyle}>
           <FormSection title="Powiązania">
-            <EditableSelect label="Umowa księgowa" value={draft.umowa_ksiegowa_id} onChange={fillFromAccountingContract} options={[{ value: "", label: "Bez powiązania" }, ...signedAccountingContracts.map((item) => ({ value: item.id, label: `${item.numer_umowy || "Bez numeru"} - ${item.nazwa_klienta}` }))]} />
-            <EditableSelect label="Klient" value={draft.klient_id} onChange={fillFromClient} options={[{ value: "", label: "Bez klienta" }, ...clients.map((client) => ({ value: client.id, label: client.nazwa || "Bez nazwy" }))]} />
+            <SearchablePicker
+              label="Umowa księgowa"
+              value={accountingSearch}
+              placeholder="Wpisz numer umowy lub klienta"
+              options={accountingOptions}
+              onInputChange={(value) => {
+                setAccountingSearch(value);
+                if (!value.trim()) updateDraft("umowa_ksiegowa_id", "");
+              }}
+              onSelect={fillFromAccountingContract}
+              onClear={clearAccountingContract}
+            />
+            <SearchablePicker
+              label="Klient"
+              value={clientSearch}
+              placeholder="Wpisz nazwę klienta, NIP lub email"
+              options={clientOptions}
+              onInputChange={(value) => {
+                setClientSearch(value);
+                if (!value.trim()) updateDraft("klient_id", "");
+              }}
+              onSelect={fillFromClient}
+              onClear={clearClient}
+            />
             <EditableSelect label="Status" value={draft.status} onChange={(value) => updateDraft("status", value as RodoProcessingContractStatus)} options={STATUS_OPTIONS} />
           </FormSection>
 
@@ -324,6 +385,22 @@ function createDraft(contract: RodoProcessingContract): RodoDraft {
   };
 }
 
+function selectedAccountingContractLabel(contract: RodoProcessingContract | null, accountingContracts: CrmContract[]) {
+  if (!contract?.umowa_ksiegowa_id) return "";
+  const accountingContract = accountingContracts.find((item) => item.id === contract.umowa_ksiegowa_id);
+  return accountingContract ? `${accountingContract.numer_umowy || "Bez numeru"} - ${accountingContract.nazwa_klienta || "Bez klienta"}` : contract.crm_umowy?.numer_umowy || "";
+}
+
+function selectedClientLabel(contract: RodoProcessingContract | null, clients: Client[]) {
+  if (!contract?.klient_id) return "";
+  const client = clients.find((item) => item.id === contract.klient_id);
+  return client ? clientLabel(client) : contract.klienci?.nazwa || contract.nazwa_klienta || "";
+}
+
+function clientLabel(client: Client) {
+  return [client.nazwa, client.nip].filter(Boolean).join(" - ") || "Bez nazwy";
+}
+
 function buildDefaultRodoNumber(accountingNumber: string | null) {
   if (!accountingNumber) return `...../RODO/...../${new Date().getFullYear()}`;
   return accountingNumber.replace("/KH/", "/RODO/").replace("/KU/", "/RODO/");
@@ -335,6 +412,12 @@ function emptyToNull(value: string) {
 
 function statusLabel(status: RodoProcessingContractStatus) {
   return STATUS_OPTIONS.find((item) => item.value === status)?.label || status;
+}
+
+function matchesSearch(option: SearchOption, search: string) {
+  const normalizedSearch = search.trim().toLowerCase();
+  if (!normalizedSearch) return true;
+  return `${option.label} ${option.description || ""}`.toLowerCase().includes(normalizedSearch);
 }
 
 function StatusBadge({ status }: { status: RodoProcessingContractStatus }) {
@@ -362,6 +445,45 @@ function EditableInput({ label, value, onChange, type = "text" }: { label: strin
 
 function EditableSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: { value: string; label: string }[] }) {
   return <label style={editableRowStyle}><span>{label}</span><select value={value} onChange={(event) => onChange(event.target.value)} style={inputStyle}>{options.map((option) => <option key={option.value || "empty"} value={option.value}>{option.label}</option>)}</select></label>;
+}
+
+function SearchablePicker({ label, value, placeholder, options, onInputChange, onSelect, onClear }: { label: string; value: string; placeholder: string; options: SearchOption[]; onInputChange: (value: string) => void; onSelect: (value: string) => void; onClear: () => void }) {
+  const [focused, setFocused] = useState(false);
+  const visibleOptions = options.filter((option) => matchesSearch(option, value)).slice(0, 8);
+
+  return (
+    <label style={searchRowStyle}>
+      <span>{label}</span>
+      <div style={searchBoxStyle}>
+        <input
+          value={value}
+          placeholder={placeholder}
+          onFocus={() => setFocused(true)}
+          onChange={(event) => onInputChange(event.target.value)}
+          style={inputStyle}
+        />
+        {value && <button type="button" style={clearButtonStyle} onClick={onClear}>Wyczyść</button>}
+        {focused && value.trim() && (
+          <div style={suggestionsStyle} onMouseDown={(event) => event.preventDefault()}>
+            {visibleOptions.length === 0 ? <div style={suggestionEmptyStyle}>Brak wyników.</div> : visibleOptions.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                style={suggestionButtonStyle}
+                onClick={() => {
+                  onSelect(option.value);
+                  setFocused(false);
+                }}
+              >
+                <strong>{option.label}</strong>
+                {option.description && <small>{option.description}</small>}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </label>
+  );
 }
 
 function EditableTextarea({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
@@ -401,6 +523,12 @@ const drawerContentStyle: CSSProperties = { display: "flex", flexDirection: "col
 const drawerSectionStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: "20px", background: colors.white };
 const formSectionTitleStyle: CSSProperties = { margin: "0 0 12px", color: colors.navy, fontSize: "18px", fontWeight: 500 };
 const editableRowStyle: CSSProperties = { display: "grid", gridTemplateColumns: "190px 1fr", gap: "14px", alignItems: "center", padding: "10px 0", borderBottom: `1px solid ${colors.border}`, color: colors.muted, fontWeight: 700 };
+const searchRowStyle: CSSProperties = { ...editableRowStyle, alignItems: "start" };
+const searchBoxStyle: CSSProperties = { position: "relative", display: "flex", gap: "8px", alignItems: "center" };
+const suggestionsStyle: CSSProperties = { position: "absolute", top: "calc(100% + 6px)", left: 0, right: 0, zIndex: 20, border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, boxShadow: shadow.soft, padding: "6px", display: "flex", flexDirection: "column", gap: "4px" };
+const suggestionButtonStyle: CSSProperties = { border: "none", background: "transparent", borderRadius: "10px", padding: "9px 10px", color: colors.text, cursor: "pointer", textAlign: "left", display: "flex", flexDirection: "column", gap: "3px", fontWeight: 750 };
+const suggestionEmptyStyle: CSSProperties = { padding: "10px", color: colors.muted, fontWeight: 700 };
+const clearButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.navy, padding: "9px 11px", fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" };
 const textareaRowStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "8px", color: colors.muted, fontWeight: 700 };
 const inputStyle: CSSProperties = { width: "100%", border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "10px 12px", background: colors.inputBackground, color: colors.text, fontWeight: 650, outline: "none" };
 const textareaStyle: CSSProperties = { ...inputStyle, resize: "vertical", minHeight: "96px", lineHeight: 1.6 };

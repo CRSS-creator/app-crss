@@ -63,7 +63,6 @@ function SettlementsContent() {
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState(EMPTY_FILTER);
-  const [invoiceFilter, setInvoiceFilter] = useState(EMPTY_FILTER);
   const [searchQuery, setSearchQuery] = useState("");
 
   const progressBySettlement = useMemo(
@@ -77,11 +76,9 @@ function SettlementsContent() {
     const haystack = [client?.nazwa, client?.nip, getCaregiverName(client), settlement.uwagi].filter(Boolean).join(" ").toLowerCase();
     const matchesSearch = !query || haystack.includes(query);
     const matchesStatus = statusFilter === EMPTY_FILTER || settlement.status_ksiegowosci === statusFilter;
-    const matchesInvoice = invoiceFilter === EMPTY_FILTER || (invoiceFilter === "wystawiona" ? settlement.faktura_wystawiona : !settlement.faktura_wystawiona);
-    return matchesSearch && matchesStatus && matchesInvoice;
+    return matchesSearch && matchesStatus;
   });
 
-  const lockedCount = settlements.filter((settlement) => settlement.faktura_wystawiona).length;
   const avgProgress = settlements.length
     ? Math.round(settlements.reduce((sum, settlement) => sum + (progressBySettlement[settlement.id]?.progress || 0), 0) / settlements.length)
     : 0;
@@ -118,28 +115,12 @@ function SettlementsContent() {
   }
 
   async function patchSettlement(settlement: MonthlySettlement, payload: Partial<MonthlySettlement>) {
-    if (settlement.faktura_wystawiona) return;
     setSavingId(settlement.id);
     const result = await updateMonthlySettlement(settlement.id, payload);
     setSavingId(null);
     if (result.error) {
       console.error("Błąd zapisu rozliczenia:", result.error);
       alert("Nie udało się zapisać rozliczenia.");
-      return;
-    }
-    const updated = result.data as MonthlySettlement;
-    setSettlements((current) => current.map((item) => item.id === updated.id ? updated : item));
-    setSelected((current) => current?.id === updated.id ? updated : current);
-  }
-
-  async function markInvoiceIssued(settlement: MonthlySettlement) {
-    if (!confirm("Po oznaczeniu faktury jako wystawionej rozliczenie zostanie zablokowane do edycji. Kontynuować?")) return;
-    setSavingId(settlement.id);
-    const result = await updateMonthlySettlement(settlement.id, { faktura_wystawiona: true });
-    setSavingId(null);
-    if (result.error) {
-      console.error("Błąd blokady rozliczenia:", result.error);
-      alert("Nie udało się oznaczyć faktury jako wystawionej.");
       return;
     }
     const updated = result.data as MonthlySettlement;
@@ -183,7 +164,6 @@ function SettlementsContent() {
       <section style={summaryGridStyle}>
         <SummaryCard label="Rozliczenia" value={settlements.length} />
         <SummaryCard label="Postęp zadań" value={`${avgProgress}%`} />
-        <SummaryCard label="Faktury wystawione" value={lockedCount} />
       </section>
 
       <section style={cardStyle}>
@@ -198,31 +178,24 @@ function SettlementsContent() {
             <option value={EMPTY_FILTER}>Status</option>
             {STATUS_OPTIONS.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}
           </select>
-          <select style={filterStyle} value={invoiceFilter} onChange={(event) => setInvoiceFilter(event.target.value)}>
-            <option value={EMPTY_FILTER}>Faktura</option>
-            <option value="niewystawiona">Nie wystawiona</option>
-            <option value="wystawiona">Wystawiona</option>
-          </select>
         </div>
 
         {loading ? <div style={emptyStateStyle}>Ładowanie rozliczeń...</div> : visibleSettlements.length === 0 ? <div style={emptyStateStyle}>Brak rozliczeń do wyświetlenia.</div> : (
           <div style={tableWrapperStyle}>
             <table style={tableStyle}>
-              <thead><tr><Th width="210px">Klient</Th><Th width="230px">Status</Th><Th width="130px">L. dokumentów</Th><Th width="140px">L. pracowników</Th><Th width="155px">L. zleceniobiorców</Th><Th width="150px">Zadania cykliczne</Th><Th width="135px">Faktura</Th><Th width="120px">Akcje</Th></tr></thead>
+              <thead><tr><Th width="230px">Klient</Th><Th width="250px">Status</Th><Th width="140px">L. dokumentów</Th><Th width="150px">L. pracowników</Th><Th width="170px">L. zleceniobiorców</Th><Th width="170px">Zadania cykliczne</Th><Th width="120px">Akcje</Th></tr></thead>
               <tbody>
                 {visibleSettlements.map((settlement) => {
                   const client = getClient(settlement.klienci);
-                  const locked = settlement.faktura_wystawiona;
                   const progress = progressBySettlement[settlement.id] || { progress: 0, total_tasks: 0, done_tasks: 0 };
                   return (
                     <tr key={settlement.id} style={rowStyle}>
                       <Td strong><div style={clientCellStyle}><span>{client?.nazwa || "Klient"}</span><small>{client?.nip || "Brak NIP"} · {getCaregiverName(client)}</small></div></Td>
-                      <Td><select style={{ ...statusInputStyle, ...statusSelectStyle(settlement.status_ksiegowosci) }} value={settlement.status_ksiegowosci} disabled={locked || savingId === settlement.id} onChange={(event) => patchSettlement(settlement, { status_ksiegowosci: event.target.value as SettlementStatus })}>{STATUS_OPTIONS.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}</select></Td>
-                      <Td><NumberInput value={settlement.liczba_dokumentow} disabled={locked} onChange={(value) => patchSettlement(settlement, { liczba_dokumentow: value })} /></Td>
-                      <Td><NumberInput value={settlement.liczba_pracownikow} disabled={locked} onChange={(value) => patchSettlement(settlement, { liczba_pracownikow: value })} /></Td>
-                      <Td><NumberInput value={settlement.liczba_zleceniobiorcow} disabled={locked} onChange={(value) => patchSettlement(settlement, { liczba_zleceniobiorcow: value })} /></Td>
+                      <Td><select style={{ ...statusInputStyle, ...statusSelectStyle(settlement.status_ksiegowosci) }} value={settlement.status_ksiegowosci} disabled={savingId === settlement.id} onChange={(event) => patchSettlement(settlement, { status_ksiegowosci: event.target.value as SettlementStatus })}>{STATUS_OPTIONS.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}</select></Td>
+                      <Td><NumberInput value={settlement.liczba_dokumentow} disabled={false} onChange={(value) => patchSettlement(settlement, { liczba_dokumentow: value })} /></Td>
+                      <Td><NumberInput value={settlement.liczba_pracownikow} disabled={false} onChange={(value) => patchSettlement(settlement, { liczba_pracownikow: value })} /></Td>
+                      <Td><NumberInput value={settlement.liczba_zleceniobiorcow} disabled={false} onChange={(value) => patchSettlement(settlement, { liczba_zleceniobiorcow: value })} /></Td>
                       <Td><ProgressBadge progress={progress.progress} done={progress.done_tasks} total={progress.total_tasks} /></Td>
-                      <Td><span style={locked ? invoiceIssuedStyle : invoiceOpenStyle}>{locked ? "Wystawiona" : "Nie wystawiona"}</span></Td>
                       <Td><button style={detailsButtonStyle} onClick={() => setSelected(settlement)}>Szczegóły</button></Td>
                     </tr>
                   );
@@ -241,7 +214,6 @@ function SettlementsContent() {
           activeTimers={activeTimers}
           onClose={() => setSelected(null)}
           onSave={patchSettlement}
-          onInvoice={markInvoiceIssued}
           onToggleRecurringTimer={toggleRecurringTimer}
           saving={savingId === selected.id}
         />
@@ -250,19 +222,17 @@ function SettlementsContent() {
   );
 }
 
-function SettlementDrawer({ settlement, progress, recurringTasks, activeTimers, onClose, onSave, onInvoice, onToggleRecurringTimer, saving }: {
+function SettlementDrawer({ settlement, progress, recurringTasks, activeTimers, onClose, onSave, onToggleRecurringTimer, saving }: {
   settlement: MonthlySettlement;
   progress: SettlementProgress;
   recurringTasks: RecurringTask[];
   activeTimers: TimeEntry[];
   onClose: () => void;
   onSave: (settlement: MonthlySettlement, payload: Partial<MonthlySettlement>) => void;
-  onInvoice: (settlement: MonthlySettlement) => void;
   onToggleRecurringTimer: (settlement: MonthlySettlement, task: RecurringTask) => void;
   saving: boolean;
 }) {
   const client = getClient(settlement.klienci);
-  const locked = settlement.faktura_wystawiona;
 
   return (
     <div style={drawerOverlayStyle}>
@@ -272,12 +242,11 @@ function SettlementDrawer({ settlement, progress, recurringTasks, activeTimers, 
           <button style={closeButtonStyle} onClick={onClose}>Zamknij</button>
         </header>
         <div style={drawerContentStyle}>
-          {locked && <div style={lockedNoticeStyle}>Rozliczenie jest zablokowane, ponieważ faktura została wystawiona.</div>}
           <section style={drawerSectionStyle}>
             <h3 style={drawerSectionTitleStyle}>Status miesiąca</h3>
-            <Field label="Status księgowości"><select style={{ ...inputStyle, ...statusSelectStyle(settlement.status_ksiegowosci) }} value={settlement.status_ksiegowosci} disabled={locked || saving} onChange={(event) => onSave(settlement, { status_ksiegowosci: event.target.value as SettlementStatus })}>{STATUS_OPTIONS.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}</select></Field>
-            <div style={threeColumnsStyle}><Field label="L. dokumentów"><NumberInput value={settlement.liczba_dokumentow} disabled={locked} onChange={(value) => onSave(settlement, { liczba_dokumentow: value })} /></Field><Field label="L. pracowników"><NumberInput value={settlement.liczba_pracownikow} disabled={locked} onChange={(value) => onSave(settlement, { liczba_pracownikow: value })} /></Field><Field label="L. zleceniobiorców"><NumberInput value={settlement.liczba_zleceniobiorcow} disabled={locked} onChange={(value) => onSave(settlement, { liczba_zleceniobiorcow: value })} /></Field></div>
-            <Field label="Uwagi"><textarea style={textareaStyle} value={settlement.uwagi || ""} disabled={locked} onChange={(event) => onSave(settlement, { uwagi: event.target.value })} /></Field>
+            <Field label="Status księgowości"><select style={{ ...inputStyle, ...statusSelectStyle(settlement.status_ksiegowosci) }} value={settlement.status_ksiegowosci} disabled={saving} onChange={(event) => onSave(settlement, { status_ksiegowosci: event.target.value as SettlementStatus })}>{STATUS_OPTIONS.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}</select></Field>
+            <div style={threeColumnsStyle}><Field label="L. dokumentów"><NumberInput value={settlement.liczba_dokumentow} disabled={false} onChange={(value) => onSave(settlement, { liczba_dokumentow: value })} /></Field><Field label="L. pracowników"><NumberInput value={settlement.liczba_pracownikow} disabled={false} onChange={(value) => onSave(settlement, { liczba_pracownikow: value })} /></Field><Field label="L. zleceniobiorców"><NumberInput value={settlement.liczba_zleceniobiorcow} disabled={false} onChange={(value) => onSave(settlement, { liczba_zleceniobiorcow: value })} /></Field></div>
+            <Field label="Uwagi"><textarea style={textareaStyle} value={settlement.uwagi || ""} disabled={false} onChange={(event) => onSave(settlement, { uwagi: event.target.value })} /></Field>
           </section>
 
           <section style={drawerSectionStyle}>
@@ -291,8 +260,6 @@ function SettlementDrawer({ settlement, progress, recurringTasks, activeTimers, 
               })}
             </div>
           </section>
-
-          <section style={drawerSectionStyle}><h3 style={drawerSectionTitleStyle}>Faktura</h3><div style={invoiceRowStyle}><span style={locked ? invoiceIssuedStyle : invoiceOpenStyle}>{locked ? "Wystawiona" : "Nie wystawiona"}</span>{!locked && <button style={lockButtonStyle} onClick={() => onInvoice(settlement)} disabled={saving}>Oznacz jako wystawioną</button>}</div></section>
         </div>
       </aside>
     </div>
@@ -329,7 +296,7 @@ const eyebrowStyle: CSSProperties = { color: colors.red, fontWeight: 800, margin
 const titleStyle: CSSProperties = { fontSize: "42px", lineHeight: 1.05, margin: 0, color: colors.navy };
 const subtitleStyle: CSSProperties = { maxWidth: "760px", fontSize: "17px", lineHeight: 1.7, color: colors.muted, marginTop: "14px" };
 const monthInputStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.card, color: colors.navy, padding: "13px 16px", fontWeight: 800 };
-const summaryGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "18px", marginBottom: "24px" };
+const summaryGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "18px", marginBottom: "24px" };
 const summaryCardStyle: CSSProperties = { background: colors.card, border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: "22px", boxShadow: shadow.soft, display: "flex", flexDirection: "column", gap: "10px", color: colors.muted, fontWeight: 800 };
 const cardStyle: CSSProperties = { background: colors.card, border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: "28px", boxShadow: shadow.soft };
 const tableHeaderStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "18px", marginBottom: "18px" };
@@ -340,7 +307,7 @@ const filtersRowStyle: CSSProperties = { display: "flex", alignItems: "center", 
 const filtersLabelStyle: CSSProperties = { color: colors.muted, fontWeight: 800, fontSize: "14px" };
 const filterStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, color: colors.text, padding: "10px 38px 10px 14px", minWidth: "190px", fontSize: "14px", fontWeight: 500 };
 const tableWrapperStyle: CSSProperties = { overflowX: "auto" };
-const tableStyle: CSSProperties = { width: "100%", minWidth: "1270px", borderCollapse: "collapse", tableLayout: "fixed" };
+const tableStyle: CSSProperties = { width: "100%", minWidth: "1120px", borderCollapse: "collapse", tableLayout: "fixed" };
 const thStyle: CSSProperties = { textAlign: "left", padding: "13px 10px", color: colors.muted, fontSize: "12px", borderBottom: `1px solid ${colors.border}`, lineHeight: 1.25, fontWeight: 800, whiteSpace: "nowrap" };
 const rowStyle: CSSProperties = { borderBottom: `1px solid ${colors.border}` };
 const tdStyle: CSSProperties = { padding: "15px 10px", color: colors.text, verticalAlign: "middle", fontSize: "15px" };
@@ -351,10 +318,7 @@ const textareaStyle: CSSProperties = { ...inputStyle, minHeight: "96px", resize:
 const clientCellStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "5px", minWidth: 0, fontWeight: 800 };
 const progressStyle: CSSProperties = { display: "inline-flex", flexDirection: "column", gap: "4px", borderRadius: radius.input, background: "#e8eef8", color: colors.navy, padding: "8px 10px", fontWeight: 800, minWidth: "86px", fontSize: "14px" };
 const progressLargeStyle: CSSProperties = { ...progressStyle, width: "100%", padding: "18px", fontSize: "20px" };
-const invoiceIssuedStyle: CSSProperties = { display: "inline-flex", borderRadius: radius.badge, background: "#d8f5df", color: colors.success, padding: "7px 10px", fontWeight: 850, fontSize: "14px" };
-const invoiceOpenStyle: CSSProperties = { display: "inline-flex", borderRadius: radius.badge, background: "#f1f5f9", color: colors.muted, padding: "7px 10px", fontWeight: 850, fontSize: "14px" };
 const detailsButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "9px 12px", background: colors.card, color: colors.navy, fontWeight: 800, cursor: "pointer" };
-const lockButtonStyle: CSSProperties = { ...detailsButtonStyle, background: colors.red, color: colors.white, borderColor: colors.red };
 const timerButtonStyle: CSSProperties = { ...detailsButtonStyle, display: "inline-flex", alignItems: "center", gap: "7px", padding: "9px 11px", background: "#eef5ff", borderColor: "#c8d8f0" };
 const timerActiveButtonStyle: CSSProperties = { ...timerButtonStyle, background: colors.success, borderColor: colors.success, color: colors.white };
 const emptyStateStyle: CSSProperties = { padding: "18px", borderRadius: radius.input, background: colors.inputBackground, border: `1px dashed ${colors.border}`, color: colors.muted, textAlign: "center", fontWeight: 800 };
@@ -370,8 +334,6 @@ const drawerSectionTitleStyle: CSSProperties = { margin: "0 0 14px", color: colo
 const fieldStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "7px", marginBottom: "14px" };
 const labelStyle: CSSProperties = { color: colors.muted, fontSize: "13px", fontWeight: 800 };
 const threeColumnsStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "14px" };
-const lockedNoticeStyle: CSSProperties = { borderRadius: radius.input, background: "#fff3df", color: "#92400e", padding: "14px", fontWeight: 850 };
-const invoiceRowStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "14px", alignItems: "center" };
 const clientContextStyle: CSSProperties = { display: "flex", gap: "10px", flexWrap: "wrap", margin: "12px 0", color: colors.muted, fontSize: "13px" };
 const recurringListStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "10px", marginTop: "12px" };
 const recurringItemStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "12px", background: colors.inputBackground };

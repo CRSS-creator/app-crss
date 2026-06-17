@@ -13,7 +13,6 @@ import CrmOfferLeadContextBridge from "@/components/CrmOfferLeadContextBridge";
 import CrmFollowUpTaskBridge from "@/components/CrmFollowUpTaskBridge";
 import CrmUiAdjustmentsBridge from "@/components/CrmUiAdjustmentsBridge";
 import ClientBillingModelBridge from "@/components/ClientBillingModelBridge";
-import SettlementBillingModelBridge from "@/components/SettlementBillingModelBridge";
 import TaskDeleteBridge from "@/components/TaskDeleteBridge";
 import {
   Home,
@@ -66,6 +65,7 @@ const menu = [
     items: [
       { href: "/crm", label: "CRM", icon: BriefcaseBusiness, page: "crm" },
       { href: "/crm/umowy", label: "Umowy", icon: FileText, page: "umowy" },
+      { href: "/faktury", label: "Faktury", icon: FileText, page: "faktury" },
       { href: "/cso", label: "CSO", icon: Megaphone, page: "cso" },
       { href: "/cfo", label: "CFO", icon: Wallet, page: "cfo" },
       { href: "/aml", label: "AML", icon: ShieldCheck, page: "aml" },
@@ -150,7 +150,6 @@ export default function AppLayout({ children, activePage }: AppLayoutProps) {
 
       <section data-active-page={activePage} style={contentStyle}>
         {activePage === "klienci" && <ClientBillingModelBridge />}
-        {activePage === "rozliczenia" && <SettlementBillingModelBridge />}
         {activePage === "crm" && <CrmOfferLeadContextBridge />}
         {activePage === "crm" && <CrmFollowUpTaskBridge />}
         {activePage === "crm" && <CrmUiAdjustmentsBridge />}

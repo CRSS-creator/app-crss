@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
+import ContractClientOnboardingPanel from "@/components/ContractClientOnboardingPanel";
 import { colors, radius, shadow } from "@/app/design";
 import { fetchCrmLeads } from "@/lib/crmService";
 import { fetchClients } from "@/lib/clientService";
@@ -391,6 +392,10 @@ function ContractDrawer({ contract, leads, clients, onClose, onSaved }: { contra
             <EditableInput label="Reprezentant" value={draft.reprezentant} onChange={(value) => updateDraft("reprezentant", value)} />
             <EditableInput label="Email klienta" type="email" value={draft.email_klienta} onChange={(value) => updateDraft("email_klienta", value)} />
           </FormSection>
+
+          {contract && contract.status === "podpisana" && !contract.klient_id && (
+            <ContractClientOnboardingPanel contract={contract} onCreated={(updatedContract) => onSaved(updatedContract)} />
+          )}
 
           <FormSection title="Warunki finansowe">
             <EditableInput label="Abonament netto" type="number" value={draft.abonament_netto} onChange={(value) => updateDraft("abonament_netto", value)} />

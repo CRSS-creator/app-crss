@@ -48,6 +48,8 @@ type Client = {
   vat_ue: boolean | null;
   schemat_zus: string | null;
   limit_dokumentow: number | null;
+  pierwszy_okres_rozliczeniowy: string | null;
+  ostatni_okres_rozliczeniowy: string | null;
   dodatkowe_uslugi: string | null;
   notatki: string | null;
   opiekun_id: string | null;
@@ -73,6 +75,8 @@ type ClientDraft = {
   vat_ue: boolean;
   schemat_zus: string;
   limit_dokumentow: string;
+  pierwszy_okres_rozliczeniowy: string;
+  ostatni_okres_rozliczeniowy: string;
   dodatkowe_uslugi: string;
   notatki: string;
 };
@@ -94,8 +98,8 @@ const LEGAL_FORM_OPTIONS = [
   { value: "", label: "Wybierz" },
   { value: "JDG", label: "JDG" },
   { value: "sp. z o.o.", label: "sp. z o.o." },
-  { value: "spółka cywilna", label: "spółka cywilna" },
-  { value: "inna", label: "inna" },
+  { value: "prosta spółka akcyjna", label: "prosta spółka akcyjna" },
+  { value: "organizacja", label: "organizacja" },
 ];
 
 const TAXATION_FORM_OPTIONS = [
@@ -104,8 +108,6 @@ const TAXATION_FORM_OPTIONS = [
   { value: "Podatek liniowy", label: "Podatek liniowy" },
   { value: "Ryczałt", label: "Ryczałt" },
   { value: "CIT", label: "CIT" },
-  { value: "Karta podatkowa", label: "Karta podatkowa" },
-  { value: "Inne", label: "Inne" },
 ];
 
 const EMPTY_FILTER = "Wszystkie";
@@ -360,8 +362,8 @@ return (
     <option value={EMPTY_FILTER}>Forma prawna</option>
     <option value="JDG">JDG</option>
     <option value="sp. z o.o.">sp. z o.o.</option>
-    <option value="spółka cywilna">spółka cywilna</option>
-    <option value="inna">inna</option>
+    <option value="prosta spółka akcyjna">prosta spółka akcyjna</option>
+    <option value="organizacja">organizacja</option>
   </select>
 
   <select
@@ -622,6 +624,12 @@ function ClientDrawer({
           obsluga_kadrowa: draft.obsluga_kadrowa,
           status_klienta: draft.status_klienta.trim() || null,
           abonament: draft.abonament ? Number(draft.abonament) : null,
+          pierwszy_okres_rozliczeniowy: normalizeMonthInput(
+            draft.pierwszy_okres_rozliczeniowy
+          ),
+          ostatni_okres_rozliczeniowy: normalizeMonthInput(
+            draft.ostatni_okres_rozliczeniowy
+          ),
           opiekun_id: draft.opiekun_id || null,
         }
       : {};
@@ -863,21 +871,53 @@ function ClientDrawer({
 
           <InfoSection title="Abonament i limity">
             {editing && canEditAdministrative ? (
-              <EditableInput
-                label="Abonament"
-                type="number"
-                value={draft.abonament}
-                onChange={(value) => updateDraft("abonament", value)}
-              />
+              <>
+                <EditableInput
+                  label="Abonament"
+                  type="number"
+                  value={draft.abonament}
+                  onChange={(value) => updateDraft("abonament", value)}
+                />
+                <EditableInput
+                  label="Pierwszy okres rozliczeniowy"
+                  type="month"
+                  value={draft.pierwszy_okres_rozliczeniowy}
+                  onChange={(value) =>
+                    updateDraft("pierwszy_okres_rozliczeniowy", value)
+                  }
+                />
+                <EditableInput
+                  label="Ostatni okres rozliczeniowy"
+                  type="month"
+                  value={draft.ostatni_okres_rozliczeniowy}
+                  onChange={(value) =>
+                    updateDraft("ostatni_okres_rozliczeniowy", value)
+                  }
+                />
+              </>
             ) : (
-              <InfoRow
-                label="Abonament"
-                value={
-                  client.abonament !== null
-                    ? `${client.abonament.toLocaleString("pl-PL")} zł`
-                    : null
-                }
-              />
+              <>
+                <InfoRow
+                  label="Abonament"
+                  value={
+                    client.abonament !== null
+                      ? `${client.abonament.toLocaleString("pl-PL")} zł`
+                      : null
+                  }
+                />
+                <InfoRow
+                  label="Pierwszy okres rozliczeniowy"
+                  value={formatSettlementPeriod(
+                    client.pierwszy_okres_rozliczeniowy
+                  )}
+                />
+                <InfoRow
+                  label="Ostatni okres rozliczeniowy"
+                  value={formatSettlementPeriod(
+                    client.ostatni_okres_rozliczeniowy
+                  )}
+                />
+              </>
             )}
 
             {editing ? (
@@ -1027,6 +1067,8 @@ function CreateClientDrawer({
     vat_ue: false,
     schemat_zus: "",
     limit_dokumentow: "",
+    pierwszy_okres_rozliczeniowy: "",
+    ostatni_okres_rozliczeniowy: "",
     dodatkowe_uslugi: "",
     notatki: "",
   });
@@ -1063,6 +1105,12 @@ function CreateClientDrawer({
       obsluga_kadrowa: draft.obsluga_kadrowa,
       status_klienta: draft.status_klienta.trim() || "Aktywny",
       abonament: draft.abonament ? Number(draft.abonament) : null,
+      pierwszy_okres_rozliczeniowy: normalizeMonthInput(
+        draft.pierwszy_okres_rozliczeniowy
+      ),
+      ostatni_okres_rozliczeniowy: normalizeMonthInput(
+        draft.ostatni_okres_rozliczeniowy
+      ),
       opiekun_id: draft.opiekun_id || null,
       czynny_vat: draft.czynny_vat,
       vat_ue: draft.vat_ue,
@@ -1196,8 +1244,8 @@ function CreateClientDrawer({
       { value: "", label: "Wybierz" },
       { value: "JDG", label: "JDG" },
       { value: "sp. z o.o.", label: "sp. z o.o." },
-      { value: "spółka cywilna", label: "spółka cywilna" },
-      { value: "inna", label: "inna" },
+      { value: "prosta spółka akcyjna", label: "prosta spółka akcyjna" },
+      { value: "organizacja", label: "organizacja" },
     ]}
   />
 
@@ -1211,8 +1259,6 @@ function CreateClientDrawer({
       { value: "Podatek liniowy", label: "Podatek liniowy" },
       { value: "Ryczałt", label: "Ryczałt" },
       { value: "CIT", label: "CIT" },
-      { value: "Karta podatkowa", label: "Karta podatkowa" },
-      { value: "Inne", label: "Inne" },
     ]}
   />
 
@@ -1258,6 +1304,20 @@ function CreateClientDrawer({
     type="number"
     value={draft.abonament}
     onChange={(v) => updateDraft("abonament", v)}
+  />
+
+  <EditableInput
+    label="Pierwszy okres rozliczeniowy"
+    type="month"
+    value={draft.pierwszy_okres_rozliczeniowy}
+    onChange={(v) => updateDraft("pierwszy_okres_rozliczeniowy", v)}
+  />
+
+  <EditableInput
+    label="Ostatni okres rozliczeniowy"
+    type="month"
+    value={draft.ostatni_okres_rozliczeniowy}
+    onChange={(v) => updateDraft("ostatni_okres_rozliczeniowy", v)}
   />
 
   <EditableInput
@@ -1309,9 +1369,35 @@ function createDraft(client: Client): ClientDraft {
       client.limit_dokumentow !== null && client.limit_dokumentow !== undefined
         ? String(client.limit_dokumentow)
         : "",
+    pierwszy_okres_rozliczeniowy: toMonthInputValue(
+      client.pierwszy_okres_rozliczeniowy
+    ),
+    ostatni_okres_rozliczeniowy: toMonthInputValue(
+      client.ostatni_okres_rozliczeniowy
+    ),
     dodatkowe_uslugi: client.dodatkowe_uslugi || "",
     notatki: client.notatki || "",
   };
+}
+
+function toMonthInputValue(value: string | null | undefined) {
+  return value ? value.slice(0, 7) : "";
+}
+
+function normalizeMonthInput(value: string) {
+  return value ? `${value}-01` : null;
+}
+
+function formatSettlementPeriod(value: string | null | undefined) {
+  if (!value) return null;
+
+  const [year, month] = value.slice(0, 7).split("-");
+  const date = new Date(Number(year), Number(month) - 1, 1);
+
+  return date.toLocaleDateString("pl-PL", {
+    month: "long",
+    year: "numeric",
+  });
 }
 
 function EditableInput({
@@ -1323,7 +1409,7 @@ function EditableInput({
   label: string;
   value: string;
   onChange: (value: string) => void;
-  type?: "text" | "number" | "email";
+  type?: "text" | "number" | "email" | "month";
 }) {
   return (
     <div style={editableRowStyle}>

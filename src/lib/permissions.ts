@@ -12,6 +12,7 @@ export type AppModule =
   | "zamykanie-roku"
   | "crm"
   | "umowy"
+  | "faktury"
   | "cso"
   | "cfo"
   | "aml"
@@ -30,6 +31,7 @@ const moduleAccess: Record<AppModule, string[]> = {
   "zamykanie-roku": ["owner", "manager", "admin"],
   crm: ["owner"],
   umowy: ["owner"],
+  faktury: ["owner"],
   cso: ["owner"],
   cfo: ["owner"],
   aml: ["owner", "manager"],

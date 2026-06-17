@@ -330,9 +330,11 @@ function TemplatesTab({ templates, clients, users, draft, loading, saving, setDr
 
         <CheckboxGroup label="Forma prawna" disabled={draft.klient_ids.length > 0} options={LEGAL_FORM_OPTIONS} selected={draft.formy_prawne} onChange={(formy_prawne) => setDraft((current) => ({ ...current, formy_prawne }))} />
         <CheckboxGroup label="Forma opodatkowania" disabled={draft.klient_ids.length > 0} options={TAXATION_FORM_OPTIONS} selected={draft.formy_opodatkowania} onChange={(formy_opodatkowania) => setDraft((current) => ({ ...current, formy_opodatkowania }))} />
-        <Field label="VAT"><select style={inputStyle} disabled={draft.klient_ids.length > 0} value={draft.vatMode} onChange={(event) => setDraft((current) => ({ ...current, vatMode: event.target.value as VatMode }))}>{VAT_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field>
-        <Field label="VAT-UE"><select style={inputStyle} disabled={draft.klient_ids.length > 0} value={draft.vatUeMode} onChange={(event) => setDraft((current) => ({ ...current, vatUeMode: event.target.value as VatUeMode }))}>{VAT_UE_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field>
         <div style={templateSidePanelStyle}>
+          <div style={templateVatGridStyle}>
+            <Field label="VAT"><select style={inputStyle} disabled={draft.klient_ids.length > 0} value={draft.vatMode} onChange={(event) => setDraft((current) => ({ ...current, vatMode: event.target.value as VatMode }))}>{VAT_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field>
+            <Field label="VAT-UE"><select style={inputStyle} disabled={draft.klient_ids.length > 0} value={draft.vatUeMode} onChange={(event) => setDraft((current) => ({ ...current, vatUeMode: event.target.value as VatUeMode }))}>{VAT_UE_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field>
+          </div>
           <label style={switchStyle}><input type="checkbox" checked={draft.aktywne} onChange={(event) => setDraft((current) => ({ ...current, aktywne: event.target.checked }))} /> Aktywny szablon</label>
           <Field label="Opis"><textarea style={textareaStyle} value={draft.opis} onChange={(event) => setDraft((current) => ({ ...current, opis: event.target.value }))} placeholder="Krótki opis czynności dla księgowości" /></Field>
         </div>
@@ -441,7 +443,7 @@ const formGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "mi
 const fieldStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "7px" };
 const labelStyle: CSSProperties = { color: colors.muted, fontSize: "13px", fontWeight: 850 };
 const inputStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, padding: "10px 12px", fontWeight: 700, minHeight: "42px", width: "100%" };
-const textareaStyle: CSSProperties = { ...inputStyle, minHeight: "88px", resize: "vertical", lineHeight: 1.5 };
+const textareaStyle: CSSProperties = { ...inputStyle, minHeight: "132px", resize: "vertical", lineHeight: 1.5 };
 const checkboxGroupStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "8px", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, padding: "12px", gridColumn: "span 2" };
 const checkboxGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "8px" };
 const checkboxOptionStyle: CSSProperties = { display: "flex", alignItems: "center", gap: "8px", color: colors.text, fontWeight: 750, fontSize: "13px" };
@@ -452,6 +454,7 @@ const selectedClientsStyle: CSSProperties = { display: "flex", gap: "7px", flexW
 const clientPillStyle: CSSProperties = { display: "inline-flex", alignItems: "center", gap: "7px", borderRadius: radius.badge, background: "rgba(23, 59, 115, 0.10)", color: colors.navy, padding: "7px 9px", fontWeight: 850, fontSize: "12px" };
 const pillRemoveStyle: CSSProperties = { border: "none", background: "transparent", color: colors.navy, cursor: "pointer", fontWeight: 900, fontSize: "15px", lineHeight: 1 };
 const templateSidePanelStyle: CSSProperties = { gridColumn: "3 / -1", display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "12px", alignSelf: "stretch" };
+const templateVatGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "12px" };
 const switchStyle: CSSProperties = { minHeight: "42px", display: "flex", alignItems: "center", gap: "9px", color: colors.text, fontWeight: 850 };
 const buttonRowStyle: CSSProperties = { display: "flex", gap: "10px", marginBottom: "18px", flexWrap: "wrap" };
 const primaryButtonStyle: CSSProperties = { border: "none", borderRadius: radius.button, background: colors.red, color: colors.white, padding: "11px 15px", minHeight: "42px", fontWeight: 850, cursor: "pointer", whiteSpace: "nowrap" };

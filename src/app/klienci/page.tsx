@@ -87,7 +87,7 @@ type ClientDraft = {
 
 const CLIENT_STATUSES = [
   "Aktywny",
-  "W onboarding",
+  "Onboarding",
   "Zawieszony",
   "Do zamknięcia",
   "Archiwalny",

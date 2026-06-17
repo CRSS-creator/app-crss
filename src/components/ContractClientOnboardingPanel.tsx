@@ -35,7 +35,7 @@ type Props = {
   onCreated: (contract: CrmContract) => void;
 };
 
-const CLIENT_STATUSES = ["W onboarding", "Aktywny", "Zawieszony", "Do zamknięcia", "Archiwalny"];
+const CLIENT_STATUSES = ["Onboarding", "Aktywny", "Zawieszony", "Do zamknięcia", "Archiwalny"];
 const ZUS_OPTIONS = ["", "Brak", "Preferencyjny", "Mały ZUS Plus", "Pełny ZUS", "Tylko zdrowotna"];
 
 export default function ContractClientOnboardingPanel({ contract, onCreated }: Props) {
@@ -87,7 +87,7 @@ export default function ContractClientOnboardingPanel({ contract, onCreated }: P
       email: nullableToNull(contract.email_klienta),
       forma_prawna: emptyToNull(draft.forma_prawna),
       forma_opodatkowania: emptyToNull(draft.forma_opodatkowania),
-      status_klienta: draft.status_klienta || "W onboarding",
+      status_klienta: draft.status_klienta || "Onboarding",
       opiekun_id: emptyToNull(draft.opiekun_id),
       obsluga_kadrowa: Boolean(contract.obsluga_kadrowa),
       czynny_vat: draft.czynny_vat,
@@ -165,7 +165,7 @@ function createEmptyDraft(contract: CrmContract): ClientOnboardingDraft {
     telefon: "",
     forma_prawna: "",
     forma_opodatkowania: contract.typ_umowy === "KH" ? "CIT" : "",
-    status_klienta: "W onboarding",
+    status_klienta: "Onboarding",
     opiekun_id: "",
     czynny_vat: false,
     vat_ue: false,
@@ -173,7 +173,7 @@ function createEmptyDraft(contract: CrmContract): ClientOnboardingDraft {
     ostatni_okres_rozliczeniowy: "",
     koszt_obslugi_pracownika: "",
     koszt_obslugi_zleceniobiorcy: "",
-    notatki: contract.numer_umowy ? `Klient utworzony z umowy ${contract.numer_umowy}.` : "Klient utworzony z podpisanej umowy.",
+    notatki: "",
   };
 }
 

@@ -50,6 +50,8 @@ type Client = {
   limit_dokumentow: number | null;
   pierwszy_okres_rozliczeniowy: string | null;
   ostatni_okres_rozliczeniowy: string | null;
+  koszt_obslugi_pracownika: number | null;
+  koszt_obslugi_zleceniobiorcy: number | null;
   dodatkowe_uslugi: string | null;
   notatki: string | null;
   opiekun_id: string | null;
@@ -77,6 +79,8 @@ type ClientDraft = {
   limit_dokumentow: string;
   pierwszy_okres_rozliczeniowy: string;
   ostatni_okres_rozliczeniowy: string;
+  koszt_obslugi_pracownika: string;
+  koszt_obslugi_zleceniobiorcy: string;
   dodatkowe_uslugi: string;
   notatki: string;
 };
@@ -630,6 +634,12 @@ function ClientDrawer({
           ostatni_okres_rozliczeniowy: normalizeMonthInput(
             draft.ostatni_okres_rozliczeniowy
           ),
+          koszt_obslugi_pracownika: draft.koszt_obslugi_pracownika
+            ? Number(draft.koszt_obslugi_pracownika)
+            : null,
+          koszt_obslugi_zleceniobiorcy: draft.koszt_obslugi_zleceniobiorcy
+            ? Number(draft.koszt_obslugi_zleceniobiorcy)
+            : null,
           opiekun_id: draft.opiekun_id || null,
         }
       : {};
@@ -894,6 +904,22 @@ function ClientDrawer({
                     updateDraft("ostatni_okres_rozliczeniowy", value)
                   }
                 />
+                <EditableInput
+                  label="Koszt obsługi pracownika"
+                  type="number"
+                  value={draft.koszt_obslugi_pracownika}
+                  onChange={(value) =>
+                    updateDraft("koszt_obslugi_pracownika", value)
+                  }
+                />
+                <EditableInput
+                  label="Koszt obsługi zleceniobiorcy"
+                  type="number"
+                  value={draft.koszt_obslugi_zleceniobiorcy}
+                  onChange={(value) =>
+                    updateDraft("koszt_obslugi_zleceniobiorcy", value)
+                  }
+                />
               </>
             ) : (
               <>
@@ -916,6 +942,14 @@ function ClientDrawer({
                   value={formatSettlementPeriod(
                     client.ostatni_okres_rozliczeniowy
                   )}
+                />
+                <InfoRow
+                  label="Koszt obsługi pracownika"
+                  value={formatMoney(client.koszt_obslugi_pracownika)}
+                />
+                <InfoRow
+                  label="Koszt obsługi zleceniobiorcy"
+                  value={formatMoney(client.koszt_obslugi_zleceniobiorcy)}
                 />
               </>
             )}
@@ -1069,6 +1103,8 @@ function CreateClientDrawer({
     limit_dokumentow: "",
     pierwszy_okres_rozliczeniowy: "",
     ostatni_okres_rozliczeniowy: "",
+    koszt_obslugi_pracownika: "",
+    koszt_obslugi_zleceniobiorcy: "",
     dodatkowe_uslugi: "",
     notatki: "",
   });
@@ -1111,6 +1147,12 @@ function CreateClientDrawer({
       ostatni_okres_rozliczeniowy: normalizeMonthInput(
         draft.ostatni_okres_rozliczeniowy
       ),
+      koszt_obslugi_pracownika: draft.koszt_obslugi_pracownika
+        ? Number(draft.koszt_obslugi_pracownika)
+        : null,
+      koszt_obslugi_zleceniobiorcy: draft.koszt_obslugi_zleceniobiorcy
+        ? Number(draft.koszt_obslugi_zleceniobiorcy)
+        : null,
       opiekun_id: draft.opiekun_id || null,
       czynny_vat: draft.czynny_vat,
       vat_ue: draft.vat_ue,
@@ -1321,6 +1363,20 @@ function CreateClientDrawer({
   />
 
   <EditableInput
+    label="Koszt obsługi pracownika"
+    type="number"
+    value={draft.koszt_obslugi_pracownika}
+    onChange={(v) => updateDraft("koszt_obslugi_pracownika", v)}
+  />
+
+  <EditableInput
+    label="Koszt obsługi zleceniobiorcy"
+    type="number"
+    value={draft.koszt_obslugi_zleceniobiorcy}
+    onChange={(v) => updateDraft("koszt_obslugi_zleceniobiorcy", v)}
+  />
+
+  <EditableInput
     label="Limit dokumentów"
     type="number"
     value={draft.limit_dokumentow}
@@ -1375,6 +1431,16 @@ function createDraft(client: Client): ClientDraft {
     ostatni_okres_rozliczeniowy: toMonthInputValue(
       client.ostatni_okres_rozliczeniowy
     ),
+    koszt_obslugi_pracownika:
+      client.koszt_obslugi_pracownika !== null &&
+      client.koszt_obslugi_pracownika !== undefined
+        ? String(client.koszt_obslugi_pracownika)
+        : "",
+    koszt_obslugi_zleceniobiorcy:
+      client.koszt_obslugi_zleceniobiorcy !== null &&
+      client.koszt_obslugi_zleceniobiorcy !== undefined
+        ? String(client.koszt_obslugi_zleceniobiorcy)
+        : "",
     dodatkowe_uslugi: client.dodatkowe_uslugi || "",
     notatki: client.notatki || "",
   };
@@ -1398,6 +1464,12 @@ function formatSettlementPeriod(value: string | null | undefined) {
     month: "long",
     year: "numeric",
   });
+}
+
+function formatMoney(value: number | null | undefined) {
+  return value !== null && value !== undefined
+    ? `${value.toLocaleString("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} zł`
+    : null;
 }
 
 function EditableInput({

@@ -257,10 +257,25 @@ export async function fetchActiveTaskTimers(userId: string) {
 }
 
 export async function startTaskTimer(taskId: string, userId: string) {
+  const taskResult = await supabase
+    .from("zadania")
+    .select("klient_id, czy_wewnetrzne")
+    .eq("id", taskId)
+    .single();
+
+  if (taskResult.error) {
+    return { data: null, error: taskResult.error };
+  }
+
+  const isInternal = Boolean(taskResult.data?.czy_wewnetrzne);
+  const clientId = isInternal ? null : taskResult.data?.klient_id || null;
+
   return supabase
     .from("czas_pracy")
     .insert({
       zadanie_id: taskId,
+      klient_id: clientId,
+      czy_wewnetrzne: isInternal,
       osoba_id: userId,
       started_at: new Date().toISOString(),
     })

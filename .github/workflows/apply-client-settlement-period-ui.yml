@@ -1,0 +1,122 @@
+name: Apply client settlement period UI patch
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, 'Apply client settlement period UI') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Patch client UI
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const path = 'src/app/klienci/page.tsx';
+          let text = fs.readFileSync(path, 'utf8');
+
+          if (!text.includes('pierwszy_okres_rozliczeniowy')) {
+            text = text.replace(
+              '  limit_dokumentow: number | null;\n  dodatkowe_uslugi: string | null;',
+              '  limit_dokumentow: number | null;\n  pierwszy_okres_rozliczeniowy: string | null;\n  ostatni_okres_rozliczeniowy: string | null;\n  dodatkowe_uslugi: string | null;'
+            );
+
+            text = text.replace(
+              '  limit_dokumentow: string;\n  dodatkowe_uslugi: string;',
+              '  limit_dokumentow: string;\n  pierwszy_okres_rozliczeniowy: string;\n  ostatni_okres_rozliczeniowy: string;\n  dodatkowe_uslugi: string;'
+            );
+
+            text = text.replace(
+              '  { value: "spółka cywilna", label: "spółka cywilna" },\n  { value: "inna", label: "inna" },',
+              '  { value: "prosta spółka akcyjna", label: "prosta spółka akcyjna" },\n  { value: "organizacja", label: "organizacja" },'
+            );
+
+            text = text.replace(
+              '  { value: "CIT", label: "CIT" },\n  { value: "Karta podatkowa", label: "Karta podatkowa" },\n  { value: "Inne", label: "Inne" },',
+              '  { value: "CIT", label: "CIT" },'
+            );
+
+            text = text.replace(
+              '    <option value="spółka cywilna">spółka cywilna</option>\n    <option value="inna">inna</option>',
+              '    <option value="prosta spółka akcyjna">prosta spółka akcyjna</option>\n    <option value="organizacja">organizacja</option>'
+            );
+
+            text = text.replace(
+              '          abonament: draft.abonament ? Number(draft.abonament) : null,\n          opiekun_id: draft.opiekun_id || null,',
+              '          abonament: draft.abonament ? Number(draft.abonament) : null,\n          pierwszy_okres_rozliczeniowy: normalizeMonthInput(\n            draft.pierwszy_okres_rozliczeniowy\n          ),\n          ostatni_okres_rozliczeniowy: normalizeMonthInput(\n            draft.ostatni_okres_rozliczeniowy\n          ),\n          opiekun_id: draft.opiekun_id || null,'
+            );
+
+            text = text.replace(
+              `            {editing && canEditAdministrative ? (\n              <EditableInput\n                label="Abonament"\n                type="number"\n                value={draft.abonament}\n                onChange={(value) => updateDraft("abonament", value)}\n              />\n            ) : (\n              <InfoRow\n                label="Abonament"\n                value={\n                  client.abonament !== null\n                    ? \`${'${client.abonament.toLocaleString("pl-PL")}'} zł\`\n                    : null\n                }\n              />\n            )}`,
+              `            {editing && canEditAdministrative ? (\n              <>\n                <EditableInput\n                  label="Abonament"\n                  type="number"\n                  value={draft.abonament}\n                  onChange={(value) => updateDraft("abonament", value)}\n                />\n                <EditableInput\n                  label="Pierwszy okres rozliczeniowy"\n                  type="month"\n                  value={draft.pierwszy_okres_rozliczeniowy}\n                  onChange={(value) =>\n                    updateDraft("pierwszy_okres_rozliczeniowy", value)\n                  }\n                />\n                <EditableInput\n                  label="Ostatni okres rozliczeniowy"\n                  type="month"\n                  value={draft.ostatni_okres_rozliczeniowy}\n                  onChange={(value) =>\n                    updateDraft("ostatni_okres_rozliczeniowy", value)\n                  }\n                />\n              </>\n            ) : (\n              <>\n                <InfoRow\n                  label="Abonament"\n                  value={\n                    client.abonament !== null\n                      ? \`${'${client.abonament.toLocaleString("pl-PL")}'} zł\`\n                      : null\n                  }\n                />\n                <InfoRow\n                  label="Pierwszy okres rozliczeniowy"\n                  value={formatSettlementPeriod(\n                    client.pierwszy_okres_rozliczeniowy\n                  )}\n                />\n                <InfoRow\n                  label="Ostatni okres rozliczeniowy"\n                  value={formatSettlementPeriod(\n                    client.ostatni_okres_rozliczeniowy\n                  )}\n                />\n              </>\n            )}`
+            );
+
+            text = text.replace(
+              '      abonament: draft.abonament ? Number(draft.abonament) : null,\n      opiekun_id: draft.opiekun_id || null,',
+              '      abonament: draft.abonament ? Number(draft.abonament) : null,\n      pierwszy_okres_rozliczeniowy: normalizeMonthInput(\n        draft.pierwszy_okres_rozliczeniowy\n      ),\n      ostatni_okres_rozliczeniowy: normalizeMonthInput(\n        draft.ostatni_okres_rozliczeniowy\n      ),\n      opiekun_id: draft.opiekun_id || null,'
+            );
+
+            text = text.replace(
+              '    limit_dokumentow: "",\n    dodatkowe_usługi: "",',
+              '    limit_dokumentow: "",\n    pierwszy_okres_rozliczeniowy: "",\n    ostatni_okres_rozliczeniowy: "",\n    dodatkowe_usługi: "",'
+            );
+            text = text.replace(
+              '    limit_dokumentow: "",\n    dodatkowe_uslugi: "",',
+              '    limit_dokumentow: "",\n    pierwszy_okres_rozliczeniowy: "",\n    ostatni_okres_rozliczeniowy: "",\n    dodatkowe_uslugi: "",'
+            );
+
+            text = text.replace(
+              '      { value: "spółka cywilna", label: "spółka cywilna" },\n      { value: "inna", label: "inna" },',
+              '      { value: "prosta spółka akcyjna", label: "prosta spółka akcyjna" },\n      { value: "organizacja", label: "organizacja" },'
+            );
+            text = text.replace(
+              '      { value: "CIT", label: "CIT" },\n      { value: "Karta podatkowa", label: "Karta podatkowa" },\n      { value: "Inne", label: "Inne" },',
+              '      { value: "CIT", label: "CIT" },'
+            );
+
+            text = text.replace(
+              `  <EditableInput\n    label="Abonament"\n    type="number"\n    value={draft.abonament}\n    onChange={(v) => updateDraft("abonament", v)}\n  />\n\n  <EditableInput\n    label="Limit dokumentów"`,
+              `  <EditableInput\n    label="Abonament"\n    type="number"\n    value={draft.abonament}\n    onChange={(v) => updateDraft("abonament", v)}\n  />\n\n  <EditableInput\n    label="Pierwszy okres rozliczeniowy"\n    type="month"\n    value={draft.pierwszy_okres_rozliczeniowy}\n    onChange={(v) => updateDraft("pierwszy_okres_rozliczeniowy", v)}\n  />\n\n  <EditableInput\n    label="Ostatni okres rozliczeniowy"\n    type="month"\n    value={draft.ostatni_okres_rozliczeniowy}\n    onChange={(v) => updateDraft("ostatni_okres_rozliczeniowy", v)}\n  />\n\n  <EditableInput\n    label="Limit dokumentów"`
+            );
+
+            text = text.replace(
+              '    dodatkowe_uslugi: client.dodatkowe_uslugi || "",',
+              '    pierwszy_okres_rozliczeniowy: toMonthInputValue(\n      client.pierwszy_okres_rozliczeniowy\n    ),\n    ostatni_okres_rozliczeniowy: toMonthInputValue(\n      client.ostatni_okres_rozliczeniowy\n    ),\n    dodatkowe_uslugi: client.dodatkowe_uslugi || "",'
+            );
+
+            text = text.replace(
+              `}\n\nfunction EditableInput({`,
+              `}\n\nfunction toMonthInputValue(value: string | null | undefined) {\n  return value ? value.slice(0, 7) : "";\n}\n\nfunction normalizeMonthInput(value: string) {\n  return value ? \`${'${value}'}-01\` : null;\n}\n\nfunction formatSettlementPeriod(value: string | null | undefined) {\n  if (!value) return null;\n\n  const [year, month] = value.slice(0, 7).split("-");\n  const date = new Date(Number(year), Number(month) - 1, 1);\n\n  return date.toLocaleDateString("pl-PL", {\n    month: "long",\n    year: "numeric",\n  });\n}\n\nfunction EditableInput({`
+            );
+
+            text = text.replace(
+              '  type?: "text" | "number" | "email";',
+              '  type?: "text" | "number" | "email" | "month";'
+            );
+
+            fs.writeFileSync(path, text, 'utf8');
+          }
+
+          fs.rmSync('.github/workflows/apply-client-settlement-period-ui.yml', { force: true });
+          NODE
+
+      - name: Commit UI patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/app/klienci/page.tsx .github/workflows/apply-client-settlement-period-ui.yml
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Apply client settlement period UI"
+            git push
+          fi

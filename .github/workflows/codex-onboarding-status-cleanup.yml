@@ -1,0 +1,50 @@
+name: Codex onboarding status cleanup
+
+on:
+  push:
+    paths:
+      - .github/workflows/codex-onboarding-status-cleanup.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Patch onboarding status and notes
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const workflowPath = '.github/workflows/codex-onboarding-status-cleanup.yml';
+          const files = [
+            'src/components/ContractClientOnboardingPanel.tsx',
+            'src/app/klienci/page.tsx',
+          ];
+
+          for (const file of files) {
+            let text = fs.readFileSync(file, 'utf8');
+            text = text.replaceAll('W onboarding', 'Onboarding');
+            if (file.endsWith('ContractClientOnboardingPanel.tsx')) {
+              text = text.replace(
+                '    notatki: contract.numer_umowy ? `Klient utworzony z umowy ${contract.numer_umowy}.` : "Klient utworzony z podpisanej umowy.",',
+                '    notatki: "",'
+              );
+            }
+            fs.writeFileSync(file, text);
+          }
+
+          fs.rmSync(workflowPath, { force: true });
+          NODE
+      - name: Commit patch
+        run: |
+          git config user.name "codex"
+          git config user.email "codex@openai.com"
+          if ! git diff --quiet; then
+            git add src/components/ContractClientOnboardingPanel.tsx src/app/klienci/page.tsx .github/workflows/codex-onboarding-status-cleanup.yml
+            git commit -m "Normalize onboarding client status"
+            git push origin main
+          fi

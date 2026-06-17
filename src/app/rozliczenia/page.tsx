@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from
 import { Play, Square } from "lucide-react";
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
+import SettlementAdditionalFeesPanel from "@/components/SettlementAdditionalFeesPanel";
 import { colors, radius, shadow } from "@/app/design";
 import { supabase } from "@/lib/supabaseClient";
 import {
@@ -248,6 +249,8 @@ function SettlementDrawer({ settlement, progress, recurringTasks, activeTimers, 
             <div style={threeColumnsStyle}><Field label="L. dokumentów"><NumberInput value={settlement.liczba_dokumentow} disabled={false} onChange={(value) => onSave(settlement, { liczba_dokumentow: value })} /></Field><Field label="L. pracowników"><NumberInput value={settlement.liczba_pracownikow} disabled={false} onChange={(value) => onSave(settlement, { liczba_pracownikow: value })} /></Field><Field label="L. zleceniobiorców"><NumberInput value={settlement.liczba_zleceniobiorcow} disabled={false} onChange={(value) => onSave(settlement, { liczba_zleceniobiorcow: value })} /></Field></div>
             <Field label="Uwagi"><textarea style={textareaStyle} value={settlement.uwagi || ""} disabled={false} onChange={(event) => onSave(settlement, { uwagi: event.target.value })} /></Field>
           </section>
+
+          <SettlementAdditionalFeesPanel settlementId={settlement.id} />
 
           <section style={drawerSectionStyle}>
             <h3 style={drawerSectionTitleStyle}>Zadania cykliczne</h3>

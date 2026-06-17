@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type CSSProperties, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
+import AdditionalFeesSettingsPanel from "@/components/AdditionalFeesSettingsPanel";
 import { colors, radius, shadow } from "@/app/design";
 import { supabase } from "@/lib/supabaseClient";
 import { fetchClients } from "@/lib/clientService";
@@ -59,7 +60,7 @@ const MONTH_OPTIONS = [
   { value: 12, label: "Grudzień" },
 ] as const;
 
-type SettingsTab = "templates" | "users";
+type SettingsTab = "templates" | "fees" | "users";
 type VatMode = typeof VAT_OPTIONS[number]["value"];
 type VatUeMode = typeof VAT_UE_OPTIONS[number]["value"];
 type FrequencyMode = typeof FREQUENCY_OPTIONS[number]["value"];
@@ -244,7 +245,7 @@ function SettingsContent() {
         <div>
           <p style={eyebrowStyle}>Administracja</p>
           <h1 style={titleStyle}>Ustawienia</h1>
-          <p style={subtitleStyle}>Szablony cykliczne i użytkownicy aplikacji.</p>
+          <p style={subtitleStyle}>Szablony cykliczne, opłaty dodatkowe i użytkownicy aplikacji.</p>
         </div>
         <div style={summaryGridStyle}>
           <Summary label="Szablony" value={templates.length} />
@@ -255,6 +256,7 @@ function SettingsContent() {
 
       <div style={tabsStyle}>
         <button style={activeTab === "templates" ? activeTabStyle : tabStyle} onClick={() => setActiveTab("templates")}>Szablony cykliczne</button>
+        <button style={activeTab === "fees" ? activeTabStyle : tabStyle} onClick={() => setActiveTab("fees")}>Opłaty dodatkowe</button>
         <button style={activeTab === "users" ? activeTabStyle : tabStyle} onClick={() => setActiveTab("users")}>Użytkownicy</button>
       </div>
 
@@ -272,6 +274,8 @@ function SettingsContent() {
           onToggle={toggleTemplate}
           onRemove={removeTemplate}
         />
+      ) : activeTab === "fees" ? (
+        <AdditionalFeesSettingsPanel />
       ) : (
         <UsersTab users={users} loading={loading} onRoleChange={updateUserRole} />
       )}

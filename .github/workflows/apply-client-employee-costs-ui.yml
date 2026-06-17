@@ -1,0 +1,95 @@
+name: Apply client employee costs UI patch
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, 'Apply client employee costs UI') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Patch client UI
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const workflowPath = '.github/workflows/apply-client-employee-costs-ui.yml';
+          const path = 'src/app/klienci/page.tsx';
+          let text = fs.readFileSync(path, 'utf8');
+
+          if (!text.includes('koszt_obslugi_pracownika')) {
+            text = text.replace(
+              '  ostatni_okres_rozliczeniowy: string | null;\n  dodatkowe_uslugi: string | null;',
+              '  ostatni_okres_rozliczeniowy: string | null;\n  koszt_obslugi_pracownika: number | null;\n  koszt_obslugi_zleceniobiorcy: number | null;\n  dodatkowe_uslugi: string | null;'
+            );
+
+            text = text.replace(
+              '  ostatni_okres_rozliczeniowy: string;\n  dodatkowe_uslugi: string;',
+              '  ostatni_okres_rozliczeniowy: string;\n  koszt_obslugi_pracownika: string;\n  koszt_obslugi_zleceniobiorcy: string;\n  dodatkowe_uslugi: string;'
+            );
+
+            text = text.replace(
+              '          ostatni_okres_rozliczeniowy: normalizeMonthInput(\n            draft.ostatni_okres_rozliczeniowy\n          ),\n          opiekun_id: draft.opiekun_id || null,',
+              '          ostatni_okres_rozliczeniowy: normalizeMonthInput(\n            draft.ostatni_okres_rozliczeniowy\n          ),\n          koszt_obslugi_pracownika: draft.koszt_obslugi_pracownika\n            ? Number(draft.koszt_obslugi_pracownika)\n            : null,\n          koszt_obslugi_zleceniobiorcy: draft.koszt_obslugi_zleceniobiorcy\n            ? Number(draft.koszt_obslugi_zleceniobiorcy)\n            : null,\n          opiekun_id: draft.opiekun_id || null,'
+            );
+
+            text = text.replace(
+              `                <EditableInput\n                  label="Ostatni okres rozliczeniowy"\n                  type="month"\n                  value={draft.ostatni_okres_rozliczeniowy}\n                  onChange={(value) =>\n                    updateDraft("ostatni_okres_rozliczeniowy", value)\n                  }\n                />`,
+              `                <EditableInput\n                  label="Ostatni okres rozliczeniowy"\n                  type="month"\n                  value={draft.ostatni_okres_rozliczeniowy}\n                  onChange={(value) =>\n                    updateDraft("ostatni_okres_rozliczeniowy", value)\n                  }\n                />\n                <EditableInput\n                  label="Koszt obsługi pracownika"\n                  type="number"\n                  value={draft.koszt_obslugi_pracownika}\n                  onChange={(value) =>\n                    updateDraft("koszt_obslugi_pracownika", value)\n                  }\n                />\n                <EditableInput\n                  label="Koszt obsługi zleceniobiorcy"\n                  type="number"\n                  value={draft.koszt_obslugi_zleceniobiorcy}\n                  onChange={(value) =>\n                    updateDraft("koszt_obslugi_zleceniobiorcy", value)\n                  }\n                />`
+            );
+
+            text = text.replace(
+              `                <InfoRow\n                  label="Ostatni okres rozliczeniowy"\n                  value={formatSettlementPeriod(\n                    client.ostatni_okres_rozliczeniowy\n                  )}\n                />`,
+              `                <InfoRow\n                  label="Ostatni okres rozliczeniowy"\n                  value={formatSettlementPeriod(\n                    client.ostatni_okres_rozliczeniowy\n                  )}\n                />\n                <InfoRow\n                  label="Koszt obsługi pracownika"\n                  value={formatMoney(client.koszt_obslugi_pracownika)}\n                />\n                <InfoRow\n                  label="Koszt obsługi zleceniobiorcy"\n                  value={formatMoney(client.koszt_obslugi_zleceniobiorcy)}\n                />`
+            );
+
+            text = text.replace(
+              '      ostatni_okres_rozliczeniowy: normalizeMonthInput(\n        draft.ostatni_okres_rozliczeniowy\n      ),\n      opiekun_id: draft.opiekun_id || null,',
+              '      ostatni_okres_rozliczeniowy: normalizeMonthInput(\n        draft.ostatni_okres_rozliczeniowy\n      ),\n      koszt_obslugi_pracownika: draft.koszt_obslugi_pracownika\n        ? Number(draft.koszt_obslugi_pracownika)\n        : null,\n      koszt_obslugi_zleceniobiorcy: draft.koszt_obslugi_zleceniobiorcy\n        ? Number(draft.koszt_obslugi_zleceniobiorcy)\n        : null,\n      opiekun_id: draft.opiekun_id || null,'
+            );
+
+            text = text.replace(
+              '    ostatni_okres_rozliczeniowy: "",\n    dodatkowe_uslugi: "",',
+              '    ostatni_okres_rozliczeniowy: "",\n    koszt_obslugi_pracownika: "",\n    koszt_obslugi_zleceniobiorcy: "",\n    dodatkowe_uslugi: "",'
+            );
+
+            text = text.replace(
+              `  <EditableInput\n    label="Ostatni okres rozliczeniowy"\n    type="month"\n    value={draft.ostatni_okres_rozliczeniowy}\n    onChange={(v) => updateDraft("ostatni_okres_rozliczeniowy", v)}\n  />\n\n  <EditableInput\n    label="Limit dokumentów"`,
+              `  <EditableInput\n    label="Ostatni okres rozliczeniowy"\n    type="month"\n    value={draft.ostatni_okres_rozliczeniowy}\n    onChange={(v) => updateDraft("ostatni_okres_rozliczeniowy", v)}\n  />\n\n  <EditableInput\n    label="Koszt obsługi pracownika"\n    type="number"\n    value={draft.koszt_obslugi_pracownika}\n    onChange={(v) => updateDraft("koszt_obslugi_pracownika", v)}\n  />\n\n  <EditableInput\n    label="Koszt obsługi zleceniobiorcy"\n    type="number"\n    value={draft.koszt_obslugi_zleceniobiorcy}\n    onChange={(v) => updateDraft("koszt_obslugi_zleceniobiorcy", v)}\n  />\n\n  <EditableInput\n    label="Limit dokumentów"`
+            );
+
+            text = text.replace(
+              '    ostatni_okres_rozliczeniowy: toMonthInputValue(\n      client.ostatni_okres_rozliczeniowy\n    ),\n    dodatkowe_uslugi: client.dodatkowe_uslugi || "",',
+              '    ostatni_okres_rozliczeniowy: toMonthInputValue(\n      client.ostatni_okres_rozliczeniowy\n    ),\n    koszt_obslugi_pracownika:\n      client.koszt_obslugi_pracownika !== null &&\n      client.koszt_obslugi_pracownika !== undefined\n        ? String(client.koszt_obslugi_pracownika)\n        : "",\n    koszt_obslugi_zleceniobiorcy:\n      client.koszt_obslugi_zleceniobiorcy !== null &&\n      client.koszt_obslugi_zleceniobiorcy !== undefined\n        ? String(client.koszt_obslugi_zleceniobiorcy)\n        : "",\n    dodatkowe_uslugi: client.dodatkowe_uslugi || "",'
+            );
+
+            text = text.replace(
+              `function formatSettlementPeriod(value: string | null | undefined) {\n  if (!value) return null;\n\n  const [year, month] = value.slice(0, 7).split("-");\n  const date = new Date(Number(year), Number(month) - 1, 1);\n\n  return date.toLocaleDateString("pl-PL", {\n    month: "long",\n    year: "numeric",\n  });\n}\n\nfunction EditableInput({`,
+              `function formatSettlementPeriod(value: string | null | undefined) {\n  if (!value) return null;\n\n  const [year, month] = value.slice(0, 7).split("-");\n  const date = new Date(Number(year), Number(month) - 1, 1);\n\n  return date.toLocaleDateString("pl-PL", {\n    month: "long",\n    year: "numeric",\n  });\n}\n\nfunction formatMoney(value: number | null | undefined) {\n  return value !== null && value !== undefined\n    ? \`${'${value.toLocaleString("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}'} zł\`\n    : null;\n}\n\nfunction EditableInput({`
+            );
+
+            fs.writeFileSync(path, text, 'utf8');
+          }
+
+          fs.rmSync(workflowPath, { force: true });
+          NODE
+
+      - name: Commit UI patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/app/klienci/page.tsx .github/workflows/apply-client-employee-costs-ui.yml
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Apply client employee costs UI"
+            git push
+          fi

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
 import { colors, radius, shadow } from "@/app/design";
@@ -75,14 +75,14 @@ function RodoContent() {
       fetchCrmContracts(),
     ]);
 
-    if (contractsResult.error) console.error("Błąd pobierania umów RODO:", contractsResult.error);
-    else setContracts((contractsResult.data || []) as RodoProcessingContract[]);
+    if (!contractsResult.error) setContracts((contractsResult.data || []) as RodoProcessingContract[]);
+    else console.error("Błąd pobierania umów RODO:", contractsResult.error);
 
-    if (clientsResult.error) console.error("Błąd pobierania klientów:", clientsResult.error);
-    else setClients((clientsResult.data || []) as Client[]);
+    if (!clientsResult.error) setClients((clientsResult.data || []) as Client[]);
+    else console.error("Błąd pobierania klientów:", clientsResult.error);
 
-    if (accountingContractsResult.error) console.error("Błąd pobierania umów księgowych:", accountingContractsResult.error);
-    else setAccountingContracts((accountingContractsResult.data || []) as CrmContract[]);
+    if (!accountingContractsResult.error) setAccountingContracts((accountingContractsResult.data || []) as CrmContract[]);
+    else console.error("Błąd pobierania umów księgowych:", accountingContractsResult.error);
 
     setLoading(false);
   }
@@ -92,10 +92,6 @@ function RodoContent() {
   const pendingCount = contracts.filter((contract) => contract.status === "wygenerowana" || contract.status === "wyslana_do_podpisu").length;
 
   function handleSaved(contract: RodoProcessingContract) {
-    setContracts((current) => {
-      const exists = current.some((item) => item.id === contract.id);
-      return exists ? current.map((item) => item.id === contract.id ? contract : item) : [contract, ...current];
-    });
     setCreatingContract(false);
     setSelectedContract(contract);
     void loadInitialData();
@@ -147,7 +143,7 @@ function RodoContent() {
                     <Td>{contract.nazwa_klienta}</Td>
                     <Td>{contract.crm_umowy?.numer_umowy || "Brak powiązania"}</Td>
                     <Td><StatusBadge status={contract.status} /></Td>
-                    <Td>{contract.nip || "—"}</Td>
+                    <Td>{contract.nip || "-"}</Td>
                     <Td><button style={secondaryButtonStyle} onClick={() => setSelectedContract(contract)}>Szczegóły</button></Td>
                   </tr>
                 ))}
@@ -228,7 +224,6 @@ function RodoDrawer({ contract, clients, accountingContracts, onClose, onSaved }
     }
 
     setSaving(true);
-
     const payload = {
       klient_id: draft.klient_id || null,
       umowa_ksiegowa_id: draft.umowa_ksiegowa_id || null,
@@ -273,7 +268,7 @@ function RodoDrawer({ contract, clients, accountingContracts, onClose, onSaved }
 
         <div style={drawerContentStyle}>
           <FormSection title="Powiązania">
-            <EditableSelect label="Umowa księgowa" value={draft.umowa_ksiegowa_id} onChange={fillFromAccountingContract} options={[{ value: "", label: "Bez powiązania" }, ...signedAccountingContracts.map((item) => ({ value: item.id, label: `${item.numer_umowy || "Bez numeru"} · ${item.nazwa_klienta}` }))]} />
+            <EditableSelect label="Umowa księgowa" value={draft.umowa_ksiegowa_id} onChange={fillFromAccountingContract} options={[{ value: "", label: "Bez powiązania" }, ...signedAccountingContracts.map((item) => ({ value: item.id, label: `${item.numer_umowy || "Bez numeru"} - ${item.nazwa_klienta}` }))]} />
             <EditableSelect label="Klient" value={draft.klient_id} onChange={fillFromClient} options={[{ value: "", label: "Bez klienta" }, ...clients.map((client) => ({ value: client.id, label: client.nazwa || "Bez nazwy" }))]} />
             <EditableSelect label="Status" value={draft.status} onChange={(value) => updateDraft("status", value as RodoProcessingContractStatus)} options={STATUS_OPTIONS} />
           </FormSection>
@@ -357,7 +352,7 @@ function SummaryCard({ label, value }: { label: string; value: string | number }
   return <div style={summaryCardStyle}><span>{label}</span><strong>{value}</strong></div>;
 }
 
-function FormSection({ title, children }: { title: string; children: React.ReactNode }) {
+function FormSection({ title, children }: { title: string; children: ReactNode }) {
   return <section style={drawerSectionStyle}><h3 style={formSectionTitleStyle}>{title}</h3>{children}</section>;
 }
 
@@ -373,8 +368,8 @@ function EditableTextarea({ label, value, onChange }: { label: string; value: st
   return <label style={textareaRowStyle}><span>{label}</span><textarea value={value} onChange={(event) => onChange(event.target.value)} style={textareaStyle} rows={4} /></label>;
 }
 
-function Th({ children }: { children: React.ReactNode }) { return <th style={thStyle}>{children}</th>; }
-function Td({ children, strong }: { children: React.ReactNode; strong?: boolean }) { return <td style={{ ...tdStyle, fontWeight: strong ? 800 : 500 }}>{children}</td>; }
+function Th({ children }: { children: ReactNode }) { return <th style={thStyle}>{children}</th>; }
+function Td({ children, strong }: { children: ReactNode; strong?: boolean }) { return <td style={{ ...tdStyle, fontWeight: strong ? 800 : 500 }}>{children}</td>; }
 
 const headerStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "24px", alignItems: "flex-start", marginBottom: "28px" };
 const eyebrowStyle: CSSProperties = { color: colors.red, fontWeight: 800, margin: "0 0 8px" };

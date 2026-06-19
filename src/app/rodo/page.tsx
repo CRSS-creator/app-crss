@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
 import { colors, radius, shadow } from "@/app/design";
@@ -13,6 +13,7 @@ import {
   fetchRodoProcessingContracts,
   requestRodoProcessingContractGeneration,
   updateRodoProcessingContract,
+  uploadSignedRodoProcessingContractPdf,
   type RodoProcessingContract,
   type RodoProcessingContractStatus,
 } from "@/lib/rodoProcessingContractService";
@@ -180,10 +181,12 @@ function RodoContent() {
 }
 
 function RodoDrawer({ contract, clients, accountingContracts, onClose, onSaved }: { contract: RodoProcessingContract | null; clients: Client[]; accountingContracts: CrmContract[]; onClose: () => void; onSaved: (contract: RodoProcessingContract) => void }) {
+  const signedPdfInputRef = useRef<HTMLInputElement | null>(null);
   const [draft, setDraft] = useState<RodoDraft>(() => contract ? createDraft(contract) : createEmptyDraft());
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [deletingPdf, setDeletingPdf] = useState(false);
+  const [uploadingSignedPdf, setUploadingSignedPdf] = useState(false);
   const [accountingSearch, setAccountingSearch] = useState(() => selectedAccountingContractLabel(contract, accountingContracts));
   const [clientSearch, setClientSearch] = useState(() => selectedClientLabel(contract, clients));
 
@@ -344,6 +347,32 @@ function RodoDrawer({ contract, clients, accountingContracts, onClose, onSaved }
     onSaved(result.data as RodoProcessingContract);
   }
 
+  async function uploadSignedPdf(file: File | null | undefined) {
+    if (!file) return;
+    if (file.type && file.type !== "application/pdf") {
+      alert("Wybierz plik PDF.");
+      return;
+    }
+
+    const savedContract = contract || await persistContract();
+    if (!savedContract?.id) return;
+
+    setUploadingSignedPdf(true);
+    const result = await uploadSignedRodoProcessingContractPdf(savedContract.id, file);
+    setUploadingSignedPdf(false);
+    if (signedPdfInputRef.current) signedPdfInputRef.current.value = "";
+
+    if (result.error || !result.data) {
+      console.error("Błąd wgrywania podpisanego PDF RODO:", result.error);
+      alert("Nie udało się dodać podpisanego PDF.");
+      return;
+    }
+
+    onSaved(result.data as RodoProcessingContract);
+  }
+
+  const busy = saving || generating || deletingPdf || uploadingSignedPdf;
+
   return (
     <div style={drawerOverlayStyle} onClick={onClose}>
       <aside style={drawerStyle} onClick={(event) => event.stopPropagation()}>
@@ -356,8 +385,8 @@ function RodoDrawer({ contract, clients, accountingContracts, onClose, onSaved }
         </div>
 
         <div style={drawerActionsStyle}>
-          <button style={secondaryButtonStyle} onClick={generateContract} disabled={saving || generating || deletingPdf}>{generating ? "Generowanie..." : "Generuj"}</button>
-          <button style={primarySmallButtonStyle} onClick={saveContract} disabled={saving || generating || deletingPdf}>{saving ? "Zapisywanie..." : "Zapisz"}</button>
+          <button style={secondaryButtonStyle} onClick={generateContract} disabled={busy}>{generating ? "Generowanie..." : "Generuj"}</button>
+          <button style={primarySmallButtonStyle} onClick={saveContract} disabled={busy}>{saving ? "Zapisywanie..." : "Zapisz"}</button>
         </div>
 
         <div style={drawerContentStyle}>
@@ -403,6 +432,18 @@ function RodoDrawer({ contract, clients, accountingContracts, onClose, onSaved }
           </FormSection>
 
           <FormSection title="Pliki PDF">
+            <div style={uploadRowStyle}>
+              <input
+                ref={signedPdfInputRef}
+                type="file"
+                accept="application/pdf"
+                style={{ display: "none" }}
+                onChange={(event) => void uploadSignedPdf(event.target.files?.[0])}
+              />
+              <button style={primarySmallButtonStyle} type="button" onClick={() => signedPdfInputRef.current?.click()} disabled={busy}>
+                {uploadingSignedPdf ? "Wgrywanie..." : "Dodaj podpisany PDF"}
+              </button>
+            </div>
             {contract?.wygenerowany_pdf_path ? (
               <FileRow
                 label="Wygenerowany PDF"
@@ -618,3 +659,4 @@ const textareaStyle: CSSProperties = { ...inputStyle, resize: "vertical", minHei
 const fileRowStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "12px", display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", marginTop: "10px" };
 const fileInfoStyle: CSSProperties = { display: "flex", flexWrap: "wrap", gap: "4px", alignItems: "baseline", minWidth: 0 };
 const fileActionsStyle: CSSProperties = { display: "flex", gap: "8px", alignItems: "center", flexShrink: 0 };
+const uploadRowStyle: CSSProperties = { display: "flex", justifyContent: "flex-end", marginBottom: "10px" };

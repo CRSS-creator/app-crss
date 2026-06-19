@@ -111,6 +111,27 @@ export async function createRodoProcessingContractSignedUrl(path: string) {
     .createSignedUrl(path, 60 * 10);
 }
 
+export async function uploadSignedRodoProcessingContractPdf(contractId: string, file: File) {
+  const fileName = sanitizeFileName(file.name || "podpisana-umowa-powierzenia.pdf");
+  const storagePath = `rodo/${contractId}/signed/${Date.now()}-${fileName}`;
+  const uploadResult = await supabase.storage
+    .from(RODO_CONTRACTS_BUCKET)
+    .upload(storagePath, file, {
+      cacheControl: "3600",
+      contentType: "application/pdf",
+      upsert: false,
+    });
+
+  if (uploadResult.error) return { data: null, error: uploadResult.error };
+
+  return updateRodoProcessingContract(contractId, {
+    status: "podpisana",
+    podpisany_pdf_path: storagePath,
+    podpisany_pdf_name: fileName,
+    podpisana_at: new Date().toISOString(),
+  });
+}
+
 export async function deleteGeneratedRodoProcessingContractPdf(contract: RodoProcessingContract) {
   if (!contract.wygenerowany_pdf_path) {
     return { data: contract, error: null };
@@ -131,4 +152,14 @@ export async function deleteGeneratedRodoProcessingContractPdf(contract: RodoPro
     wygenerowany_pdf_path: null,
     wygenerowany_pdf_name: null,
   });
+}
+
+function sanitizeFileName(value: string) {
+  const extension = value.toLowerCase().endsWith(".pdf") ? "" : ".pdf";
+  return `${value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "") || "podpisana-umowa-powierzenia"}${extension}`;
 }

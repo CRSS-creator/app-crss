@@ -26,12 +26,33 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json().catch(() => null) as GenerateRodoContractRequest | null;
-  const contract = body?.contract;
+  const contractId = body?.contract?.id;
 
-  if (!contract?.id) {
+  if (!contractId) {
     return NextResponse.json({ error: "Brakuje danych umowy powierzenia." }, { status: 400 });
   }
 
+  const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
+    auth: { persistSession: false },
+  });
+
+  const latestContractResult = await supabase
+    .from("rodo_umowy_powierzenia")
+    .select(`
+      *,
+      crm_umowy(numer_umowy, typ_umowy, status, nazwa_klienta)
+    `)
+    .eq("id", contractId)
+    .single();
+
+  if (latestContractResult.error || !latestContractResult.data) {
+    return NextResponse.json(
+      { error: latestContractResult.error?.message || "Nie znaleziono umowy powierzenia." },
+      { status: 404 }
+    );
+  }
+
+  const contract = latestContractResult.data as RodoProcessingContract;
   const templatePath = resolveTemplatePath();
   if (!templatePath || !existsSync(templatePath)) {
     return NextResponse.json(
@@ -65,9 +86,6 @@ export async function POST(request: NextRequest) {
 
     const pdfBuffer = await readFile(convertedPdfPath);
     const storagePath = `rodo/${contract.id}/generated/${Date.now()}-${fileName}`;
-    const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
-      auth: { persistSession: false },
-    });
 
     const uploadResult = await supabase.storage
       .from(RODO_CONTRACTS_BUCKET)
@@ -90,7 +108,10 @@ export async function POST(request: NextRequest) {
         updated_at: new Date().toISOString(),
       })
       .eq("id", contract.id)
-      .select("*")
+      .select(`
+        *,
+        crm_umowy(numer_umowy, typ_umowy, status, nazwa_klienta)
+      `)
       .single();
 
     if (updateResult.error) {

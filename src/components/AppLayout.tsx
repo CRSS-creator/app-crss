@@ -10,7 +10,6 @@ import UnsignedContractDeleteWidget from "@/components/UnsignedContractDeleteWid
 import ContractRegisterSplitWidget from "@/components/ContractRegisterSplitWidget";
 import CrmLeadDrawerLayoutWidget from "@/components/CrmLeadDrawerLayoutWidget";
 import CrmOfferLeadContextBridge from "@/components/CrmOfferLeadContextBridge";
-import CrmFollowUpTaskBridge from "@/components/CrmFollowUpTaskBridge";
 import CrmUiAdjustmentsBridge from "@/components/CrmUiAdjustmentsBridge";
 import ClientBillingModelBridge from "@/components/ClientBillingModelBridge";
 import TaskDeleteBridge from "@/components/TaskDeleteBridge";
@@ -151,7 +150,6 @@ export default function AppLayout({ children, activePage }: AppLayoutProps) {
       <section data-active-page={activePage} style={contentStyle}>
         {activePage === "klienci" && <ClientBillingModelBridge />}
         {activePage === "crm" && <CrmOfferLeadContextBridge />}
-        {activePage === "crm" && <CrmFollowUpTaskBridge />}
         {activePage === "crm" && <CrmUiAdjustmentsBridge />}
         {activePage === "zadania" && <TaskDeleteBridge />}
         {children}

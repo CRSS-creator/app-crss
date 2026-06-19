@@ -296,7 +296,13 @@ function TemplatesTab({ templates, clients, users, draft, loading, saving, setDr
   onToggle: (template: RecurringTask) => void;
   onRemove: (template: RecurringTask) => void;
 }) {
+  const [clientFilter, setClientFilter] = useState("");
   const sortedTemplates = useMemo(() => [...templates].sort((a, b) => Number(b.aktywne) - Number(a.aktywne) || a.dzien_miesiaca - b.dzien_miesiaca), [templates]);
+  const filteredTemplates = useMemo(() => {
+    const query = clientFilter.trim().toLowerCase();
+    if (!query) return sortedTemplates;
+    return sortedTemplates.filter((template) => templateMatchesClientSearch(template, clients, query));
+  }, [clients, clientFilter, sortedTemplates]);
   const selectedClients = clients.filter((client) => draft.klient_ids.includes(client.id));
   const search = draft.clientSearch.trim().toLowerCase();
   const suggestions = search
@@ -347,11 +353,20 @@ function TemplatesTab({ templates, clients, users, draft, loading, saving, setDr
         {draft.id && <button style={secondaryButtonStyle} onClick={() => setDraft(emptyDraft)}>Anuluj edycję</button>}
       </div>
 
+      <div style={templateFilterStyle}>
+        <input
+          style={inputStyle}
+          value={clientFilter}
+          onChange={(event) => setClientFilter(event.target.value)}
+          placeholder="Szukaj szablonu po kliencie lub NIP"
+        />
+      </div>
+
       <div style={tableShellStyle}>
         <table style={tableStyle}>
           <thead><tr><Th>Zadanie</Th><Th>Zakres</Th><Th>Cykl</Th><Th>Termin</Th><Th>Obejmuje</Th><Th>Status</Th><Th>Akcje</Th></tr></thead>
           <tbody>
-            {loading ? <tr><Td colSpan={7}>Ładowanie ustawień...</Td></tr> : sortedTemplates.length === 0 ? <tr><Td colSpan={7}>Brak szablonów cyklicznych.</Td></tr> : sortedTemplates.map((template) => (
+            {loading ? <tr><Td colSpan={7}>Ładowanie ustawień...</Td></tr> : filteredTemplates.length === 0 ? <tr><Td colSpan={7}>{clientFilter.trim() ? "Brak szablonów dla tego klienta." : "Brak szablonów cyklicznych."}</Td></tr> : filteredTemplates.map((template) => (
               <tr key={template.id} style={rowStyle}>
                 <Td strong>{template.tytul}<Small>{template.opis || "Brak opisu"}</Small></Td>
                 <Td>{scopeLabel(template, clients)}</Td>
@@ -427,6 +442,11 @@ function vatUeModeToValue(mode: VatUeMode) { return mode === "active" ? true : m
 function valueToVatUeMode(value: boolean | null | undefined): VatUeMode { return value === true ? "active" : value === false ? "inactive" : "any"; }
 function matchingClientsCount(template: RecurringTask, clients: ClientRow[]) { return clients.filter((client) => recurringTaskMatchesClient(template, client)).length; }
 function scopeLabel(template: RecurringTask, clients: ClientRow[]) { return template.klient_id ? clients.find((client) => client.id === template.klient_id)?.nazwa || "Wybrany klient" : recurringScopeLabel(template); }
+function templateMatchesClientSearch(template: RecurringTask, clients: ClientRow[], query: string) {
+  return clients
+    .filter((client) => [client.nazwa, client.nip].filter(Boolean).join(" ").toLowerCase().includes(query))
+    .some((client) => recurringTaskMatchesClient(template, client));
+}
 
 const headerStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "24px", alignItems: "flex-start", marginBottom: "24px", flexWrap: "wrap" };
 const eyebrowStyle: CSSProperties = { margin: "0 0 8px", color: colors.red, fontWeight: 850 };
@@ -460,6 +480,7 @@ const buttonRowStyle: CSSProperties = { display: "flex", gap: "10px", marginBott
 const primaryButtonStyle: CSSProperties = { border: "none", borderRadius: radius.button, background: colors.red, color: colors.white, padding: "11px 15px", minHeight: "42px", fontWeight: 850, cursor: "pointer", whiteSpace: "nowrap" };
 const secondaryButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.navy, padding: "9px 12px", fontWeight: 850, cursor: "pointer", whiteSpace: "nowrap" };
 const dangerButtonStyle: CSSProperties = { ...secondaryButtonStyle, color: colors.danger, background: "#fff5f5" };
+const templateFilterStyle: CSSProperties = { marginBottom: "12px" };
 const tableShellStyle: CSSProperties = { overflowX: "auto", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white };
 const tableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse" };
 const thStyle: CSSProperties = { textAlign: "left", padding: "13px 14px", color: colors.muted, fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: `1px solid ${colors.border}`, whiteSpace: "nowrap" };

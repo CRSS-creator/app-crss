@@ -92,6 +92,9 @@ function splitContractRegister(
     });
   });
 
+  groupedRows.KH.sort(compareRowsByNewestNumber);
+  groupedRows.KU.sort(compareRowsByNewestNumber);
+
   const query = searchQueries[activeTab];
   const visibleRows = groupedRows[activeTab].filter((row) => matchesRegisterSearch(row, query));
 
@@ -233,6 +236,19 @@ function matchesRegisterSearch(row: RegisterRow, query: string) {
   const normalizedQuery = query.trim().toLowerCase();
   if (!normalizedQuery) return true;
   return `${row.number} ${row.client}`.toLowerCase().includes(normalizedQuery);
+}
+
+function compareRowsByNewestNumber(a: RegisterRow, b: RegisterRow) {
+  return contractNumberWeight(b.number) - contractNumberWeight(a.number);
+}
+
+function contractNumberWeight(value: string) {
+  const match = value.match(/(\d+)\s*\/\s*(KH|KU)\s*\/\s*(\d+)\s*\/\s*(\d{4})/i);
+  if (!match) return 0;
+  const sequence = Number(match[1] || 0);
+  const month = Number(match[3] || 0);
+  const year = Number(match[4] || 0);
+  return year * 1000000 + month * 10000 + sequence;
 }
 
 function buildHeaderCell(label: string) {

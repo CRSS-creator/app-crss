@@ -34,6 +34,25 @@ export async function createDueTaskNotifications() {
   return supabase.rpc("create_due_task_notifications");
 }
 
+export async function createDueCrmFollowUpNotifications() {
+  return supabase.rpc("create_due_crm_follow_up_notifications");
+}
+
+export async function createDueNotifications() {
+  const [taskResult, crmFollowUpResult] = await Promise.all([
+    createDueTaskNotifications(),
+    createDueCrmFollowUpNotifications(),
+  ]);
+
+  return {
+    data: {
+      taskNotifications: taskResult.data || 0,
+      crmFollowUpNotifications: crmFollowUpResult.data || 0,
+    },
+    error: taskResult.error || crmFollowUpResult.error,
+  };
+}
+
 export async function markNotificationRead(notificationId: string) {
   return supabase
     .from("powiadomienia")

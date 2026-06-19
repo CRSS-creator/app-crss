@@ -23,8 +23,12 @@ export default function CrmUiAdjustmentsBridge() {
 
 function renamePipelineStage() {
   document.querySelectorAll("h3, td, option, span").forEach((element) => {
-    if (element.textContent?.trim() === "Kontakt / próba kontaktu") {
+    const text = element.textContent?.trim();
+    if (text === "Kontakt / próba kontaktu") {
       element.textContent = "Kontakt";
+    }
+    if (text === "Rozmowa online") {
+      element.textContent = "Rozmowa";
     }
   });
 }

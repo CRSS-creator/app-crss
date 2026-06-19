@@ -10,6 +10,7 @@ type Profile = {
   email: string | null;
 };
 
+const REGISTER_TITLE = "Rejestr umów powierzenia przetwarzania danych osobowych";
 const DEFAULT_SCOPE = "zgodnie z zawartą umową główną";
 const LEGACY_SCOPE = "Przetwarzanie danych osobowych w zakresie niezbędnym do świadczenia usług księgowych, podatkowych oraz kadrowo-płacowych.";
 
@@ -71,9 +72,14 @@ function applyRodoRegisterView(
   if (!page) return;
 
   const title = Array.from(page.querySelectorAll<HTMLHeadingElement>("h2"))
-    .find((heading) => heading.textContent?.trim() === "Rejestr RODO");
+    .find((heading) => {
+      const text = heading.textContent?.trim();
+      return text === "Rejestr RODO" || text === REGISTER_TITLE;
+    });
   const card = title?.closest<HTMLElement>("section");
   if (!card) return;
+
+  title.textContent = REGISTER_TITLE;
 
   const header = title?.parentElement;
   const originalWrapper = findOriginalRegisterWrapper(card);
@@ -95,6 +101,7 @@ function applyRodoRegisterView(
     })
     .sort(compareContractsByNewest);
 
+  ensurePrintButton(header, filteredContracts);
   const enhanced = ensureEnhancedWrapper(card, originalWrapper);
   enhanced.replaceChildren(buildEnhancedTable(filteredContracts, originalTable));
   applyDrawerScopeDefault(page);
@@ -132,6 +139,31 @@ function ensureSearchInput(card: HTMLElement, header: HTMLElement, query: string
   input.addEventListener("input", () => setQuery(input.value));
   header.insertAdjacentElement("afterend", input);
   return input;
+}
+
+function ensurePrintButton(header: HTMLElement, contracts: RodoProcessingContract[]) {
+  let button = header.querySelector<HTMLButtonElement>('[data-rodo-register-print="true"]');
+  if (!button) {
+    button = document.createElement("button");
+    button.type = "button";
+    button.textContent = "Drukuj rejestr";
+    button.dataset.rodoRegisterPrint = "true";
+    button.style.border = "1px solid #cbd7e6";
+    button.style.borderRadius = "14px";
+    button.style.padding = "10px 16px";
+    button.style.minHeight = "42px";
+    button.style.background = "#fff";
+    button.style.color = "#102a5c";
+    button.style.fontWeight = "800";
+    button.style.cursor = "pointer";
+    button.style.marginLeft = "auto";
+
+    const select = header.querySelector("select");
+    if (select) select.insertAdjacentElement("beforebegin", button);
+    else header.appendChild(button);
+  }
+
+  button.onclick = () => printRegister(contracts);
 }
 
 function ensureEnhancedWrapper(card: HTMLElement, originalWrapper: HTMLElement) {
@@ -217,6 +249,61 @@ function openOriginalDetails(originalTable: HTMLTableElement, contract: RodoProc
   const button = sourceRow?.querySelector<HTMLButtonElement>("button");
   if (!button) return;
   button.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
+}
+
+function printRegister(contracts: RodoProcessingContract[]) {
+  const printWindow = window.open("", "_blank", "width=1200,height=800");
+  if (!printWindow) return;
+
+  const rows = contracts.map((contract) => `
+    <tr>
+      <td>${escapeHtml(contract.numer_umowy || "Bez numeru")}</td>
+      <td>${escapeHtml(contract.nazwa_klienta || "-")}</td>
+      <td>${escapeHtml(contract.nip || "-")}</td>
+      <td>${escapeHtml(contract.siedziba || "-")}</td>
+      <td>${escapeHtml(contract.crm_umowy?.numer_umowy || "Brak powiązania")}</td>
+      <td>${escapeHtml(normalizeScope(contract.zakres_powierzenia))}</td>
+      <td>${escapeHtml(STATUS_LABELS[contract.status] || contract.status)}</td>
+    </tr>
+  `).join("");
+
+  printWindow.document.write(`<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8" />
+  <title>${REGISTER_TITLE}</title>
+  <style>
+    body { font-family: Arial, sans-serif; color: #0f2147; margin: 28px; }
+    h1 { font-size: 22px; margin: 0 0 8px; }
+    p { margin: 0 0 18px; color: #4b5d78; }
+    table { border-collapse: collapse; width: 100%; font-size: 11px; }
+    th, td { border: 1px solid #cbd7e6; padding: 8px; text-align: left; vertical-align: top; }
+    th { background: #eef2f7; text-transform: uppercase; font-size: 10px; }
+    @page { size: A4 landscape; margin: 12mm; }
+  </style>
+</head>
+<body>
+  <h1>${REGISTER_TITLE}</h1>
+  <p>Wygenerowano: ${escapeHtml(formatDateTime(new Date().toISOString()))}</p>
+  <table>
+    <thead>
+      <tr>
+        <th>Numer</th>
+        <th>Klient</th>
+        <th>NIP</th>
+        <th>Siedziba klienta</th>
+        <th>Umowa główna</th>
+        <th>Zakres</th>
+        <th>Status umowy</th>
+      </tr>
+    </thead>
+    <tbody>${rows || `<tr><td colspan="7">Brak umów powierzenia do wydruku.</td></tr>`}</tbody>
+  </table>
+</body>
+</html>`);
+  printWindow.document.close();
+  printWindow.focus();
+  window.setTimeout(() => printWindow.print(), 250);
 }
 
 function applyDrawerScopeDefault(page: HTMLElement) {
@@ -314,6 +401,15 @@ function contractNumberWeight(value: string) {
   const month = Number(match[2] || 0);
   const year = Number(match[3] || 0);
   return year * 1000000 + month * 10000 + sequence;
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
 function buildStatusBadge(status: RodoProcessingContractStatus) {

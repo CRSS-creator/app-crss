@@ -76,10 +76,11 @@ function applyRodoRegisterView(
   if (!card) return;
 
   const header = title?.parentElement;
-  const originalTable = card.querySelector<HTMLTableElement>("table");
-  const originalWrapper = originalTable?.closest<HTMLElement>("div");
+  const originalWrapper = findOriginalRegisterWrapper(card);
+  const originalTable = originalWrapper?.querySelector<HTMLTableElement>("table");
   if (!header || !originalTable || !originalWrapper) return;
 
+  originalWrapper.dataset.rodoOriginalRegister = "true";
   originalWrapper.style.display = "none";
   const searchInput = ensureSearchInput(card, header, query, setQuery);
   if (document.activeElement !== searchInput && searchInput.value !== query) searchInput.value = query;
@@ -98,6 +99,16 @@ function applyRodoRegisterView(
   enhanced.replaceChildren(buildEnhancedTable(filteredContracts, originalTable));
   applyDrawerScopeDefault(page);
   applyDrawerAudit(page, contracts, profiles);
+}
+
+function findOriginalRegisterWrapper(card: HTMLElement) {
+  const marked = card.querySelector<HTMLElement>('[data-rodo-original-register="true"]');
+  if (marked) return marked;
+
+  return Array.from(card.querySelectorAll<HTMLElement>("div")).find((wrapper) => {
+    if (wrapper.dataset.rodoRegisterEnhanced) return false;
+    return Boolean(wrapper.querySelector("table"));
+  });
 }
 
 function ensureSearchInput(card: HTMLElement, header: HTMLElement, query: string, setQuery: (value: string) => void) {
@@ -194,12 +205,18 @@ function buildEnhancedTable(contracts: RodoProcessingContract[], originalTable: 
 }
 
 function openOriginalDetails(originalTable: HTMLTableElement, contract: RodoProcessingContract) {
+  const expectedNumber = contract.numer_umowy || "Bez numeru";
+  const expectedClient = contract.nazwa_klienta || "";
   const rows = Array.from(originalTable.querySelectorAll<HTMLTableRowElement>("tbody tr"));
   const sourceRow = rows.find((row) => {
-    const firstCell = row.children[0] as HTMLElement | undefined;
-    return firstCell?.textContent?.trim() === (contract.numer_umowy || "Bez numeru");
+    const cells = Array.from(row.children) as HTMLElement[];
+    const number = cells[0]?.textContent?.trim();
+    const client = cells[1]?.textContent?.trim();
+    return number === expectedNumber || (!!expectedClient && client === expectedClient);
   });
-  sourceRow?.querySelector<HTMLButtonElement>("button")?.click();
+  const button = sourceRow?.querySelector<HTMLButtonElement>("button");
+  if (!button) return;
+  button.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
 }
 
 function applyDrawerScopeDefault(page: HTMLElement) {
@@ -285,9 +302,9 @@ function normalizeScope(value: string | null | undefined) {
 }
 
 function compareContractsByNewest(a: RodoProcessingContract, b: RodoProcessingContract) {
-  const dateDiff = new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
-  if (dateDiff !== 0) return dateDiff;
-  return contractNumberWeight(b.numer_umowy || "") - contractNumberWeight(a.numer_umowy || "");
+  const numberDiff = contractNumberWeight(b.numer_umowy || "") - contractNumberWeight(a.numer_umowy || "");
+  if (numberDiff !== 0) return numberDiff;
+  return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
 }
 
 function contractNumberWeight(value: string) {

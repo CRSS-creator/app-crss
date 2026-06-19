@@ -1,6 +1,8 @@
 import { supabase } from "@/lib/supabaseClient";
 
 const RODO_CONTRACTS_BUCKET = "crm-umowy";
+const DEFAULT_SCOPE = "zgodnie z zawartą umową główną";
+const LEGACY_SCOPE = "Przetwarzanie danych osobowych w zakresie niezbędnym do świadczenia usług księgowych, podatkowych oraz kadrowo-płacowych.";
 
 export type RodoProcessingContractStatus = "szkic" | "wygenerowana" | "wyslana_do_podpisu" | "podpisana" | "anulowana";
 
@@ -75,7 +77,7 @@ export async function createRodoProcessingContract(payload: RodoProcessingContra
 
   return supabase
     .from("rodo_umowy_powierzenia")
-    .insert({ ...payload, created_by: createdBy })
+    .insert(normalizePayload({ ...payload, created_by: createdBy }))
     .select("*")
     .single();
 }
@@ -83,7 +85,7 @@ export async function createRodoProcessingContract(payload: RodoProcessingContra
 export async function updateRodoProcessingContract(contractId: string, payload: Partial<RodoProcessingContractPayload>) {
   return supabase
     .from("rodo_umowy_powierzenia")
-    .update({ ...payload, updated_at: new Date().toISOString() })
+    .update(normalizePayload({ ...payload, updated_at: new Date().toISOString() }))
     .eq("id", contractId)
     .select("*")
     .single();
@@ -161,6 +163,18 @@ export async function deleteGeneratedRodoProcessingContractPdf(contract: RodoPro
 async function getCurrentUserId() {
   const { data } = await supabase.auth.getUser();
   return data.user?.id || null;
+}
+
+function normalizePayload<T extends Partial<RodoProcessingContractPayload> & Record<string, unknown>>(payload: T) {
+  if ("zakres_powierzenia" in payload) {
+    const scope = typeof payload.zakres_powierzenia === "string" ? payload.zakres_powierzenia.trim() : "";
+    return {
+      ...payload,
+      zakres_powierzenia: !scope || scope === LEGACY_SCOPE ? DEFAULT_SCOPE : payload.zakres_powierzenia,
+    };
+  }
+
+  return payload;
 }
 
 function sanitizeFileName(value: string) {

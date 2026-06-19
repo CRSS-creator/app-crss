@@ -17,6 +17,7 @@ import {
   type RodoProcessingContract,
   type RodoProcessingContractStatus,
 } from "@/lib/rodoProcessingContractService";
+import { fetchTaskAssignees, type ProfileSummary } from "@/lib/taskService";
 import { X } from "lucide-react";
 
 type Client = {
@@ -31,6 +32,8 @@ type SearchOption = {
   label: string;
   description?: string;
 };
+
+type UserProfile = ProfileSummary & { id: string };
 
 type RodoDraft = {
   klient_id: string;
@@ -67,6 +70,7 @@ function RodoContent() {
   const [contracts, setContracts] = useState<RodoProcessingContract[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [accountingContracts, setAccountingContracts] = useState<CrmContract[]>([]);
+  const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("Wszystkie");
   const [selectedContract, setSelectedContract] = useState<RodoProcessingContract | null>(null);
@@ -78,10 +82,11 @@ function RodoContent() {
 
   async function loadInitialData() {
     setLoading(true);
-    const [contractsResult, clientsResult, accountingContractsResult] = await Promise.all([
+    const [contractsResult, clientsResult, accountingContractsResult, profilesResult] = await Promise.all([
       fetchRodoProcessingContracts(),
       fetchClients(),
       fetchCrmContracts(),
+      fetchTaskAssignees(),
     ]);
 
     if (!contractsResult.error) setContracts((contractsResult.data || []) as RodoProcessingContract[]);
@@ -93,10 +98,17 @@ function RodoContent() {
     if (!accountingContractsResult.error) setAccountingContracts((accountingContractsResult.data || []) as CrmContract[]);
     else console.error("Błąd pobierania umów księgowych:", accountingContractsResult.error);
 
+    if (!profilesResult.error) setProfiles((profilesResult.data || []) as UserProfile[]);
+    else console.error("Błąd pobierania użytkowników:", profilesResult.error);
+
     setLoading(false);
   }
 
-  const filteredContracts = contracts.filter((contract) => statusFilter === "Wszystkie" || contract.status === statusFilter);
+  const filteredContracts = useMemo(() => {
+    return contracts
+      .filter((contract) => statusFilter === "Wszystkie" || contract.status === statusFilter)
+      .sort(compareContractNumbersDesc);
+  }, [contracts, statusFilter]);
   const signedCount = contracts.filter((contract) => contract.status === "podpisana").length;
   const pendingCount = contracts.filter((contract) => contract.status === "wygenerowana" || contract.status === "wyslana_do_podpisu").length;
 
@@ -125,11 +137,14 @@ function RodoContent() {
 
       <section style={cardStyle}>
         <div style={tableHeaderStyle}>
-          <h2 style={sectionTitleStyle}>Rejestr RODO</h2>
-          <select style={filterStyle} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-            <option value="Wszystkie">Wszystkie statusy</option>
-            {STATUS_OPTIONS.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}
-          </select>
+          <h2 style={sectionTitleStyle}>Rejestr umów powierzenia przetwarzania danych osobowych</h2>
+          <div style={tableActionsStyle}>
+            <button style={secondaryButtonStyle} type="button" onClick={() => window.print()}>Drukuj rejestr</button>
+            <select style={filterStyle} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+              <option value="Wszystkie">Wszystkie statusy</option>
+              {STATUS_OPTIONS.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}
+            </select>
+          </div>
         </div>
 
         {loading ? <div style={emptyStyle}>Ładowanie umów...</div> : filteredContracts.length === 0 ? <div style={emptyStyle}>Brak umów powierzenia do wyświetlenia.</div> : (
@@ -139,11 +154,12 @@ function RodoContent() {
                 <tr>
                   <Th>Numer</Th>
                   <Th>Klient</Th>
-                  <Th>Umowa księgowa</Th>
-                  <Th>Status</Th>
                   <Th>NIP</Th>
-                  <Th>Pliki</Th>
-                  <Th>Akcje</Th>
+                  <Th>Siedziba klienta</Th>
+                  <Th>Umowa główna</Th>
+                  <Th>Zakres</Th>
+                  <Th>Status umowy</Th>
+                  <Th>Szczegóły</Th>
                 </tr>
               </thead>
               <tbody>
@@ -151,10 +167,11 @@ function RodoContent() {
                   <tr key={contract.id} style={rowStyle}>
                     <Td strong>{contract.numer_umowy || "Bez numeru"}</Td>
                     <Td>{contract.nazwa_klienta}</Td>
-                    <Td>{contract.crm_umowy?.numer_umowy || "Brak powiązania"}</Td>
-                    <Td><StatusBadge status={contract.status} /></Td>
                     <Td>{contract.nip || "-"}</Td>
-                    <Td>{contract.podpisany_pdf_path ? "Podpisana" : contract.wygenerowany_pdf_path ? "Wygenerowana" : "Brak PDF"}</Td>
+                    <Td>{contract.siedziba || "-"}</Td>
+                    <Td>{contract.crm_umowy?.numer_umowy || "Brak powiązania"}</Td>
+                    <Td>{contract.zakres_powierzenia || "zgodnie z zawartą umową główną"}</Td>
+                    <Td><StatusBadge status={contract.status} /></Td>
                     <Td><button style={secondaryButtonStyle} onClick={() => setSelectedContract(contract)}>Szczegóły</button></Td>
                   </tr>
                 ))}
@@ -169,6 +186,7 @@ function RodoContent() {
           contract={selectedContract}
           clients={clients}
           accountingContracts={accountingContracts}
+          profiles={profiles}
           onClose={() => {
             setCreatingContract(false);
             setSelectedContract(null);
@@ -180,7 +198,7 @@ function RodoContent() {
   );
 }
 
-function RodoDrawer({ contract, clients, accountingContracts, onClose, onSaved }: { contract: RodoProcessingContract | null; clients: Client[]; accountingContracts: CrmContract[]; onClose: () => void; onSaved: (contract: RodoProcessingContract) => void }) {
+function RodoDrawer({ contract, clients, accountingContracts, profiles, onClose, onSaved }: { contract: RodoProcessingContract | null; clients: Client[]; accountingContracts: CrmContract[]; profiles: UserProfile[]; onClose: () => void; onSaved: (contract: RodoProcessingContract) => void }) {
   const signedPdfInputRef = useRef<HTMLInputElement | null>(null);
   const [draft, setDraft] = useState<RodoDraft>(() => contract ? createDraft(contract) : createEmptyDraft());
   const [saving, setSaving] = useState(false);
@@ -431,6 +449,16 @@ function RodoDrawer({ contract, clients, accountingContracts, onClose, onSaved }
             <EditableTextarea label="Uwagi" value={draft.uwagi} onChange={(value) => updateDraft("uwagi", value)} />
           </FormSection>
 
+          {contract && (
+            <FormSection title="Historia">
+              <div style={auditBoxStyle}>{contractAuditDescription(contract, profiles)}</div>
+              <div style={auditMetaStyle}>
+                <span>Utworzono: {formatDateTime(contract.created_at)}</span>
+                <span>Ostatnia zmiana: {formatDateTime(contract.updated_at)}</span>
+              </div>
+            </FormSection>
+          )}
+
           <FormSection title="Pliki PDF">
             <div style={uploadRowStyle}>
               <input
@@ -514,12 +542,56 @@ function buildDefaultRodoNumber(accountingNumber: string | null) {
   return accountingNumber.replace("/KH/", "/RODO/").replace("/KU/", "/RODO/");
 }
 
+function compareContractNumbersDesc(a: RodoProcessingContract, b: RodoProcessingContract) {
+  const aNumber = extractLeadingNumber(a.numer_umowy);
+  const bNumber = extractLeadingNumber(b.numer_umowy);
+  if (aNumber !== bNumber) return bNumber - aNumber;
+  return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+}
+
+function extractLeadingNumber(value: string | null) {
+  const match = value?.match(/^(\d+)/);
+  return match ? Number(match[1]) : 0;
+}
+
 function emptyToNull(value: string) {
   return value.trim() ? value.trim() : null;
 }
 
 function statusLabel(status: RodoProcessingContractStatus) {
   return STATUS_OPTIONS.find((item) => item.value === status)?.label || status;
+}
+
+function contractAuditDescription(contract: RodoProcessingContract, profiles: UserProfile[]) {
+  const userName = profileName(contract.created_by, profiles);
+  return `Użytkownik ${userName} dodał umowę w dniu ${formatDate(contract.created_at)} o godzinie ${formatTime(contract.created_at)}.`;
+}
+
+function profileName(profileId: string | null, profiles: UserProfile[]) {
+  if (!profileId) return "nieustalony";
+  const profile = profiles.find((item) => item.id === profileId);
+  return profile?.full_name || profile?.email || profileId;
+}
+
+function formatDateTime(value: string | null | undefined) {
+  if (!value) return "-";
+  return new Intl.DateTimeFormat("pl-PL", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
+function formatDate(value: string | null | undefined) {
+  if (!value) return "-";
+  return new Intl.DateTimeFormat("pl-PL", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(value));
+}
+
+function formatTime(value: string | null | undefined) {
+  if (!value) return "-";
+  return new Intl.DateTimeFormat("pl-PL", { hour: "2-digit", minute: "2-digit" }).format(new Date(value));
 }
 
 function matchesSearch(option: SearchOption, search: string) {
@@ -628,6 +700,7 @@ const summaryGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: 
 const summaryCardStyle: CSSProperties = { background: colors.card, border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: "22px", boxShadow: shadow.soft, display: "flex", flexDirection: "column", gap: "10px", color: colors.muted, fontWeight: 800 };
 const cardStyle: CSSProperties = { background: colors.card, border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: "28px", boxShadow: shadow.soft, marginBottom: "24px" };
 const tableHeaderStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "16px", marginBottom: "18px" };
+const tableActionsStyle: CSSProperties = { display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "10px", flexWrap: "wrap" };
 const sectionTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "24px" };
 const filterStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "10px 14px", background: colors.card, color: colors.text, minWidth: "190px", fontWeight: 700 };
 const tableWrapperStyle: CSSProperties = { overflowX: "auto" };
@@ -660,3 +733,5 @@ const fileRowStyle: CSSProperties = { border: `1px solid ${colors.border}`, bord
 const fileInfoStyle: CSSProperties = { display: "flex", flexWrap: "wrap", gap: "4px", alignItems: "baseline", minWidth: 0 };
 const fileActionsStyle: CSSProperties = { display: "flex", gap: "8px", alignItems: "center", flexShrink: 0 };
 const uploadRowStyle: CSSProperties = { display: "flex", justifyContent: "flex-end", marginBottom: "10px" };
+const auditBoxStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "13px 14px", color: colors.text, fontWeight: 750, lineHeight: 1.55 };
+const auditMetaStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "6px", marginTop: "10px", color: colors.muted, fontSize: "13px", fontWeight: 700 };

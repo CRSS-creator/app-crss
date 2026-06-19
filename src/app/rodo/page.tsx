@@ -8,7 +8,9 @@ import { fetchClients } from "@/lib/clientService";
 import { fetchCrmContracts, type CrmContract } from "@/lib/crmContractService";
 import {
   createRodoProcessingContract,
+  createRodoProcessingContractSignedUrl,
   fetchRodoProcessingContracts,
+  requestRodoProcessingContractGeneration,
   updateRodoProcessingContract,
   type RodoProcessingContract,
   type RodoProcessingContractStatus,
@@ -37,7 +39,6 @@ type RodoDraft = {
   siedziba: string;
   nip: string;
   reprezentant: string;
-  email_klienta: string;
   zakres_powierzenia: string;
   uwagi: string;
 };
@@ -139,6 +140,7 @@ function RodoContent() {
                   <Th>Umowa księgowa</Th>
                   <Th>Status</Th>
                   <Th>NIP</Th>
+                  <Th>Pliki</Th>
                   <Th>Akcje</Th>
                 </tr>
               </thead>
@@ -150,6 +152,7 @@ function RodoContent() {
                     <Td>{contract.crm_umowy?.numer_umowy || "Brak powiązania"}</Td>
                     <Td><StatusBadge status={contract.status} /></Td>
                     <Td>{contract.nip || "-"}</Td>
+                    <Td>{contract.podpisany_pdf_path ? "Podpisana" : contract.wygenerowany_pdf_path ? "Wygenerowana" : "Brak PDF"}</Td>
                     <Td><button style={secondaryButtonStyle} onClick={() => setSelectedContract(contract)}>Szczegóły</button></Td>
                   </tr>
                 ))}
@@ -178,6 +181,7 @@ function RodoContent() {
 function RodoDrawer({ contract, clients, accountingContracts, onClose, onSaved }: { contract: RodoProcessingContract | null; clients: Client[]; accountingContracts: CrmContract[]; onClose: () => void; onSaved: (contract: RodoProcessingContract) => void }) {
   const [draft, setDraft] = useState<RodoDraft>(() => contract ? createDraft(contract) : createEmptyDraft());
   const [saving, setSaving] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [accountingSearch, setAccountingSearch] = useState(() => selectedAccountingContractLabel(contract, accountingContracts));
   const [clientSearch, setClientSearch] = useState(() => selectedClientLabel(contract, clients));
 
@@ -229,7 +233,6 @@ function RodoDrawer({ contract, clients, accountingContracts, onClose, onSaved }
       siedziba: accountingContract.siedziba || current.siedziba,
       nip: accountingContract.nip || current.nip,
       reprezentant: accountingContract.reprezentant || current.reprezentant,
-      email_klienta: accountingContract.email_klienta || current.email_klienta,
       numer_umowy: current.numer_umowy || buildDefaultRodoNumber(accountingContract.numer_umowy),
     }));
   }
@@ -252,14 +255,13 @@ function RodoDrawer({ contract, clients, accountingContracts, onClose, onSaved }
       klient_id: clientId,
       nazwa_klienta: client.nazwa || current.nazwa_klienta,
       nip: client.nip || current.nip,
-      email_klienta: client.email || current.email_klienta,
     }));
   }
 
-  async function saveContract() {
+  async function persistContract() {
     if (!draft.nazwa_klienta.trim()) {
       alert("Uzupełnij nazwę klienta.");
-      return;
+      return null;
     }
 
     setSaving(true);
@@ -272,7 +274,6 @@ function RodoDrawer({ contract, clients, accountingContracts, onClose, onSaved }
       siedziba: emptyToNull(draft.siedziba),
       nip: emptyToNull(draft.nip),
       reprezentant: emptyToNull(draft.reprezentant),
-      email_klienta: emptyToNull(draft.email_klienta),
       zakres_powierzenia: emptyToNull(draft.zakres_powierzenia),
       uwagi: emptyToNull(draft.uwagi),
       podpisana_at: draft.status === "podpisana" ? new Date().toISOString() : null,
@@ -284,10 +285,43 @@ function RodoDrawer({ contract, clients, accountingContracts, onClose, onSaved }
     if (result.error || !result.data) {
       console.error("Błąd zapisu umowy RODO:", result.error);
       alert("Nie udało się zapisać umowy powierzenia.");
+      return null;
+    }
+
+    return result.data as RodoProcessingContract;
+  }
+
+  async function saveContract() {
+    const savedContract = await persistContract();
+    if (savedContract) onSaved(savedContract);
+  }
+
+  async function generateContract() {
+    const savedContract = await persistContract();
+    if (!savedContract) return;
+
+    setGenerating(true);
+    const result = await requestRodoProcessingContractGeneration(savedContract);
+    setGenerating(false);
+
+    if (result.error || !result.data?.contract) {
+      console.error("Błąd generowania umowy RODO:", result.error);
+      alert(result.error || "Nie udało się wygenerować umowy powierzenia.");
       return;
     }
 
-    onSaved(result.data as RodoProcessingContract);
+    onSaved(result.data.contract as RodoProcessingContract);
+  }
+
+  async function openPdf(storagePath: string | null) {
+    if (!storagePath) return;
+    const result = await createRodoProcessingContractSignedUrl(storagePath);
+    if (result.error || !result.data?.signedUrl) {
+      console.error("Błąd otwierania PDF RODO:", result.error);
+      alert("Nie udało się otworzyć pliku PDF.");
+      return;
+    }
+    window.open(result.data.signedUrl, "_blank", "noopener,noreferrer");
   }
 
   return (
@@ -302,7 +336,8 @@ function RodoDrawer({ contract, clients, accountingContracts, onClose, onSaved }
         </div>
 
         <div style={drawerActionsStyle}>
-          <button style={primarySmallButtonStyle} onClick={saveContract} disabled={saving}>{saving ? "Zapisywanie..." : "Zapisz"}</button>
+          <button style={secondaryButtonStyle} onClick={generateContract} disabled={saving || generating}>{generating ? "Generowanie..." : "Generuj"}</button>
+          <button style={primarySmallButtonStyle} onClick={saveContract} disabled={saving || generating}>{saving ? "Zapisywanie..." : "Zapisz"}</button>
         </div>
 
         <div style={drawerContentStyle}>
@@ -340,12 +375,20 @@ function RodoDrawer({ contract, clients, accountingContracts, onClose, onSaved }
             <EditableInput label="Siedziba" value={draft.siedziba} onChange={(value) => updateDraft("siedziba", value)} />
             <EditableInput label="NIP" value={draft.nip} onChange={(value) => updateDraft("nip", value)} />
             <EditableInput label="Reprezentant" value={draft.reprezentant} onChange={(value) => updateDraft("reprezentant", value)} />
-            <EditableInput label="Email klienta" type="email" value={draft.email_klienta} onChange={(value) => updateDraft("email_klienta", value)} />
           </FormSection>
 
           <FormSection title="Zakres powierzenia">
             <EditableTextarea label="Zakres" value={draft.zakres_powierzenia} onChange={(value) => updateDraft("zakres_powierzenia", value)} />
             <EditableTextarea label="Uwagi" value={draft.uwagi} onChange={(value) => updateDraft("uwagi", value)} />
+          </FormSection>
+
+          <FormSection title="Pliki PDF">
+            {contract?.wygenerowany_pdf_path ? (
+              <FileRow label="Wygenerowany PDF" fileName={contract.wygenerowany_pdf_name || "Umowa powierzenia.pdf"} onOpen={() => void openPdf(contract.wygenerowany_pdf_path)} />
+            ) : <div style={emptyStyle}>Brak wygenerowanego PDF.</div>}
+            {contract?.podpisany_pdf_path && (
+              <FileRow label="Podpisany PDF" fileName={contract.podpisany_pdf_name || "Podpisana umowa powierzenia.pdf"} onOpen={() => void openPdf(contract.podpisany_pdf_path)} />
+            )}
           </FormSection>
         </div>
       </aside>
@@ -363,7 +406,6 @@ function createEmptyDraft(): RodoDraft {
     siedziba: "",
     nip: "",
     reprezentant: "",
-    email_klienta: "",
     zakres_powierzenia: "Przetwarzanie danych osobowych w zakresie niezbędnym do świadczenia usług księgowych, podatkowych oraz kadrowo-płacowych.",
     uwagi: "",
   };
@@ -379,7 +421,6 @@ function createDraft(contract: RodoProcessingContract): RodoDraft {
     siedziba: contract.siedziba || "",
     nip: contract.nip || "",
     reprezentant: contract.reprezentant || "",
-    email_klienta: contract.email_klienta || "",
     zakres_powierzenia: contract.zakres_powierzenia || "",
     uwagi: contract.uwagi || "",
   };
@@ -437,6 +478,18 @@ function SummaryCard({ label, value }: { label: string; value: string | number }
 
 function FormSection({ title, children }: { title: string; children: ReactNode }) {
   return <section style={drawerSectionStyle}><h3 style={formSectionTitleStyle}>{title}</h3>{children}</section>;
+}
+
+function FileRow({ label, fileName, onOpen }: { label: string; fileName: string; onOpen: () => void }) {
+  return (
+    <div style={fileRowStyle}>
+      <div>
+        <strong>{label}</strong>
+        <span>{fileName}</span>
+      </div>
+      <button style={secondaryButtonStyle} type="button" onClick={onOpen}>Otwórz</button>
+    </div>
+  );
 }
 
 function EditableInput({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (value: string) => void; type?: "text" | "email" }) {
@@ -532,3 +585,4 @@ const clearButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, 
 const textareaRowStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "8px", color: colors.muted, fontWeight: 700 };
 const inputStyle: CSSProperties = { width: "100%", border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "10px 12px", background: colors.inputBackground, color: colors.text, fontWeight: 650, outline: "none" };
 const textareaStyle: CSSProperties = { ...inputStyle, resize: "vertical", minHeight: "96px", lineHeight: 1.6 };
+const fileRowStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "12px", display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", marginTop: "10px" };

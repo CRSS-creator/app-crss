@@ -8,6 +8,7 @@ export type RodoProcessingContract = {
   id: string;
   created_at: string;
   updated_at: string;
+  created_by: string | null;
   klient_id: string | null;
   umowa_ksiegowa_id: string | null;
   status: RodoProcessingContractStatus;
@@ -39,6 +40,7 @@ export type RodoProcessingContract = {
 };
 
 export type RodoProcessingContractPayload = {
+  created_by?: string | null;
   klient_id?: string | null;
   umowa_ksiegowa_id?: string | null;
   status?: RodoProcessingContractStatus;
@@ -69,9 +71,11 @@ export async function fetchRodoProcessingContracts() {
 }
 
 export async function createRodoProcessingContract(payload: RodoProcessingContractPayload) {
+  const createdBy = payload.created_by ?? await getCurrentUserId();
+
   return supabase
     .from("rodo_umowy_powierzenia")
-    .insert(payload)
+    .insert({ ...payload, created_by: createdBy })
     .select("*")
     .single();
 }
@@ -152,6 +156,11 @@ export async function deleteGeneratedRodoProcessingContractPdf(contract: RodoPro
     wygenerowany_pdf_path: null,
     wygenerowany_pdf_name: null,
   });
+}
+
+async function getCurrentUserId() {
+  const { data } = await supabase.auth.getUser();
+  return data.user?.id || null;
 }
 
 function sanitizeFileName(value: string) {

@@ -8,6 +8,7 @@ import { canAccessModule, type AppModule } from "@/lib/permissions";
 import { createDueNotifications, fetchUnreadNotificationsCount } from "@/lib/notificationService";
 import UnsignedContractDeleteWidget from "@/components/UnsignedContractDeleteWidget";
 import ContractRegisterSplitWidget from "@/components/ContractRegisterSplitWidget";
+import RodoRegisterSearchWidget from "@/components/RodoRegisterSearchWidget";
 import CrmLeadDrawerLayoutWidget from "@/components/CrmLeadDrawerLayoutWidget";
 import CrmOfferLeadContextBridge from "@/components/CrmOfferLeadContextBridge";
 import CrmUiAdjustmentsBridge from "@/components/CrmUiAdjustmentsBridge";
@@ -156,6 +157,7 @@ export default function AppLayout({ children, activePage }: AppLayoutProps) {
         {activePage === "crm" && <CrmLeadDrawerLayoutWidget />}
         {activePage === "umowy" && <ContractRegisterSplitWidget />}
         {activePage === "umowy" && <UnsignedContractDeleteWidget />}
+        {activePage === "rodo" && <RodoRegisterSearchWidget />}
       </section>
     </main>
   );

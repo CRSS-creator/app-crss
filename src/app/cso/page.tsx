@@ -19,6 +19,12 @@ const STORAGE_KEY = "crss-cso-content-plan";
 type TopicStatus = "pomysl" | "w_planie" | "opublikowane";
 type TopicCategory = typeof categories[number];
 
+const statusOptions: { value: TopicStatus; label: string }[] = [
+  { value: "pomysl", label: "Pomysł" },
+  { value: "w_planie", label: "W planie" },
+  { value: "opublikowane", label: "Opublikowane" },
+];
+
 type ContentTopic = {
   id: string;
   category: TopicCategory;
@@ -229,6 +235,7 @@ export default function CsoPage() {
 
 function CsoContent() {
   const [categoryFilter, setCategoryFilter] = useState<TopicCategory | "Wszystkie">("Wszystkie");
+  const [statusFilter, setStatusFilter] = useState<TopicStatus | "Wszystkie">("Wszystkie");
   const [topics, setTopics] = useState<ContentTopic[]>(createInitialTopics);
   const [facebookTopics, setFacebookTopics] = useState<Record<string, boolean>>({});
   const [blogTopics, setBlogTopics] = useState<Record<string, boolean>>({});
@@ -257,10 +264,11 @@ function CsoContent() {
     const query = searchQuery.trim().toLowerCase();
     return topics.filter((topic) => {
       const matchesCategory = categoryFilter === "Wszystkie" || topic.category === categoryFilter;
+      const matchesStatus = statusFilter === "Wszystkie" || topic.status === statusFilter;
       const matchesSearch = !query || [topic.category, topic.title, topic.note].join(" ").toLowerCase().includes(query);
-      return matchesCategory && matchesSearch;
+      return matchesCategory && matchesStatus && matchesSearch;
     });
-  }, [categoryFilter, searchQuery, topics]);
+  }, [categoryFilter, searchQuery, statusFilter, topics]);
 
   const noteTopic = noteTopicId ? topics.find((topic) => topic.id === noteTopicId) : null;
 
@@ -315,10 +323,16 @@ function CsoContent() {
             <h2 style={sectionTitleStyle}>Plan contentowy</h2>
             <p style={hintStyle}>Dodawaj tematy, oznaczaj publikację na FB i Blogu oraz zapisuj notatki robocze pod przyciskiem po prawej stronie.</p>
           </div>
-          <select style={filterStyle} value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value as TopicCategory | "Wszystkie")}>
-            <option>Wszystkie</option>
-            {categories.map((category) => <option key={category}>{category}</option>)}
-          </select>
+          <div style={filtersRowStyle}>
+            <select style={filterStyle} value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value as TopicCategory | "Wszystkie")}>
+              <option>Wszystkie</option>
+              {categories.map((category) => <option key={category}>{category}</option>)}
+            </select>
+            <select style={filterStyle} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as TopicStatus | "Wszystkie")}>
+              <option value="Wszystkie">Wszystkie statusy</option>
+              {statusOptions.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}
+            </select>
+          </div>
         </div>
 
         <input
@@ -361,9 +375,7 @@ function CsoContent() {
                   <Td strong>{topic.title}</Td>
                   <Td>
                     <select style={{ ...smallSelectStyle, ...statusStyle(topic.status) }} value={topic.status} onChange={(event) => updateTopic(topic.id, { status: event.target.value as TopicStatus })}>
-                      <option value="pomysl">Pomysł</option>
-                      <option value="w_planie">W planie</option>
-                      <option value="opublikowane">Opublikowane</option>
+                      {statusOptions.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}
                     </select>
                   </Td>
                   <Td><button style={secondaryButtonStyle} onClick={() => setNoteTopicId(topic.id)}>Notatka</button></Td>
@@ -443,6 +455,7 @@ const headerStatsStyle: CSSProperties = { display: "grid", gridTemplateColumns: 
 const summaryStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.card, padding: "15px", display: "flex", flexDirection: "column", gap: "8px", color: colors.muted, fontWeight: 800, boxShadow: shadow.soft };
 const panelStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.card, padding: "26px", boxShadow: shadow.soft };
 const panelHeaderStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "18px", alignItems: "flex-start", marginBottom: "18px", flexWrap: "wrap" };
+const filtersRowStyle: CSSProperties = { display: "flex", justifyContent: "flex-end", gap: "10px", flexWrap: "wrap" };
 const sectionTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "24px" };
 const hintStyle: CSSProperties = { margin: "8px 0 0", color: colors.muted, lineHeight: 1.65 };
 const filterStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.inputBackground, color: colors.text, padding: "11px 14px", fontWeight: 750, minWidth: "210px" };

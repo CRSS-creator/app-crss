@@ -10,6 +10,10 @@ type Profile = {
   email: string | null;
 };
 
+type ReactButtonProps = {
+  onClick?: (event: unknown) => void;
+};
+
 const REGISTER_TITLE = "Rejestr umów powierzenia przetwarzania danych osobowych";
 const DEFAULT_SCOPE = "zgodnie z zawartą umową główną";
 const LEGACY_SCOPE = "Przetwarzanie danych osobowych w zakresie niezbędnym do świadczenia usług księgowych, podatkowych oraz kadrowo-płacowych.";
@@ -239,18 +243,41 @@ function buildEnhancedTable(contracts: RodoProcessingContract[], originalTable: 
 }
 
 function openOriginalDetails(originalTable: HTMLTableElement, contract: RodoProcessingContract) {
+  window.dispatchEvent(new CustomEvent("crss:open-rodo-contract", { detail: { id: contract.id, contract } }));
+
+  const button = findOriginalDetailsButton(originalTable, contract);
+  if (!button) return;
+
+  callReactButtonHandler(button);
+  button.click();
+}
+
+function findOriginalDetailsButton(originalTable: HTMLTableElement, contract: RodoProcessingContract) {
   const expectedNumber = contract.numer_umowy || "Bez numeru";
   const expectedClient = contract.nazwa_klienta || "";
-  const rows = Array.from(originalTable.querySelectorAll<HTMLTableRowElement>("tbody tr"));
+  const originalRegister = originalTable.closest<HTMLElement>('[data-rodo-original-register="true"]') || originalTable;
+  const rows = Array.from(originalRegister.querySelectorAll<HTMLTableRowElement>("tbody tr"));
   const sourceRow = rows.find((row) => {
     const cells = Array.from(row.children) as HTMLElement[];
     const number = cells[0]?.textContent?.trim();
     const client = cells[1]?.textContent?.trim();
-    return number === expectedNumber || (!!expectedClient && client === expectedClient);
+    const rowText = row.textContent || "";
+    return number === expectedNumber || (!!expectedClient && client === expectedClient) || rowText.includes(expectedNumber);
   });
-  const button = sourceRow?.querySelector<HTMLButtonElement>("button");
-  if (!button) return;
-  button.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
+  return sourceRow?.querySelector<HTMLButtonElement>("button") || null;
+}
+
+function callReactButtonHandler(button: HTMLButtonElement) {
+  const reactPropsKey = Object.keys(button).find((key) => key.startsWith("__reactProps$"));
+  if (!reactPropsKey) return;
+
+  const reactProps = (button as unknown as Record<string, ReactButtonProps>)[reactPropsKey];
+  reactProps?.onClick?.({
+    currentTarget: button,
+    target: button,
+    preventDefault() {},
+    stopPropagation() {},
+  });
 }
 
 function printRegister(contracts: RodoProcessingContract[]) {

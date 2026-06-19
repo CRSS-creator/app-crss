@@ -110,3 +110,25 @@ export async function createRodoProcessingContractSignedUrl(path: string) {
     .from(RODO_CONTRACTS_BUCKET)
     .createSignedUrl(path, 60 * 10);
 }
+
+export async function deleteGeneratedRodoProcessingContractPdf(contract: RodoProcessingContract) {
+  if (!contract.wygenerowany_pdf_path) {
+    return { data: contract, error: null };
+  }
+
+  const storageResult = await supabase.storage
+    .from(RODO_CONTRACTS_BUCKET)
+    .remove([contract.wygenerowany_pdf_path]);
+
+  if (storageResult.error) {
+    return { data: null, error: storageResult.error };
+  }
+
+  const nextStatus: RodoProcessingContractStatus = contract.status === "wygenerowana" ? "szkic" : contract.status;
+
+  return updateRodoProcessingContract(contract.id, {
+    status: nextStatus,
+    wygenerowany_pdf_path: null,
+    wygenerowany_pdf_name: null,
+  });
+}

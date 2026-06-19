@@ -9,6 +9,7 @@ import { fetchCrmContracts, type CrmContract } from "@/lib/crmContractService";
 import {
   createRodoProcessingContract,
   createRodoProcessingContractSignedUrl,
+  deleteGeneratedRodoProcessingContractPdf,
   fetchRodoProcessingContracts,
   requestRodoProcessingContractGeneration,
   updateRodoProcessingContract,
@@ -182,6 +183,7 @@ function RodoDrawer({ contract, clients, accountingContracts, onClose, onSaved }
   const [draft, setDraft] = useState<RodoDraft>(() => contract ? createDraft(contract) : createEmptyDraft());
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [deletingPdf, setDeletingPdf] = useState(false);
   const [accountingSearch, setAccountingSearch] = useState(() => selectedAccountingContractLabel(contract, accountingContracts));
   const [clientSearch, setClientSearch] = useState(() => selectedClientLabel(contract, clients));
 
@@ -324,6 +326,24 @@ function RodoDrawer({ contract, clients, accountingContracts, onClose, onSaved }
     window.open(result.data.signedUrl, "_blank", "noopener,noreferrer");
   }
 
+  async function deleteGeneratedPdf() {
+    if (!contract?.wygenerowany_pdf_path) return;
+    const confirmed = window.confirm("Czy na pewno usunąć wygenerowany PDF tej umowy?");
+    if (!confirmed) return;
+
+    setDeletingPdf(true);
+    const result = await deleteGeneratedRodoProcessingContractPdf(contract);
+    setDeletingPdf(false);
+
+    if (result.error || !result.data) {
+      console.error("Błąd usuwania wygenerowanego PDF RODO:", result.error);
+      alert("Nie udało się usunąć wygenerowanego PDF.");
+      return;
+    }
+
+    onSaved(result.data as RodoProcessingContract);
+  }
+
   return (
     <div style={drawerOverlayStyle} onClick={onClose}>
       <aside style={drawerStyle} onClick={(event) => event.stopPropagation()}>
@@ -336,8 +356,8 @@ function RodoDrawer({ contract, clients, accountingContracts, onClose, onSaved }
         </div>
 
         <div style={drawerActionsStyle}>
-          <button style={secondaryButtonStyle} onClick={generateContract} disabled={saving || generating}>{generating ? "Generowanie..." : "Generuj"}</button>
-          <button style={primarySmallButtonStyle} onClick={saveContract} disabled={saving || generating}>{saving ? "Zapisywanie..." : "Zapisz"}</button>
+          <button style={secondaryButtonStyle} onClick={generateContract} disabled={saving || generating || deletingPdf}>{generating ? "Generowanie..." : "Generuj"}</button>
+          <button style={primarySmallButtonStyle} onClick={saveContract} disabled={saving || generating || deletingPdf}>{saving ? "Zapisywanie..." : "Zapisz"}</button>
         </div>
 
         <div style={drawerContentStyle}>
@@ -384,7 +404,13 @@ function RodoDrawer({ contract, clients, accountingContracts, onClose, onSaved }
 
           <FormSection title="Pliki PDF">
             {contract?.wygenerowany_pdf_path ? (
-              <FileRow label="Wygenerowany PDF" fileName={contract.wygenerowany_pdf_name || "Umowa powierzenia.pdf"} onOpen={() => void openPdf(contract.wygenerowany_pdf_path)} />
+              <FileRow
+                label="Wygenerowany PDF"
+                fileName={contract.wygenerowany_pdf_name || "Umowa powierzenia.pdf"}
+                onOpen={() => void openPdf(contract.wygenerowany_pdf_path)}
+                onDelete={() => void deleteGeneratedPdf()}
+                deleting={deletingPdf}
+              />
             ) : <div style={emptyStyle}>Brak wygenerowanego PDF.</div>}
             {contract?.podpisany_pdf_path && (
               <FileRow label="Podpisany PDF" fileName={contract.podpisany_pdf_name || "Podpisana umowa powierzenia.pdf"} onOpen={() => void openPdf(contract.podpisany_pdf_path)} />
@@ -480,14 +506,17 @@ function FormSection({ title, children }: { title: string; children: ReactNode }
   return <section style={drawerSectionStyle}><h3 style={formSectionTitleStyle}>{title}</h3>{children}</section>;
 }
 
-function FileRow({ label, fileName, onOpen }: { label: string; fileName: string; onOpen: () => void }) {
+function FileRow({ label, fileName, onOpen, onDelete, deleting }: { label: string; fileName: string; onOpen: () => void; onDelete?: () => void; deleting?: boolean }) {
   return (
     <div style={fileRowStyle}>
-      <div>
+      <div style={fileInfoStyle}>
         <strong>{label}</strong>
         <span>{fileName}</span>
       </div>
-      <button style={secondaryButtonStyle} type="button" onClick={onOpen}>Otwórz</button>
+      <div style={fileActionsStyle}>
+        <button style={secondaryButtonStyle} type="button" onClick={onOpen}>Otwórz</button>
+        {onDelete && <button style={dangerButtonStyle} type="button" onClick={onDelete} disabled={deleting}>{deleting ? "Usuwanie..." : "Usuń"}</button>}
+      </div>
     </div>
   );
 }
@@ -553,6 +582,7 @@ const subtitleStyle: CSSProperties = { maxWidth: "780px", fontSize: "17px", line
 const primaryButtonStyle: CSSProperties = { border: "none", borderRadius: radius.button, padding: "14px 18px", minHeight: "46px", background: colors.red, color: colors.white, fontWeight: 800, cursor: "pointer", textAlign: "center" };
 const primarySmallButtonStyle: CSSProperties = { ...primaryButtonStyle, padding: "11px 15px", minHeight: "42px" };
 const secondaryButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "10px 14px", minHeight: "42px", background: colors.white, color: colors.navy, fontWeight: 800, cursor: "pointer", textAlign: "center" };
+const dangerButtonStyle: CSSProperties = { border: `1px solid #fecaca`, borderRadius: radius.button, padding: "10px 14px", minHeight: "42px", background: "#fff1f2", color: "#b91c1c", fontWeight: 800, cursor: "pointer", textAlign: "center" };
 const summaryGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "18px", marginBottom: "24px" };
 const summaryCardStyle: CSSProperties = { background: colors.card, border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: "22px", boxShadow: shadow.soft, display: "flex", flexDirection: "column", gap: "10px", color: colors.muted, fontWeight: 800 };
 const cardStyle: CSSProperties = { background: colors.card, border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: "28px", boxShadow: shadow.soft, marginBottom: "24px" };
@@ -586,3 +616,5 @@ const textareaRowStyle: CSSProperties = { display: "flex", flexDirection: "colum
 const inputStyle: CSSProperties = { width: "100%", border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "10px 12px", background: colors.inputBackground, color: colors.text, fontWeight: 650, outline: "none" };
 const textareaStyle: CSSProperties = { ...inputStyle, resize: "vertical", minHeight: "96px", lineHeight: 1.6 };
 const fileRowStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "12px", display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", marginTop: "10px" };
+const fileInfoStyle: CSSProperties = { display: "flex", flexWrap: "wrap", gap: "4px", alignItems: "baseline", minWidth: 0 };
+const fileActionsStyle: CSSProperties = { display: "flex", gap: "8px", alignItems: "center", flexShrink: 0 };

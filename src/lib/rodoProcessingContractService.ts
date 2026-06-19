@@ -1,8 +1,8 @@
 import { supabase } from "@/lib/supabaseClient";
 
 const RODO_CONTRACTS_BUCKET = "crm-umowy";
-const DEFAULT_SCOPE = "zgodnie z zawartą umową główną";
-const LEGACY_SCOPE = "Przetwarzanie danych osobowych w zakresie niezbędnym do świadczenia usług księgowych, podatkowych oraz kadrowo-płacowych.";
+const DEFAULT_SCOPE = "Przetwarzanie danych osobowych w zakresie niezbędnym do świadczenia usług księgowych, podatkowych oraz kadrowo-płacowych.";
+const LEGACY_SCOPE = "zgodnie z zawartą umową główną";
 
 export type RodoProcessingContractStatus = "szkic" | "wygenerowana" | "wyslana_do_podpisu" | "podpisana" | "anulowana";
 
@@ -62,7 +62,7 @@ export type RodoProcessingContractPayload = {
 };
 
 export async function fetchRodoProcessingContracts() {
-  return supabase
+  const result = await supabase
     .from("rodo_umowy_powierzenia")
     .select(`
       *,
@@ -70,6 +70,15 @@ export async function fetchRodoProcessingContracts() {
       crm_umowy(numer_umowy, typ_umowy, status, nazwa_klienta)
     `)
     .order("created_at", { ascending: false });
+
+  if (result.data) {
+    return {
+      ...result,
+      data: result.data.map(normalizeContractScope),
+    };
+  }
+
+  return result;
 }
 
 export async function createRodoProcessingContract(payload: RodoProcessingContractPayload) {
@@ -165,16 +174,28 @@ async function getCurrentUserId() {
   return data.user?.id || null;
 }
 
+function normalizeContractScope(contract: RodoProcessingContract): RodoProcessingContract {
+  return {
+    ...contract,
+    zakres_powierzenia: normalizeScope(contract.zakres_powierzenia),
+  };
+}
+
 function normalizePayload<T extends Partial<RodoProcessingContractPayload> & Record<string, unknown>>(payload: T) {
   if ("zakres_powierzenia" in payload) {
-    const scope = typeof payload.zakres_powierzenia === "string" ? payload.zakres_powierzenia.trim() : "";
     return {
       ...payload,
-      zakres_powierzenia: !scope || scope === LEGACY_SCOPE ? DEFAULT_SCOPE : payload.zakres_powierzenia,
+      zakres_powierzenia: normalizeScope(payload.zakres_powierzenia as string | null | undefined),
     };
   }
 
   return payload;
+}
+
+function normalizeScope(value: string | null | undefined) {
+  const scope = typeof value === "string" ? value.trim() : "";
+  if (!scope || scope === LEGACY_SCOPE) return DEFAULT_SCOPE;
+  return scope;
 }
 
 function sanitizeFileName(value: string) {

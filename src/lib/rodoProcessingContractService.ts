@@ -1,5 +1,7 @@
 import { supabase } from "@/lib/supabaseClient";
 
+const RODO_CONTRACTS_BUCKET = "crm-umowy";
+
 export type RodoProcessingContractStatus = "szkic" | "wygenerowana" | "wyslana_do_podpisu" | "podpisana" | "anulowana";
 
 export type RodoProcessingContract = {
@@ -81,4 +83,30 @@ export async function updateRodoProcessingContract(contractId: string, payload: 
     .eq("id", contractId)
     .select("*")
     .single();
+}
+
+export async function requestRodoProcessingContractGeneration(contract: RodoProcessingContract) {
+  const response = await fetch("/api/rodo/contracts/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ contract }),
+  });
+
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    return {
+      error: data?.error || "Nie udało się wygenerować umowy powierzenia.",
+      data: null,
+      status: response.status,
+    };
+  }
+
+  return { error: null, data, status: response.status };
+}
+
+export async function createRodoProcessingContractSignedUrl(path: string) {
+  return supabase.storage
+    .from(RODO_CONTRACTS_BUCKET)
+    .createSignedUrl(path, 60 * 10);
 }

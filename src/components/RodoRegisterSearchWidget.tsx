@@ -10,6 +10,9 @@ type Profile = {
   email: string | null;
 };
 
+const DEFAULT_SCOPE = "zgodnie z zawartą umową główną";
+const LEGACY_SCOPE = "Przetwarzanie danych osobowych w zakresie niezbędnym do świadczenia usług księgowych, podatkowych oraz kadrowo-płacowych.";
+
 const STATUS_LABELS: Record<RodoProcessingContractStatus, string> = {
   szkic: "Szkic",
   wygenerowana: "Wygenerowana",
@@ -90,7 +93,8 @@ function applyRodoRegisterView(
   });
 
   const enhanced = ensureEnhancedWrapper(card, originalWrapper);
-  enhanced.replaceChildren(buildEnhancedTable(filteredContracts, profiles, originalTable));
+  enhanced.replaceChildren(buildEnhancedTable(filteredContracts, originalTable));
+  applyDrawerScopeDefault(page);
   applyDrawerAudit(page, contracts, profiles);
 }
 
@@ -128,7 +132,7 @@ function ensureEnhancedWrapper(card: HTMLElement, originalWrapper: HTMLElement) 
   return wrapper;
 }
 
-function buildEnhancedTable(contracts: RodoProcessingContract[], profiles: Profile[], originalTable: HTMLTableElement) {
+function buildEnhancedTable(contracts: RodoProcessingContract[], originalTable: HTMLTableElement) {
   if (!contracts.length) {
     const empty = document.createElement("div");
     empty.textContent = "Brak umów powierzenia do wyświetlenia.";
@@ -158,7 +162,7 @@ function buildEnhancedTable(contracts: RodoProcessingContract[], profiles: Profi
     row.appendChild(buildTextCell(contract.nip || "-"));
     row.appendChild(buildTextCell(contract.siedziba || "-"));
     row.appendChild(buildTextCell(contract.crm_umowy?.numer_umowy || "Brak powiązania"));
-    row.appendChild(buildTextCell(contract.zakres_powierzenia || "-"));
+    row.appendChild(buildTextCell(normalizeScope(contract.zakres_powierzenia)));
 
     const statusCell = buildBaseCell();
     statusCell.appendChild(buildStatusBadge(contract.status));
@@ -194,6 +198,23 @@ function openOriginalDetails(originalTable: HTMLTableElement, contract: RodoProc
     return firstCell?.textContent?.trim() === (contract.numer_umowy || "Bez numeru");
   });
   sourceRow?.querySelector<HTMLButtonElement>("button")?.click();
+}
+
+function applyDrawerScopeDefault(page: HTMLElement) {
+  const drawer = page.querySelector<HTMLElement>("aside");
+  if (!drawer) return;
+
+  const labels = Array.from(drawer.querySelectorAll<HTMLLabelElement>("label"));
+  const scopeLabel = labels.find((label) => label.querySelector("span")?.textContent?.trim() === "Zakres");
+  const textarea = scopeLabel?.querySelector<HTMLTextAreaElement>("textarea");
+  if (!textarea) return;
+
+  const currentValue = textarea.value.trim();
+  if (currentValue && currentValue !== LEGACY_SCOPE) return;
+
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set;
+  setter?.call(textarea, DEFAULT_SCOPE);
+  textarea.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
 function applyDrawerAudit(page: HTMLElement, contracts: RodoProcessingContract[], profiles: Profile[]) {
@@ -253,6 +274,12 @@ function formatDateTime(value: string | null | undefined) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value));
+}
+
+function normalizeScope(value: string | null | undefined) {
+  const scope = value?.trim();
+  if (!scope || scope === LEGACY_SCOPE) return DEFAULT_SCOPE;
+  return scope;
 }
 
 function buildStatusBadge(status: RodoProcessingContractStatus) {

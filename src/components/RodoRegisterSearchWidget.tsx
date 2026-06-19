@@ -76,12 +76,14 @@ function applyRodoRegisterView(
       const text = heading.textContent?.trim();
       return text === "Rejestr RODO" || text === REGISTER_TITLE;
     });
-  const card = title?.closest<HTMLElement>("section");
+  if (!title) return;
+
+  const card = title.closest<HTMLElement>("section");
   if (!card) return;
 
   title.textContent = REGISTER_TITLE;
 
-  const header = title?.parentElement;
+  const header = title.parentElement;
   const originalWrapper = findOriginalRegisterWrapper(card);
   const originalTable = originalWrapper?.querySelector<HTMLTableElement>("table");
   if (!header || !originalTable || !originalWrapper) return;

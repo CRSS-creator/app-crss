@@ -18,6 +18,7 @@ const HEADER_LABELS = ["Numer", "Klient", "Status", "Abonament", "Pliki", "Akcje
 
 export default function ContractRegisterSplitWidget() {
   const [activeTab, setActiveTab] = useState<ContractType>("KH");
+  const [searchQueries, setSearchQueries] = useState<Record<ContractType, string>>({ KH: "", KU: "" });
 
   useEffect(() => {
     let frame = 0;
@@ -25,7 +26,7 @@ export default function ContractRegisterSplitWidget() {
     function scheduleSplit() {
       window.cancelAnimationFrame(frame);
       frame = window.requestAnimationFrame(() => {
-        splitContractRegister(activeTab, setActiveTab);
+        splitContractRegister(activeTab, searchQueries, setActiveTab, setSearchQueries);
       });
     }
 
@@ -37,12 +38,17 @@ export default function ContractRegisterSplitWidget() {
       window.cancelAnimationFrame(frame);
       observer.disconnect();
     };
-  }, [activeTab]);
+  }, [activeTab, searchQueries]);
 
   return <ContractDocxGenerationWidget />;
 }
 
-function splitContractRegister(activeTab: ContractType, setActiveTab: (tab: ContractType) => void) {
+function splitContractRegister(
+  activeTab: ContractType,
+  searchQueries: Record<ContractType, string>,
+  setActiveTab: (tab: ContractType) => void,
+  setSearchQueries: (queries: Record<ContractType, string>) => void,
+) {
   const page = document.querySelector<HTMLElement>('[data-active-page="umowy"]');
   if (!page) return;
 
@@ -64,7 +70,7 @@ function splitContractRegister(activeTab: ContractType, setActiveTab: (tab: Cont
   const rows = Array.from(table.querySelectorAll<HTMLTableRowElement>("tbody tr"));
   if (!rows.length) return;
 
-  const signature = `${activeTab}:${rows.map((row) => row.textContent?.trim()).join("|")}`;
+  const signature = `${activeTab}:${searchQueries.KH}:${searchQueries.KU}:${rows.map((row) => row.textContent?.trim()).join("|")}`;
   const existingSplit = card.querySelector<HTMLElement>('[data-contract-register-split="true"]');
   if (sourceWrapper.dataset.contractRegisterSignature === signature && existingSplit) return;
   existingSplit?.remove();
@@ -86,10 +92,19 @@ function splitContractRegister(activeTab: ContractType, setActiveTab: (tab: Cont
     });
   });
 
+  const query = searchQueries[activeTab];
+  const visibleRows = groupedRows[activeTab].filter((row) => matchesRegisterSearch(row, query));
+
   const splitRoot = document.createElement("div");
   splitRoot.dataset.contractRegisterSplit = "true";
   splitRoot.appendChild(buildTabs(activeTab, groupedRows, setActiveTab));
-  splitRoot.appendChild(buildRegisterSection(activeTab === "KH" ? "Pełna księgowość" : "Uproszczona księgowość", groupedRows[activeTab]));
+  splitRoot.appendChild(buildRegisterSection(
+    activeTab === "KH" ? "Pełna księgowość" : "Uproszczona księgowość",
+    visibleRows,
+    groupedRows[activeTab].length,
+    query,
+    (value) => setSearchQueries({ ...searchQueries, [activeTab]: value }),
+  ));
 
   sourceWrapper.dataset.contractRegisterSource = "true";
   sourceWrapper.dataset.contractRegisterSignature = signature;
@@ -123,7 +138,7 @@ function buildTabs(activeTab: ContractType, rows: Record<ContractType, RegisterR
   return tabs;
 }
 
-function buildRegisterSection(subtitle: string, rows: RegisterRow[]) {
+function buildRegisterSection(subtitle: string, rows: RegisterRow[], totalRows: number, query: string, onSearch: (value: string) => void) {
   const section = document.createElement("section");
   section.style.border = "1px solid #cbd7e6";
   section.style.borderRadius = "16px";
@@ -145,7 +160,7 @@ function buildRegisterSection(subtitle: string, rows: RegisterRow[]) {
   description.style.fontWeight = "700";
 
   const count = document.createElement("strong");
-  count.textContent = `${rows.length} ${rows.length === 1 ? "umowa" : "umów"}`;
+  count.textContent = `${totalRows} ${totalRows === 1 ? "umowa" : "umów"}`;
   count.style.borderRadius = "999px";
   count.style.padding = "7px 12px";
   count.style.background = "#eef2f7";
@@ -155,10 +170,11 @@ function buildRegisterSection(subtitle: string, rows: RegisterRow[]) {
 
   header.append(description, count);
   section.appendChild(header);
+  section.appendChild(buildSearchInput(query, onSearch));
 
   if (!rows.length) {
     const empty = document.createElement("div");
-    empty.textContent = "Brak umów w tym rejestrze.";
+    empty.textContent = totalRows === 0 ? "Brak umów w tym rejestrze." : "Brak umów pasujących do wyszukiwania.";
     empty.style.border = "1px dashed #cbd7e6";
     empty.style.borderRadius = "14px";
     empty.style.padding = "18px";
@@ -187,6 +203,30 @@ function buildRegisterSection(subtitle: string, rows: RegisterRow[]) {
   tableWrapper.appendChild(table);
   section.appendChild(tableWrapper);
   return section;
+}
+
+function buildSearchInput(value: string, onSearch: (value: string) => void) {
+  const input = document.createElement("input");
+  input.type = "search";
+  input.value = value;
+  input.placeholder = "Szukaj po numerze umowy lub nazwie klienta";
+  input.style.width = "100%";
+  input.style.border = "1px solid #cbd7e6";
+  input.style.borderRadius = "14px";
+  input.style.padding = "12px 14px";
+  input.style.margin = "0 0 16px";
+  input.style.background = "#f8fafc";
+  input.style.color = "#0f2147";
+  input.style.fontWeight = "700";
+  input.style.outline = "none";
+  input.addEventListener("input", () => onSearch(input.value));
+  return input;
+}
+
+function matchesRegisterSearch(row: RegisterRow, query: string) {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery) return true;
+  return `${row.number} ${row.client}`.toLowerCase().includes(normalizedQuery);
 }
 
 function buildHeaderCell(label: string) {

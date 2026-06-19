@@ -220,6 +220,12 @@ function buildSearchInput(value: string, onSearch: (value: string) => void) {
   input.style.fontWeight = "700";
   input.style.outline = "none";
   input.addEventListener("input", () => onSearch(input.value));
+  if (value) {
+    window.setTimeout(() => {
+      input.focus();
+      input.setSelectionRange(input.value.length, input.value.length);
+    }, 0);
+  }
   return input;
 }
 

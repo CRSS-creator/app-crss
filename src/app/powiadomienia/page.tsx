@@ -90,6 +90,7 @@ function NotificationsContent() {
             {visibleNotifications.map((notification) => {
               const publicToken = getPublicToken(notification);
               const isTaskNotification = notification.type === "task_assigned" || notification.type === "task_due_today";
+              const isCrmFollowUpNotification = notification.type === "crm_follow_up_due";
               return (
                 <article key={notification.id} style={notification.status === "unread" ? unreadItemStyle : itemStyle}>
                   <div style={itemHeaderStyle}>
@@ -107,6 +108,7 @@ function NotificationsContent() {
                       <a style={secondaryButtonStyle} href={`/oferta/${publicToken}`} target="_blank" rel="noreferrer">Otwórz propozycję</a>
                     )}
                     {isTaskNotification && <a style={secondaryButtonStyle} href="/zadania">Otwórz zadania</a>}
+                    {isCrmFollowUpNotification && <a style={secondaryButtonStyle} href="/crm">Otwórz CRM</a>}
                     {notification.status === "unread" && <button style={primaryButtonStyle} onClick={() => markRead(notification)}>Przeczytane</button>}
                   </div>
                 </article>

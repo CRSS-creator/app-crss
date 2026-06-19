@@ -6,6 +6,7 @@ import AccessGuard from "@/components/AccessGuard";
 import { colors, radius, shadow } from "@/app/design";
 import { fetchClients } from "@/lib/clientService";
 import { fetchCrmContracts, type CrmContract } from "@/lib/crmContractService";
+import { supabase } from "@/lib/supabaseClient";
 import {
   createRodoProcessingContract,
   createRodoProcessingContractSignedUrl,
@@ -17,7 +18,6 @@ import {
   type RodoProcessingContract,
   type RodoProcessingContractStatus,
 } from "@/lib/rodoProcessingContractService";
-import { fetchTaskAssignees, type ProfileSummary } from "@/lib/taskService";
 import { X } from "lucide-react";
 
 type Client = {
@@ -33,7 +33,11 @@ type SearchOption = {
   description?: string;
 };
 
-type UserProfile = ProfileSummary & { id: string };
+type UserProfile = {
+  id: string;
+  full_name: string | null;
+  email: string | null;
+};
 
 type RodoDraft = {
   klient_id: string;
@@ -86,7 +90,7 @@ function RodoContent() {
       fetchRodoProcessingContracts(),
       fetchClients(),
       fetchCrmContracts(),
-      fetchTaskAssignees(),
+      fetchRodoProfiles(),
     ]);
 
     if (!contractsResult.error) setContracts((contractsResult.data || []) as RodoProcessingContract[]);
@@ -542,6 +546,13 @@ function buildDefaultRodoNumber(accountingNumber: string | null) {
   return accountingNumber.replace("/KH/", "/RODO/").replace("/KU/", "/RODO/");
 }
 
+function fetchRodoProfiles() {
+  return supabase
+    .from("profiles")
+    .select("id, full_name, email")
+    .order("full_name", { ascending: true });
+}
+
 function compareContractNumbersDesc(a: RodoProcessingContract, b: RodoProcessingContract) {
   const aNumber = extractLeadingNumber(a.numer_umowy);
   const bNumber = extractLeadingNumber(b.numer_umowy);
@@ -568,7 +579,7 @@ function contractAuditDescription(contract: RodoProcessingContract, profiles: Us
 }
 
 function profileName(profileId: string | null, profiles: UserProfile[]) {
-  if (!profileId) return "nieustalony";
+  if (!profileId) return "brak zapisanego autora";
   const profile = profiles.find((item) => item.id === profileId);
   return profile?.full_name || profile?.email || profileId;
 }

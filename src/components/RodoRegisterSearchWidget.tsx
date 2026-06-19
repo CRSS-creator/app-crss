@@ -86,11 +86,13 @@ function applyRodoRegisterView(
 
   const statusFilter = card.querySelector<HTMLSelectElement>("select")?.value || "Wszystkie";
   const normalizedQuery = query.trim().toLowerCase();
-  const filteredContracts = contracts.filter((contract) => {
-    const matchesStatus = statusFilter === "Wszystkie" || contract.status === statusFilter;
-    const matchesSearch = !normalizedQuery || `${contract.numer_umowy || ""} ${contract.nazwa_klienta || ""}`.toLowerCase().includes(normalizedQuery);
-    return matchesStatus && matchesSearch;
-  });
+  const filteredContracts = contracts
+    .filter((contract) => {
+      const matchesStatus = statusFilter === "Wszystkie" || contract.status === statusFilter;
+      const matchesSearch = !normalizedQuery || `${contract.numer_umowy || ""} ${contract.nazwa_klienta || ""}`.toLowerCase().includes(normalizedQuery);
+      return matchesStatus && matchesSearch;
+    })
+    .sort(compareContractsByNewest);
 
   const enhanced = ensureEnhancedWrapper(card, originalWrapper);
   enhanced.replaceChildren(buildEnhancedTable(filteredContracts, originalTable));
@@ -280,6 +282,21 @@ function normalizeScope(value: string | null | undefined) {
   const scope = value?.trim();
   if (!scope || scope === LEGACY_SCOPE) return DEFAULT_SCOPE;
   return scope;
+}
+
+function compareContractsByNewest(a: RodoProcessingContract, b: RodoProcessingContract) {
+  const dateDiff = new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+  if (dateDiff !== 0) return dateDiff;
+  return contractNumberWeight(b.numer_umowy || "") - contractNumberWeight(a.numer_umowy || "");
+}
+
+function contractNumberWeight(value: string) {
+  const match = value.match(/(\d+)\s*\/\s*RODO\s*\/\s*(\d+)\s*\/\s*(\d{4})/i);
+  if (!match) return 0;
+  const sequence = Number(match[1] || 0);
+  const month = Number(match[2] || 0);
+  const year = Number(match[3] || 0);
+  return year * 1000000 + month * 10000 + sequence;
 }
 
 function buildStatusBadge(status: RodoProcessingContractStatus) {

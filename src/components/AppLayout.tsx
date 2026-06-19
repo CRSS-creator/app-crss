@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { colors, radius } from "@/app/design";
 import { useCurrentUserRole } from "@/hooks/useCurrentUserRole";
 import { canAccessModule, type AppModule } from "@/lib/permissions";
-import { createDueTaskNotifications, fetchUnreadNotificationsCount } from "@/lib/notificationService";
+import { createDueNotifications, fetchUnreadNotificationsCount } from "@/lib/notificationService";
 import UnsignedContractDeleteWidget from "@/components/UnsignedContractDeleteWidget";
 import ContractRegisterSplitWidget from "@/components/ContractRegisterSplitWidget";
 import CrmLeadDrawerLayoutWidget from "@/components/CrmLeadDrawerLayoutWidget";
@@ -87,7 +87,7 @@ export default function AppLayout({ children, activePage }: AppLayoutProps) {
   }, [roleLoading, role]);
 
   async function loadUnreadCount() {
-    await createDueTaskNotifications();
+    await createDueNotifications();
     const { count } = await fetchUnreadNotificationsCount();
     setUnreadCount(count || 0);
   }

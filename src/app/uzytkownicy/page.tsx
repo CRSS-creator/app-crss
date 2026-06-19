@@ -65,6 +65,7 @@ type VatMode = typeof VAT_OPTIONS[number]["value"];
 type VatUeMode = typeof VAT_UE_OPTIONS[number]["value"];
 type FrequencyMode = typeof FREQUENCY_OPTIONS[number]["value"];
 type UserProfile = ProfileSummary & { id: string; role: string | null };
+type NewUserDraft = { fullName: string; email: string; role: string; password: string };
 type ClientRow = {
   id: string;
   nazwa: string | null;
@@ -108,6 +109,13 @@ const emptyDraft: TemplateDraft = {
   dzien_miesiaca: "10",
   osoba_id: "",
   aktywne: true,
+};
+
+const emptyNewUserDraft: NewUserDraft = {
+  fullName: "",
+  email: "",
+  role: "accountant",
+  password: "",
 };
 
 export default function SettingsPage() {
@@ -277,7 +285,7 @@ function SettingsContent() {
       ) : activeTab === "fees" ? (
         <AdditionalFeesSettingsPanel />
       ) : (
-        <UsersTab users={users} loading={loading} onRoleChange={updateUserRole} />
+        <UsersTab users={users} loading={loading} onRoleChange={updateUserRole} onUserCreated={(user) => setUsers((current) => [user, ...current])} />
       )}
     </>
   );
@@ -404,10 +412,51 @@ function ClientPicker({ clients, selectedClients, suggestions, search, onSearch,
   );
 }
 
-function UsersTab({ users, loading, onRoleChange }: { users: UserProfile[]; loading: boolean; onRoleChange: (user: UserProfile, role: string) => void }) {
+function UsersTab({ users, loading, onRoleChange, onUserCreated }: { users: UserProfile[]; loading: boolean; onRoleChange: (user: UserProfile, role: string) => void; onUserCreated: (user: UserProfile) => void }) {
+  const [newUser, setNewUser] = useState<NewUserDraft>(emptyNewUserDraft);
+  const [creatingUser, setCreatingUser] = useState(false);
+
+  async function createUser() {
+    if (!newUser.fullName.trim()) return alert("Wpisz imię i nazwisko użytkownika.");
+    if (!newUser.email.trim()) return alert("Wpisz email użytkownika.");
+    if (!newUser.password.trim()) return alert("Wygeneruj albo wpisz hasło tymczasowe.");
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (!token) return alert("Sesja wygasła. Zaloguj się ponownie.");
+
+    setCreatingUser(true);
+    const response = await fetch("/api/admin/users", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(newUser),
+    });
+    const result = await response.json().catch(() => null);
+    setCreatingUser(false);
+
+    if (!response.ok || !result?.user) {
+      alert(result?.error || "Nie udało się dodać użytkownika.");
+      return;
+    }
+
+    onUserCreated(result.user as UserProfile);
+    setNewUser(emptyNewUserDraft);
+  }
+
   return (
     <section style={panelStyle}>
       <div style={panelHeaderStyle}><div><h2 style={sectionTitleStyle}>Użytkownicy</h2><p style={hintStyle}>Lista osób z dostępem do aplikacji oraz ich role.</p></div></div>
+      <div style={userCreateFormStyle}>
+        <Field label="Imię i nazwisko"><input style={inputStyle} value={newUser.fullName} onChange={(event) => setNewUser((current) => ({ ...current, fullName: event.target.value }))} placeholder="np. Anna Kowalska" /></Field>
+        <Field label="Email"><input style={inputStyle} type="email" value={newUser.email} onChange={(event) => setNewUser((current) => ({ ...current, email: event.target.value }))} placeholder="adres@email.pl" /></Field>
+        <Field label="Rola"><select style={inputStyle} value={newUser.role} onChange={(event) => setNewUser((current) => ({ ...current, role: event.target.value }))}>{ROLE_OPTIONS.map((role) => <option key={role.value} value={role.value}>{role.label}</option>)}</select></Field>
+        <Field label="Hasło jednorazowe"><input style={inputStyle} value={newUser.password} onChange={(event) => setNewUser((current) => ({ ...current, password: event.target.value }))} placeholder="Wygeneruj hasło" /></Field>
+        <button style={secondaryButtonStyle} type="button" onClick={() => setNewUser((current) => ({ ...current, password: generateTemporaryPassword() }))}>Generuj hasło</button>
+        <button style={primaryButtonStyle} type="button" disabled={creatingUser} onClick={createUser}>{creatingUser ? "Dodawanie..." : "Dodaj użytkownika"}</button>
+      </div>
       <div style={tableShellStyle}>
         <table style={tableStyle}>
           <thead><tr><Th>Użytkownik</Th><Th>Email</Th><Th>Rola</Th></tr></thead>
@@ -447,6 +496,12 @@ function templateMatchesClientSearch(template: RecurringTask, clients: ClientRow
     .filter((client) => [client.nazwa, client.nip].filter(Boolean).join(" ").toLowerCase().includes(query))
     .some((client) => recurringTaskMatchesClient(template, client));
 }
+function generateTemporaryPassword() {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%";
+  const values = new Uint32Array(16);
+  crypto.getRandomValues(values);
+  return Array.from(values, (value) => alphabet[value % alphabet.length]).join("");
+}
 
 const headerStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "24px", alignItems: "flex-start", marginBottom: "24px", flexWrap: "wrap" };
 const eyebrowStyle: CSSProperties = { margin: "0 0 8px", color: colors.red, fontWeight: 850 };
@@ -482,6 +537,7 @@ const secondaryButtonStyle: CSSProperties = { border: `1px solid ${colors.border
 const dangerButtonStyle: CSSProperties = { ...secondaryButtonStyle, color: colors.danger, background: "#fff5f5" };
 const templateFilterStyle: CSSProperties = { marginBottom: "12px" };
 const tableShellStyle: CSSProperties = { overflowX: "auto", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white };
+const userCreateFormStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(4, minmax(160px, 1fr)) auto auto", gap: "12px", alignItems: "end", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "14px", marginBottom: "18px" };
 const tableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse" };
 const thStyle: CSSProperties = { textAlign: "left", padding: "13px 14px", color: colors.muted, fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: `1px solid ${colors.border}`, whiteSpace: "nowrap" };
 const tdStyle: CSSProperties = { padding: "14px", borderBottom: `1px solid ${colors.border}`, color: colors.text, verticalAlign: "middle" };

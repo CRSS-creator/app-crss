@@ -3,6 +3,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 const ALLOWED_ADMIN_ROLES = new Set(["owner", "manager", "admin"]);
 const ALLOWED_USER_ROLES = new Set(["owner", "manager", "admin", "accountant"]);
+const APP_URL = "https://app.crss.com.pl";
 
 type CreateUserPayload = {
   fullName?: string;
@@ -16,11 +17,85 @@ type ResetUserPasswordPayload = {
   password?: string;
 };
 
+type TemporaryPasswordMailPayload = {
+  recipientEmail: string;
+  recipientName: string;
+  temporaryPassword: string;
+  reason: "created" | "reset";
+  role?: string | null;
+};
+
 function generateTemporaryPassword() {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%";
   const values = new Uint32Array(16);
   crypto.getRandomValues(values);
   return Array.from(values, (value) => alphabet[value % alphabet.length]).join("");
+}
+
+function getTemporaryPasswordWebhookUrl() {
+  const webhookUrl = process.env.N8N_USER_TEMP_PASSWORD_WEBHOOK_URL;
+
+  if (!webhookUrl) {
+    return {
+      webhookUrl: null,
+      error: NextResponse.json(
+        { error: "Brak konfiguracji wysyłki hasła tymczasowego. Uzupełnij N8N_USER_TEMP_PASSWORD_WEBHOOK_URL." },
+        { status: 500 }
+      ),
+    };
+  }
+
+  if (webhookUrl.includes("/webhook-test/")) {
+    return {
+      webhookUrl: null,
+      error: NextResponse.json(
+        { error: "W aplikacji ustawiony jest testowy webhook n8n. Użyj produkcyjnego adresu /webhook/... i aktywuj workflow w n8n." },
+        { status: 500 }
+      ),
+    };
+  }
+
+  return { webhookUrl, error: null };
+}
+
+async function sendTemporaryPasswordMail(payload: TemporaryPasswordMailPayload) {
+  const config = getTemporaryPasswordWebhookUrl();
+  if (config.error || !config.webhookUrl) return config.error;
+
+  try {
+    const response = await fetch(config.webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        event: "user_temporary_password_requested",
+        recipientEmail: payload.recipientEmail,
+        recipientName: payload.recipientName,
+        temporaryPassword: payload.temporaryPassword,
+        reason: payload.reason,
+        role: payload.role,
+        appUrl: APP_URL,
+        subject: "Dostęp do aplikacji CRSS",
+        template: {
+          type: "temporary_password",
+          signatureSource: "n8n_html_template",
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const details = await response.text().catch(() => "");
+      const message = details ? `Automatyzacja zwróciła status ${response.status}: ${details}` : `Automatyzacja zwróciła status ${response.status}.`;
+      return NextResponse.json({ error: message }, { status: 502 });
+    }
+
+    return null;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Nie udało się połączyć z n8n.";
+    return NextResponse.json(
+      { error: `Nie udało się połączyć z automatyzacją n8n: ${message}` },
+      { status: 502 }
+    );
+  }
 }
 
 type AuthorizedAdminResult =
@@ -70,6 +145,9 @@ export async function POST(request: NextRequest) {
   const auth = await getAuthorizedAdmin(request);
   if (auth.error) return auth.error;
   const admin = auth.admin;
+
+  const webhookConfig = getTemporaryPasswordWebhookUrl();
+  if (webhookConfig.error) return webhookConfig.error;
 
   let payload: CreateUserPayload;
   try {
@@ -124,13 +202,25 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Użytkownik został utworzony, ale nie udało się zapisać profilu." }, { status: 500 });
   }
 
-  return NextResponse.json({ user: profile });
+  const mailError = await sendTemporaryPasswordMail({
+    recipientEmail: email,
+    recipientName: fullName,
+    temporaryPassword: password,
+    reason: "created",
+    role,
+  });
+  if (mailError) return mailError;
+
+  return NextResponse.json({ user: profile, temporaryPasswordSent: true });
 }
 
 export async function PATCH(request: NextRequest) {
   const auth = await getAuthorizedAdmin(request);
   if (auth.error) return auth.error;
   const admin = auth.admin;
+
+  const webhookConfig = getTemporaryPasswordWebhookUrl();
+  if (webhookConfig.error) return webhookConfig.error;
 
   let payload: ResetUserPasswordPayload;
   try {
@@ -155,6 +245,19 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: "Nie znaleziono użytkownika w Supabase Auth." }, { status: 404 });
   }
 
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("id, full_name, email, role")
+    .eq("id", userId)
+    .single();
+
+  const recipientEmail = profile?.email || existingUser.user.email;
+  const recipientName = profile?.full_name || existingUser.user.user_metadata?.full_name || recipientEmail || "Użytkownik";
+
+  if (!recipientEmail) {
+    return NextResponse.json({ error: "Ten użytkownik nie ma adresu email do wysyłki hasła tymczasowego." }, { status: 400 });
+  }
+
   const { error: updateError } = await admin.auth.admin.updateUserById(userId, {
     password: temporaryPassword,
     user_metadata: {
@@ -171,14 +274,18 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: updateError.message || "Nie udało się zresetować hasła." }, { status: 400 });
   }
 
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("id, full_name, email, role")
-    .eq("id", userId)
-    .single();
+  const mailError = await sendTemporaryPasswordMail({
+    recipientEmail,
+    recipientName,
+    temporaryPassword,
+    reason: "reset",
+    role: profile?.role,
+  });
+  if (mailError) return mailError;
 
   return NextResponse.json({
     user: profile,
     temporaryPassword,
+    temporaryPasswordSent: true,
   });
 }

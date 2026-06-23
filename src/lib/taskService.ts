@@ -8,6 +8,7 @@ export type ProfileSummary = {
   full_name: string | null;
   email: string | null;
   role?: string | null;
+  aktywne?: boolean | null;
 };
 
 export type ClientSummary = {
@@ -67,7 +68,8 @@ const TASK_SELECT = `
   profiles!zadania_osoba_id_fkey (
     full_name,
     email,
-    role
+    role,
+    aktywne
   ),
   klienci!zadania_klient_id_fkey (
     nazwa,
@@ -80,15 +82,17 @@ const TIME_ENTRY_SELECT = `
   profiles!czas_pracy_osoba_id_fkey (
     full_name,
     email,
-    role
+    role,
+    aktywne
   )
 `;
 
 export async function fetchTaskAssignees() {
   return supabase
     .from("profiles")
-    .select("id, full_name, email, role")
+    .select("id, full_name, email, role, aktywne")
     .in("role", ["owner", "manager", "admin", "accountant"])
+    .neq("aktywne", false)
     .order("full_name", { ascending: true });
 }
 

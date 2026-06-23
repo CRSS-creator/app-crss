@@ -3,8 +3,9 @@ import { supabase } from "@/lib/supabaseClient";
 export async function fetchClientCaregivers() {
   return supabase
     .from("profiles")
-    .select("id, full_name, email, role")
+    .select("id, full_name, email, role, aktywne")
     .in("role", ["owner", "manager", "admin", "accountant"])
+    .neq("aktywne", false)
     .order("full_name", { ascending: true });
 }
 
@@ -37,7 +38,8 @@ export async function fetchClients() {
       profiles!klienci_opiekun_id_fkey (
         full_name,
         email,
-        role
+        role,
+        aktywne
       )
     `)
     .order("nazwa", { ascending: true });

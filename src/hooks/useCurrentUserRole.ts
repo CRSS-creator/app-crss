@@ -26,11 +26,22 @@ export function useCurrentUserRole() {
 
       const { data, error: profileError } = await supabase
         .from("profiles")
-        .select("role")
+        .select("role, aktywne")
         .eq("id", userData.user.id)
         .single();
 
       if (!active) return;
+
+      if (data?.aktywne === false) {
+        await supabase.auth.signOut();
+        if (active) {
+          setError("Konto użytkownika jest nieaktywne.");
+          setRole(null);
+          setLoading(false);
+          window.location.href = "/login";
+        }
+        return;
+      }
 
       setError(profileError?.message ?? null);
       setRole(data?.role ?? null);

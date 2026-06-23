@@ -12,9 +12,10 @@ type CreateUserPayload = {
   password?: string;
 };
 
-type ResetUserPasswordPayload = {
+type UserActionPayload = {
   userId?: string;
   password?: string;
+  action?: "reset_password" | "deactivate" | "activate";
 };
 
 type TemporaryPasswordMailPayload = {
@@ -99,20 +100,20 @@ async function sendTemporaryPasswordMail(payload: TemporaryPasswordMailPayload) 
 }
 
 type AuthorizedAdminResult =
-  | { admin: SupabaseClient; error: null }
-  | { admin: null; error: NextResponse };
+  | { admin: SupabaseClient; requesterId: string; error: null }
+  | { admin: null; requesterId: null; error: NextResponse };
 
 async function getAuthorizedAdmin(request: NextRequest): Promise<AuthorizedAdminResult> {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseUrl || !serviceRoleKey) {
-    return { admin: null, error: NextResponse.json({ error: "Brak konfiguracji administracyjnej Supabase." }, { status: 500 }) };
+    return { admin: null, requesterId: null, error: NextResponse.json({ error: "Brak konfiguracji administracyjnej Supabase." }, { status: 500 }) };
   }
 
   const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
   if (!token) {
-    return { admin: null, error: NextResponse.json({ error: "Brak aktywnej sesji użytkownika." }, { status: 401 }) };
+    return { admin: null, requesterId: null, error: NextResponse.json({ error: "Brak aktywnej sesji użytkownika." }, { status: 401 }) };
   }
 
   const admin = createClient(supabaseUrl, serviceRoleKey, {
@@ -125,20 +126,34 @@ async function getAuthorizedAdmin(request: NextRequest): Promise<AuthorizedAdmin
   const { data: requesterData, error: requesterError } = await admin.auth.getUser(token);
   const requesterId = requesterData.user?.id;
   if (requesterError || !requesterId) {
-    return { admin: null, error: NextResponse.json({ error: "Nie udało się potwierdzić uprawnień użytkownika." }, { status: 401 }) };
+    return { admin: null, requesterId: null, error: NextResponse.json({ error: "Nie udało się potwierdzić uprawnień użytkownika." }, { status: 401 }) };
   }
 
   const { data: requesterProfile } = await admin
     .from("profiles")
-    .select("role")
+    .select("role, aktywne")
     .eq("id", requesterId)
     .single();
 
-  if (!ALLOWED_ADMIN_ROLES.has(requesterProfile?.role || "")) {
-    return { admin: null, error: NextResponse.json({ error: "Brak uprawnień do zarządzania użytkownikami." }, { status: 403 }) };
+  if (requesterProfile?.aktywne === false) {
+    return { admin: null, requesterId: null, error: NextResponse.json({ error: "Konto użytkownika jest nieaktywne." }, { status: 403 }) };
   }
 
-  return { admin, error: null };
+  if (!ALLOWED_ADMIN_ROLES.has(requesterProfile?.role || "")) {
+    return { admin: null, requesterId: null, error: NextResponse.json({ error: "Brak uprawnień do zarządzania użytkownikami." }, { status: 403 }) };
+  }
+
+  return { admin, requesterId, error: null };
+}
+
+async function fetchUserProfile(admin: SupabaseClient, userId: string) {
+  const { data } = await admin
+    .from("profiles")
+    .select("id, full_name, email, role, aktywne")
+    .eq("id", userId)
+    .single();
+
+  return data;
 }
 
 export async function POST(request: NextRequest) {
@@ -180,6 +195,7 @@ export async function POST(request: NextRequest) {
     app_metadata: {
       role,
       must_change_password: true,
+      account_blocked: false,
     },
   });
 
@@ -194,8 +210,9 @@ export async function POST(request: NextRequest) {
       full_name: fullName,
       email,
       role,
+      aktywne: true,
     }, { onConflict: "id" })
-    .select("id, full_name, email, role")
+    .select("id, full_name, email, role, aktywne")
     .single();
 
   if (profileError) {
@@ -219,25 +236,22 @@ export async function PATCH(request: NextRequest) {
   if (auth.error) return auth.error;
   const admin = auth.admin;
 
-  const webhookConfig = getTemporaryPasswordWebhookUrl();
-  if (webhookConfig.error) return webhookConfig.error;
-
-  let payload: ResetUserPasswordPayload;
+  let payload: UserActionPayload;
   try {
     payload = await request.json();
   } catch {
-    return NextResponse.json({ error: "Nieprawidłowe dane resetu hasła." }, { status: 400 });
+    return NextResponse.json({ error: "Nieprawidłowe dane użytkownika." }, { status: 400 });
   }
 
+  const action = payload.action || "reset_password";
   const userId = payload.userId?.trim();
-  const temporaryPassword = payload.password?.trim() || generateTemporaryPassword();
 
   if (!userId) {
-    return NextResponse.json({ error: "Brak użytkownika do resetu hasła." }, { status: 400 });
+    return NextResponse.json({ error: "Brak użytkownika." }, { status: 400 });
   }
 
-  if (temporaryPassword.length < 8) {
-    return NextResponse.json({ error: "Hasło musi mieć co najmniej 8 znaków." }, { status: 400 });
+  if (action === "deactivate" && userId === auth.requesterId) {
+    return NextResponse.json({ error: "Nie możesz zablokować własnego konta." }, { status: 400 });
   }
 
   const { data: existingUser, error: existingUserError } = await admin.auth.admin.getUserById(userId);
@@ -245,12 +259,51 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: "Nie znaleziono użytkownika w Supabase Auth." }, { status: 404 });
   }
 
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("id, full_name, email, role")
-    .eq("id", userId)
-    .single();
+  if (action === "deactivate" || action === "activate") {
+    const isActive = action === "activate";
 
+    const { error: updateProfileError } = await admin
+      .from("profiles")
+      .update({ aktywne: isActive })
+      .eq("id", userId);
+
+    if (updateProfileError) {
+      return NextResponse.json({ error: "Nie udało się zmienić statusu użytkownika." }, { status: 500 });
+    }
+
+    const authPayload = {
+      ban_duration: isActive ? "none" : "876000h",
+      app_metadata: {
+        ...(existingUser.user.app_metadata || {}),
+        account_blocked: !isActive,
+      },
+      user_metadata: {
+        ...(existingUser.user.user_metadata || {}),
+        account_blocked: !isActive,
+      },
+    };
+
+    const { error: updateAuthError } = await admin.auth.admin.updateUserById(userId, authPayload as never);
+
+    if (updateAuthError) {
+      await admin.from("profiles").update({ aktywne: !isActive }).eq("id", userId);
+      return NextResponse.json({ error: updateAuthError.message || "Nie udało się zmienić blokady logowania." }, { status: 400 });
+    }
+
+    const profile = await fetchUserProfile(admin, userId);
+    return NextResponse.json({ user: profile, active: isActive });
+  }
+
+  const webhookConfig = getTemporaryPasswordWebhookUrl();
+  if (webhookConfig.error) return webhookConfig.error;
+
+  const temporaryPassword = payload.password?.trim() || generateTemporaryPassword();
+
+  if (temporaryPassword.length < 8) {
+    return NextResponse.json({ error: "Hasło musi mieć co najmniej 8 znaków." }, { status: 400 });
+  }
+
+  const profile = await fetchUserProfile(admin, userId);
   const recipientEmail = profile?.email || existingUser.user.email;
   const recipientName = profile?.full_name || existingUser.user.user_metadata?.full_name || recipientEmail || "Użytkownik";
 

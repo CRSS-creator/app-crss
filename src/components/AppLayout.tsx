@@ -7,6 +7,7 @@ import { colors, radius } from "@/app/design";
 import { useCurrentUserRole } from "@/hooks/useCurrentUserRole";
 import { canAccessModule, type AppModule } from "@/lib/permissions";
 import { createDueTaskNotifications, fetchUnreadNotificationsCount } from "@/lib/notificationService";
+import UserAccessPanel from "@/components/UserAccessPanel";
 import {
   Home,
   Users,
@@ -154,7 +155,10 @@ export default function AppLayout({ children, activePage }: AppLayoutProps) {
         </button>
       </aside>
 
-      <section data-active-page={activePage} style={contentStyle}>{children}</section>
+      <section data-active-page={activePage} style={contentStyle}>
+        {children}
+        {activePage === "uzytkownicy" && <UserAccessPanel />}
+      </section>
     </main>
   );
 }

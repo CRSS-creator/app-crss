@@ -15,7 +15,7 @@ export default function LoginPage() {
     e.preventDefault()
     setError('')
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     })
@@ -25,7 +25,12 @@ export default function LoginPage() {
       return
     }
 
-    window.location.href = '/dashboard'
+    const mustChangePassword = Boolean(
+      data.user?.app_metadata?.must_change_password ||
+      data.user?.user_metadata?.must_change_password
+    )
+
+    window.location.href = mustChangePassword ? '/zmiana-hasla' : '/dashboard'
   }
 
   return (

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
 import { colors, radius, shadow } from "@/app/design";
+import { supabase } from "@/lib/supabaseClient";
 
 const categories = [
   "Ceny i koszty",
@@ -42,6 +43,16 @@ type StoredContentPlan = {
   topics?: ContentTopic[];
   facebookTopics?: Record<string, boolean>;
   blogTopics?: Record<string, boolean>;
+};
+
+type ContentTopicRow = {
+  id: string;
+  category: TopicCategory;
+  title: string;
+  status: TopicStatus;
+  note: string | null;
+  facebook_published: boolean | null;
+  blog_published: boolean | null;
 };
 
 type RawTopic = {
@@ -223,6 +234,38 @@ function mergeSavedTopics(initialTopics: ContentTopic[], savedTopics: ContentTop
   return [...customTopics, ...mergedInitialTopics];
 }
 
+function rowToTopic(row: ContentTopicRow): ContentTopic {
+  return {
+    id: row.id,
+    category: row.category,
+    title: row.title,
+    status: row.status,
+    note: row.note || "",
+  };
+}
+
+async function persistTopic(topic: ContentTopic, facebookPublished: boolean, blogPublished: boolean) {
+  const { data: userData } = await supabase.auth.getUser();
+  const userId = userData.user?.id || null;
+  const result = await supabase
+    .from("cso_content_topics")
+    .upsert({
+      id: topic.id,
+      category: topic.category,
+      title: topic.title,
+      status: topic.status,
+      note: topic.note,
+      facebook_published: facebookPublished,
+      blog_published: blogPublished,
+      updated_by: userId,
+      created_by: userId,
+    }, { onConflict: "id" });
+
+  if (result.error) {
+    console.error("Błąd zapisu planu contentowego:", result.error);
+  }
+}
+
 export default function CsoPage() {
   return (
     <AppLayout activePage="cso">
@@ -245,15 +288,48 @@ function CsoContent() {
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    const savedPlan = readSavedPlan();
-    if (savedPlan) {
-      const initialTopics = createInitialTopics();
-      setTopics(mergeSavedTopics(initialTopics, savedPlan.topics || []));
-      setFacebookTopics(savedPlan.facebookTopics || {});
-      setBlogTopics(savedPlan.blogTopics || {});
-    }
-    setIsReady(true);
+    loadContentPlan();
   }, []);
+
+  async function loadContentPlan() {
+    const savedPlan = readSavedPlan();
+    const initialTopics = createInitialTopics();
+    let localTopics = initialTopics;
+    let localFacebookTopics: Record<string, boolean> = {};
+    let localBlogTopics: Record<string, boolean> = {};
+
+    if (savedPlan) {
+      localTopics = mergeSavedTopics(initialTopics, savedPlan.topics || []);
+      localFacebookTopics = savedPlan.facebookTopics || {};
+      localBlogTopics = savedPlan.blogTopics || {};
+      setTopics(localTopics);
+      setFacebookTopics(localFacebookTopics);
+      setBlogTopics(localBlogTopics);
+    }
+
+    const result = await supabase
+      .from("cso_content_topics")
+      .select("id, category, title, status, note, facebook_published, blog_published")
+      .order("created_at", { ascending: true });
+
+    if (result.error) {
+      console.error("Błąd pobierania planu contentowego:", result.error);
+      setIsReady(true);
+      return;
+    }
+
+    const rows = (result.data || []) as ContentTopicRow[];
+    if (rows.length > 0) {
+      const remoteTopics = rows.map(rowToTopic);
+      setTopics(mergeSavedTopics(initialTopics, remoteTopics));
+      setFacebookTopics(rows.reduce<Record<string, boolean>>((acc, row) => ({ ...acc, [row.id]: Boolean(row.facebook_published) }), {}));
+      setBlogTopics(rows.reduce<Record<string, boolean>>((acc, row) => ({ ...acc, [row.id]: Boolean(row.blog_published) }), {}));
+    } else if (savedPlan) {
+      await Promise.all(localTopics.map((topic) => persistTopic(topic, Boolean(localFacebookTopics[topic.id]), Boolean(localBlogTopics[topic.id]))));
+    }
+
+    setIsReady(true);
+  }
 
   useEffect(() => {
     if (!isReady) return;
@@ -273,12 +349,21 @@ function CsoContent() {
   const noteTopic = noteTopicId ? topics.find((topic) => topic.id === noteTopicId) : null;
 
   function updateTopic(id: string, patch: Partial<ContentTopic>) {
-    setTopics((current) => current.map((topic) => topic.id === id ? { ...topic, ...patch } : topic));
+    const currentTopic = topics.find((topic) => topic.id === id);
+    if (!currentTopic) return;
+    const nextTopic = { ...currentTopic, ...patch };
+    setTopics((current) => current.map((topic) => topic.id === id ? nextTopic : topic));
+    persistTopic(nextTopic, Boolean(facebookTopics[id]), Boolean(blogTopics[id]));
   }
 
   function toggleChecked(kind: "facebook" | "blog", id: string) {
     const setter = kind === "facebook" ? setFacebookTopics : setBlogTopics;
-    setter((current) => ({ ...current, [id]: !current[id] }));
+    const currentMap = kind === "facebook" ? facebookTopics : blogTopics;
+    const nextValue = !currentMap[id];
+    setter((current) => ({ ...current, [id]: nextValue }));
+    const topic = topics.find((item) => item.id === id);
+    if (!topic) return;
+    persistTopic(topic, kind === "facebook" ? nextValue : Boolean(facebookTopics[id]), kind === "blog" ? nextValue : Boolean(blogTopics[id]));
   }
 
   function addTopic() {
@@ -289,16 +374,15 @@ function CsoContent() {
     }
 
     const id = `topic-${Date.now()}`;
-    setTopics((current) => [
-      {
-        id,
-        category: draft.category,
-        title,
-        status: "pomysl",
-        note: "",
-      },
-      ...current,
-    ]);
+    const topic: ContentTopic = {
+      id,
+      category: draft.category,
+      title,
+      status: "pomysl",
+      note: "",
+    };
+    setTopics((current) => [topic, ...current]);
+    persistTopic(topic, false, false);
     setNoteTopicId(id);
     setDraft(createEmptyDraft());
   }

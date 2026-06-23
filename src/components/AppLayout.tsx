@@ -1,19 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { colors, radius } from "@/app/design";
 import { useCurrentUserRole } from "@/hooks/useCurrentUserRole";
 import { canAccessModule, type AppModule } from "@/lib/permissions";
-import { createDueNotifications, fetchUnreadNotificationsCount } from "@/lib/notificationService";
-import UnsignedContractDeleteWidget from "@/components/UnsignedContractDeleteWidget";
-import ContractRegisterSplitWidget from "@/components/ContractRegisterSplitWidget";
-import RodoRegisterSearchWidget from "@/components/RodoRegisterSearchWidget";
-import CrmLeadDrawerLayoutWidget from "@/components/CrmLeadDrawerLayoutWidget";
-import CrmOfferLeadContextBridge from "@/components/CrmOfferLeadContextBridge";
-import CrmUiAdjustmentsBridge from "@/components/CrmUiAdjustmentsBridge";
-import ClientBillingModelBridge from "@/components/ClientBillingModelBridge";
-import TaskDeleteBridge from "@/components/TaskDeleteBridge";
+import { createDueTaskNotifications, fetchUnreadNotificationsCount } from "@/lib/notificationService";
 import {
   Home,
   Users,
@@ -65,7 +58,6 @@ const menu = [
     items: [
       { href: "/crm", label: "CRM", icon: BriefcaseBusiness, page: "crm" },
       { href: "/crm/umowy", label: "Umowy", icon: FileText, page: "umowy" },
-      { href: "/faktury", label: "Faktury", icon: FileText, page: "faktury" },
       { href: "/cso", label: "CSO", icon: Megaphone, page: "cso" },
       { href: "/cfo", label: "CFO", icon: Wallet, page: "cfo" },
       { href: "/aml", label: "AML", icon: ShieldCheck, page: "aml" },
@@ -80,6 +72,7 @@ const menu = [
 
 export default function AppLayout({ children, activePage }: AppLayoutProps) {
   const { role, loading: roleLoading } = useCurrentUserRole();
+  const pathname = usePathname();
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
@@ -87,8 +80,21 @@ export default function AppLayout({ children, activePage }: AppLayoutProps) {
     loadUnreadCount();
   }, [roleLoading, role]);
 
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      const mustChangePassword = Boolean(
+        data.user?.app_metadata?.must_change_password ||
+        data.user?.user_metadata?.must_change_password
+      );
+
+      if (mustChangePassword && pathname !== "/zmiana-hasla") {
+        window.location.href = "/zmiana-hasla";
+      }
+    });
+  }, [pathname]);
+
   async function loadUnreadCount() {
-    await createDueNotifications();
+    await createDueTaskNotifications();
     const { count } = await fetchUnreadNotificationsCount();
     setUnreadCount(count || 0);
   }
@@ -148,17 +154,7 @@ export default function AppLayout({ children, activePage }: AppLayoutProps) {
         </button>
       </aside>
 
-      <section data-active-page={activePage} style={contentStyle}>
-        {activePage === "klienci" && <ClientBillingModelBridge />}
-        {activePage === "crm" && <CrmOfferLeadContextBridge />}
-        {activePage === "crm" && <CrmUiAdjustmentsBridge />}
-        {activePage === "zadania" && <TaskDeleteBridge />}
-        {children}
-        {activePage === "crm" && <CrmLeadDrawerLayoutWidget />}
-        {activePage === "umowy" && <ContractRegisterSplitWidget />}
-        {activePage === "umowy" && <UnsignedContractDeleteWidget />}
-        {activePage === "rodo" && <RodoRegisterSearchWidget />}
-      </section>
+      <section data-active-page={activePage} style={contentStyle}>{children}</section>
     </main>
   );
 }

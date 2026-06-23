@@ -103,7 +103,7 @@ const cardStyle: React.CSSProperties = {
   border: `1px solid ${colors.border}`,
   borderRadius: radius.card,
   background: colors.card,
-  boxShadow: shadow.strong,
+  boxShadow: shadow.card,
   padding: "34px",
 };
 

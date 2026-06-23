@@ -16,6 +16,7 @@ export default function UserAccessPanel() {
   const [users, setUsers] = useState<UserAccessRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [actionUserId, setActionUserId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -35,7 +36,9 @@ export default function UserAccessPanel() {
       alert("Nie udało się pobrać statusów użytkowników.");
     }
 
-    setUsers((data || []) as UserAccessRow[]);
+    const rows = (data || []) as UserAccessRow[];
+    setUsers(rows);
+    setSelectedUserId((current) => current || rows[0]?.id || null);
     setLoading(false);
   }
 
@@ -45,6 +48,8 @@ export default function UserAccessPanel() {
 
     return users.filter((user) => [user.full_name, user.email, user.role].filter(Boolean).join(" ").toLowerCase().includes(query));
   }, [search, users]);
+
+  const selectedUser = users.find((user) => user.id === selectedUserId) || filteredUsers[0] || null;
 
   async function changeUserAccess(user: UserAccessRow, active: boolean) {
     const action = active ? "activate" : "deactivate";
@@ -83,58 +88,65 @@ export default function UserAccessPanel() {
     <section style={panelStyle}>
       <div style={headerStyle}>
         <div>
-          <h2 style={titleStyle}>Dostęp użytkowników</h2>
-          <p style={hintStyle}>Blokada wyłącza logowanie, ale zostawia historię zadań, czasu pracy i zmian wykonaną przez daną osobę.</p>
+          <h2 style={titleStyle}>Blokada dostępu</h2>
+          <p style={hintStyle}>Wybierz użytkownika tylko wtedy, gdy chcesz zablokować albo przywrócić jego dostęp do aplikacji.</p>
         </div>
         <input
           style={searchStyle}
           value={search}
           onChange={(event) => setSearch(event.target.value)}
-          placeholder="Szukaj po imieniu, emailu lub roli"
+          placeholder="Szukaj użytkownika"
         />
       </div>
 
-      <div style={tableShellStyle}>
-        <table style={tableStyle}>
-          <thead>
-            <tr>
-              <Th>Użytkownik</Th>
-              <Th>Email</Th>
-              <Th>Rola</Th>
-              <Th>Status</Th>
-              <Th>Akcje</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><Td colSpan={5}>Ładowanie użytkowników...</Td></tr>
-            ) : filteredUsers.length === 0 ? (
-              <tr><Td colSpan={5}>Brak użytkowników dla wybranego wyszukiwania.</Td></tr>
-            ) : filteredUsers.map((user) => {
+      {loading ? (
+        <div style={emptyStyle}>Ładowanie użytkowników...</div>
+      ) : filteredUsers.length === 0 ? (
+        <div style={emptyStyle}>Brak użytkowników dla wybranego wyszukiwania.</div>
+      ) : (
+        <div style={accessGridStyle}>
+          <div style={userListStyle}>
+            {filteredUsers.slice(0, 8).map((user) => {
               const active = user.aktywne !== false;
+              const selected = selectedUser?.id === user.id;
               return (
-                <tr key={user.id}>
-                  <Td strong>{profileName(user)}</Td>
-                  <Td>{user.email || "Brak emaila"}</Td>
-                  <Td>{roleLabel(user.role)}</Td>
-                  <Td><span style={active ? activeBadgeStyle : inactiveBadgeStyle}>{active ? "Aktywny" : "Nieaktywny"}</span></Td>
-                  <Td>
-                    {active ? (
-                      <button style={dangerButtonStyle} disabled={actionUserId === user.id} onClick={() => changeUserAccess(user, false)}>
-                        {actionUserId === user.id ? "Blokowanie..." : "Zablokuj"}
-                      </button>
-                    ) : (
-                      <button style={secondaryButtonStyle} disabled={actionUserId === user.id} onClick={() => changeUserAccess(user, true)}>
-                        {actionUserId === user.id ? "Przywracanie..." : "Przywróć dostęp"}
-                      </button>
-                    )}
-                  </Td>
-                </tr>
+                <button
+                  key={user.id}
+                  type="button"
+                  style={selected ? selectedUserButtonStyle : userButtonStyle}
+                  onClick={() => setSelectedUserId(user.id)}
+                >
+                  <span style={userButtonNameStyle}>{profileName(user)}</span>
+                  <span style={userButtonMetaStyle}>{user.email || roleLabel(user.role)}</span>
+                  <span style={active ? activeBadgeStyle : inactiveBadgeStyle}>{active ? "Aktywny" : "Nieaktywny"}</span>
+                </button>
               );
             })}
-          </tbody>
-        </table>
-      </div>
+          </div>
+
+          {selectedUser && (
+            <div style={selectedCardStyle}>
+              <div>
+                <span style={labelStyle}>Wybrany użytkownik</span>
+                <h3 style={selectedTitleStyle}>{profileName(selectedUser)}</h3>
+                <p style={selectedMetaStyle}>{selectedUser.email || "Brak emaila"} · {roleLabel(selectedUser.role)}</p>
+              </div>
+              <div style={selectedActionsStyle}>
+                <span style={selectedUser.aktywne !== false ? activeBadgeStyle : inactiveBadgeStyle}>{selectedUser.aktywne !== false ? "Aktywny" : "Nieaktywny"}</span>
+                {selectedUser.aktywne !== false ? (
+                  <button style={dangerButtonStyle} disabled={actionUserId === selectedUser.id} onClick={() => changeUserAccess(selectedUser, false)}>
+                    {actionUserId === selectedUser.id ? "Blokowanie..." : "Zablokuj dostęp"}
+                  </button>
+                ) : (
+                  <button style={secondaryButtonStyle} disabled={actionUserId === selectedUser.id} onClick={() => changeUserAccess(selectedUser, true)}>
+                    {actionUserId === selectedUser.id ? "Przywracanie..." : "Przywróć dostęp"}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </section>
   );
 }
@@ -149,14 +161,6 @@ function roleLabel(role: string | null) {
   if (role === "admin") return "Admin";
   if (role === "accountant") return "Accountant";
   return role || "Brak roli";
-}
-
-function Th({ children }: { children: React.ReactNode }) {
-  return <th style={thStyle}>{children}</th>;
-}
-
-function Td({ children, strong, colSpan }: { children: React.ReactNode; strong?: boolean; colSpan?: number }) {
-  return <td colSpan={colSpan} style={{ ...tdStyle, fontWeight: strong ? 850 : 650 }}>{children}</td>;
 }
 
 const panelStyle: CSSProperties = {
@@ -180,10 +184,18 @@ const headerStyle: CSSProperties = {
 const titleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "24px" };
 const hintStyle: CSSProperties = { margin: "8px 0 0", color: colors.muted, lineHeight: 1.55, maxWidth: "760px" };
 const searchStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, color: colors.text, padding: "11px 13px", minHeight: "44px", minWidth: "320px", fontWeight: 750 };
-const tableShellStyle: CSSProperties = { overflowX: "auto", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white };
-const tableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse" };
-const thStyle: CSSProperties = { textAlign: "left", padding: "13px 14px", color: colors.muted, fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: `1px solid ${colors.border}`, whiteSpace: "nowrap" };
-const tdStyle: CSSProperties = { padding: "14px", borderBottom: `1px solid ${colors.border}`, color: colors.text, verticalAlign: "middle" };
+const accessGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(260px, 360px) minmax(280px, 1fr)", gap: "14px", alignItems: "stretch" };
+const userListStyle: CSSProperties = { display: "grid", gap: "8px", alignContent: "start" };
+const userButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, padding: "11px 12px", display: "grid", gridTemplateColumns: "1fr auto", gap: "5px 10px", textAlign: "left", cursor: "pointer", alignItems: "center" };
+const selectedUserButtonStyle: CSSProperties = { ...userButtonStyle, borderColor: colors.navy, background: "rgba(23, 59, 115, 0.08)" };
+const userButtonNameStyle: CSSProperties = { fontWeight: 850, color: colors.text };
+const userButtonMetaStyle: CSSProperties = { gridColumn: "1 / 2", color: colors.muted, fontSize: "12px", fontWeight: 650, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
+const selectedCardStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "18px", display: "flex", justifyContent: "space-between", gap: "18px", alignItems: "center", flexWrap: "wrap" };
+const selectedTitleStyle: CSSProperties = { margin: "8px 0 4px", color: colors.navy, fontSize: "22px" };
+const selectedMetaStyle: CSSProperties = { margin: 0, color: colors.muted, fontWeight: 700 };
+const selectedActionsStyle: CSSProperties = { display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" };
+const labelStyle: CSSProperties = { color: colors.muted, fontSize: "13px", fontWeight: 850 };
+const emptyStyle: CSSProperties = { border: `1px dashed ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, color: colors.muted, padding: "18px", fontWeight: 800, textAlign: "center" };
 const badgeBaseStyle: CSSProperties = { display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: radius.badge, padding: "7px 11px", fontWeight: 850, fontSize: "12px", whiteSpace: "nowrap" };
 const activeBadgeStyle: CSSProperties = { ...badgeBaseStyle, background: "#dcfce7", color: colors.success };
 const inactiveBadgeStyle: CSSProperties = { ...badgeBaseStyle, background: "#fee2e2", color: colors.danger };

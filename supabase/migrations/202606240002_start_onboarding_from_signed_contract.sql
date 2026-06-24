@@ -117,7 +117,7 @@ begin
         'notification_kind', 'onboarding_started'
       )
     from public.profiles profile
-    where profile.role in ('manager', 'admin')
+    where profile.role in ('owner', 'manager', 'admin')
       and coalesce(profile.aktywne, true) = true;
   end if;
 

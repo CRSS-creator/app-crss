@@ -9,6 +9,7 @@ import { canAccessModule, type AppModule } from "@/lib/permissions";
 import { createDueTaskNotifications, fetchUnreadNotificationsCount } from "@/lib/notificationService";
 import UserAccessPanel from "@/components/UserAccessPanel";
 import ContractRegisterSplitWidget from "@/components/ContractRegisterSplitWidget";
+import CrmDetailsLayoutFixWidget from "@/components/CrmDetailsLayoutFixWidget";
 import {
   Home,
   Users,
@@ -158,6 +159,7 @@ export default function AppLayout({ children, activePage }: AppLayoutProps) {
 
       <section data-active-page={activePage} style={contentStyle}>
         {children}
+        {activePage === "crm" && <CrmDetailsLayoutFixWidget />}
         {activePage === "umowy" && <ContractRegisterSplitWidget />}
         {activePage === "uzytkownicy" && <UserAccessPanel />}
       </section>

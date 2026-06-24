@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { colors, radius, shadow } from "@/app/design";
+import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
 type UserAccessRow = {
@@ -14,17 +13,31 @@ type UserAccessRow = {
 
 export default function UserAccessPanel() {
   const [users, setUsers] = useState<UserAccessRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [actionUserId, setActionUserId] = useState<string | null>(null);
 
   useEffect(() => {
-    loadUsers();
+    void loadUsers();
   }, []);
 
+  useEffect(() => {
+    let frame = 0;
+
+    function scheduleAttach() {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => attachAccessControls(users, actionUserId, changeUserAccess));
+    }
+
+    scheduleAttach();
+    const observer = new MutationObserver(scheduleAttach);
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, [users, actionUserId]);
+
   async function loadUsers() {
-    setLoading(true);
     const { data, error } = await supabase
       .from("profiles")
       .select("id, full_name, email, role, aktywne")
@@ -33,23 +46,11 @@ export default function UserAccessPanel() {
 
     if (error) {
       console.error("Błąd pobierania statusów użytkowników:", error);
-      alert("Nie udało się pobrać statusów użytkowników.");
+      return;
     }
 
-    const rows = (data || []) as UserAccessRow[];
-    setUsers(rows);
-    setSelectedUserId((current) => current || rows[0]?.id || null);
-    setLoading(false);
+    setUsers((data || []) as UserAccessRow[]);
   }
-
-  const filteredUsers = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    if (!query) return users;
-
-    return users.filter((user) => [user.full_name, user.email, user.role].filter(Boolean).join(" ").toLowerCase().includes(query));
-  }, [search, users]);
-
-  const selectedUser = users.find((user) => user.id === selectedUserId) || filteredUsers[0] || null;
 
   async function changeUserAccess(user: UserAccessRow, active: boolean) {
     const action = active ? "activate" : "deactivate";
@@ -84,120 +85,117 @@ export default function UserAccessPanel() {
     setUsers((current) => current.map((item) => item.id === user.id ? { ...item, aktywne: active } : item));
   }
 
-  return (
-    <section style={panelStyle}>
-      <div style={headerStyle}>
-        <div>
-          <h2 style={titleStyle}>Blokada dostępu</h2>
-          <p style={hintStyle}>Wybierz użytkownika tylko wtedy, gdy chcesz zablokować albo przywrócić jego dostęp do aplikacji.</p>
-        </div>
-        <input
-          style={searchStyle}
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder="Szukaj użytkownika"
-        />
-      </div>
+  return null;
+}
 
-      {loading ? (
-        <div style={emptyStyle}>Ładowanie użytkowników...</div>
-      ) : filteredUsers.length === 0 ? (
-        <div style={emptyStyle}>Brak użytkowników dla wybranego wyszukiwania.</div>
-      ) : (
-        <div style={accessGridStyle}>
-          <div style={userListStyle}>
-            {filteredUsers.slice(0, 8).map((user) => {
-              const active = user.aktywne !== false;
-              const selected = selectedUser?.id === user.id;
-              return (
-                <button
-                  key={user.id}
-                  type="button"
-                  style={selected ? selectedUserButtonStyle : userButtonStyle}
-                  onClick={() => setSelectedUserId(user.id)}
-                >
-                  <span style={userButtonNameStyle}>{profileName(user)}</span>
-                  <span style={userButtonMetaStyle}>{user.email || roleLabel(user.role)}</span>
-                  <span style={active ? activeBadgeStyle : inactiveBadgeStyle}>{active ? "Aktywny" : "Nieaktywny"}</span>
-                </button>
-              );
-            })}
-          </div>
+function attachAccessControls(
+  users: UserAccessRow[],
+  actionUserId: string | null,
+  onChange: (user: UserAccessRow, active: boolean) => void,
+) {
+  const page = document.querySelector<HTMLElement>('[data-active-page="uzytkownicy"]');
+  if (!page) return;
 
-          {selectedUser && (
-            <div style={selectedCardStyle}>
-              <div>
-                <span style={labelStyle}>Wybrany użytkownik</span>
-                <h3 style={selectedTitleStyle}>{profileName(selectedUser)}</h3>
-                <p style={selectedMetaStyle}>{selectedUser.email || "Brak emaila"} · {roleLabel(selectedUser.role)}</p>
-              </div>
-              <div style={selectedActionsStyle}>
-                <span style={selectedUser.aktywne !== false ? activeBadgeStyle : inactiveBadgeStyle}>{selectedUser.aktywne !== false ? "Aktywny" : "Nieaktywny"}</span>
-                {selectedUser.aktywne !== false ? (
-                  <button style={dangerButtonStyle} disabled={actionUserId === selectedUser.id} onClick={() => changeUserAccess(selectedUser, false)}>
-                    {actionUserId === selectedUser.id ? "Blokowanie..." : "Zablokuj dostęp"}
-                  </button>
-                ) : (
-                  <button style={secondaryButtonStyle} disabled={actionUserId === selectedUser.id} onClick={() => changeUserAccess(selectedUser, true)}>
-                    {actionUserId === selectedUser.id ? "Przywracanie..." : "Przywróć dostęp"}
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-    </section>
-  );
+  const usersTitle = Array.from(page.querySelectorAll<HTMLHeadingElement>("h2"))
+    .find((heading) => heading.textContent?.trim() === "Użytkownicy");
+  const usersSection = usersTitle?.closest<HTMLElement>("section");
+  if (!usersSection) return;
+
+  const table = Array.from(usersSection.querySelectorAll<HTMLTableElement>("table"))
+    .find((candidate) => Array.from(candidate.querySelectorAll("th")).some((th) => th.textContent?.trim() === "Hasło"));
+  if (!table) return;
+
+  const headerRow = table.querySelector<HTMLTableRowElement>("thead tr");
+  if (!headerRow) return;
+
+  if (!headerRow.querySelector('[data-user-access-header="status"]')) {
+    headerRow.appendChild(buildHeaderCell("Status", "status"));
+    headerRow.appendChild(buildHeaderCell("Dostęp", "access"));
+  }
+
+  const rows = Array.from(table.querySelectorAll<HTMLTableRowElement>("tbody tr"));
+  rows.forEach((row) => {
+    const cells = Array.from(row.children) as HTMLElement[];
+    if (cells.length < 2) return;
+
+    const email = normalize(cells[1]?.textContent || "");
+    const user = users.find((item) => normalize(item.email || "") === email);
+    if (!user) return;
+
+    row.querySelectorAll('[data-user-access-cell="true"]').forEach((cell) => cell.remove());
+    row.appendChild(buildStatusCell(user));
+    row.appendChild(buildActionCell(user, actionUserId, onChange));
+  });
+}
+
+function buildHeaderCell(label: string, key: string) {
+  const th = document.createElement("th");
+  th.dataset.userAccessHeader = key;
+  th.textContent = label;
+  th.style.textAlign = "left";
+  th.style.padding = "13px 14px";
+  th.style.color = "#4b5d78";
+  th.style.fontSize = "12px";
+  th.style.textTransform = "uppercase";
+  th.style.letterSpacing = "0.04em";
+  th.style.borderBottom = "1px solid #cbd7e6";
+  th.style.whiteSpace = "nowrap";
+  return th;
+}
+
+function buildStatusCell(user: UserAccessRow) {
+  const td = buildBaseCell();
+  const active = user.aktywne !== false;
+  const badge = document.createElement("span");
+  badge.textContent = active ? "Aktywny" : "Nieaktywny";
+  badge.style.display = "inline-flex";
+  badge.style.alignItems = "center";
+  badge.style.justifyContent = "center";
+  badge.style.borderRadius = "999px";
+  badge.style.padding = "7px 11px";
+  badge.style.fontWeight = "850";
+  badge.style.fontSize = "12px";
+  badge.style.whiteSpace = "nowrap";
+  badge.style.background = active ? "#dcfce7" : "#fee2e2";
+  badge.style.color = active ? "#16a34a" : "#dc2626";
+  td.appendChild(badge);
+  return td;
+}
+
+function buildActionCell(user: UserAccessRow, actionUserId: string | null, onChange: (user: UserAccessRow, active: boolean) => void) {
+  const td = buildBaseCell();
+  const active = user.aktywne !== false;
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = actionUserId === user.id ? (active ? "Blokowanie..." : "Przywracanie...") : (active ? "Zablokuj" : "Przywróć");
+  button.disabled = actionUserId === user.id;
+  button.style.border = "1px solid #cbd7e6";
+  button.style.borderRadius = "14px";
+  button.style.background = active ? "#fff5f5" : "#ffffff";
+  button.style.color = active ? "#dc2626" : "#102a5c";
+  button.style.padding = "9px 12px";
+  button.style.fontWeight = "850";
+  button.style.cursor = button.disabled ? "default" : "pointer";
+  button.style.whiteSpace = "nowrap";
+  button.addEventListener("click", () => onChange(user, !active));
+  td.appendChild(button);
+  return td;
+}
+
+function buildBaseCell() {
+  const td = document.createElement("td");
+  td.dataset.userAccessCell = "true";
+  td.style.padding = "14px";
+  td.style.borderBottom = "1px solid #cbd7e6";
+  td.style.color = "#0f2147";
+  td.style.verticalAlign = "middle";
+  return td;
+}
+
+function normalize(value: string) {
+  return value.trim().toLowerCase();
 }
 
 function profileName(user: UserAccessRow) {
   return user.full_name || user.email || "Użytkownik";
 }
-
-function roleLabel(role: string | null) {
-  if (role === "owner") return "Owner";
-  if (role === "manager") return "Manager";
-  if (role === "admin") return "Admin";
-  if (role === "accountant") return "Accountant";
-  return role || "Brak roli";
-}
-
-const panelStyle: CSSProperties = {
-  marginTop: "24px",
-  border: `1px solid ${colors.border}`,
-  borderRadius: radius.card,
-  background: colors.card,
-  padding: "24px",
-  boxShadow: shadow.soft,
-};
-
-const headerStyle: CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: "18px",
-  alignItems: "flex-start",
-  marginBottom: "18px",
-  flexWrap: "wrap",
-};
-
-const titleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "24px" };
-const hintStyle: CSSProperties = { margin: "8px 0 0", color: colors.muted, lineHeight: 1.55, maxWidth: "760px" };
-const searchStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, color: colors.text, padding: "11px 13px", minHeight: "44px", minWidth: "320px", fontWeight: 750 };
-const accessGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(260px, 360px) minmax(280px, 1fr)", gap: "14px", alignItems: "stretch" };
-const userListStyle: CSSProperties = { display: "grid", gap: "8px", alignContent: "start" };
-const userButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, padding: "11px 12px", display: "grid", gridTemplateColumns: "1fr auto", gap: "5px 10px", textAlign: "left", cursor: "pointer", alignItems: "center" };
-const selectedUserButtonStyle: CSSProperties = { ...userButtonStyle, borderColor: colors.navy, background: "rgba(23, 59, 115, 0.08)" };
-const userButtonNameStyle: CSSProperties = { fontWeight: 850, color: colors.text };
-const userButtonMetaStyle: CSSProperties = { gridColumn: "1 / 2", color: colors.muted, fontSize: "12px", fontWeight: 650, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
-const selectedCardStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "18px", display: "flex", justifyContent: "space-between", gap: "18px", alignItems: "center", flexWrap: "wrap" };
-const selectedTitleStyle: CSSProperties = { margin: "8px 0 4px", color: colors.navy, fontSize: "22px" };
-const selectedMetaStyle: CSSProperties = { margin: 0, color: colors.muted, fontWeight: 700 };
-const selectedActionsStyle: CSSProperties = { display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" };
-const labelStyle: CSSProperties = { color: colors.muted, fontSize: "13px", fontWeight: 850 };
-const emptyStyle: CSSProperties = { border: `1px dashed ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, color: colors.muted, padding: "18px", fontWeight: 800, textAlign: "center" };
-const badgeBaseStyle: CSSProperties = { display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: radius.badge, padding: "7px 11px", fontWeight: 850, fontSize: "12px", whiteSpace: "nowrap" };
-const activeBadgeStyle: CSSProperties = { ...badgeBaseStyle, background: "#dcfce7", color: colors.success };
-const inactiveBadgeStyle: CSSProperties = { ...badgeBaseStyle, background: "#fee2e2", color: colors.danger };
-const secondaryButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.navy, padding: "10px 13px", fontWeight: 850, cursor: "pointer", whiteSpace: "nowrap" };
-const dangerButtonStyle: CSSProperties = { ...secondaryButtonStyle, color: colors.danger, background: "#fff5f5" };

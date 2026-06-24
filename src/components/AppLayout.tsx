@@ -10,6 +10,7 @@ import { createDueTaskNotifications, fetchUnreadNotificationsCount } from "@/lib
 import UserAccessPanel from "@/components/UserAccessPanel";
 import ContractRegisterSplitWidget from "@/components/ContractRegisterSplitWidget";
 import CrmDetailsLayoutFixWidget from "@/components/CrmDetailsLayoutFixWidget";
+import RodoRegisterPrintWidget from "@/components/RodoRegisterPrintWidget";
 import {
   Home,
   Users,
@@ -161,6 +162,7 @@ export default function AppLayout({ children, activePage }: AppLayoutProps) {
         {children}
         {activePage === "crm" && <CrmDetailsLayoutFixWidget />}
         {activePage === "umowy" && <ContractRegisterSplitWidget />}
+        {activePage === "rodo" && <RodoRegisterPrintWidget />}
         {activePage === "uzytkownicy" && <UserAccessPanel />}
       </section>
     </main>

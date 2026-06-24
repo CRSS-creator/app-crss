@@ -112,11 +112,31 @@ export async function createCrmContract(payload: CrmContractPayload) {
 }
 
 export async function updateCrmContract(contractId: string, payload: Partial<CrmContractPayload>) {
-  return supabase
+  const result = await supabase
     .from("crm_umowy")
     .update({ ...payload, updated_at: new Date().toISOString() })
     .eq("id", contractId)
     .select("*")
+    .single();
+
+  if (result.error || !result.data) return result;
+
+  const contract = result.data as CrmContract;
+  if (contract.status === "podpisana" && contract.klient_id && !contract.onboarding_uruchomiony_at) {
+    const onboardingResult = await startOnboardingFromSignedContract(contract.id);
+    if (!onboardingResult.error && onboardingResult.data) {
+      return onboardingResult;
+    }
+
+    console.error("Nie udało się uruchomić onboardingu z podpisanej umowy:", onboardingResult.error);
+  }
+
+  return result;
+}
+
+export async function startOnboardingFromSignedContract(contractId: string) {
+  return supabase
+    .rpc("start_onboarding_from_signed_contract", { public_contract_id: contractId })
     .single();
 }
 

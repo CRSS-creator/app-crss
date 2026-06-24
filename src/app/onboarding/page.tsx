@@ -9,6 +9,18 @@ import { supabase } from "@/lib/supabaseClient";
 import { fetchClients } from "@/lib/clientService";
 import { fetchCrmContracts, type CrmContract } from "@/lib/crmContractService";
 import { fetchRodoProcessingContracts, type RodoProcessingContract } from "@/lib/rodoProcessingContractService";
+import {
+  ensureClientOnboarding,
+  fetchOnboardingHistory,
+  fetchOnboardingStages,
+  stageLabel,
+  statusLabel,
+  updateOnboardingStageStatus,
+  type OnboardingHistoryRecord,
+  type OnboardingStageKey,
+  type OnboardingStageRecord,
+  type OnboardingStageStatus,
+} from "@/lib/onboardingService";
 import { X } from "lucide-react";
 
 type CaregiverProfile = {
@@ -40,10 +52,12 @@ type Profile = {
 type StageState = "done" | "progress" | "blocked" | "todo";
 
 type OnboardingStage = {
-  key: string;
+  key: OnboardingStageKey;
   title: string;
   description: string;
   state: StageState;
+  editable?: boolean;
+  record?: OnboardingStageRecord;
   moduleLabel?: string;
   href?: string;
 };
@@ -80,10 +94,13 @@ function OnboardingContent() {
   const [clients, setClients] = useState<Client[]>([]);
   const [contracts, setContracts] = useState<CrmContract[]>([]);
   const [rodoContracts, setRodoContracts] = useState<RodoProcessingContract[]>([]);
+  const [onboardingStages, setOnboardingStages] = useState<OnboardingStageRecord[]>([]);
+  const [onboardingHistory, setOnboardingHistory] = useState<OnboardingHistoryRecord[]>([]);
   const [profilesById, setProfilesById] = useState<Record<string, Profile>>({});
   const [loading, setLoading] = useState(true);
+  const [savingStageId, setSavingStageId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState("Wszystkie");
-  const [selectedRow, setSelectedRow] = useState<OnboardingRow | null>(null);
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
 
   useEffect(() => {
@@ -99,28 +116,59 @@ function OnboardingContent() {
       supabase.from("profiles").select("id, full_name, email"),
     ]);
 
+    const nextClients = clientsResult.error ? [] : ((clientsResult.data || []) as unknown as Client[]);
+    const nextContracts = contractsResult.error ? [] : ((contractsResult.data || []) as CrmContract[]);
+    const nextRodoContracts = rodoResult.error ? [] : ((rodoResult.data || []) as RodoProcessingContract[]);
+
     if (clientsResult.error) console.error("Błąd pobierania klientów do onboardingu:", clientsResult.error);
-    else setClients((clientsResult.data || []) as unknown as Client[]);
-
     if (contractsResult.error) console.error("Błąd pobierania umów do onboardingu:", contractsResult.error);
-    else setContracts((contractsResult.data || []) as CrmContract[]);
-
     if (rodoResult.error) console.error("Błąd pobierania umów RODO do onboardingu:", rodoResult.error);
-    else setRodoContracts((rodoResult.data || []) as RodoProcessingContract[]);
-
     if (profilesResult.error) console.error("Błąd pobierania użytkowników do historii onboardingu:", profilesResult.error);
-    else setProfilesById(indexProfiles((profilesResult.data || []) as Profile[]));
 
+    const onboardingClientIds = findOnboardingClientIds(nextClients, nextContracts, nextRodoContracts);
+    if (onboardingClientIds.length > 0) {
+      await Promise.all(onboardingClientIds.map((clientId) => ensureClientOnboarding(clientId)));
+    }
+
+    const [stagesResult, historyResult] = await Promise.all([
+      fetchOnboardingStages(),
+      fetchOnboardingHistory(),
+    ]);
+
+    if (stagesResult.error) console.error("Błąd pobierania etapów onboardingu:", stagesResult.error);
+    if (historyResult.error) console.error("Błąd pobierania historii onboardingu:", historyResult.error);
+
+    setClients(nextClients);
+    setContracts(nextContracts);
+    setRodoContracts(nextRodoContracts);
+    setProfilesById(profilesResult.error ? {} : indexProfiles((profilesResult.data || []) as Profile[]));
+    setOnboardingStages(stagesResult.error ? [] : ((stagesResult.data || []) as OnboardingStageRecord[]));
+    setOnboardingHistory(historyResult.error ? [] : ((historyResult.data || []) as OnboardingHistoryRecord[]));
     setLoading(false);
   }
 
   const rows = useMemo(
-    () => buildRows(clients, contracts, rodoContracts, profilesById),
-    [clients, contracts, rodoContracts, profilesById]
+    () => buildRows(clients, contracts, rodoContracts, onboardingStages, onboardingHistory, profilesById),
+    [clients, contracts, rodoContracts, onboardingStages, onboardingHistory, profilesById]
   );
+  const selectedRow = rows.find((row) => row.client.id === selectedClientId) || null;
   const filteredRows = rows.filter((row) => statusFilter === "Wszystkie" || row.status === statusFilter);
   const blockedCount = rows.filter((row) => row.status === "Czeka na formalności").length;
   const doneCount = rows.filter((row) => row.status === "Zakończony").length;
+
+  async function handleStageStatusChange(stage: OnboardingStage, status: OnboardingStageStatus) {
+    if (!stage.record) return;
+    setSavingStageId(stage.record.id);
+    const result = await updateOnboardingStageStatus(stage.record, status);
+    setSavingStageId(null);
+
+    if (result.error) {
+      alert("Nie udało się zapisać etapu onboardingu.");
+      return;
+    }
+
+    await loadData();
+  }
 
   return (
     <>
@@ -180,7 +228,7 @@ function OnboardingContent() {
                     <Td><StagePill stage={row.stages[0]} /></Td>
                     <Td><StagePill stage={row.stages[1]} /></Td>
                     <Td><StagePill stage={row.stages[2]} /></Td>
-                    <Td><button style={secondaryButtonStyle} onClick={() => { setSelectedRow(row); setHistoryOpen(false); }}>Szczegóły</button></Td>
+                    <Td><button style={secondaryButtonStyle} onClick={() => { setSelectedClientId(row.client.id); setHistoryOpen(false); }}>Szczegóły</button></Td>
                   </tr>
                 ))}
               </tbody>
@@ -190,7 +238,7 @@ function OnboardingContent() {
       </section>
 
       {selectedRow && (
-        <aside style={overlayStyle} onClick={() => setSelectedRow(null)}>
+        <aside style={overlayStyle} onClick={() => setSelectedClientId(null)}>
           <div style={drawerStyle} onClick={(event) => event.stopPropagation()}>
             <div style={drawerHeaderStyle}>
               <div>
@@ -198,7 +246,7 @@ function OnboardingContent() {
                 <h2 style={drawerTitleStyle}>{selectedRow.client.nazwa || "Klient"}</h2>
                 <p style={drawerSubtitleStyle}>{selectedRow.client.nip || "Brak NIP"} · {selectedRow.client.forma_prawna || "Brak formy prawnej"} · {selectedRow.client.forma_opodatkowania || "Brak opodatkowania"}</p>
               </div>
-              <button style={closeButtonStyle} onClick={() => setSelectedRow(null)}><X size={22} /></button>
+              <button style={closeButtonStyle} onClick={() => setSelectedClientId(null)}><X size={22} /></button>
             </div>
 
             <section style={drawerSummaryStyle}>
@@ -213,14 +261,21 @@ function OnboardingContent() {
                 <button style={secondaryButtonStyle} onClick={() => setHistoryOpen((current) => !current)}>Historia zmian</button>
               </div>
               <div style={stageGridStyle}>
-                {selectedRow.stages.map((stage) => <StageCard key={stage.key} stage={stage} />)}
+                {selectedRow.stages.map((stage) => (
+                  <StageCard
+                    key={stage.key}
+                    stage={stage}
+                    saving={savingStageId === stage.record?.id}
+                    onStatusChange={(status) => handleStageStatusChange(stage, status)}
+                  />
+                ))}
               </div>
             </section>
 
             <section style={drawerSectionStyle}>
               <h3 style={drawerSectionTitleStyle}>Zadania onboardingowe</h3>
               <div style={taskListStyle}>
-                {buildOnboardingTasks(selectedRow).map((task) => <TaskRow key={task.title} {...task} />)}
+                {selectedRow.stages.map((stage) => <TaskRow key={stage.key} stage={stage} />)}
               </div>
             </section>
 
@@ -248,18 +303,34 @@ function OnboardingContent() {
   );
 }
 
-function buildRows(clients: Client[], contracts: CrmContract[], rodoContracts: RodoProcessingContract[], profilesById: Record<string, Profile>): OnboardingRow[] {
-  const onboardingClients = clients.filter((client) => {
-    const status = normalize(client.status_klienta);
-    const hasContract = contracts.some((contract) => matchesClient(client, contract.klient_id, contract.nip, contract.nazwa_klienta));
-    const hasRodoContract = rodoContracts.some((contract) => matchesClient(client, contract.klient_id, contract.nip, contract.nazwa_klienta));
-    return status === "onboarding" || hasContract || hasRodoContract;
-  });
+function findOnboardingClientIds(clients: Client[], contracts: CrmContract[], rodoContracts: RodoProcessingContract[]) {
+  return clients
+    .filter((client) => {
+      const status = normalize(client.status_klienta);
+      const hasContract = contracts.some((contract) => matchesClient(client, contract.klient_id, contract.nip, contract.nazwa_klienta));
+      const hasRodoContract = rodoContracts.some((contract) => matchesClient(client, contract.klient_id, contract.nip, contract.nazwa_klienta));
+      return status === "onboarding" || hasContract || hasRodoContract;
+    })
+    .map((client) => client.id);
+}
+
+function buildRows(
+  clients: Client[],
+  contracts: CrmContract[],
+  rodoContracts: RodoProcessingContract[],
+  onboardingStages: OnboardingStageRecord[],
+  onboardingHistory: OnboardingHistoryRecord[],
+  profilesById: Record<string, Profile>
+): OnboardingRow[] {
+  const onboardingClientIds = new Set(findOnboardingClientIds(clients, contracts, rodoContracts));
+  const onboardingClients = clients.filter((client) => onboardingClientIds.has(client.id));
 
   return onboardingClients.map((client) => {
     const accountingContract = contracts.find((contract) => matchesClient(client, contract.klient_id, contract.nip, contract.nazwa_klienta)) || null;
     const rodoContract = rodoContracts.find((contract) => matchesClient(client, contract.klient_id, contract.nip, contract.nazwa_klienta)) || null;
-    const stages = buildStages(accountingContract, rodoContract);
+    const clientStages = onboardingStages.filter((stage) => stage.klient_id === client.id);
+    const clientHistory = onboardingHistory.filter((entry) => entry.klient_id === client.id);
+    const stages = buildStages(accountingContract, rodoContract, clientStages);
     const done = stages.filter((stage) => stage.state === "done").length;
     const progress = Math.round((done / stages.length) * 100);
     const nextStep = stages.find((stage) => stage.state !== "done")?.title || "Gotowy do obsługi";
@@ -273,12 +344,17 @@ function buildRows(clients: Client[], contracts: CrmContract[], rodoContracts: R
       progress,
       nextStep,
       status,
-      history: buildHistory(accountingContract, rodoContract, profilesById),
+      history: buildHistory(accountingContract, rodoContract, clientHistory, profilesById),
     };
   }).sort((a, b) => a.progress - b.progress || (a.client.nazwa || "").localeCompare(b.client.nazwa || "", "pl"));
 }
 
-function buildStages(accountingContract: CrmContract | null, rodoContract: RodoProcessingContract | null): OnboardingStage[] {
+function buildStages(accountingContract: CrmContract | null, rodoContract: RodoProcessingContract | null, records: OnboardingStageRecord[]): OnboardingStage[] {
+  const recordByKey = records.reduce<Partial<Record<OnboardingStageKey, OnboardingStageRecord>>>((acc, record) => {
+    acc[record.etap] = record;
+    return acc;
+  }, {});
+
   return [
     {
       key: "contract",
@@ -296,44 +372,33 @@ function buildStages(accountingContract: CrmContract | null, rodoContract: RodoP
       moduleLabel: "Przejdź do RODO",
       href: "/rodo",
     },
-    {
-      key: "aml",
-      title: "AML",
-      description: "Do obsługi w module AML. Onboarding tylko pokazuje, że etap jest wymagany.",
-      state: "todo",
-      moduleLabel: "Przejdź do AML",
-      href: "/aml",
-    },
-    {
-      key: "powers",
-      title: "Pełnomocnictwa ZUS/US",
-      description: "Formularze albo instrukcje online. Status będzie oznaczany w onboardingu.",
-      state: "todo",
-    },
-    {
-      key: "wfirma",
-      title: "Konfiguracja wFirma",
-      description: "Konto klienta, opiekun, daty, VAT, US, ZUS oraz ustawienia KH/KU.",
-      state: "todo",
-    },
-    {
-      key: "drive",
-      title: "Dysk i komunikacja",
-      description: "Dysk Google, foldery, kontakt Gmail, newsletter i instrukcja dla klienta.",
-      state: "todo",
-    },
-    {
-      key: "recurring",
-      title: "Zadania cykliczne",
-      description: "Szablony miesięczne i roczne pozostają w ustawieniach oraz rozliczeniach.",
-      state: "todo",
-      moduleLabel: "Przejdź do ustawień",
-      href: "/uzytkownicy",
-    },
+    buildManualStage("aml", "Do obsługi w module AML. Onboarding pokazuje status wykonania etapu.", recordByKey.aml, "/aml", "Przejdź do AML"),
+    buildManualStage("powers", "Formularze albo instrukcje online dotyczące ZUS i US.", recordByKey.powers),
+    buildManualStage("wfirma", "Konto klienta, opiekun, daty, VAT, US, ZUS oraz ustawienia KH/KU.", recordByKey.wfirma),
+    buildManualStage("drive", "Dysk Google, foldery, kontakt Gmail, newsletter i instrukcja dla klienta.", recordByKey.drive),
+    buildManualStage("recurring", "Szablony miesięczne i roczne pozostają w ustawieniach oraz rozliczeniach.", recordByKey.recurring, "/uzytkownicy", "Przejdź do ustawień"),
   ];
 }
 
-function buildHistory(contract: CrmContract | null, rodoContract: RodoProcessingContract | null, profilesById: Record<string, Profile>): HistoryEntry[] {
+function buildManualStage(key: OnboardingStageKey, description: string, record?: OnboardingStageRecord, href?: string, moduleLabel?: string): OnboardingStage {
+  return {
+    key,
+    title: stageLabel(key),
+    description: record ? statusLabel(record.status) : description,
+    state: stageStateFromStatus(record?.status),
+    editable: true,
+    record,
+    href,
+    moduleLabel,
+  };
+}
+
+function buildHistory(
+  contract: CrmContract | null,
+  rodoContract: RodoProcessingContract | null,
+  onboardingHistory: OnboardingHistoryRecord[],
+  profilesById: Record<string, Profile>
+): HistoryEntry[] {
   const history: HistoryEntry[] = [];
   if (contract) {
     history.push({
@@ -368,19 +433,17 @@ function buildHistory(contract: CrmContract | null, rodoContract: RodoProcessing
       });
     }
   }
-  return history.sort((a, b) => new Date(b.at || 0).getTime() - new Date(a.at || 0).getTime());
-}
 
-function buildOnboardingTasks(row: OnboardingRow) {
-  return [
-    { title: "Umowa księgowa podpisana", done: row.stages[0].state === "done", href: "/crm/umowy" },
-    { title: "Umowa powierzenia podpisana i wpisana do rejestru", done: row.stages[1].state === "done", href: "/rodo" },
-    { title: "AML zweryfikowany w module AML", done: row.stages[2].state === "done", href: "/aml" },
-    { title: "Pełnomocnictwa ZUS i US wysłane lub otrzymane", done: false },
-    { title: "Konfiguracja wFirma wykonana", done: false },
-    { title: "Dysk Google i foldery klienta utworzone", done: false },
-    { title: "Zadania cykliczne dobrane do klienta", done: false, href: "/uzytkownicy" },
-  ];
+  onboardingHistory.forEach((entry) => {
+    history.push({
+      at: entry.created_at,
+      user: profileLabel(entry.created_by, profilesById),
+      source: "Onboarding",
+      description: entry.opis,
+    });
+  });
+
+  return history.sort((a, b) => new Date(b.at || 0).getTime() - new Date(a.at || 0).getTime());
 }
 
 function resolveOnboardingStatus(stages: OnboardingStage[], progress: number) {
@@ -388,6 +451,13 @@ function resolveOnboardingStatus(stages: OnboardingStage[], progress: number) {
   if (stages.some((stage) => stage.state === "blocked")) return "Czeka na formalności";
   if (progress === 0) return "Do rozpoczęcia";
   return "W trakcie";
+}
+
+function stageStateFromStatus(status: OnboardingStageStatus | null | undefined): StageState {
+  if (status === "gotowe") return "done";
+  if (status === "w_toku") return "progress";
+  if (status === "zablokowane") return "blocked";
+  return "todo";
 }
 
 function indexProfiles(profiles: Profile[]) {
@@ -466,7 +536,15 @@ function StagePill({ stage }: { stage: OnboardingStage }) {
   return <span style={style}>{stage.state === "done" ? "Gotowe" : stage.state === "blocked" ? "Brak" : stage.state === "progress" ? "W toku" : "Do wykonania"}</span>;
 }
 
-function StageCard({ stage }: { stage: OnboardingStage }) {
+function StageCard({
+  stage,
+  saving,
+  onStatusChange,
+}: {
+  stage: OnboardingStage;
+  saving: boolean;
+  onStatusChange: (status: OnboardingStageStatus) => void;
+}) {
   return (
     <div style={stageCardStyle}>
       <div style={stageCardHeaderStyle}>
@@ -474,17 +552,26 @@ function StageCard({ stage }: { stage: OnboardingStage }) {
         <StagePill stage={stage} />
       </div>
       <p style={stageDescriptionStyle}>{stage.description}</p>
-      {stage.href && <Link href={stage.href} style={secondaryButtonStyle}>{stage.moduleLabel || "Przejdź"}</Link>}
+      <div style={stageActionsStyle}>
+        {stage.href && <Link href={stage.href} style={secondaryButtonStyle}>{stage.moduleLabel || "Przejdź"}</Link>}
+        {stage.editable && stage.record && (
+          <>
+            <button style={smallButtonStyle} disabled={saving} onClick={() => onStatusChange("w_toku")}>W toku</button>
+            <button style={smallButtonStyle} disabled={saving} onClick={() => onStatusChange("gotowe")}>Gotowe</button>
+            <button style={dangerSmallButtonStyle} disabled={saving} onClick={() => onStatusChange("zablokowane")}>Blokada</button>
+          </>
+        )}
+      </div>
     </div>
   );
 }
 
-function TaskRow({ title, done, href }: { title: string; done: boolean; href?: string }) {
+function TaskRow({ stage }: { stage: OnboardingStage }) {
   return (
     <div style={taskRowStyle}>
-      <span style={done ? taskDoneDotStyle : taskTodoDotStyle} />
-      <strong>{title}</strong>
-      {href && <Link href={href} style={smallLinkStyle}>Otwórz moduł</Link>}
+      <span style={stage.state === "done" ? taskDoneDotStyle : stage.state === "blocked" ? taskBlockedDotStyle : taskTodoDotStyle} />
+      <strong>{stage.title}</strong>
+      <StagePill stage={stage} />
     </div>
   );
 }
@@ -530,10 +617,13 @@ const stageCardStyle: CSSProperties = { border: `1px solid ${colors.border}`, bo
 const stageCardHeaderStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "10px", alignItems: "flex-start" };
 const stageTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "17px" };
 const stageDescriptionStyle: CSSProperties = { margin: 0, color: colors.muted, lineHeight: 1.5, fontWeight: 650 };
+const stageActionsStyle: CSSProperties = { display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" };
+const smallButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.navy, padding: "8px 10px", fontWeight: 850, cursor: "pointer" };
+const dangerSmallButtonStyle: CSSProperties = { ...smallButtonStyle, background: "#fff1f2", color: colors.danger };
 const taskListStyle: CSSProperties = { display: "grid", gap: "9px" };
 const taskRowStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, padding: "12px", display: "grid", gridTemplateColumns: "auto 1fr auto", gap: "10px", alignItems: "center", color: colors.text };
 const taskDoneDotStyle: CSSProperties = { width: "11px", height: "11px", borderRadius: "999px", background: colors.success };
 const taskTodoDotStyle: CSSProperties = { width: "11px", height: "11px", borderRadius: "999px", background: "#f59e0b" };
-const smallLinkStyle: CSSProperties = { color: colors.navy, fontWeight: 850, textDecoration: "none", whiteSpace: "nowrap" };
+const taskBlockedDotStyle: CSSProperties = { width: "11px", height: "11px", borderRadius: "999px", background: colors.danger };
 const historyListStyle: CSSProperties = { display: "grid", gap: "10px" };
 const historyItemStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, padding: "12px", display: "grid", gap: "4px", color: colors.text };

@@ -113,7 +113,6 @@ export default function ContractClientOnboardingPanel({ contract, onCreated }: P
     const createdClient = clientResult.data as { id: string };
     const contractResult = await updateCrmContract(contract.id, {
       klient_id: createdClient.id,
-      onboarding_uruchomiony_at: new Date().toISOString(),
     });
 
     setSaving(false);

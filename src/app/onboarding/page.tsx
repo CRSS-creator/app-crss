@@ -5,6 +5,7 @@ import Link from "next/link";
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
 import { colors, radius, shadow } from "@/app/design";
+import { supabase } from "@/lib/supabaseClient";
 import { fetchClients } from "@/lib/clientService";
 import { fetchCrmContracts, type CrmContract } from "@/lib/crmContractService";
 import { fetchRodoProcessingContracts, type RodoProcessingContract } from "@/lib/rodoProcessingContractService";
@@ -28,18 +29,13 @@ type Client = {
   } | null;
 };
 
-type StageState = "done" | "progress" | "blocked" | "todo";
-
-type OnboardingRow = {
-  client: Client;
-  accountingContract: CrmContract | null;
-  rodoContract: RodoProcessingContract | null;
-  stages: OnboardingStage[];
-  progress: number;
-  nextStep: string;
-  status: string;
-  history: HistoryEntry[];
+type Profile = {
+  id: string;
+  full_name: string | null;
+  email: string | null;
 };
+
+type StageState = "done" | "progress" | "blocked" | "todo";
 
 type OnboardingStage = {
   key: string;
@@ -57,6 +53,17 @@ type HistoryEntry = {
   description: string;
 };
 
+type OnboardingRow = {
+  client: Client;
+  accountingContract: CrmContract | null;
+  rodoContract: RodoProcessingContract | null;
+  stages: OnboardingStage[];
+  progress: number;
+  nextStep: string;
+  status: string;
+  history: HistoryEntry[];
+};
+
 export default function OnboardingPage() {
   return (
     <AppLayout activePage="onboarding">
@@ -71,6 +78,7 @@ function OnboardingContent() {
   const [clients, setClients] = useState<Client[]>([]);
   const [contracts, setContracts] = useState<CrmContract[]>([]);
   const [rodoContracts, setRodoContracts] = useState<RodoProcessingContract[]>([]);
+  const [profilesById, setProfilesById] = useState<Record<string, Profile>>({});
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("Wszystkie");
   const [selectedRow, setSelectedRow] = useState<OnboardingRow | null>(null);
@@ -82,10 +90,11 @@ function OnboardingContent() {
 
   async function loadData() {
     setLoading(true);
-    const [clientsResult, contractsResult, rodoResult] = await Promise.all([
+    const [clientsResult, contractsResult, rodoResult, profilesResult] = await Promise.all([
       fetchClients(),
       fetchCrmContracts(),
       fetchRodoProcessingContracts(),
+      supabase.from("profiles").select("id, full_name, email"),
     ]);
 
     if (clientsResult.error) console.error("Błąd pobierania klientów do onboardingu:", clientsResult.error);
@@ -97,12 +106,18 @@ function OnboardingContent() {
     if (rodoResult.error) console.error("Błąd pobierania umów RODO do onboardingu:", rodoResult.error);
     else setRodoContracts((rodoResult.data || []) as RodoProcessingContract[]);
 
+    if (profilesResult.error) console.error("Błąd pobierania użytkowników do historii onboardingu:", profilesResult.error);
+    else setProfilesById(indexProfiles((profilesResult.data || []) as Profile[]));
+
     setLoading(false);
   }
 
-  const rows = useMemo(() => buildRows(clients, contracts, rodoContracts), [clients, contracts, rodoContracts]);
+  const rows = useMemo(
+    () => buildRows(clients, contracts, rodoContracts, profilesById),
+    [clients, contracts, rodoContracts, profilesById]
+  );
   const filteredRows = rows.filter((row) => statusFilter === "Wszystkie" || row.status === statusFilter);
-  const blockedCount = rows.filter((row) => row.status === "Czeka na klienta" || row.status === "Czeka na formalności").length;
+  const blockedCount = rows.filter((row) => row.status === "Czeka na formalności").length;
   const doneCount = rows.filter((row) => row.status === "Zakończony").length;
 
   return (
@@ -111,7 +126,7 @@ function OnboardingContent() {
         <div>
           <p style={eyebrowStyle}>Moduł operacyjny</p>
           <h1 style={titleStyle}>Onboarding</h1>
-          <p style={subtitleStyle}>Centrum koordynacji startu klienta. Szczegółowe prace pozostają w modułach Umowy, RODO, AML, Klienci i Rozliczenia.</p>
+          <p style={subtitleStyle}>Centrum koordynacji startu klienta. Umowy, RODO i AML pozostają osobnymi modułami, a onboarding zbiera statusy i kolejne kroki w jednym miejscu.</p>
         </div>
       </section>
 
@@ -125,13 +140,12 @@ function OnboardingContent() {
         <div style={tableHeaderStyle}>
           <div>
             <h2 style={sectionTitleStyle}>Klienci w onboardingu</h2>
-            <p style={hintStyle}>Widok zbiera statusy z istniejących modułów i pokazuje, co blokuje przejście klienta do bieżącej obsługi.</p>
+            <p style={hintStyle}>Lista pokazuje klientów ze statusem onboarding lub z powiązanymi umowami startowymi.</p>
           </div>
           <select style={filterStyle} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
             <option value="Wszystkie">Wszystkie statusy</option>
             <option value="Do rozpoczęcia">Do rozpoczęcia</option>
             <option value="W trakcie">W trakcie</option>
-            <option value="Czeka na klienta">Czeka na klienta</option>
             <option value="Czeka na formalności">Czeka na formalności</option>
             <option value="Zakończony">Zakończony</option>
           </select>
@@ -232,11 +246,12 @@ function OnboardingContent() {
   );
 }
 
-function buildRows(clients: Client[], contracts: CrmContract[], rodoContracts: RodoProcessingContract[]): OnboardingRow[] {
+function buildRows(clients: Client[], contracts: CrmContract[], rodoContracts: RodoProcessingContract[], profilesById: Record<string, Profile>): OnboardingRow[] {
   const onboardingClients = clients.filter((client) => {
     const status = normalize(client.status_klienta);
     const hasContract = contracts.some((contract) => matchesClient(client, contract.klient_id, contract.nip, contract.nazwa_klienta));
-    return status === "onboarding" || status === "aktywny" || hasContract;
+    const hasRodoContract = rodoContracts.some((contract) => matchesClient(client, contract.klient_id, contract.nip, contract.nazwa_klienta));
+    return status === "onboarding" || hasContract || hasRodoContract;
   });
 
   return onboardingClients.map((client) => {
@@ -256,7 +271,7 @@ function buildRows(clients: Client[], contracts: CrmContract[], rodoContracts: R
       progress,
       nextStep,
       status,
-      history: buildHistory(accountingContract, rodoContract),
+      history: buildHistory(accountingContract, rodoContract, profilesById),
     };
   }).sort((a, b) => a.progress - b.progress || (a.client.nazwa || "").localeCompare(b.client.nazwa || "", "pl"));
 }
@@ -290,7 +305,7 @@ function buildStages(accountingContract: CrmContract | null, rodoContract: RodoP
     {
       key: "powers",
       title: "Pełnomocnictwa ZUS/US",
-      description: "Wyślij formularze albo instrukcję online i oznacz status w onboardingu.",
+      description: "Formularze albo instrukcje online. Status będzie oznaczany w onboardingu.",
       state: "todo",
     },
     {
@@ -316,35 +331,36 @@ function buildStages(accountingContract: CrmContract | null, rodoContract: RodoP
   ];
 }
 
-function buildHistory(contract: CrmContract | null, rodoContract: RodoProcessingContract | null): HistoryEntry[] {
+function buildHistory(contract: CrmContract | null, rodoContract: RodoProcessingContract | null, profilesById: Record<string, Profile>): HistoryEntry[] {
   const history: HistoryEntry[] = [];
   if (contract) {
     history.push({
       at: contract.created_at,
       user: "System CRSS",
-      source: "Umowy",
+      source: "Umowy księgowe",
       description: `Utworzono umowę księgową ${contract.numer_umowy || "bez numeru"}.`,
     });
     if (contract.updated_at && contract.updated_at !== contract.created_at) {
       history.push({
         at: contract.updated_at,
         user: "System CRSS",
-        source: "Umowy",
+        source: "Umowy księgowe",
         description: `Zmieniono status umowy księgowej na „${contractStatusLabel(contract.status)}”.`,
       });
     }
   }
   if (rodoContract) {
+    const user = profileLabel(rodoContract.created_by, profilesById);
     history.push({
       at: rodoContract.created_at,
-      user: "Użytkownik z modułu RODO",
+      user,
       source: "RODO",
       description: `Utworzono umowę powierzenia ${rodoContract.numer_umowy || "bez numeru"}.`,
     });
     if (rodoContract.updated_at && rodoContract.updated_at !== rodoContract.created_at) {
       history.push({
         at: rodoContract.updated_at,
-        user: "Użytkownik z modułu RODO",
+        user,
         source: "RODO",
         description: `Zmieniono status umowy powierzenia na „${rodoStatusLabel(rodoContract.status)}”.`,
       });
@@ -370,6 +386,19 @@ function resolveOnboardingStatus(stages: OnboardingStage[], progress: number) {
   if (stages.some((stage) => stage.state === "blocked")) return "Czeka na formalności";
   if (progress === 0) return "Do rozpoczęcia";
   return "W trakcie";
+}
+
+function indexProfiles(profiles: Profile[]) {
+  return profiles.reduce<Record<string, Profile>>((acc, profile) => {
+    acc[profile.id] = profile;
+    return acc;
+  }, {});
+}
+
+function profileLabel(userId: string | null | undefined, profilesById: Record<string, Profile>) {
+  if (!userId) return "Brak danych o użytkowniku";
+  const profile = profilesById[userId];
+  return profile?.full_name || profile?.email || "Brak danych o użytkowniku";
 }
 
 function matchesClient(client: Client, klientId: string | null | undefined, nip: string | null | undefined, name: string | null | undefined) {

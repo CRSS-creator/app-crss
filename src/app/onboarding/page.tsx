@@ -11,6 +11,13 @@ import { fetchCrmContracts, type CrmContract } from "@/lib/crmContractService";
 import { fetchRodoProcessingContracts, type RodoProcessingContract } from "@/lib/rodoProcessingContractService";
 import { X } from "lucide-react";
 
+type CaregiverProfile = {
+  full_name: string | null;
+  email: string | null;
+  role: string | null;
+  aktywne?: boolean | null;
+};
+
 type Client = {
   id: string;
   nazwa: string | null;
@@ -21,12 +28,7 @@ type Client = {
   status_klienta: string | null;
   pierwszy_okres_rozliczeniowy: string | null;
   opiekun_id: string | null;
-  profiles?: {
-    full_name: string | null;
-    email: string | null;
-    role: string | null;
-    aktywne?: boolean | null;
-  } | null;
+  profiles?: CaregiverProfile | CaregiverProfile[] | null;
 };
 
 type Profile = {
@@ -98,7 +100,7 @@ function OnboardingContent() {
     ]);
 
     if (clientsResult.error) console.error("Błąd pobierania klientów do onboardingu:", clientsResult.error);
-    else setClients((clientsResult.data || []) as Client[]);
+    else setClients((clientsResult.data || []) as unknown as Client[]);
 
     if (contractsResult.error) console.error("Błąd pobierania umów do onboardingu:", contractsResult.error);
     else setContracts((contractsResult.data || []) as CrmContract[]);
@@ -171,7 +173,7 @@ function OnboardingContent() {
                 {filteredRows.map((row) => (
                   <tr key={row.client.id} style={rowStyle}>
                     <Td strong>{row.client.nazwa || "Bez nazwy"}<Small>{row.client.nip || "Brak NIP"}</Small></Td>
-                    <Td>{row.client.profiles?.full_name || "Brak opiekuna"}</Td>
+                    <Td>{caregiverLabel(row.client)}</Td>
                     <Td><StatusPill status={row.status} /></Td>
                     <Td><Progress value={row.progress} /></Td>
                     <Td>{row.nextStep}</Td>
@@ -399,6 +401,11 @@ function profileLabel(userId: string | null | undefined, profilesById: Record<st
   if (!userId) return "Brak danych o użytkowniku";
   const profile = profilesById[userId];
   return profile?.full_name || profile?.email || "Brak danych o użytkowniku";
+}
+
+function caregiverLabel(client: Client) {
+  const profile = Array.isArray(client.profiles) ? client.profiles[0] : client.profiles;
+  return profile?.full_name || profile?.email || "Brak opiekuna";
 }
 
 function matchesClient(client: Client, klientId: string | null | undefined, nip: string | null | undefined, name: string | null | undefined) {

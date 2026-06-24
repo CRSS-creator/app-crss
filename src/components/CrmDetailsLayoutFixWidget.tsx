@@ -9,6 +9,12 @@ const LABEL_REPLACEMENTS: Record<string, string> = {
 };
 
 const HIDDEN_FIELDS = new Set(["Powód zmiany biura", "Powód przegranej"]);
+const DATE_FIELD_ROWS: Record<string, string> = {
+  "Data telefonu": "2",
+  "Data spotkania": "3",
+  "Data wysłania propozycji": "4",
+  "Data follow-up": "5",
+};
 
 export default function CrmDetailsLayoutFixWidget() {
   useEffect(() => {
@@ -78,17 +84,23 @@ function fixNotesSection(root: HTMLElement) {
   if (!notesSection) return;
 
   notesSection.style.display = "grid";
-  notesSection.style.gridTemplateColumns = "minmax(0, 1.35fr) minmax(300px, 0.8fr)";
+  notesSection.style.gridTemplateColumns = "minmax(0, 1.45fr) minmax(300px, 0.85fr)";
+  notesSection.style.gridTemplateRows = "auto repeat(4, auto)";
   notesSection.style.gap = "14px 22px";
   notesSection.style.alignItems = "start";
 
   const heading = notesSection.querySelector<HTMLElement>("h3");
-  if (heading) heading.style.gridColumn = "1 / -1";
+  if (heading) {
+    heading.style.gridColumn = "1 / -1";
+    heading.style.gridRow = "1";
+  }
 
   const labels = Array.from(notesSection.querySelectorAll<HTMLLabelElement>("label"));
   labels.forEach((label) => {
     const caption = label.querySelector<HTMLElement>("span")?.textContent?.trim();
     if (!caption) return;
+
+    label.style.margin = "0";
 
     if (HIDDEN_FIELDS.has(caption)) {
       label.style.display = "none";
@@ -98,14 +110,25 @@ function fixNotesSection(root: HTMLElement) {
     const textarea = label.querySelector<HTMLTextAreaElement>("textarea");
     const input = label.querySelector<HTMLInputElement>("input");
 
-    if (textarea) {
+    if (caption === "Powód kontaktu" && textarea) {
       label.style.gridColumn = "1 / 2";
-      textarea.style.minHeight = caption === "Notatki" ? "360px" : "190px";
+      label.style.gridRow = "2";
+      textarea.style.minHeight = "190px";
       textarea.style.resize = "vertical";
+      return;
+    }
+
+    if (caption === "Notatki" && textarea) {
+      label.style.gridColumn = "1 / 2";
+      label.style.gridRow = "3 / 6";
+      textarea.style.minHeight = "360px";
+      textarea.style.resize = "vertical";
+      return;
     }
 
     if (input) {
       label.style.gridColumn = "2 / 3";
+      label.style.gridRow = DATE_FIELD_ROWS[caption] || "auto";
     }
   });
 }

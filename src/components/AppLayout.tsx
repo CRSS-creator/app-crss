@@ -132,6 +132,10 @@ export default function AppLayout({ children, activePage }: AppLayoutProps) {
           </div>
         </div>
 
+        <button onClick={handleLogout} style={logoutButtonStyle}>
+          Wyloguj
+        </button>
+
         <nav style={navStyle}>
           {visibleMenu.map((section) => (
             <div key={section.title ?? "main"}>
@@ -153,10 +157,6 @@ export default function AppLayout({ children, activePage }: AppLayoutProps) {
             </div>
           ))}
         </nav>
-
-        <button onClick={handleLogout} style={logoutButtonStyle}>
-          Wyloguj
-        </button>
       </aside>
 
       <section data-active-page={activePage} style={contentStyle}>
@@ -306,10 +306,10 @@ const badgeStyle: React.CSSProperties = { minWidth: "22px", height: "22px", bord
 const activeBadgeStyle: React.CSSProperties = { ...badgeStyle, background: colors.white, color: colors.navy };
 
 const logoutButtonStyle: React.CSSProperties = {
-  marginTop: "auto",
   border: "none",
   borderRadius: radius.button,
   padding: "15px 18px",
+  marginBottom: "24px",
   background: colors.red,
   color: colors.white,
   fontWeight: 800,

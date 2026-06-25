@@ -15,7 +15,6 @@ import {
   fetchRecurringTaskTemplates,
   recurringFrequencyLabel,
   recurringTaskMatchesClient,
-  recurringScopeLabel,
   updateRecurringTask,
   type RecurringTask,
 } from "@/lib/recurringTasksService";
@@ -386,15 +385,13 @@ function TemplatesTab({ templates, clients, users, draft, loading, saving, setDr
 
       <div style={tableShellStyle}>
         <table style={tableStyle}>
-          <thead><tr><Th>Zadanie</Th><Th>Zakres</Th><Th>Cykl</Th><Th>Termin</Th><Th>Obejmuje</Th><Th>Status</Th><Th>Akcje</Th></tr></thead>
+          <thead><tr><Th>Zadanie</Th><Th>Cykl</Th><Th>Termin</Th><Th>Status</Th><Th>Akcje</Th></tr></thead>
           <tbody>
-            {loading ? <tr><Td colSpan={7}>Ładowanie ustawień...</Td></tr> : filteredTemplates.length === 0 ? <tr><Td colSpan={7}>{clientFilter.trim() ? "Brak szablonów dla tego klienta." : "Brak szablonów cyklicznych."}</Td></tr> : filteredTemplates.map((template) => (
+            {loading ? <tr><Td colSpan={5}>Ładowanie ustawień...</Td></tr> : filteredTemplates.length === 0 ? <tr><Td colSpan={5}>{clientFilter.trim() ? "Brak szablonów dla tego klienta." : "Brak szablonów cyklicznych."}</Td></tr> : filteredTemplates.map((template) => (
               <tr key={template.id} style={rowStyle}>
-                <Td strong>{template.tytul}<Small>{template.opis || "Brak opisu"}</Small></Td>
-                <Td>{scopeLabel(template, clients)}</Td>
+                <Td strong>{template.tytul}</Td>
                 <Td><Badge>{recurringFrequencyLabel(template)}</Badge></Td>
                 <Td>{template.czestotliwosc === "roczne" ? `${monthLabel(template.miesiac_roczny)} · ${template.dzien_miesiaca}` : `Dzień ${template.dzien_miesiaca}`}</Td>
-                <Td>{matchingClientsCount(template, clients)} klientów</Td>
                 <Td><span style={template.aktywne ? activeBadgeStyle : inactiveBadgeStyle}>{template.aktywne ? "Aktywny" : "Wyłączony"}</span></Td>
                 <Td><div style={actionsStyle}><button style={secondaryButtonStyle} onClick={() => onEdit(template)}>Edytuj</button><button style={secondaryButtonStyle} onClick={() => onToggle(template)}>{template.aktywne ? "Wyłącz" : "Włącz"}</button><button style={dangerButtonStyle} onClick={() => onRemove(template)}>Usuń</button></div></Td>
               </tr>
@@ -565,7 +562,6 @@ function Summary({ label, value }: { label: string; value: string | number }) { 
 function Th({ children }: { children: ReactNode }) { return <th style={thStyle}>{children}</th>; }
 function Td({ children, strong, colSpan }: { children: ReactNode; strong?: boolean; colSpan?: number }) { return <td colSpan={colSpan} style={{ ...tdStyle, fontWeight: strong ? 800 : 600 }}>{children}</td>; }
 function Badge({ children }: { children: ReactNode }) { return <span style={badgeStyle}>{children}</span>; }
-function Small({ children }: { children: ReactNode }) { return <small style={smallTextStyle}>{children}</small>; }
 
 function profileName(user: UserProfile | ProfileSummary) { return user.full_name || user.email || "Użytkownik"; }
 function monthLabel(month: number | null | undefined) { return MONTH_OPTIONS.find((item) => item.value === month)?.label || "Rok"; }
@@ -575,8 +571,6 @@ function vatUeModeToValue(mode: VatUeMode) { return mode === "active" ? true : m
 function valueToVatUeMode(value: boolean | null | undefined): VatUeMode { return value === true ? "active" : value === false ? "inactive" : "any"; }
 function payrollModeToValue(mode: PayrollMode) { return mode === "active" ? true : mode === "inactive" ? false : null; }
 function valueToPayrollMode(value: boolean | null | undefined): PayrollMode { return value === true ? "active" : value === false ? "inactive" : "any"; }
-function matchingClientsCount(template: RecurringTask, clients: ClientRow[]) { return clients.filter((client) => recurringTaskMatchesClient(template, client)).length; }
-function scopeLabel(template: RecurringTask, clients: ClientRow[]) { return template.klient_id ? clients.find((client) => client.id === template.klient_id)?.nazwa || "Wybrany klient" : recurringScopeLabel(template); }
 function templateMatchesClientSearch(template: RecurringTask, clients: ClientRow[], query: string) {
   return clients
     .filter((client) => [client.nazwa, client.nip].filter(Boolean).join(" ").toLowerCase().includes(query))

@@ -211,7 +211,7 @@ function SettlementsContent() {
         <SettlementDrawer
           settlement={selected}
           progress={progressBySettlement[selected.id] || { progress: 0, total_tasks: 0, done_tasks: 0, rozliczenie_id: selected.id }}
-          recurringTasks={getMatchingRecurringTasks(recurringTasks, getClient(selected.klienci))}
+          recurringTasks={getMatchingRecurringTasks(recurringTasks, getClient(selected.klienci), selected.okres)}
           activeTimers={activeTimers}
           onClose={() => setSelected(null)}
           onSave={patchSettlement}
@@ -255,7 +255,7 @@ function SettlementDrawer({ settlement, progress, recurringTasks, activeTimers, 
           <section style={drawerSectionStyle}>
             <h3 style={drawerSectionTitleStyle}>Zadania cykliczne</h3>
             <ProgressBadge progress={progress.progress} done={progress.done_tasks} total={progress.total_tasks} large />
-            <div style={clientContextStyle}><span>Forma prawna: <strong>{client?.forma_prawna || "Brak"}</strong></span><span>Opodatkowanie: <strong>{client?.forma_opodatkowania || "Brak"}</strong></span><span>VAT: <strong>{client?.czynny_vat ? "czynny" : "nie"}</strong></span></div>
+            <div style={clientContextStyle}><span>Forma prawna: <strong>{client?.forma_prawna || "Brak"}</strong></span><span>Opodatkowanie: <strong>{client?.forma_opodatkowania || "Brak"}</strong></span><span>VAT: <strong>{client?.czynny_vat ? "czynny" : "nie"}</strong></span><span>VAT-UE: <strong>{client?.vat_ue ? "tak" : "nie"}</strong></span><span>Kadry: <strong>{client?.obsluga_kadrowa ? "tak" : "nie"}</strong></span></div>
             <div style={recurringListStyle}>
               {recurringTasks.length === 0 ? <div style={emptyStateStyle}>Brak zadań cyklicznych dla tego klienta.</div> : recurringTasks.map((task) => {
                 const activeTimer = activeTimers.find((entry) => entry.zadanie_cykliczne_id === task.id && entry.klient_id === client?.id && entry.miesiac_rozliczeniowy === settlement.okres);
@@ -291,7 +291,13 @@ function currentMonthInput() {
 }
 function formatMonth(value: string) { return new Intl.DateTimeFormat("pl-PL", { month: "long", year: "numeric" }).format(new Date(`${value}-01T12:00:00`)); }
 function priorityLabel(priority: TaskPriority) { return PRIORITY_OPTIONS.find((item) => item.value === priority)?.label || priority; }
-function getMatchingRecurringTasks(tasks: RecurringTask[], client: ReturnType<typeof getClient>) { return tasks.filter((task) => recurringTaskMatchesClient(task, client)); }
+function getMatchingRecurringTasks(tasks: RecurringTask[], client: ReturnType<typeof getClient>, settlementPeriod: string) {
+  const month = Number(settlementPeriod.slice(5, 7));
+  return tasks.filter((task) =>
+    recurringTaskMatchesClient(task, client) &&
+    (task.czestotliwosc !== "roczne" || task.miesiac_roczny === month)
+  );
+}
 function statusSelectStyle(status: SettlementStatus): CSSProperties { if (status === "czeka_na_dokumenty") return { background: "#ffd8d8", color: "#991b1b" }; if (status === "dokumenty_kompletne_biuro") return { background: "#ffe7b8", color: "#92400e" }; if (status === "w_trakcie_ksiegowania") return { background: "#ffe3c4", color: "#9a3412" }; if (status === "do_sprawdzenia") return { background: "#efd4f5", color: "#7e22ce" }; if (status === "sprawdzone_zatwierdzone") return { background: "#cbe7f5", color: "#075985" }; return { background: "#c9f2d2", color: "#166534" }; }
 
 const headerStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "24px", alignItems: "flex-start", marginBottom: "30px" };

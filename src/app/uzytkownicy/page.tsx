@@ -40,6 +40,12 @@ const VAT_UE_OPTIONS = [
   { value: "inactive", label: "Tylko bez VAT-UE" },
 ] as const;
 
+const PAYROLL_OPTIONS = [
+  { value: "any", label: "Dowolne kadry" },
+  { value: "active", label: "Tylko z kadrami" },
+  { value: "inactive", label: "Tylko bez kadr" },
+] as const;
+
 const FREQUENCY_OPTIONS = [
   { value: "miesieczne", label: "Miesięczne" },
   { value: "roczne", label: "Roczne" },
@@ -63,6 +69,7 @@ const MONTH_OPTIONS = [
 type SettingsTab = "templates" | "fees" | "users";
 type VatMode = typeof VAT_OPTIONS[number]["value"];
 type VatUeMode = typeof VAT_UE_OPTIONS[number]["value"];
+type PayrollMode = typeof PAYROLL_OPTIONS[number]["value"];
 type FrequencyMode = typeof FREQUENCY_OPTIONS[number]["value"];
 type UserProfile = ProfileSummary & { id: string; role: string | null };
 type NewUserDraft = { fullName: string; email: string; role: string; password: string };
@@ -75,6 +82,7 @@ type ClientRow = {
   forma_opodatkowania: string | null;
   czynny_vat: boolean | null;
   vat_ue: boolean | null;
+  obsluga_kadrowa: boolean | null;
   opiekun_id: string | null;
 };
 
@@ -88,6 +96,7 @@ type TemplateDraft = {
   formy_opodatkowania: string[];
   vatMode: VatMode;
   vatUeMode: VatUeMode;
+  payrollMode: PayrollMode;
   czestotliwosc: FrequencyMode;
   miesiac_roczny: string;
   dzien_miesiaca: string;
@@ -105,6 +114,7 @@ const emptyDraft: TemplateDraft = {
   formy_opodatkowania: [],
   vatMode: "any",
   vatUeMode: "any",
+  payrollMode: "any",
   czestotliwosc: "miesieczne",
   miesiac_roczny: "3",
   dzien_miesiaca: "10",
@@ -175,6 +185,7 @@ function SettingsContent() {
       formy_opodatkowania: !hasClientSelection && draft.formy_opodatkowania.length ? draft.formy_opodatkowania : null,
       wymaga_czynnego_vat: hasClientSelection ? null : vatModeToValue(draft.vatMode),
       wymaga_vat_ue: hasClientSelection ? null : vatUeModeToValue(draft.vatUeMode),
+      wymaga_obslugi_kadrowej: hasClientSelection ? null : payrollModeToValue(draft.payrollMode),
       czestotliwosc: draft.czestotliwosc,
       miesiac_roczny: annualMonth,
       dzien_miesiaca: day,
@@ -228,6 +239,7 @@ function SettingsContent() {
       formy_opodatkowania: template.formy_opodatkowania?.length ? template.formy_opodatkowania : template.forma_opodatkowania ? [template.forma_opodatkowania] : [],
       vatMode: valueToVatMode(template.wymaga_czynnego_vat),
       vatUeMode: valueToVatUeMode(template.wymaga_vat_ue),
+      payrollMode: valueToPayrollMode(template.wymaga_obslugi_kadrowej),
       czestotliwosc: template.czestotliwosc || "miesieczne",
       miesiac_roczny: String(template.miesiac_roczny || 3),
       dzien_miesiaca: String(template.dzien_miesiaca || 10),
@@ -353,6 +365,7 @@ function TemplatesTab({ templates, clients, users, draft, loading, saving, setDr
           <div style={templateVatGridStyle}>
             <Field label="VAT"><select style={inputStyle} disabled={draft.klient_ids.length > 0} value={draft.vatMode} onChange={(event) => setDraft((current) => ({ ...current, vatMode: event.target.value as VatMode }))}>{VAT_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field>
             <Field label="VAT-UE"><select style={inputStyle} disabled={draft.klient_ids.length > 0} value={draft.vatUeMode} onChange={(event) => setDraft((current) => ({ ...current, vatUeMode: event.target.value as VatUeMode }))}>{VAT_UE_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field>
+            <Field label="Kadry"><select style={inputStyle} disabled={draft.klient_ids.length > 0} value={draft.payrollMode} onChange={(event) => setDraft((current) => ({ ...current, payrollMode: event.target.value as PayrollMode }))}>{PAYROLL_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field>
           </div>
         </div>
       </div>
@@ -560,6 +573,8 @@ function vatModeToValue(mode: VatMode) { return mode === "active" ? true : mode 
 function valueToVatMode(value: boolean | null | undefined): VatMode { return value === true ? "active" : value === false ? "inactive" : "any"; }
 function vatUeModeToValue(mode: VatUeMode) { return mode === "active" ? true : mode === "inactive" ? false : null; }
 function valueToVatUeMode(value: boolean | null | undefined): VatUeMode { return value === true ? "active" : value === false ? "inactive" : "any"; }
+function payrollModeToValue(mode: PayrollMode) { return mode === "active" ? true : mode === "inactive" ? false : null; }
+function valueToPayrollMode(value: boolean | null | undefined): PayrollMode { return value === true ? "active" : value === false ? "inactive" : "any"; }
 function matchingClientsCount(template: RecurringTask, clients: ClientRow[]) { return clients.filter((client) => recurringTaskMatchesClient(template, client)).length; }
 function scopeLabel(template: RecurringTask, clients: ClientRow[]) { return template.klient_id ? clients.find((client) => client.id === template.klient_id)?.nazwa || "Wybrany klient" : recurringScopeLabel(template); }
 function templateMatchesClientSearch(template: RecurringTask, clients: ClientRow[], query: string) {

@@ -44,10 +44,10 @@ export function canAccessModule(role: UserRole | null, moduleName: AppModule) {
   return moduleAccess[moduleName]?.includes(role) ?? false;
 }
 
-export function canManageClients(_role: UserRole | null) {
-  return false;
+export function canManageClients(role: UserRole | null) {
+  return role === "owner" || role === "manager" || role === "admin";
 }
 
 export function canEditClientAdministrative(role: UserRole | null) {
-  return role === "owner" || role === "manager" || role === "admin";
+  return canManageClients(role);
 }

@@ -9,12 +9,7 @@ const LABEL_REPLACEMENTS: Record<string, string> = {
 };
 
 const HIDDEN_FIELDS = new Set(["Powód zmiany biura", "Powód przegranej"]);
-const DATE_FIELD_ROWS: Record<string, string> = {
-  "Data telefonu": "2",
-  "Data spotkania": "3",
-  "Data wysłania propozycji": "4",
-  "Data follow-up": "5",
-};
+const DATE_FIELDS = new Set(["Data telefonu", "Data spotkania", "Data wysłania propozycji", "Data follow-up"]);
 
 export default function CrmDetailsLayoutFixWidget() {
   useEffect(() => {
@@ -85,7 +80,7 @@ function fixNotesSection(root: HTMLElement) {
 
   notesSection.style.display = "grid";
   notesSection.style.gridTemplateColumns = "minmax(0, 1.45fr) minmax(300px, 0.85fr)";
-  notesSection.style.gridTemplateRows = "auto repeat(4, auto)";
+  notesSection.style.gridTemplateRows = "auto auto auto";
   notesSection.style.gap = "14px 22px";
   notesSection.style.alignItems = "start";
 
@@ -95,6 +90,7 @@ function fixNotesSection(root: HTMLElement) {
     heading.style.gridRow = "1";
   }
 
+  const rightColumn = ensureRightColumn(notesSection);
   const labels = Array.from(notesSection.querySelectorAll<HTMLLabelElement>("label"));
   labels.forEach((label) => {
     const caption = label.querySelector<HTMLElement>("span")?.textContent?.trim();
@@ -120,15 +116,36 @@ function fixNotesSection(root: HTMLElement) {
 
     if (caption === "Notatki" && textarea) {
       label.style.gridColumn = "1 / 2";
-      label.style.gridRow = "3 / 6";
-      textarea.style.minHeight = "360px";
+      label.style.gridRow = "3";
+      textarea.style.minHeight = "520px";
       textarea.style.resize = "vertical";
       return;
     }
 
-    if (input) {
-      label.style.gridColumn = "2 / 3";
-      label.style.gridRow = DATE_FIELD_ROWS[caption] || "auto";
+    if (input && DATE_FIELDS.has(caption)) {
+      rightColumn.appendChild(label);
+      label.style.display = "grid";
+      label.style.gridTemplateColumns = "1fr minmax(170px, 0.95fr)";
+      label.style.alignItems = "center";
+      label.style.gap = "14px";
+      label.style.borderBottom = "1px solid #cbd8ea";
+      label.style.padding = "0 0 12px";
     }
   });
+}
+
+function ensureRightColumn(notesSection: HTMLElement) {
+  let rightColumn = notesSection.querySelector<HTMLElement>("[data-crss-crm-dates-column='1']");
+  if (rightColumn) return rightColumn;
+
+  rightColumn = document.createElement("div");
+  rightColumn.setAttribute("data-crss-crm-dates-column", "1");
+  rightColumn.style.gridColumn = "2 / 3";
+  rightColumn.style.gridRow = "2 / 4";
+  rightColumn.style.display = "flex";
+  rightColumn.style.flexDirection = "column";
+  rightColumn.style.gap = "16px";
+  rightColumn.style.alignSelf = "start";
+  notesSection.appendChild(rightColumn);
+  return rightColumn;
 }

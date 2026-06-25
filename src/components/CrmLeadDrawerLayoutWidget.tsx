@@ -3,17 +3,11 @@
 import { useEffect } from "react";
 
 const LARGE_FIELD_ROWS: Record<string, string> = {
-  "Powód kontaktu": "2 / span 3",
-  "Notatki": "5 / span 9",
+  "Powód kontaktu": "2",
+  "Notatki": "3",
 };
 
-const RIGHT_FIELD_ROWS: Record<string, string> = {
-  "Data telefonu": "2",
-  "Data spotkania online": "3",
-  "Data wysłania propozycji": "4",
-  "Data follow-up": "5",
-  "Powód przegranej": "6 / span 3",
-};
+const DATE_FIELDS = new Set(["Data telefonu", "Data spotkania online", "Data spotkania", "Data wysłania propozycji", "Data follow-up"]);
 
 export default function CrmLeadDrawerLayoutWidget() {
   useEffect(() => {
@@ -55,7 +49,7 @@ function enhanceDrawerLayout() {
 
   section.style.display = "grid";
   section.style.gridTemplateColumns = "minmax(0, 1.25fr) minmax(360px, 0.75fr)";
-  section.style.gridAutoRows = "minmax(42px, auto)";
+  section.style.gridTemplateRows = "auto auto auto";
   section.style.gap = "12px 22px";
   section.style.alignItems = "start";
 
@@ -65,17 +59,24 @@ function enhanceDrawerLayout() {
     heading.style.marginBottom = "2px";
   }
 
+  const rightColumn = ensureRightColumn(section);
+
   Array.from(section.querySelectorAll<HTMLLabelElement>("label")).forEach((label) => {
     const labelText = label.querySelector("span")?.textContent?.trim() || "";
     label.style.minWidth = "0";
+
+    if (labelText === "Powód przegranej") {
+      label.style.display = "none";
+      return;
+    }
 
     if (LARGE_FIELD_ROWS[labelText]) {
       prepareLargeTextField(label, LARGE_FIELD_ROWS[labelText], labelText === "Notatki");
       return;
     }
 
-    if (RIGHT_FIELD_ROWS[labelText]) {
-      prepareRightField(label, RIGHT_FIELD_ROWS[labelText], labelText === "Powód przegranej");
+    if (DATE_FIELDS.has(labelText)) {
+      prepareRightField(label, rightColumn);
     }
   });
 }
@@ -98,19 +99,29 @@ function prepareLargeTextField(label: HTMLLabelElement, gridRow: string, isNotes
   textarea.style.lineHeight = "1.65";
 }
 
-function prepareRightField(label: HTMLLabelElement, gridRow: string, isTextarea = false) {
-  label.style.gridColumn = "2";
-  label.style.gridRow = gridRow;
+function prepareRightField(label: HTMLLabelElement, rightColumn: HTMLElement) {
+  rightColumn.appendChild(label);
   label.style.minWidth = "0";
+  label.style.display = "grid";
+  label.style.gridTemplateColumns = "1fr minmax(170px, 0.95fr)";
+  label.style.alignItems = "center";
+  label.style.gap = "14px";
+  label.style.borderBottom = "1px solid #cbd8ea";
+  label.style.padding = "0 0 12px";
+}
 
-  if (!isTextarea) return;
+function ensureRightColumn(section: HTMLElement) {
+  let rightColumn = section.querySelector<HTMLElement>("[data-crss-crm-dates-column='1']");
+  if (rightColumn) return rightColumn;
 
-  label.style.display = "flex";
-  label.style.flexDirection = "column";
-  label.style.gap = "8px";
-  label.style.borderBottom = "none";
-
-  const textarea = label.querySelector<HTMLTextAreaElement>("textarea");
-  if (!textarea) return;
-  textarea.style.minHeight = "150px";
+  rightColumn = document.createElement("div");
+  rightColumn.setAttribute("data-crss-crm-dates-column", "1");
+  rightColumn.style.gridColumn = "2";
+  rightColumn.style.gridRow = "2 / 4";
+  rightColumn.style.display = "flex";
+  rightColumn.style.flexDirection = "column";
+  rightColumn.style.gap = "16px";
+  rightColumn.style.alignSelf = "start";
+  section.appendChild(rightColumn);
+  return rightColumn;
 }

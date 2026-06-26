@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type CSSProperties, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
 import AdditionalFeesSettingsPanel from "@/components/AdditionalFeesSettingsPanel";
@@ -316,6 +316,7 @@ function TemplatesTab({ templates, clients, users, draft, loading, saving, setDr
   onToggle: (template: RecurringTask) => void;
   onRemove: (template: RecurringTask) => void;
 }) {
+  const formRef = useRef<HTMLDivElement | null>(null);
   const [clientFilter, setClientFilter] = useState("");
   const sortedTemplates = useMemo(() => [...templates].sort((a, b) => Number(b.aktywne) - Number(a.aktywne) || a.dzien_miesiaca - b.dzien_miesiaca), [templates]);
   const filteredTemplates = useMemo(() => {
@@ -331,6 +332,14 @@ function TemplatesTab({ templates, clients, users, draft, loading, saving, setDr
         .filter((client) => [client.nazwa, client.nip].filter(Boolean).join(" ").toLowerCase().includes(search))
         .slice(0, 8)
     : [];
+  const editingTemplate = templates.find((template) => template.id === draft.id);
+
+  function handleEdit(template: RecurringTask) {
+    onEdit(template);
+    requestAnimationFrame(() => {
+      formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
 
   return (
     <section style={panelStyle}>
@@ -341,7 +350,19 @@ function TemplatesTab({ templates, clients, users, draft, loading, saving, setDr
         </div>
       </div>
 
-      <div style={formGridStyle}>
+      <div ref={formRef} style={formAnchorStyle}>
+        {draft.id && (
+          <div style={editNoticeStyle}>
+            <div>
+              <strong>Edytujesz szablon</strong>
+              <span>{editingTemplate?.tytul || draft.tytul}</span>
+            </div>
+            <button style={secondaryButtonStyle} type="button" onClick={() => setDraft(emptyDraft)}>Anuluj edycję</button>
+          </div>
+        )}
+      </div>
+
+      <div style={draft.id ? editingFormGridStyle : formGridStyle}>
         <Field label="Nazwa zadania"><input style={inputStyle} value={draft.tytul} onChange={(event) => setDraft((current) => ({ ...current, tytul: event.target.value }))} placeholder="np. Sprawdzenie kompletu dokumentów" /></Field>
         <Field label="Cykl"><select style={inputStyle} value={draft.czestotliwosc} onChange={(event) => setDraft((current) => ({ ...current, czestotliwosc: event.target.value as FrequencyMode }))}>{FREQUENCY_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field>
         {draft.czestotliwosc === "roczne" && <Field label="Miesiąc"><select style={inputStyle} value={draft.miesiac_roczny} onChange={(event) => setDraft((current) => ({ ...current, miesiac_roczny: event.target.value }))}>{MONTH_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field>}
@@ -393,7 +414,7 @@ function TemplatesTab({ templates, clients, users, draft, loading, saving, setDr
                 <Td><Badge>{recurringFrequencyLabel(template)}</Badge></Td>
                 <Td>{template.czestotliwosc === "roczne" ? `${monthLabel(template.miesiac_roczny)} · ${template.dzien_miesiaca}` : `Dzień ${template.dzien_miesiaca}`}</Td>
                 <Td><span style={template.aktywne ? activeBadgeStyle : inactiveBadgeStyle}>{template.aktywne ? "Aktywny" : "Wyłączony"}</span></Td>
-                <Td><div style={actionsStyle}><button style={secondaryButtonStyle} onClick={() => onEdit(template)}>Edytuj</button><button style={secondaryButtonStyle} onClick={() => onToggle(template)}>{template.aktywne ? "Wyłącz" : "Włącz"}</button><button style={dangerButtonStyle} onClick={() => onRemove(template)}>Usuń</button></div></Td>
+                <Td><div style={actionsStyle}><button style={secondaryButtonStyle} onClick={() => handleEdit(template)}>Edytuj</button><button style={secondaryButtonStyle} onClick={() => onToggle(template)}>{template.aktywne ? "Wyłącz" : "Włącz"}</button><button style={dangerButtonStyle} onClick={() => onRemove(template)}>Usuń</button></div></Td>
               </tr>
             ))}
           </tbody>
@@ -597,6 +618,9 @@ const panelHeaderStyle: CSSProperties = { display: "flex", justifyContent: "spac
 const sectionTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "24px" };
 const hintStyle: CSSProperties = { margin: "8px 0 0", color: colors.muted, lineHeight: 1.65 };
 const formGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(260px, 2fr) repeat(3, minmax(150px, 1fr))", gap: "12px", alignItems: "start", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "14px", marginBottom: "14px" };
+const editingFormGridStyle: CSSProperties = { ...formGridStyle, borderColor: colors.navy, boxShadow: "0 0 0 3px rgba(23, 59, 115, 0.10)" };
+const formAnchorStyle: CSSProperties = { scrollMarginTop: "24px" };
+const editNoticeStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", border: `1px solid ${colors.navy}`, borderRadius: radius.input, background: "rgba(23, 59, 115, 0.08)", color: colors.navy, padding: "12px 14px", marginBottom: "12px", flexWrap: "wrap" };
 const fieldStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "7px" };
 const labelStyle: CSSProperties = { color: colors.muted, fontSize: "13px", fontWeight: 850 };
 const inputStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, padding: "10px 12px", fontWeight: 700, minHeight: "42px", width: "100%" };

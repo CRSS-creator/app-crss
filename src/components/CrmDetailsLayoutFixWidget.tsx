@@ -130,6 +130,12 @@ function fixNotesSection(root: HTMLElement) {
       label.style.gap = "14px";
       label.style.borderBottom = "1px solid #cbd8ea";
       label.style.padding = "0 0 12px";
+      label.style.position = "relative";
+      label.style.zIndex = "3";
+      label.style.pointerEvents = "auto";
+      input.style.pointerEvents = "auto";
+      input.style.position = "relative";
+      input.style.zIndex = "4";
     }
   });
 }
@@ -146,6 +152,9 @@ function ensureRightColumn(notesSection: HTMLElement) {
   rightColumn.style.flexDirection = "column";
   rightColumn.style.gap = "16px";
   rightColumn.style.alignSelf = "start";
+  rightColumn.style.position = "relative";
+  rightColumn.style.zIndex = "2";
+  rightColumn.style.pointerEvents = "auto";
   notesSection.appendChild(rightColumn);
   return rightColumn;
 }

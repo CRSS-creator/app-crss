@@ -291,7 +291,7 @@ function SettlementDrawer({ settlement, progress, recurringTasks, taxObligations
     <div style={drawerOverlayStyle}>
       <aside style={drawerStyle}>
         <header style={drawerHeaderStyle}>
-          <div><p style={eyebrowStyle}>Szczegóły rozliczenia</p><h2 style={drawerTitleStyle}>{client?.nazwa || "Klient"}</h2><p style={drawerMetaStyle}>{formatMonth(settlement.okres.slice(0, 7))} · {client?.nip || "Brak NIP"}</p></div>
+          <div><p style={eyebrowStyle}>Szczegóły rozliczenia</p><h2 style={drawerTitleStyle}>{client?.nazwa || "Klient"}</h2><p style={drawerMetaStyle}>{formatMonth(settlement.okres.slice(0, 7))} · {client?.nip || "Brak NIP"} · Opiekun: {getCaregiverName(client)}</p></div>
           <button style={closeButtonStyle} onClick={onClose}>Zamknij</button>
         </header>
         <div style={drawerContentStyle}>

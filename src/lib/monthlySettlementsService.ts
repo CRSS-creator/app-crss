@@ -12,6 +12,7 @@ type SettlementClient = {
   id?: string;
   nazwa: string | null;
   nip: string | null;
+  email: string | null;
   opiekun_id: string | null;
   forma_prawna: string | null;
   forma_opodatkowania: string | null;
@@ -60,6 +61,7 @@ const SETTLEMENT_SELECT = `
     id,
     nazwa,
     nip,
+    email,
     opiekun_id,
     forma_prawna,
     forma_opodatkowania,
@@ -96,4 +98,18 @@ export async function updateMonthlySettlement(settlementId: string, payload: Set
 
 export async function fetchSettlementTaskProgress(period: string) {
   return supabase.rpc("settlement_task_progress", { public_period: period });
+}
+
+export async function sendDocumentsReminder(settlementId: string) {
+  const sessionResult = await supabase.auth.getSession();
+  const token = sessionResult.data.session?.access_token;
+
+  return fetch("/api/rozliczenia/document-reminder", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ settlementId }),
+  });
 }

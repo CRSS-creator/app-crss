@@ -12,6 +12,7 @@ import {
   ensureCurrentMonthSettlements,
   fetchMonthlySettlements,
   fetchSettlementTaskProgress,
+  sendDocumentsReminder,
   updateMonthlySettlement,
   type MonthlySettlement,
   type SettlementProgress,
@@ -256,6 +257,21 @@ function SettlementDrawer({ settlement, progress, recurringTasks, taxObligations
 }) {
   const client = getClient(settlement.klienci);
   const hasPayroll = Boolean(client?.obsluga_kadrowa);
+  const [sendingReminder, setSendingReminder] = useState(false);
+
+  async function requestDocumentsReminder() {
+    setSendingReminder(true);
+    const response = await sendDocumentsReminder(settlement.id);
+    setSendingReminder(false);
+
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      alert(result.error || "Nie udało się wysłać przypomnienia.");
+      return;
+    }
+
+    alert("Przypomnienie zostało przekazane do wysyłki.");
+  }
 
   return (
     <div style={drawerOverlayStyle}>
@@ -270,6 +286,9 @@ function SettlementDrawer({ settlement, progress, recurringTasks, taxObligations
               <h3 style={drawerSectionTitleStyle}>Status miesiąca</h3>
               <Field label="Status księgowości"><AppSelect style={{ ...inputStyle, ...statusSelectStyle(settlement.status_ksiegowosci) }} value={settlement.status_ksiegowosci} disabled={saving} options={STATUS_OPTIONS} onChange={(value) => onSave(settlement, { status_ksiegowosci: value as SettlementStatus })} /></Field>
               <Field label="Data dostarczenia dokumentów"><input style={inputStyle} type="date" value={formatDateForInput(settlement.data_dostarczenia_dokumentow)} disabled={saving} onChange={(event) => onSave(settlement, { data_dostarczenia_dokumentow: event.target.value || null })} /></Field>
+              <button type="button" style={sendingReminder || Boolean(settlement.data_dostarczenia_dokumentow) ? disabledReminderButtonStyle : reminderButtonStyle} disabled={sendingReminder || Boolean(settlement.data_dostarczenia_dokumentow)} onClick={requestDocumentsReminder}>
+                {sendingReminder ? "Wysyłanie..." : "Przypomnij o dokumentach"}
+              </button>
               <div style={hasPayroll ? countFieldsGridStyle : oneColumnStyle}>
                 <Field label="Liczba dokumentów"><NumberInput value={settlement.liczba_dokumentow} disabled={false} onChange={(value) => onSave(settlement, { liczba_dokumentow: value })} /></Field>
                 {hasPayroll && <Field label="Liczba pracowników"><NumberInput value={settlement.liczba_pracownikow} disabled={false} onChange={(value) => onSave(settlement, { liczba_pracownikow: value })} /></Field>}
@@ -398,6 +417,8 @@ const clientCellStyle: CSSProperties = { display: "flex", flexDirection: "column
 const progressStyle: CSSProperties = { display: "inline-flex", flexDirection: "column", gap: "4px", borderRadius: radius.input, background: "#e8eef8", color: colors.navy, padding: "8px 10px", fontWeight: 800, minWidth: "86px", fontSize: "14px" };
 const progressLargeStyle: CSSProperties = { ...progressStyle, width: "100%", padding: "18px", fontSize: "20px" };
 const detailsButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "9px 12px", background: colors.card, color: colors.navy, fontWeight: 800, cursor: "pointer" };
+const reminderButtonStyle: CSSProperties = { border: "none", borderRadius: radius.button, padding: "12px 16px", background: colors.red, color: colors.white, fontWeight: 850, cursor: "pointer", margin: "0 0 16px", minHeight: "44px" };
+const disabledReminderButtonStyle: CSSProperties = { ...reminderButtonStyle, background: "#e8eef8", color: colors.muted, cursor: "not-allowed" };
 const timerButtonStyle: CSSProperties = { ...detailsButtonStyle, display: "inline-flex", alignItems: "center", gap: "7px", padding: "9px 11px", background: "#eef5ff", borderColor: "#c8d8f0" };
 const timerActiveButtonStyle: CSSProperties = { ...timerButtonStyle, background: colors.success, borderColor: colors.success, color: colors.white };
 const emptyStateStyle: CSSProperties = { padding: "18px", borderRadius: radius.input, background: colors.inputBackground, border: `1px dashed ${colors.border}`, color: colors.muted, textAlign: "center", fontWeight: 800 };

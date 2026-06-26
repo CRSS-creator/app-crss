@@ -18,15 +18,14 @@ import {
 } from "@/lib/monthlySettlementsService";
 import {
   fetchActiveRecurringTaskTimers,
-  fetchRecurringTasks,
-  recurringScopeLabel,
-  recurringTaskMatchesClient,
+  fetchRecurringTaskRealizations,
   startRecurringTaskTimer,
   stopRecurringTaskTimer,
-  type RecurringTask,
+  updateRecurringTaskRealizationStatus,
+  type RecurringTaskRealization,
 } from "@/lib/recurringTasksService";
 import { fetchTaxObligations, type TaxObligation, type TaxFetchStatus, type TaxSendStatus } from "@/lib/taxObligationService";
-import type { TaskPriority, TimeEntry } from "@/lib/taskService";
+import type { TimeEntry } from "@/lib/taskService";
 
 const EMPTY_FILTER = "Wszystkie";
 const STATUS_OPTIONS: { value: SettlementStatus; label: string }[] = [
@@ -37,13 +36,6 @@ const STATUS_OPTIONS: { value: SettlementStatus; label: string }[] = [
   { value: "sprawdzone_zatwierdzone", label: "Zatwierdzone" },
   { value: "podatki_wyslane", label: "Podatki wysłane" },
 ];
-const PRIORITY_OPTIONS: { value: TaskPriority; label: string }[] = [
-  { value: "niski", label: "Niski" },
-  { value: "normalny", label: "Normalny" },
-  { value: "wysoki", label: "Wysoki" },
-  { value: "pilne", label: "Pilne" },
-];
-
 export default function SettlementsPage() {
   return (
     <AppLayout activePage="rozliczenia">
@@ -58,7 +50,7 @@ function SettlementsContent() {
   const [period, setPeriod] = useState(currentMonthInput());
   const [settlements, setSettlements] = useState<MonthlySettlement[]>([]);
   const [progressRows, setProgressRows] = useState<SettlementProgress[]>([]);
-  const [recurringTasks, setRecurringTasks] = useState<RecurringTask[]>([]);
+  const [recurringRealizations, setRecurringRealizations] = useState<RecurringTaskRealization[]>([]);
   const [taxObligations, setTaxObligations] = useState<TaxObligation[]>([]);
   const [activeTimers, setActiveTimers] = useState<TimeEntry[]>([]);
   const [selected, setSelected] = useState<MonthlySettlement | null>(null);
@@ -101,7 +93,7 @@ function SettlementsContent() {
     const [settlementsResult, progressResult, recurringResult, taxResult, timersResult] = await Promise.all([
       fetchMonthlySettlements(normalizedPeriod),
       fetchSettlementTaskProgress(normalizedPeriod),
-      fetchRecurringTasks(),
+      fetchRecurringTaskRealizations(normalizedPeriod),
       fetchTaxObligations(normalizedPeriod),
       userId ? fetchActiveRecurringTaskTimers(userId) : Promise.resolve({ data: [], error: null }),
     ]);
@@ -114,7 +106,7 @@ function SettlementsContent() {
 
     setSettlements((settlementsResult.data || []) as MonthlySettlement[]);
     setProgressRows((progressResult.data || []) as SettlementProgress[]);
-    setRecurringTasks((recurringResult.data || []) as RecurringTask[]);
+    setRecurringRealizations((recurringResult.data || []) as RecurringTaskRealization[]);
     setTaxObligations((taxResult.data || []) as TaxObligation[]);
     setActiveTimers((timersResult.data || []) as TimeEntry[]);
     setLoading(false);
@@ -134,26 +126,46 @@ function SettlementsContent() {
     setSelected((current) => current?.id === updated.id ? updated : current);
   }
 
-  async function toggleRecurringTimer(settlement: MonthlySettlement, task: RecurringTask) {
+  async function toggleRecurringTimer(settlement: MonthlySettlement, task: RecurringTaskRealization) {
     if (!currentUserId) {
       alert("Nie udało się rozpoznać użytkownika. Zaloguj się ponownie.");
       return;
     }
     const client = getClient(settlement.klienci);
     const activeTimer = activeTimers.find((entry) =>
-      entry.zadanie_cykliczne_id === task.id &&
+      entry.zadanie_cykliczne_id === task.zadanie_cykliczne_id &&
       entry.klient_id === client?.id &&
       entry.miesiac_rozliczeniowy === settlement.okres
     );
     const result = activeTimer
       ? await stopRecurringTaskTimer(activeTimer.id)
-      : await startRecurringTaskTimer({ taskId: task.id, clientId: client?.id || null, userId: currentUserId, settlementMonth: settlement.okres });
+      : await startRecurringTaskTimer({ taskId: task.zadanie_cykliczne_id, clientId: client?.id || null, userId: currentUserId, settlementMonth: settlement.okres });
     if (result.error) {
       console.error("Błąd liczenia czasu pracy:", result.error);
       alert("Nie udało się zapisać czasu pracy.");
       return;
     }
     setActiveTimers((current) => activeTimer ? current.filter((entry) => entry.id !== activeTimer.id) : [result.data as TimeEntry, ...current]);
+  }
+
+  async function toggleRecurringDone(task: RecurringTaskRealization) {
+    const nextStatus = task.status === "zrobione" ? "do_zrobienia" : "zrobione";
+    const result = await updateRecurringTaskRealizationStatus(task.id, nextStatus);
+    if (result.error) {
+      console.error("Błąd zapisu statusu zadania cyklicznego:", result.error);
+      alert("Nie udało się zapisać statusu zadania.");
+      return;
+    }
+    const updated = result.data as RecurringTaskRealization;
+    setRecurringRealizations((current) => {
+      const next = current.map((item) => item.id === updated.id ? updated : item);
+      const rows = next.filter((item) => item.rozliczenie_id === updated.rozliczenie_id);
+      const total = rows.length;
+      const done = rows.filter((item) => item.status === "zrobione").length;
+      const progress = total === 0 ? 0 : Math.round((done / total) * 100);
+      setProgressRows((progressRows) => progressRows.map((row) => row.rozliczenie_id === updated.rozliczenie_id ? { ...row, total_tasks: total, done_tasks: done, progress } : row));
+      return next;
+    });
   }
 
   return (
@@ -216,12 +228,13 @@ function SettlementsContent() {
         <SettlementDrawer
           settlement={selected}
           progress={progressBySettlement[selected.id] || { progress: 0, total_tasks: 0, done_tasks: 0, rozliczenie_id: selected.id }}
-          recurringTasks={getMatchingRecurringTasks(recurringTasks, getClient(selected.klienci), selected.okres)}
+          recurringTasks={recurringRealizations.filter((task) => task.rozliczenie_id === selected.id).sort(sortRecurringRealizations)}
           taxObligations={taxObligations.filter((obligation) => obligation.rozliczenie_id === selected.id)}
           activeTimers={activeTimers}
           onClose={() => setSelected(null)}
           onSave={patchSettlement}
           onToggleRecurringTimer={toggleRecurringTimer}
+          onToggleRecurringDone={toggleRecurringDone}
           saving={savingId === selected.id}
         />
       )}
@@ -229,15 +242,16 @@ function SettlementsContent() {
   );
 }
 
-function SettlementDrawer({ settlement, progress, recurringTasks, taxObligations, activeTimers, onClose, onSave, onToggleRecurringTimer, saving }: {
+function SettlementDrawer({ settlement, progress, recurringTasks, taxObligations, activeTimers, onClose, onSave, onToggleRecurringTimer, onToggleRecurringDone, saving }: {
   settlement: MonthlySettlement;
   progress: SettlementProgress;
-  recurringTasks: RecurringTask[];
+  recurringTasks: RecurringTaskRealization[];
   taxObligations: TaxObligation[];
   activeTimers: TimeEntry[];
   onClose: () => void;
   onSave: (settlement: MonthlySettlement, payload: Partial<MonthlySettlement>) => void;
-  onToggleRecurringTimer: (settlement: MonthlySettlement, task: RecurringTask) => void;
+  onToggleRecurringTimer: (settlement: MonthlySettlement, task: RecurringTaskRealization) => void;
+  onToggleRecurringDone: (task: RecurringTaskRealization) => void;
   saving: boolean;
 }) {
   const client = getClient(settlement.klienci);
@@ -294,8 +308,9 @@ function SettlementDrawer({ settlement, progress, recurringTasks, taxObligations
             <div style={clientContextStyle}><span>Forma prawna: <strong>{client?.forma_prawna || "Brak"}</strong></span><span>Opodatkowanie: <strong>{client?.forma_opodatkowania || "Brak"}</strong></span><span>VAT: <strong>{client?.czynny_vat ? "czynny" : "nie"}</strong></span><span>VAT-UE: <strong>{client?.vat_ue ? "tak" : "nie"}</strong></span><span>Kadry: <strong>{client?.obsluga_kadrowa ? "tak" : "nie"}</strong></span></div>
             <div style={recurringListStyle}>
               {recurringTasks.length === 0 ? <div style={emptyStateStyle}>Brak zadań cyklicznych dla tego klienta.</div> : recurringTasks.map((task) => {
-                const activeTimer = activeTimers.find((entry) => entry.zadanie_cykliczne_id === task.id && entry.klient_id === client?.id && entry.miesiac_rozliczeniowy === settlement.okres);
-                return <article key={task.id} style={recurringItemStyle}><div><strong>{task.tytul}</strong><p style={recurringMetaStyle}>{recurringScopeLabel(task)} · dzień {task.dzien_miesiaca} · {priorityLabel(task.priorytet)}</p></div><div style={recurringActionsStyle}><button style={activeTimer ? timerActiveButtonStyle : timerButtonStyle} onClick={() => onToggleRecurringTimer(settlement, task)} title={activeTimer ? "Zatrzymaj liczenie czasu" : "Rozpocznij liczenie czasu"}>{activeTimer ? <Square size={16} /> : <Play size={16} />}{activeTimer ? "Stop" : "Start"}</button></div></article>;
+                const activeTimer = activeTimers.find((entry) => entry.zadanie_cykliczne_id === task.zadanie_cykliczne_id && entry.klient_id === client?.id && entry.miesiac_rozliczeniowy === settlement.okres);
+                const done = task.status === "zrobione";
+                return <article key={task.id} style={done ? recurringDoneItemStyle : recurringItemStyle}><div style={recurringTitleRowStyle}><input type="checkbox" checked={done} onChange={() => onToggleRecurringDone(task)} style={checkboxStyle} /><div><strong>{task.tytul}</strong><p style={recurringMetaStyle}>{requiredDayLabel(task.termin)}</p></div></div><div style={recurringActionsStyle}><button style={activeTimer ? timerActiveButtonStyle : timerButtonStyle} onClick={() => onToggleRecurringTimer(settlement, task)} title={activeTimer ? "Zatrzymaj liczenie czasu" : "Rozpocznij liczenie czasu"}>{activeTimer ? <Square size={16} /> : <Play size={16} />}{activeTimer ? "Stop" : "Start"}</button></div></article>;
               })}
             </div>
           </section>
@@ -328,7 +343,6 @@ function currentMonthInput() {
 function formatMonth(value: string) { return new Intl.DateTimeFormat("pl-PL", { month: "long", year: "numeric" }).format(new Date(`${value}-01T12:00:00`)); }
 function formatDate(value: string | null) { return value ? new Intl.DateTimeFormat("pl-PL").format(new Date(`${value}T12:00:00`)) : "Do ustalenia"; }
 function formatCurrency(value: number | null) { return value === null || value === undefined ? "Do pobrania" : new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN" }).format(value); }
-function priorityLabel(priority: TaskPriority) { return PRIORITY_OPTIONS.find((item) => item.value === priority)?.label || priority; }
 function fetchStatusLabel(status: TaxFetchStatus) { if (status === "pobrane") return "pobrane"; if (status === "blad") return "błąd"; return "do pobrania"; }
 function sendStatusLabel(status: TaxSendStatus) { if (status === "wyslane") return "wysłane"; if (status === "blad") return "błąd"; return "niewysłane"; }
 function sendStatusStyle(status: TaxSendStatus): CSSProperties {
@@ -336,12 +350,11 @@ function sendStatusStyle(status: TaxSendStatus): CSSProperties {
   if (status === "blad") return { ...taxSendBadgeStyle, background: "#fee2e2", color: "#b91c1c" };
   return taxSendBadgeStyle;
 }
-function getMatchingRecurringTasks(tasks: RecurringTask[], client: ReturnType<typeof getClient>, settlementPeriod: string) {
-  const month = Number(settlementPeriod.slice(5, 7));
-  return tasks.filter((task) =>
-    recurringTaskMatchesClient(task, client) &&
-    (task.czestotliwosc !== "roczne" || task.miesiac_roczny === month)
-  );
+function requiredDayLabel(value: string | null) { return value ? `Wymagany dzień: ${new Date(`${value}T12:00:00`).getDate()}` : "Wymagany dzień: do ustalenia"; }
+function sortRecurringRealizations(a: RecurringTaskRealization, b: RecurringTaskRealization) {
+  if (a.status === "zrobione" && b.status !== "zrobione") return 1;
+  if (a.status !== "zrobione" && b.status === "zrobione") return -1;
+  return (a.termin || "").localeCompare(b.termin || "") || a.tytul.localeCompare(b.tytul, "pl");
 }
 function statusSelectStyle(status: SettlementStatus): CSSProperties { if (status === "czeka_na_dokumenty") return { background: "#ffd8d8", color: "#991b1b" }; if (status === "dokumenty_kompletne_biuro") return { background: "#ffe7b8", color: "#92400e" }; if (status === "w_trakcie_ksiegowania") return { background: "#ffe3c4", color: "#9a3412" }; if (status === "do_sprawdzenia") return { background: "#efd4f5", color: "#7e22ce" }; if (status === "sprawdzone_zatwierdzone") return { background: "#cbe7f5", color: "#075985" }; return { background: "#c9f2d2", color: "#166534" }; }
 
@@ -393,6 +406,9 @@ const threeColumnsStyle: CSSProperties = { display: "grid", gridTemplateColumns:
 const clientContextStyle: CSSProperties = { display: "flex", gap: "10px", flexWrap: "wrap", margin: "12px 0", color: colors.muted, fontSize: "13px" };
 const recurringListStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "10px", marginTop: "12px" };
 const recurringItemStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "12px", background: colors.inputBackground };
+const recurringDoneItemStyle: CSSProperties = { ...recurringItemStyle, background: "#f8fafc", opacity: 0.72 };
+const recurringTitleRowStyle: CSSProperties = { display: "flex", alignItems: "flex-start", gap: "10px", minWidth: 0 };
+const checkboxStyle: CSSProperties = { width: "18px", height: "18px", marginTop: "2px", accentColor: colors.navy };
 const recurringMetaStyle: CSSProperties = { margin: "5px 0 0", color: colors.muted, fontWeight: 700, fontSize: "13px" };
 const recurringActionsStyle: CSSProperties = { display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "8px", flexWrap: "wrap" };
 const taxObligationListStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "10px" };

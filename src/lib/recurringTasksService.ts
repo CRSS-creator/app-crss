@@ -28,6 +28,24 @@ export type RecurringTask = {
   }[] | null;
 };
 
+export type RecurringTaskRealization = {
+  id: string;
+  zadanie_cykliczne_id: string;
+  klient_id: string;
+  rozliczenie_id: string | null;
+  okres: string;
+  termin: string | null;
+  tytul: string;
+  opis: string | null;
+  status: "do_zrobienia" | "w_trakcie" | "zrobione";
+  priorytet: TaskPriority;
+  osoba_id: string | null;
+  completed_at: string | null;
+  uwagi: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type RecurringTaskPayload = {
   klient_id?: string | null;
   tytul: string;
@@ -95,6 +113,16 @@ export async function fetchRecurringTaskTemplates() {
     .order("created_at", { ascending: false });
 }
 
+export async function fetchRecurringTaskRealizations(period: string) {
+  return supabase
+    .from("zadania_cykliczne_realizacje")
+    .select("*")
+    .eq("okres", period)
+    .order("status", { ascending: true })
+    .order("termin", { ascending: true })
+    .order("created_at", { ascending: true });
+}
+
 export async function createRecurringTask(payload: RecurringTaskPayload) {
   return supabase
     .from("zadania_cykliczne")
@@ -117,6 +145,18 @@ export async function updateRecurringTask(taskId: string, payload: Partial<Recur
     .eq("id", taskId)
     .select(RECURRING_TASK_SELECT)
     .single();
+}
+
+export async function updateRecurringTaskRealizationStatus(realizationId: string, status: RecurringTaskRealization["status"]) {
+  return supabase
+    .from("zadania_cykliczne_realizacje")
+    .update({
+      status,
+      completed_at: status === "zrobione" ? new Date().toISOString() : null,
+    })
+    .eq("id", realizationId)
+    .select("*")
+    .single<RecurringTaskRealization>();
 }
 
 export async function deleteRecurringTask(taskId: string) {

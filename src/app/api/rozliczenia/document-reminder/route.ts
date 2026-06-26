@@ -87,12 +87,18 @@ async function getAuthorizedUser(request: NextRequest): Promise<AuthorizedResult
 }
 
 function reminderDueDate(period: string) {
-  const date = new Date(`${period.slice(0, 7)}-07T12:00:00`);
+  const periodDate = new Date(`${period.slice(0, 7)}-01T12:00:00`);
+  const date = new Date(periodDate);
+  date.setMonth(date.getMonth() + 1, 7);
   return date.toISOString().slice(0, 10);
 }
 
 function formatPeriod(period: string) {
   return new Intl.DateTimeFormat("pl-PL", { month: "long", year: "numeric" }).format(new Date(`${period.slice(0, 7)}-01T12:00:00`));
+}
+
+function formatDueDate(date: string) {
+  return new Intl.DateTimeFormat("pl-PL", { day: "numeric", month: "long", year: "numeric" }).format(new Date(`${date}T12:00:00`));
 }
 
 export async function POST(request: NextRequest) {
@@ -173,6 +179,7 @@ export async function POST(request: NextRequest) {
         period: settlement.okres,
         periodLabel: formatPeriod(settlement.okres),
         dueDate,
+        dueDateLabel: formatDueDate(dueDate),
         subject: `Przypomnienie o dokumentach księgowych za ${formatPeriod(settlement.okres)}`,
         caregiverName: caregiver?.full_name || null,
         caregiverEmail: caregiver?.email || null,

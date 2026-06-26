@@ -269,7 +269,7 @@ function SettlementDrawer({ settlement, progress, recurringTasks, taxObligations
             <h3 style={drawerSectionTitleStyle}>Status miesiąca</h3>
             <Field label="Status księgowości"><select style={{ ...inputStyle, ...statusSelectStyle(settlement.status_ksiegowosci) }} value={settlement.status_ksiegowosci} disabled={saving} onChange={(event) => onSave(settlement, { status_ksiegowosci: event.target.value as SettlementStatus })}>{STATUS_OPTIONS.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}</select></Field>
             <Field label="Data dostarczenia dokumentów"><input style={inputStyle} type="date" value={formatDateForInput(settlement.data_dostarczenia_dokumentow)} disabled={saving} onChange={(event) => onSave(settlement, { data_dostarczenia_dokumentow: event.target.value || null })} /></Field>
-            <div style={hasPayroll ? threeColumnsStyle : oneColumnStyle}>
+            <div style={hasPayroll ? countFieldsGridStyle : oneColumnStyle}>
               <Field label="Liczba dokumentów"><NumberInput value={settlement.liczba_dokumentow} disabled={false} onChange={(value) => onSave(settlement, { liczba_dokumentow: value })} /></Field>
               {hasPayroll && <Field label="Liczba pracowników"><NumberInput value={settlement.liczba_pracownikow} disabled={false} onChange={(value) => onSave(settlement, { liczba_pracownikow: value })} /></Field>}
               {hasPayroll && <Field label="Liczba zleceniobiorców"><NumberInput value={settlement.liczba_zleceniobiorcow} disabled={false} onChange={(value) => onSave(settlement, { liczba_zleceniobiorcow: value })} /></Field>}
@@ -388,7 +388,7 @@ const tdStyle: CSSProperties = { padding: "15px 10px", color: colors.text, verti
 const emptyCellStyle: CSSProperties = { color: colors.muted, fontWeight: 800 };
 const inputStyle: CSSProperties = { width: "100%", border: `1px solid ${colors.border}`, borderRadius: radius.input, color: colors.text, padding: "10px 12px", fontWeight: 500, fontSize: "14px" };
 const statusInputStyle: CSSProperties = { ...inputStyle, minWidth: 0, maxWidth: "100%", height: "42px", padding: "8px 28px 8px 10px", fontSize: "12px", lineHeight: 1.1, whiteSpace: "normal", fontWeight: 800 };
-const smallInputStyle: CSSProperties = { ...inputStyle, width: "100%", maxWidth: "94px", background: colors.inputBackground, textAlign: "center", fontWeight: 800 };
+const smallInputStyle: CSSProperties = { ...inputStyle, width: "100%", maxWidth: "150px", minWidth: "94px", background: colors.inputBackground, textAlign: "center", fontWeight: 800 };
 const textareaStyle: CSSProperties = { ...inputStyle, minHeight: "96px", resize: "vertical", background: colors.inputBackground };
 const clientCellStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "5px", minWidth: 0, fontWeight: 800 };
 const progressStyle: CSSProperties = { display: "inline-flex", flexDirection: "column", gap: "4px", borderRadius: radius.input, background: "#e8eef8", color: colors.navy, padding: "8px 10px", fontWeight: 800, minWidth: "86px", fontSize: "14px" };
@@ -410,7 +410,7 @@ const sectionHeaderRowStyle: CSSProperties = { display: "flex", justifyContent: 
 const mutedBadgeStyle: CSSProperties = { borderRadius: radius.badge, background: "#eef2f7", color: colors.muted, padding: "7px 10px", fontSize: "12px", fontWeight: 850 };
 const fieldStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "7px", marginBottom: "14px" };
 const labelStyle: CSSProperties = { color: colors.muted, fontSize: "13px", fontWeight: 800 };
-const threeColumnsStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "14px" };
+const countFieldsGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(145px, 1fr))", gap: "12px", alignItems: "start" };
 const oneColumnStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "14px" };
 const clientContextStyle: CSSProperties = { display: "flex", gap: "10px", flexWrap: "wrap", margin: "12px 0", color: colors.muted, fontSize: "13px" };
 const recurringListStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "10px", marginTop: "12px" };

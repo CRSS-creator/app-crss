@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from
 import { Play, Square } from "lucide-react";
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
+import AppSelect from "@/components/AppSelect";
 import SettlementAdditionalFeesPanel from "@/components/SettlementAdditionalFeesPanel";
 import { colors, radius, shadow } from "@/app/design";
 import { supabase } from "@/lib/supabaseClient";
@@ -36,6 +37,8 @@ const STATUS_OPTIONS: { value: SettlementStatus; label: string }[] = [
   { value: "sprawdzone_zatwierdzone", label: "Zatwierdzone" },
   { value: "podatki_wyslane", label: "Podatki wysłane" },
 ];
+const STATUS_FILTER_OPTIONS = [{ value: EMPTY_FILTER, label: "Status" }, ...STATUS_OPTIONS];
+
 export default function SettlementsPage() {
   return (
     <AppLayout activePage="rozliczenia">
@@ -192,10 +195,7 @@ function SettlementsContent() {
         <input style={searchInputStyle} value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Szukaj po kliencie, NIP, opiekunie lub uwagach" />
         <div style={filtersRowStyle}>
           <span style={filtersLabelStyle}>Filtry:</span>
-          <select style={filterStyle} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-            <option value={EMPTY_FILTER}>Status</option>
-            {STATUS_OPTIONS.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}
-          </select>
+          <AppSelect style={filterStyle} value={statusFilter} options={STATUS_FILTER_OPTIONS} onChange={setStatusFilter} />
         </div>
 
         {loading ? <div style={emptyStateStyle}>Ładowanie rozliczeń...</div> : visibleSettlements.length === 0 ? <div style={emptyStateStyle}>Brak rozliczeń do wyświetlenia.</div> : (
@@ -209,7 +209,7 @@ function SettlementsContent() {
                   return (
                     <tr key={settlement.id} style={rowStyle}>
                       <Td strong><div style={clientCellStyle}><span>{client?.nazwa || "Klient"}</span><small>{client?.nip || "Brak NIP"} · {getCaregiverName(client)}</small></div></Td>
-                      <Td><select style={{ ...statusInputStyle, ...statusSelectStyle(settlement.status_ksiegowosci) }} value={settlement.status_ksiegowosci} disabled={savingId === settlement.id} onChange={(event) => patchSettlement(settlement, { status_ksiegowosci: event.target.value as SettlementStatus })}>{STATUS_OPTIONS.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}</select></Td>
+                      <Td><AppSelect style={{ ...statusInputStyle, ...statusSelectStyle(settlement.status_ksiegowosci) }} value={settlement.status_ksiegowosci} disabled={savingId === settlement.id} options={STATUS_OPTIONS} onChange={(value) => patchSettlement(settlement, { status_ksiegowosci: value as SettlementStatus })} /></Td>
                       <Td><NumberInput value={settlement.liczba_dokumentow} disabled={false} onChange={(value) => patchSettlement(settlement, { liczba_dokumentow: value })} /></Td>
                       <Td>{client?.obsluga_kadrowa ? <NumberInput value={settlement.liczba_pracownikow} disabled={false} onChange={(value) => patchSettlement(settlement, { liczba_pracownikow: value })} /> : <span style={emptyCellStyle}>-</span>}</Td>
                       <Td>{client?.obsluga_kadrowa ? <NumberInput value={settlement.liczba_zleceniobiorcow} disabled={false} onChange={(value) => patchSettlement(settlement, { liczba_zleceniobiorcow: value })} /> : <span style={emptyCellStyle}>-</span>}</Td>
@@ -268,7 +268,7 @@ function SettlementDrawer({ settlement, progress, recurringTasks, taxObligations
           <div style={drawerColumnStyle}>
             <section style={drawerSectionStyle}>
               <h3 style={drawerSectionTitleStyle}>Status miesiąca</h3>
-              <Field label="Status księgowości"><select style={{ ...inputStyle, ...statusSelectStyle(settlement.status_ksiegowosci) }} value={settlement.status_ksiegowosci} disabled={saving} onChange={(event) => onSave(settlement, { status_ksiegowosci: event.target.value as SettlementStatus })}>{STATUS_OPTIONS.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}</select></Field>
+              <Field label="Status księgowości"><AppSelect style={{ ...inputStyle, ...statusSelectStyle(settlement.status_ksiegowosci) }} value={settlement.status_ksiegowosci} disabled={saving} options={STATUS_OPTIONS} onChange={(value) => onSave(settlement, { status_ksiegowosci: value as SettlementStatus })} /></Field>
               <Field label="Data dostarczenia dokumentów"><input style={inputStyle} type="date" value={formatDateForInput(settlement.data_dostarczenia_dokumentow)} disabled={saving} onChange={(event) => onSave(settlement, { data_dostarczenia_dokumentow: event.target.value || null })} /></Field>
               <div style={hasPayroll ? countFieldsGridStyle : oneColumnStyle}>
                 <Field label="Liczba dokumentów"><NumberInput value={settlement.liczba_dokumentow} disabled={false} onChange={(value) => onSave(settlement, { liczba_dokumentow: value })} /></Field>

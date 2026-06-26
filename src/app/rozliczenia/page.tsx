@@ -265,61 +265,65 @@ function SettlementDrawer({ settlement, progress, recurringTasks, taxObligations
           <button style={closeButtonStyle} onClick={onClose}>Zamknij</button>
         </header>
         <div style={drawerContentStyle}>
-          <section style={drawerSectionStyle}>
-            <h3 style={drawerSectionTitleStyle}>Status miesiąca</h3>
-            <Field label="Status księgowości"><select style={{ ...inputStyle, ...statusSelectStyle(settlement.status_ksiegowosci) }} value={settlement.status_ksiegowosci} disabled={saving} onChange={(event) => onSave(settlement, { status_ksiegowosci: event.target.value as SettlementStatus })}>{STATUS_OPTIONS.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}</select></Field>
-            <Field label="Data dostarczenia dokumentów"><input style={inputStyle} type="date" value={formatDateForInput(settlement.data_dostarczenia_dokumentow)} disabled={saving} onChange={(event) => onSave(settlement, { data_dostarczenia_dokumentow: event.target.value || null })} /></Field>
-            <div style={hasPayroll ? countFieldsGridStyle : oneColumnStyle}>
-              <Field label="Liczba dokumentów"><NumberInput value={settlement.liczba_dokumentow} disabled={false} onChange={(value) => onSave(settlement, { liczba_dokumentow: value })} /></Field>
-              {hasPayroll && <Field label="Liczba pracowników"><NumberInput value={settlement.liczba_pracownikow} disabled={false} onChange={(value) => onSave(settlement, { liczba_pracownikow: value })} /></Field>}
-              {hasPayroll && <Field label="Liczba zleceniobiorców"><NumberInput value={settlement.liczba_zleceniobiorcow} disabled={false} onChange={(value) => onSave(settlement, { liczba_zleceniobiorcow: value })} /></Field>}
-            </div>
-            <Field label="Uwagi"><textarea style={textareaStyle} value={settlement.uwagi || ""} disabled={false} onChange={(event) => onSave(settlement, { uwagi: event.target.value })} /></Field>
-          </section>
-
-          <SettlementAdditionalFeesPanel settlementId={settlement.id} />
-
-          <section style={drawerSectionStyle}>
-            <div style={sectionHeaderRowStyle}>
-              <h3 style={drawerSectionTitleStyle}>Zobowiązania publicznoprawne</h3>
-              <span style={mutedBadgeStyle}>wFirma</span>
-            </div>
-            {taxObligations.length === 0 ? (
-              <div style={emptyStateStyle}>Brak zobowiązań wynikających z danych klienta.</div>
-            ) : (
-              <div style={taxObligationListStyle}>
-                {taxObligations.map((obligation) => (
-                  <article key={obligation.id} style={taxObligationItemStyle}>
-                    <div style={taxObligationMainStyle}>
-                      <strong>{obligation.nazwa}</strong>
-                      <span>{formatCurrency(obligation.kwota)}</span>
-                    </div>
-                    <div style={taxObligationMetaStyle}>
-                      <span>Termin: <strong>{formatDate(obligation.termin_platnosci)}</strong></span>
-                      <span>Pobranie: <strong>{fetchStatusLabel(obligation.status_pobrania)}</strong></span>
-                    </div>
-                    <div style={taxStatusGridStyle}>
-                      <span style={sendStatusStyle(obligation.status_email)}>E-mail: {sendStatusLabel(obligation.status_email)}</span>
-                      <span style={sendStatusStyle(obligation.status_sms)}>SMS: {sendStatusLabel(obligation.status_sms)}</span>
-                    </div>
-                  </article>
-                ))}
+          <div style={drawerColumnStyle}>
+            <section style={drawerSectionStyle}>
+              <h3 style={drawerSectionTitleStyle}>Status miesiąca</h3>
+              <Field label="Status księgowości"><select style={{ ...inputStyle, ...statusSelectStyle(settlement.status_ksiegowosci) }} value={settlement.status_ksiegowosci} disabled={saving} onChange={(event) => onSave(settlement, { status_ksiegowosci: event.target.value as SettlementStatus })}>{STATUS_OPTIONS.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}</select></Field>
+              <Field label="Data dostarczenia dokumentów"><input style={inputStyle} type="date" value={formatDateForInput(settlement.data_dostarczenia_dokumentow)} disabled={saving} onChange={(event) => onSave(settlement, { data_dostarczenia_dokumentow: event.target.value || null })} /></Field>
+              <div style={hasPayroll ? countFieldsGridStyle : oneColumnStyle}>
+                <Field label="Liczba dokumentów"><NumberInput value={settlement.liczba_dokumentow} disabled={false} onChange={(value) => onSave(settlement, { liczba_dokumentow: value })} /></Field>
+                {hasPayroll && <Field label="Liczba pracowników"><NumberInput value={settlement.liczba_pracownikow} disabled={false} onChange={(value) => onSave(settlement, { liczba_pracownikow: value })} /></Field>}
+                {hasPayroll && <Field label="Liczba zleceniobiorców"><NumberInput value={settlement.liczba_zleceniobiorcow} disabled={false} onChange={(value) => onSave(settlement, { liczba_zleceniobiorcow: value })} /></Field>}
               </div>
-            )}
-          </section>
+              <Field label="Uwagi"><textarea style={textareaStyle} value={settlement.uwagi || ""} disabled={false} onChange={(event) => onSave(settlement, { uwagi: event.target.value })} /></Field>
+            </section>
 
-          <section style={drawerSectionStyle}>
-            <h3 style={drawerSectionTitleStyle}>Zadania cykliczne</h3>
-            <ProgressBadge progress={progress.progress} done={progress.done_tasks} total={progress.total_tasks} large />
-            <div style={clientContextStyle}><span>Forma prawna: <strong>{client?.forma_prawna || "Brak"}</strong></span><span>Opodatkowanie: <strong>{client?.forma_opodatkowania || "Brak"}</strong></span><span>VAT: <strong>{client?.czynny_vat ? "czynny" : "nie"}</strong></span><span>VAT-UE: <strong>{client?.vat_ue ? "tak" : "nie"}</strong></span><span>Kadry: <strong>{client?.obsluga_kadrowa ? "tak" : "nie"}</strong></span></div>
-            <div style={recurringListStyle}>
-              {recurringTasks.length === 0 ? <div style={emptyStateStyle}>Brak zadań cyklicznych dla tego klienta.</div> : recurringTasks.map((task) => {
-                const activeTimer = activeTimers.find((entry) => entry.zadanie_cykliczne_id === task.zadanie_cykliczne_id && entry.klient_id === client?.id && entry.miesiac_rozliczeniowy === settlement.okres);
-                const done = task.status === "zrobione";
-                return <article key={task.id} style={done ? recurringDoneItemStyle : recurringItemStyle}><div style={recurringTitleRowStyle}><input type="checkbox" checked={done} onChange={() => onToggleRecurringDone(task)} style={checkboxStyle} /><div><strong>{task.tytul}</strong><p style={recurringMetaStyle}>{requiredDayLabel(task.termin)}</p></div></div><div style={recurringActionsStyle}><button style={activeTimer ? timerActiveButtonStyle : timerButtonStyle} onClick={() => onToggleRecurringTimer(settlement, task)} title={activeTimer ? "Zatrzymaj liczenie czasu" : "Rozpocznij liczenie czasu"}>{activeTimer ? <Square size={16} /> : <Play size={16} />}{activeTimer ? "Stop" : "Start"}</button></div></article>;
-              })}
-            </div>
-          </section>
+            <section style={drawerSectionStyle}>
+              <div style={sectionHeaderRowStyle}>
+                <h3 style={drawerSectionTitleStyle}>Zobowiązania publicznoprawne</h3>
+                <span style={mutedBadgeStyle}>wFirma</span>
+              </div>
+              {taxObligations.length === 0 ? (
+                <div style={emptyStateStyle}>Brak zobowiązań wynikających z danych klienta.</div>
+              ) : (
+                <div style={taxObligationListStyle}>
+                  {taxObligations.map((obligation) => (
+                    <article key={obligation.id} style={taxObligationItemStyle}>
+                      <div style={taxObligationMainStyle}>
+                        <strong>{obligation.nazwa}</strong>
+                        <span>{formatCurrency(obligation.kwota)}</span>
+                      </div>
+                      <div style={taxObligationMetaStyle}>
+                        <span>Termin: <strong>{formatDate(obligation.termin_platnosci)}</strong></span>
+                        <span>Pobranie: <strong>{fetchStatusLabel(obligation.status_pobrania)}</strong></span>
+                      </div>
+                      <div style={taxStatusGridStyle}>
+                        <span style={sendStatusStyle(obligation.status_email)}>E-mail: {sendStatusLabel(obligation.status_email)}</span>
+                        <span style={sendStatusStyle(obligation.status_sms)}>SMS: {sendStatusLabel(obligation.status_sms)}</span>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <SettlementAdditionalFeesPanel settlementId={settlement.id} />
+          </div>
+
+          <div style={drawerColumnStyle}>
+            <section style={drawerSectionStyle}>
+              <h3 style={drawerSectionTitleStyle}>Zadania cykliczne</h3>
+              <ProgressBadge progress={progress.progress} done={progress.done_tasks} total={progress.total_tasks} large />
+              <div style={clientContextStyle}><span>Forma prawna: <strong>{client?.forma_prawna || "Brak"}</strong></span><span>Opodatkowanie: <strong>{client?.forma_opodatkowania || "Brak"}</strong></span><span>VAT: <strong>{client?.czynny_vat ? "czynny" : "nie"}</strong></span><span>VAT-UE: <strong>{client?.vat_ue ? "tak" : "nie"}</strong></span><span>Kadry: <strong>{client?.obsluga_kadrowa ? "tak" : "nie"}</strong></span></div>
+              <div style={recurringListStyle}>
+                {recurringTasks.length === 0 ? <div style={emptyStateStyle}>Brak zadań cyklicznych dla tego klienta.</div> : recurringTasks.map((task) => {
+                  const activeTimer = activeTimers.find((entry) => entry.zadanie_cykliczne_id === task.zadanie_cykliczne_id && entry.klient_id === client?.id && entry.miesiac_rozliczeniowy === settlement.okres);
+                  const done = task.status === "zrobione";
+                  return <article key={task.id} style={done ? recurringDoneItemStyle : recurringItemStyle}><div style={recurringTitleRowStyle}><input type="checkbox" checked={done} onChange={() => onToggleRecurringDone(task)} style={checkboxStyle} /><div><strong>{task.tytul}</strong><p style={recurringMetaStyle}>{requiredDayLabel(task.termin)}</p></div></div><div style={recurringActionsStyle}><button style={activeTimer ? timerActiveButtonStyle : timerButtonStyle} onClick={() => onToggleRecurringTimer(settlement, task)} title={activeTimer ? "Zatrzymaj liczenie czasu" : "Rozpocznij liczenie czasu"}>{activeTimer ? <Square size={16} /> : <Play size={16} />}{activeTimer ? "Stop" : "Start"}</button></div></article>;
+                })}
+              </div>
+            </section>
+          </div>
         </div>
       </aside>
     </div>
@@ -404,6 +408,7 @@ const drawerTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSiz
 const drawerMetaStyle: CSSProperties = { margin: "8px 0 0", color: colors.muted, fontWeight: 800 };
 const closeButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.inputBackground, color: colors.text, cursor: "pointer", padding: "10px 14px", height: "42px", fontWeight: 800 };
 const drawerContentStyle: CSSProperties = { padding: "24px 28px 34px", overflowY: "auto", display: "grid", gridTemplateColumns: "minmax(720px, 1.18fr) minmax(0, 0.82fr)", alignItems: "start", gap: "18px" };
+const drawerColumnStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "18px", minWidth: 0 };
 const drawerSectionStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: "22px", background: colors.card };
 const drawerSectionTitleStyle: CSSProperties = { margin: "0 0 14px", color: colors.navy, fontSize: "20px" };
 const sectionHeaderRowStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", marginBottom: "14px" };

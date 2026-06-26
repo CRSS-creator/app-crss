@@ -12,8 +12,12 @@ type AuthorizedResult =
   | { admin: SupabaseClient; requesterId: string; role: string; error: null }
   | { admin: null; requesterId: null; role: null; error: NextResponse };
 
-function getWebhookUrl() {
-  const webhookUrl = process.env.N8N_DOCUMENT_REMINDER_WEBHOOK_URL;
+type WebhookConfig =
+  | { webhookUrl: string; error: null }
+  | { webhookUrl: null; error: NextResponse };
+
+function getWebhookUrl(): WebhookConfig {
+  const webhookUrl = process.env.N8N_DOCUMENT_REMINDER_WEBHOOK_URL?.trim();
 
   if (!webhookUrl) {
     return {
@@ -96,7 +100,7 @@ export async function POST(request: NextRequest) {
   if (auth.error) return auth.error;
 
   const webhookConfig = getWebhookUrl();
-  if (webhookConfig.error || !webhookConfig.webhookUrl) return webhookConfig.error;
+  if (webhookConfig.error) return webhookConfig.error;
 
   let payload: ReminderPayload;
   try {

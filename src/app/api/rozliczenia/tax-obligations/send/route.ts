@@ -171,9 +171,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Nie udało się pobrać zobowiązań." }, { status: 500 });
   }
 
-  const readyObligations = (obligations || []).filter((obligation) => obligation.kwota !== null && obligation.termin_platnosci);
+  const sendStatusColumn = payload.channel === "email" ? "status_email" : "status_sms";
+  const readyObligations = (obligations || []).filter((obligation) =>
+    obligation.kwota !== null &&
+    obligation.termin_platnosci &&
+    obligation[sendStatusColumn] !== "wyslane"
+  );
   if (readyObligations.length === 0) {
-    return NextResponse.json({ error: "Brak zobowiązań z uzupełnioną kwotą i terminem płatności." }, { status: 400 });
+    return NextResponse.json({ error: "Brak nowych zobowiązań do wysłania tym kanałem." }, { status: 400 });
   }
 
   const caregiver = Array.isArray(client.profiles) ? client.profiles[0] : client.profiles;

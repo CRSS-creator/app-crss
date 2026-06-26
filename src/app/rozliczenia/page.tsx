@@ -279,6 +279,8 @@ function SettlementDrawer({ settlement, progress, recurringTasks, taxObligations
   const hasPayroll = Boolean(client?.obsluga_kadrowa);
   const [sendingReminder, setSendingReminder] = useState(false);
   const [sendingTaxChannel, setSendingTaxChannel] = useState<"email" | "sms" | null>(null);
+  const hasEmailObligationsToSend = taxObligations.some((obligation) => obligation.kwota !== null && obligation.termin_platnosci && obligation.status_email !== "wyslane");
+  const hasSmsObligationsToSend = taxObligations.some((obligation) => obligation.kwota !== null && obligation.termin_platnosci && obligation.status_sms !== "wyslane");
 
   async function requestDocumentsReminder() {
     setSendingReminder(true);
@@ -346,10 +348,10 @@ function SettlementDrawer({ settlement, progress, recurringTasks, taxObligations
                 <h3 style={drawerSectionTitleStyle}>Zobowiązania publicznoprawne</h3>
                 <div style={taxHeaderActionsStyle}>
                   <span style={mutedBadgeStyle}>wFirma</span>
-                  <button type="button" style={taxActionButtonStyle} disabled={taxObligations.length === 0 || sendingTaxChannel !== null} onClick={() => requestTaxObligationSend("email")}>
+                  <button type="button" style={taxActionButtonStyle} disabled={!hasEmailObligationsToSend || sendingTaxChannel !== null} onClick={() => requestTaxObligationSend("email")}>
                     {sendingTaxChannel === "email" ? "Wysyłanie..." : "Wyślij e-mail"}
                   </button>
-                  <button type="button" style={taxActionButtonStyle} disabled={taxObligations.length === 0 || sendingTaxChannel !== null} onClick={() => requestTaxObligationSend("sms")}>
+                  <button type="button" style={taxActionButtonStyle} disabled={!hasSmsObligationsToSend || sendingTaxChannel !== null} onClick={() => requestTaxObligationSend("sms")}>
                     {sendingTaxChannel === "sms" ? "Wysyłanie..." : "Wyślij SMS"}
                   </button>
                 </div>

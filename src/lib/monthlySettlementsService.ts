@@ -33,6 +33,7 @@ export type MonthlySettlement = {
   liczba_dokumentow: number;
   liczba_pracownikow: number;
   liczba_zleceniobiorcow: number;
+  data_dostarczenia_dokumentow: string | null;
   uwagi: string | null;
   klienci?: SettlementClient | SettlementClient[] | null;
 };
@@ -42,6 +43,7 @@ export type SettlementUpdatePayload = {
   liczba_dokumentow?: number;
   liczba_pracownikow?: number;
   liczba_zleceniobiorcow?: number;
+  data_dostarczenia_dokumentow?: string | null;
   uwagi?: string | null;
 };
 

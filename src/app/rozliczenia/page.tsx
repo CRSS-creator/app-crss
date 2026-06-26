@@ -201,7 +201,7 @@ function SettlementsContent() {
         {loading ? <div style={emptyStateStyle}>Ładowanie rozliczeń...</div> : visibleSettlements.length === 0 ? <div style={emptyStateStyle}>Brak rozliczeń do wyświetlenia.</div> : (
           <div style={tableWrapperStyle}>
             <table style={tableStyle}>
-              <thead><tr><Th width="230px">Klient</Th><Th width="250px">Status</Th><Th width="140px">L. dokumentów</Th><Th width="150px">L. pracowników</Th><Th width="170px">L. zleceniobiorców</Th><Th width="170px">Zadania cykliczne</Th><Th width="120px">Akcje</Th></tr></thead>
+              <thead><tr><Th width="230px">Klient</Th><Th width="250px">Status</Th><Th width="160px">Liczba dokumentów</Th><Th width="160px">Liczba pracowników</Th><Th width="190px">Liczba zleceniobiorców</Th><Th width="170px">Zadania cykliczne</Th><Th width="120px">Akcje</Th></tr></thead>
               <tbody>
                 {visibleSettlements.map((settlement) => {
                   const client = getClient(settlement.klienci);
@@ -211,8 +211,8 @@ function SettlementsContent() {
                       <Td strong><div style={clientCellStyle}><span>{client?.nazwa || "Klient"}</span><small>{client?.nip || "Brak NIP"} · {getCaregiverName(client)}</small></div></Td>
                       <Td><select style={{ ...statusInputStyle, ...statusSelectStyle(settlement.status_ksiegowosci) }} value={settlement.status_ksiegowosci} disabled={savingId === settlement.id} onChange={(event) => patchSettlement(settlement, { status_ksiegowosci: event.target.value as SettlementStatus })}>{STATUS_OPTIONS.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}</select></Td>
                       <Td><NumberInput value={settlement.liczba_dokumentow} disabled={false} onChange={(value) => patchSettlement(settlement, { liczba_dokumentow: value })} /></Td>
-                      <Td><NumberInput value={settlement.liczba_pracownikow} disabled={false} onChange={(value) => patchSettlement(settlement, { liczba_pracownikow: value })} /></Td>
-                      <Td><NumberInput value={settlement.liczba_zleceniobiorcow} disabled={false} onChange={(value) => patchSettlement(settlement, { liczba_zleceniobiorcow: value })} /></Td>
+                      <Td>{client?.obsluga_kadrowa ? <NumberInput value={settlement.liczba_pracownikow} disabled={false} onChange={(value) => patchSettlement(settlement, { liczba_pracownikow: value })} /> : <span style={emptyCellStyle}>-</span>}</Td>
+                      <Td>{client?.obsluga_kadrowa ? <NumberInput value={settlement.liczba_zleceniobiorcow} disabled={false} onChange={(value) => patchSettlement(settlement, { liczba_zleceniobiorcow: value })} /> : <span style={emptyCellStyle}>-</span>}</Td>
                       <Td><ProgressBadge progress={progress.progress} done={progress.done_tasks} total={progress.total_tasks} /></Td>
                       <Td><button style={detailsButtonStyle} onClick={() => setSelected(settlement)}>Szczegóły</button></Td>
                     </tr>
@@ -255,6 +255,7 @@ function SettlementDrawer({ settlement, progress, recurringTasks, taxObligations
   saving: boolean;
 }) {
   const client = getClient(settlement.klienci);
+  const hasPayroll = Boolean(client?.obsluga_kadrowa);
 
   return (
     <div style={drawerOverlayStyle}>
@@ -267,7 +268,12 @@ function SettlementDrawer({ settlement, progress, recurringTasks, taxObligations
           <section style={drawerSectionStyle}>
             <h3 style={drawerSectionTitleStyle}>Status miesiąca</h3>
             <Field label="Status księgowości"><select style={{ ...inputStyle, ...statusSelectStyle(settlement.status_ksiegowosci) }} value={settlement.status_ksiegowosci} disabled={saving} onChange={(event) => onSave(settlement, { status_ksiegowosci: event.target.value as SettlementStatus })}>{STATUS_OPTIONS.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}</select></Field>
-            <div style={threeColumnsStyle}><Field label="L. dokumentów"><NumberInput value={settlement.liczba_dokumentow} disabled={false} onChange={(value) => onSave(settlement, { liczba_dokumentow: value })} /></Field><Field label="L. pracowników"><NumberInput value={settlement.liczba_pracownikow} disabled={false} onChange={(value) => onSave(settlement, { liczba_pracownikow: value })} /></Field><Field label="L. zleceniobiorców"><NumberInput value={settlement.liczba_zleceniobiorcow} disabled={false} onChange={(value) => onSave(settlement, { liczba_zleceniobiorcow: value })} /></Field></div>
+            <div style={hasPayroll ? threeColumnsStyle : twoColumnsStyle}>
+              <Field label="Liczba dokumentów"><NumberInput value={settlement.liczba_dokumentow} disabled={false} onChange={(value) => onSave(settlement, { liczba_dokumentow: value })} /></Field>
+              <Field label="Data dostarczenia dokumentów"><input style={inputStyle} type="date" value={formatDateForInput(settlement.data_dostarczenia_dokumentow)} disabled={saving} onChange={(event) => onSave(settlement, { data_dostarczenia_dokumentow: event.target.value || null })} /></Field>
+              {hasPayroll && <Field label="Liczba pracowników"><NumberInput value={settlement.liczba_pracownikow} disabled={false} onChange={(value) => onSave(settlement, { liczba_pracownikow: value })} /></Field>}
+              {hasPayroll && <Field label="Liczba zleceniobiorców"><NumberInput value={settlement.liczba_zleceniobiorcow} disabled={false} onChange={(value) => onSave(settlement, { liczba_zleceniobiorcow: value })} /></Field>}
+            </div>
             <Field label="Uwagi"><textarea style={textareaStyle} value={settlement.uwagi || ""} disabled={false} onChange={(event) => onSave(settlement, { uwagi: event.target.value })} /></Field>
           </section>
 
@@ -342,6 +348,7 @@ function currentMonthInput() {
 }
 function formatMonth(value: string) { return new Intl.DateTimeFormat("pl-PL", { month: "long", year: "numeric" }).format(new Date(`${value}-01T12:00:00`)); }
 function formatDate(value: string | null) { return value ? new Intl.DateTimeFormat("pl-PL").format(new Date(`${value}T12:00:00`)) : "Do ustalenia"; }
+function formatDateForInput(value: string | null) { return value ? value.slice(0, 10) : ""; }
 function formatCurrency(value: number | null) { return value === null || value === undefined ? "Do pobrania" : new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN" }).format(value); }
 function fetchStatusLabel(status: TaxFetchStatus) { if (status === "pobrane") return "pobrane"; if (status === "blad") return "błąd"; return "do pobrania"; }
 function sendStatusLabel(status: TaxSendStatus) { if (status === "wyslane") return "wysłane"; if (status === "blad") return "błąd"; return "niewysłane"; }
@@ -378,6 +385,7 @@ const tableStyle: CSSProperties = { width: "100%", minWidth: "1120px", borderCol
 const thStyle: CSSProperties = { textAlign: "left", padding: "13px 10px", color: colors.muted, fontSize: "12px", borderBottom: `1px solid ${colors.border}`, lineHeight: 1.25, fontWeight: 800, whiteSpace: "nowrap" };
 const rowStyle: CSSProperties = { borderBottom: `1px solid ${colors.border}` };
 const tdStyle: CSSProperties = { padding: "15px 10px", color: colors.text, verticalAlign: "middle", fontSize: "15px" };
+const emptyCellStyle: CSSProperties = { color: colors.muted, fontWeight: 800 };
 const inputStyle: CSSProperties = { width: "100%", border: `1px solid ${colors.border}`, borderRadius: radius.input, color: colors.text, padding: "10px 12px", fontWeight: 500, fontSize: "14px" };
 const statusInputStyle: CSSProperties = { ...inputStyle, minWidth: 0, maxWidth: "100%", height: "42px", padding: "8px 28px 8px 10px", fontSize: "12px", lineHeight: 1.1, whiteSpace: "normal", fontWeight: 800 };
 const smallInputStyle: CSSProperties = { ...inputStyle, width: "100%", maxWidth: "94px", background: colors.inputBackground, textAlign: "center", fontWeight: 800 };
@@ -403,6 +411,7 @@ const mutedBadgeStyle: CSSProperties = { borderRadius: radius.badge, background:
 const fieldStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "7px", marginBottom: "14px" };
 const labelStyle: CSSProperties = { color: colors.muted, fontSize: "13px", fontWeight: 800 };
 const threeColumnsStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "14px" };
+const twoColumnsStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "14px" };
 const clientContextStyle: CSSProperties = { display: "flex", gap: "10px", flexWrap: "wrap", margin: "12px 0", color: colors.muted, fontSize: "13px" };
 const recurringListStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "10px", marginTop: "12px" };
 const recurringItemStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "12px", background: colors.inputBackground };

@@ -94,6 +94,7 @@ function NotificationsContent() {
               const publicToken = getPublicToken(notification);
               const isTaskNotification = notification.type === "task_assigned" || notification.type === "task_due_today";
               const isCrmFollowUpNotification = notification.type === "crm_follow_up_due";
+              const isRecurringTaskNotification = notification.type === "recurring_task_due_today";
               return (
                 <article key={notification.id} style={notification.status === "unread" ? unreadItemStyle : itemStyle}>
                   <div style={itemHeaderStyle}>
@@ -112,6 +113,7 @@ function NotificationsContent() {
                     )}
                     {isTaskNotification && <a style={secondaryButtonStyle} href="/zadania">Otwórz zadania</a>}
                     {isCrmFollowUpNotification && <a style={secondaryButtonStyle} href="/crm">Otwórz CRM</a>}
+                    {isRecurringTaskNotification && <a style={secondaryButtonStyle} href="/rozliczenia">Otwórz rozliczenia</a>}
                     {notification.status === "unread" && <button style={primaryButtonStyle} onClick={() => markRead(notification)}>Przeczytane</button>}
                   </div>
                 </article>

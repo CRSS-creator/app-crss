@@ -38,18 +38,24 @@ export async function createDueCrmFollowUpNotifications() {
   return supabase.rpc("create_due_crm_follow_up_notifications");
 }
 
+export async function createDueRecurringTaskNotifications() {
+  return supabase.rpc("create_due_recurring_task_notifications");
+}
+
 export async function createDueNotifications() {
-  const [taskResult, crmFollowUpResult] = await Promise.all([
+  const [taskResult, crmFollowUpResult, recurringTaskResult] = await Promise.all([
     createDueTaskNotifications(),
     createDueCrmFollowUpNotifications(),
+    createDueRecurringTaskNotifications(),
   ]);
 
   return {
     data: {
       taskNotifications: taskResult.data || 0,
       crmFollowUpNotifications: crmFollowUpResult.data || 0,
+      recurringTaskNotifications: recurringTaskResult.data || 0,
     },
-    error: taskResult.error || crmFollowUpResult.error,
+    error: taskResult.error || crmFollowUpResult.error || recurringTaskResult.error,
   };
 }
 

@@ -1813,7 +1813,8 @@ const drawerOverlayStyle: React.CSSProperties = {
 };
 
 const drawerStyle: React.CSSProperties = {
-  width: "560px",
+  width: "min(960px, calc(100vw - 280px))",
+  minWidth: "680px",
   maxWidth: "100%",
   height: "100vh",
   background: colors.card,
@@ -1884,16 +1885,16 @@ const drawerSectionTitleStyle: React.CSSProperties = {
 
 const infoRowStyle: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "180px 1fr",
-  gap: "14px",
+  gridTemplateColumns: "220px 1fr",
+  gap: "18px",
   padding: "11px 0",
   borderBottom: `1px solid ${colors.border}`,
 };
 
 const editableRowStyle: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "180px 1fr",
-  gap: "14px",
+  gridTemplateColumns: "220px 1fr",
+  gap: "18px",
   alignItems: "center",
   padding: "10px 0",
   borderBottom: `1px solid ${colors.border}`,

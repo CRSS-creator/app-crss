@@ -275,7 +275,7 @@ function SettlementDrawer({ settlement, progress, recurringTasks, taxObligations
 
           <section style={drawerSectionStyle}>
             <div style={sectionHeaderRowStyle}>
-              <h3 style={drawerSectionTitleStyle}>Zobowiązania podatkowe</h3>
+              <h3 style={drawerSectionTitleStyle}>Zobowiązania publicznoprawne</h3>
               <span style={mutedBadgeStyle}>wFirma</span>
             </div>
             {taxObligations.length === 0 ? (

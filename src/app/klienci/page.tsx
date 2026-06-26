@@ -1702,13 +1702,14 @@ const filtersLabelStyle: React.CSSProperties = {
 };
 
 const compactFilterStyle: React.CSSProperties = {
+  width: "180px",
+  flex: "0 0 180px",
   border: `1px solid ${colors.border}`,
   borderRadius: radius.button,
   padding: "10px 14px",
   background: colors.card,
   color: colors.text,
   fontSize: "14px",
-  minWidth: "160px",
 };
 
 const sectionTitleStyle: React.CSSProperties = {

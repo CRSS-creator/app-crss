@@ -616,7 +616,7 @@ function ClientDrawer({
       ...administrativePayload,
     };
 
-    const { error } = await updateClient(client.id, payload);
+    const { data, error } = await updateClient(client.id, payload);
 
     if (error) {
       console.error("Błąd zapisu klienta:", error);
@@ -625,23 +625,7 @@ function ClientDrawer({
       return;
     }
 
-    const selectedOpiekun = opiekunowie.find(
-      (opiekun) => opiekun.id === draft.opiekun_id
-    );
-
-    const updatedClient: Client = {
-      ...client,
-      ...payload,
-      profiles: selectedOpiekun
-        ? [
-            {
-              full_name: selectedOpiekun.full_name,
-              email: selectedOpiekun.email,
-              role: selectedOpiekun.role,
-            },
-          ]
-        : client.profiles,
-    };
+    const updatedClient = data as Client;
 
     onSaved(updatedClient);
     setEditing(false);

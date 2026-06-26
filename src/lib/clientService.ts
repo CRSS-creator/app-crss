@@ -1,18 +1,6 @@
 import { supabase } from "@/lib/supabaseClient";
 
-export async function fetchClientCaregivers() {
-  return supabase
-    .from("profiles")
-    .select("id, full_name, email, role, aktywne")
-    .in("role", ["owner", "manager", "admin", "accountant"])
-    .neq("aktywne", false)
-    .order("full_name", { ascending: true });
-}
-
-export async function fetchClients() {
-  return supabase
-    .from("klienci")
-    .select(`
+const CLIENT_SELECT = `
       id,
       nazwa,
       nip,
@@ -41,7 +29,21 @@ export async function fetchClients() {
         role,
         aktywne
       )
-    `)
+    `;
+
+export async function fetchClientCaregivers() {
+  return supabase
+    .from("profiles")
+    .select("id, full_name, email, role, aktywne")
+    .in("role", ["owner", "manager", "admin", "accountant"])
+    .neq("aktywne", false)
+    .order("full_name", { ascending: true });
+}
+
+export async function fetchClients() {
+  return supabase
+    .from("klienci")
+    .select(CLIENT_SELECT)
     .order("nazwa", { ascending: true });
 }
 
@@ -49,7 +51,9 @@ export async function updateClient(clientId: string, payload: Record<string, unk
   return supabase
     .from("klienci")
     .update(payload)
-    .eq("id", clientId);
+    .eq("id", clientId)
+    .select(CLIENT_SELECT)
+    .single();
 }
 
 export async function createClient(payload: Record<string, unknown>) {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import AppSelect from "@/components/AppSelect";
 import { colors, radius, shadow } from "@/app/design";
 import { LEGAL_FORM_OPTIONS, TAXATION_FORM_OPTIONS } from "@/lib/clientDictionaries";
 import { createClient as createClientRecord, fetchClientCaregivers } from "@/lib/clientService";
@@ -219,9 +220,7 @@ function SelectField({ label, value, onChange, options }: { label: string; value
   return (
     <label style={fieldStyle}>
       <span>{label}</span>
-      <select value={value} onChange={(event) => onChange(event.target.value)} style={inputStyle}>
-        {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-      </select>
+      <AppSelect value={value} onChange={onChange} style={inputStyle} options={options} />
     </label>
   );
 }

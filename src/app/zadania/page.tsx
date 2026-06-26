@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
+import AppSelect from "@/components/AppSelect";
 import { colors, radius, shadow } from "@/app/design";
 import { supabase } from "@/lib/supabaseClient";
 import type { UserRole } from "@/lib/permissions";
@@ -62,6 +63,7 @@ const PRIORITY_OPTIONS: { value: TaskPriority; label: string }[] = [
   { value: "wysoki", label: "Wysoki" },
   { value: "pilne", label: "Pilne" },
 ];
+const STATUS_FILTER_OPTIONS = [{ value: EMPTY_FILTER, label: "Status" }, ...STATUS_OPTIONS];
 
 export default function TasksPage() {
   return (
@@ -211,19 +213,9 @@ function TasksContent({ currentRole }: { currentRole: UserRole | null }) {
 
         <div style={compactFiltersRowStyle}>
           <span style={filtersLabelStyle}>Filtry:</span>
-          <select style={compactFilterStyle} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-            <option value={EMPTY_FILTER}>Status</option>
-            {STATUS_OPTIONS.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}
-          </select>
-          <select style={compactFilterStyle} value={assigneeFilter} onChange={(event) => setAssigneeFilter(event.target.value)}>
-            <option value={EMPTY_FILTER}>Osoba</option>
-            {assignees.map((assignee) => <option key={assignee.id} value={assignee.id}>{formatProfileName(assignee)}</option>)}
-          </select>
-          <select style={compactFilterStyle} value={clientFilter} onChange={(event) => setClientFilter(event.target.value)}>
-            <option value={EMPTY_FILTER}>Klient</option>
-            <option value="internal">Wewnętrzne</option>
-            {clients.map((client) => <option key={client.id} value={client.id}>{formatClientName(client)}</option>)}
-          </select>
+          <AppSelect style={compactFilterStyle} value={statusFilter} options={STATUS_FILTER_OPTIONS} onChange={setStatusFilter} />
+          <AppSelect style={compactFilterStyle} value={assigneeFilter} options={[{ value: EMPTY_FILTER, label: "Osoba" }, ...assignees.map((assignee) => ({ value: assignee.id, label: formatProfileName(assignee) }))]} onChange={setAssigneeFilter} />
+          <AppSelect style={compactFilterStyle} value={clientFilter} options={[{ value: EMPTY_FILTER, label: "Klient" }, { value: "internal", label: "Wewnętrzne" }, ...clients.map((client) => ({ value: client.id, label: formatClientName(client) }))]} onChange={setClientFilter} />
         </div>
 
         {loading ? (
@@ -431,22 +423,15 @@ function TaskDrawer({ mode, task, currentUserId, assignees, clients, onClose, on
             <EditableRow label="Opis"><textarea style={textareaStyle} value={draft.opis} onChange={(event) => updateDraft("opis", event.target.value)} /></EditableRow>
             <div style={twoColumnsStyle}>
               <EditableRow label="Status">
-                <select style={inputStyle} value={draft.status} onChange={(event) => updateDraft("status", event.target.value as TaskStatus)}>
-                  {STATUS_OPTIONS.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}
-                </select>
+                <AppSelect style={inputStyle} value={draft.status} options={STATUS_OPTIONS} onChange={(value) => updateDraft("status", value as TaskStatus)} />
               </EditableRow>
               <EditableRow label="Priorytet">
-                <select style={inputStyle} value={draft.priorytet} onChange={(event) => updateDraft("priorytet", event.target.value as TaskPriority)}>
-                  {PRIORITY_OPTIONS.map((priority) => <option key={priority.value} value={priority.value}>{priority.label}</option>)}
-                </select>
+                <AppSelect style={inputStyle} value={draft.priorytet} options={PRIORITY_OPTIONS} onChange={(value) => updateDraft("priorytet", value as TaskPriority)} />
               </EditableRow>
             </div>
             <EditableRow label="Termin"><input style={inputStyle} type="date" value={draft.termin} onChange={(event) => updateDraft("termin", event.target.value)} /></EditableRow>
             <EditableRow label="Osoba odpowiedzialna">
-              <select style={inputStyle} value={draft.osoba_id} onChange={(event) => updateDraft("osoba_id", event.target.value)}>
-                <option value="">Wybierz osobę</option>
-                {assignees.map((assignee) => <option key={assignee.id} value={assignee.id}>{formatProfileName(assignee)}</option>)}
-              </select>
+              <AppSelect style={inputStyle} value={draft.osoba_id} options={[{ value: "", label: "Wybierz osobę" }, ...assignees.map((assignee) => ({ value: assignee.id, label: formatProfileName(assignee) }))]} onChange={(value) => updateDraft("osoba_id", value)} />
             </EditableRow>
             <label style={checkboxLabelStyle}>
               <input

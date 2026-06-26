@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
+import AppSelect from "@/components/AppSelect";
 import { colors, radius, shadow } from "@/app/design";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -25,6 +26,9 @@ const statusOptions: { value: TopicStatus; label: string }[] = [
   { value: "w_planie", label: "W planie" },
   { value: "opublikowane", label: "Opublikowane" },
 ];
+const categoryOptions = categories.map((category) => ({ value: category, label: category }));
+const categoryFilterOptions = [{ value: "Wszystkie", label: "Wszystkie" }, ...categoryOptions];
+const statusFilterOptions = [{ value: "Wszystkie", label: "Wszystkie statusy" }, ...statusOptions];
 
 type ContentTopic = {
   id: string;
@@ -408,14 +412,8 @@ function CsoContent() {
             <p style={hintStyle}>Dodawaj tematy, oznaczaj publikację na FB i Blogu oraz zapisuj notatki robocze pod przyciskiem po prawej stronie.</p>
           </div>
           <div style={filtersRowStyle}>
-            <select style={filterStyle} value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value as TopicCategory | "Wszystkie")}>
-              <option>Wszystkie</option>
-              {categories.map((category) => <option key={category}>{category}</option>)}
-            </select>
-            <select style={filterStyle} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as TopicStatus | "Wszystkie")}>
-              <option value="Wszystkie">Wszystkie statusy</option>
-              {statusOptions.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}
-            </select>
+            <AppSelect style={filterStyle} value={categoryFilter} options={categoryFilterOptions} onChange={(value) => setCategoryFilter(value as TopicCategory | "Wszystkie")} />
+            <AppSelect style={filterStyle} value={statusFilter} options={statusFilterOptions} onChange={(value) => setStatusFilter(value as TopicStatus | "Wszystkie")} />
           </div>
         </div>
 
@@ -427,9 +425,7 @@ function CsoContent() {
         />
 
         <div style={addPanelStyle}>
-          <select style={inputStyle} value={draft.category} onChange={(event) => setDraft((current) => ({ ...current, category: event.target.value as TopicCategory }))}>
-            {categories.map((category) => <option key={category}>{category}</option>)}
-          </select>
+          <AppSelect style={inputStyle} value={draft.category} options={categoryOptions} onChange={(value) => setDraft((current) => ({ ...current, category: value as TopicCategory }))} />
           <input style={inputStyle} value={draft.title} onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))} placeholder="Nowy temat" />
           <button style={primaryButtonStyle} onClick={addTopic}>Dodaj temat</button>
         </div>
@@ -458,9 +454,7 @@ function CsoContent() {
                   </Td>
                   <Td strong>{topic.title}</Td>
                   <Td>
-                    <select style={{ ...smallSelectStyle, ...statusStyle(topic.status) }} value={topic.status} onChange={(event) => updateTopic(topic.id, { status: event.target.value as TopicStatus })}>
-                      {statusOptions.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}
-                    </select>
+                    <AppSelect style={{ ...smallSelectStyle, ...statusStyle(topic.status) }} value={topic.status} options={statusOptions} onChange={(value) => updateTopic(topic.id, { status: value as TopicStatus })} />
                   </Td>
                   <Td><button style={secondaryButtonStyle} onClick={() => setNoteTopicId(topic.id)}>Notatka</button></Td>
                 </tr>

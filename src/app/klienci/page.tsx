@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
+import AppSelect from "@/components/AppSelect";
 import {
   createClient as createClientRecord,
   fetchClientCaregivers,
@@ -115,6 +116,20 @@ const TAXATION_FORM_OPTIONS = [
 ];
 
 const EMPTY_FILTER = "Wszystkie";
+const STATUS_FILTER_OPTIONS = [{ value: EMPTY_FILTER, label: "Status" }, ...CLIENT_STATUS_OPTIONS];
+const LEGAL_FORM_FILTER_OPTIONS = [
+  { value: EMPTY_FILTER, label: "Forma prawna" },
+  ...LEGAL_FORM_OPTIONS.filter((option) => option.value),
+];
+const TAXATION_FORM_FILTER_OPTIONS = [
+  { value: EMPTY_FILTER, label: "Opodatkowanie" },
+  ...TAXATION_FORM_OPTIONS.filter((option) => option.value),
+];
+const PAYROLL_FILTER_OPTIONS = [
+  { value: EMPTY_FILTER, label: "Kadry" },
+  { value: "Tak", label: "Tak" },
+  { value: "Nie", label: "Nie" },
+];
 
 function formatClientsCount(count: number) {
   if (count === 1) return "1 klient";
@@ -323,74 +338,26 @@ return (
 <div style={compactFiltersRowStyle}>
   <span style={filtersLabelStyle}>Filtry:</span>
 
-  <select
-    style={compactFilterStyle}
-    value={statusFilter}
-    onChange={(e) => setStatusFilter(e.target.value)}
-  >
-    <option value={EMPTY_FILTER}>Status</option>
+  <AppSelect style={compactFilterStyle} value={statusFilter} options={STATUS_FILTER_OPTIONS} onChange={setStatusFilter} />
 
-    {CLIENT_STATUSES.map((status) => (
-      <option key={status} value={status}>
-        {status}
-      </option>
-    ))}
-  </select>
-
-  <select
+  <AppSelect
     style={compactFilterStyle}
     value={opiekunFilter}
-    onChange={(e) => setOpiekunFilter(e.target.value)}
-  >
-    <option value={EMPTY_FILTER}>Opiekun</option>
+    options={[
+      { value: EMPTY_FILTER, label: "Opiekun" },
+      ...opiekunowie.map((opiekun) => {
+        const label = opiekun.full_name || opiekun.email || "Brak opiekuna";
+        return { value: label, label };
+      }),
+    ]}
+    onChange={setOpiekunFilter}
+  />
 
-    {opiekunowie.map((opiekun) => {
-      const label =
-        opiekun.full_name ||
-        opiekun.email ||
-        "Brak opiekuna";
+  <AppSelect style={compactFilterStyle} value={formaPrawnaFilter} options={LEGAL_FORM_FILTER_OPTIONS} onChange={setFormaPrawnaFilter} />
 
-      return (
-        <option key={opiekun.id} value={label}>
-          {label}
-        </option>
-      );
-    })}
-  </select>
+  <AppSelect style={compactFilterStyle} value={opodatkowanieFilter} options={TAXATION_FORM_FILTER_OPTIONS} onChange={setOpodatkowanieFilter} />
 
-  <select
-    style={compactFilterStyle}
-    value={formaPrawnaFilter}
-    onChange={(e) => setFormaPrawnaFilter(e.target.value)}
-  >
-    <option value={EMPTY_FILTER}>Forma prawna</option>
-    <option value="JDG">JDG</option>
-    <option value="sp. z o.o.">sp. z o.o.</option>
-    <option value="prosta spółka akcyjna">prosta spółka akcyjna</option>
-    <option value="organizacja">organizacja</option>
-  </select>
-
-  <select
-    style={compactFilterStyle}
-    value={opodatkowanieFilter}
-    onChange={(e) => setOpodatkowanieFilter(e.target.value)}
-  >
-    <option value={EMPTY_FILTER}>Opodatkowanie</option>
-    <option value="Skala podatkowa">Skala podatkowa</option>
-    <option value="Podatek liniowy">Podatek liniowy</option>
-    <option value="Ryczałt">Ryczałt</option>
-    <option value="CIT">CIT</option>
-  </select>
-
-  <select
-    style={compactFilterStyle}
-    value={kadryFilter}
-    onChange={(e) => setKadryFilter(e.target.value)}
-  >
-    <option value={EMPTY_FILTER}>Kadry</option>
-    <option value="Tak">Tak</option>
-    <option value="Nie">Nie</option>
-  </select>
+  <AppSelect style={compactFilterStyle} value={kadryFilter} options={PAYROLL_FILTER_OPTIONS} onChange={setKadryFilter} />
 </div>
 
         {loading ? (
@@ -1510,17 +1477,7 @@ function EditableSelect({
   return (
     <div style={editableRowStyle}>
       <label style={infoLabelStyle}>{label}</label>
-      <select
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        style={inputStyle}
-      >
-        {options.map((option) => (
-          <option key={option.value || "empty"} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
+      <AppSelect value={value} onChange={onChange} style={inputStyle} options={options} />
     </div>
   );
 }

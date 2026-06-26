@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
+import AppSelect from "@/components/AppSelect";
 import { colors, radius, shadow } from "@/app/design";
 import {
   fetchPublicCrmOffer,
@@ -29,6 +30,7 @@ const REJECTION_REASONS = [
   "Brakuje nam elementów w propozycji",
   "Inny powód",
 ];
+const REJECTION_REASON_OPTIONS = REJECTION_REASONS.map((reason) => ({ value: reason, label: reason }));
 
 export default function PublicOfferPage() {
   const params = useParams<{ token: string }>();
@@ -215,9 +217,7 @@ export default function PublicOfferPage() {
             <h2 style={rejectionTitleStyle}>Powód rezygnacji</h2>
             <p style={rejectionTextStyle}>Wybór powodu pomoże nam lepiej odnieść się do Państwa decyzji.</p>
           </div>
-          <select style={selectStyle} value={rejectionReason} onChange={(event) => setRejectionReason(event.target.value)}>
-            {REJECTION_REASONS.map((reason) => <option key={reason} value={reason}>{reason}</option>)}
-          </select>
+          <AppSelect style={selectStyle} value={rejectionReason} options={REJECTION_REASON_OPTIONS} onChange={setRejectionReason} />
           <div style={rejectionActionsStyle}>
             <button style={secondaryButtonStyle} onClick={() => setShowRejectionReason(false)} disabled={Boolean(decisionSaving)}>Anuluj</button>
             <button style={rejectButtonStyle} onClick={() => handleDecision("rejected", rejectionReason)} disabled={Boolean(decisionSaving)}>

@@ -24,7 +24,7 @@ export default function AppSelect({
   menuStyle,
 }: {
   value: string;
-  options: SelectOption[];
+  options: readonly SelectOption[];
   onChange: (value: string) => void;
   disabled?: boolean;
   style?: CSSProperties;

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
+import AppSelect from "@/components/AppSelect";
 import AdditionalFeesSettingsPanel from "@/components/AdditionalFeesSettingsPanel";
 import { colors, radius, shadow } from "@/app/design";
 import { supabase } from "@/lib/supabaseClient";
@@ -364,10 +365,10 @@ function TemplatesTab({ templates, clients, users, draft, loading, saving, setDr
 
       <div style={draft.id ? editingFormGridStyle : formGridStyle}>
         <Field label="Nazwa zadania"><input style={inputStyle} value={draft.tytul} onChange={(event) => setDraft((current) => ({ ...current, tytul: event.target.value }))} placeholder="np. Sprawdzenie kompletu dokumentów" /></Field>
-        <Field label="Cykl"><select style={inputStyle} value={draft.czestotliwosc} onChange={(event) => setDraft((current) => ({ ...current, czestotliwosc: event.target.value as FrequencyMode }))}>{FREQUENCY_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field>
-        {draft.czestotliwosc === "roczne" && <Field label="Miesiąc"><select style={inputStyle} value={draft.miesiac_roczny} onChange={(event) => setDraft((current) => ({ ...current, miesiac_roczny: event.target.value }))}>{MONTH_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field>}
+        <Field label="Cykl"><AppSelect style={inputStyle} value={draft.czestotliwosc} options={FREQUENCY_OPTIONS} onChange={(value) => setDraft((current) => ({ ...current, czestotliwosc: value as FrequencyMode }))} /></Field>
+        {draft.czestotliwosc === "roczne" && <Field label="Miesiąc"><AppSelect style={inputStyle} value={String(draft.miesiac_roczny)} options={MONTH_OPTIONS.map((item) => ({ value: String(item.value), label: item.label }))} onChange={(value) => setDraft((current) => ({ ...current, miesiac_roczny: value }))} /></Field>}
         <Field label="Dzień miesiąca"><input style={inputStyle} type="number" min={1} max={31} value={draft.dzien_miesiaca} onChange={(event) => setDraft((current) => ({ ...current, dzien_miesiaca: event.target.value }))} /></Field>
-        <Field label="Osoba odpowiedzialna"><select style={inputStyle} value={draft.osoba_id} onChange={(event) => setDraft((current) => ({ ...current, osoba_id: event.target.value }))}><option value="">Opiekun klienta</option>{users.map((user) => <option key={user.id} value={user.id}>{profileName(user)}</option>)}</select></Field>
+        <Field label="Osoba odpowiedzialna"><AppSelect style={inputStyle} value={draft.osoba_id} options={[{ value: "", label: "Opiekun klienta" }, ...users.map((user) => ({ value: user.id, label: profileName(user) }))]} onChange={(value) => setDraft((current) => ({ ...current, osoba_id: value }))} /></Field>
 
         <ClientPicker
           clients={clients}
@@ -383,9 +384,9 @@ function TemplatesTab({ templates, clients, users, draft, loading, saving, setDr
         <CheckboxGroup label="Forma opodatkowania" disabled={draft.klient_ids.length > 0} options={TAXATION_FORM_OPTIONS} selected={draft.formy_opodatkowania} onChange={(formy_opodatkowania) => setDraft((current) => ({ ...current, formy_opodatkowania }))} />
         <div style={templateSidePanelStyle}>
           <div style={templateVatGridStyle}>
-            <Field label="VAT"><select style={inputStyle} disabled={draft.klient_ids.length > 0} value={draft.vatMode} onChange={(event) => setDraft((current) => ({ ...current, vatMode: event.target.value as VatMode }))}>{VAT_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field>
-            <Field label="VAT-UE"><select style={inputStyle} disabled={draft.klient_ids.length > 0} value={draft.vatUeMode} onChange={(event) => setDraft((current) => ({ ...current, vatUeMode: event.target.value as VatUeMode }))}>{VAT_UE_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field>
-            <Field label="Kadry"><select style={inputStyle} disabled={draft.klient_ids.length > 0} value={draft.payrollMode} onChange={(event) => setDraft((current) => ({ ...current, payrollMode: event.target.value as PayrollMode }))}>{PAYROLL_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field>
+            <Field label="VAT"><AppSelect style={inputStyle} disabled={draft.klient_ids.length > 0} value={draft.vatMode} options={VAT_OPTIONS} onChange={(value) => setDraft((current) => ({ ...current, vatMode: value as VatMode }))} /></Field>
+            <Field label="VAT-UE"><AppSelect style={inputStyle} disabled={draft.klient_ids.length > 0} value={draft.vatUeMode} options={VAT_UE_OPTIONS} onChange={(value) => setDraft((current) => ({ ...current, vatUeMode: value as VatUeMode }))} /></Field>
+            <Field label="Kadry"><AppSelect style={inputStyle} disabled={draft.klient_ids.length > 0} value={draft.payrollMode} options={PAYROLL_OPTIONS} onChange={(value) => setDraft((current) => ({ ...current, payrollMode: value as PayrollMode }))} /></Field>
           </div>
         </div>
       </div>
@@ -554,7 +555,7 @@ function UsersTab({ users, loading, onRoleChange, onUserCreated }: { users: User
       <div style={userCreateFormStyle}>
         <Field label="Imię i nazwisko"><input style={inputStyle} value={newUser.fullName} onChange={(event) => setNewUser((current) => ({ ...current, fullName: event.target.value }))} placeholder="np. Anna Kowalska" /></Field>
         <Field label="Email"><input style={inputStyle} type="email" value={newUser.email} onChange={(event) => setNewUser((current) => ({ ...current, email: event.target.value }))} placeholder="adres@email.pl" /></Field>
-        <Field label="Rola"><select style={inputStyle} value={newUser.role} onChange={(event) => setNewUser((current) => ({ ...current, role: event.target.value }))}>{ROLE_OPTIONS.map((role) => <option key={role.value} value={role.value}>{role.label}</option>)}</select></Field>
+        <Field label="Rola"><AppSelect style={inputStyle} value={newUser.role} options={ROLE_OPTIONS} onChange={(value) => setNewUser((current) => ({ ...current, role: value }))} /></Field>
         <Field label="Hasło jednorazowe"><input style={inputStyle} value={newUser.password} onChange={(event) => setNewUser((current) => ({ ...current, password: event.target.value }))} placeholder="Wygeneruj hasło" /></Field>
         <button style={secondaryButtonStyle} type="button" onClick={() => setNewUser((current) => ({ ...current, password: generateTemporaryPassword() }))}>Generuj hasło</button>
         <button style={primaryButtonStyle} type="button" disabled={creatingUser} onClick={createUser}>{creatingUser ? "Dodawanie..." : "Dodaj użytkownika"}</button>
@@ -563,7 +564,7 @@ function UsersTab({ users, loading, onRoleChange, onUserCreated }: { users: User
         <table style={tableStyle}>
           <thead><tr><Th>Użytkownik</Th><Th>Email</Th><Th>Rola</Th><Th>Hasło</Th></tr></thead>
           <tbody>
-            {loading ? <tr><Td colSpan={4}>Ładowanie użytkowników...</Td></tr> : users.map((user) => <tr key={user.id} style={rowStyle}><Td strong>{profileName(user)}</Td><Td>{user.email || "Brak emaila"}</Td><Td><select style={roleSelectStyle} value={user.role || "accountant"} onChange={(event) => onRoleChange(user, event.target.value)}>{ROLE_OPTIONS.map((role) => <option key={role.value} value={role.value}>{role.label}</option>)}</select></Td><Td><button style={secondaryButtonStyle} type="button" disabled={resettingUserId === user.id} onClick={() => resetPassword(user)}>{resettingUserId === user.id ? "Reset..." : "Reset hasła"}</button></Td></tr>)}
+            {loading ? <tr><Td colSpan={4}>Ładowanie użytkowników...</Td></tr> : users.map((user) => <tr key={user.id} style={rowStyle}><Td strong>{profileName(user)}</Td><Td>{user.email || "Brak emaila"}</Td><Td><AppSelect style={roleSelectStyle} value={user.role || "accountant"} options={ROLE_OPTIONS} onChange={(value) => onRoleChange(user, value)} /></Td><Td><button style={secondaryButtonStyle} type="button" disabled={resettingUserId === user.id} onClick={() => resetPassword(user)}>{resettingUserId === user.id ? "Reset..." : "Reset hasła"}</button></Td></tr>)}
           </tbody>
         </table>
       </div>

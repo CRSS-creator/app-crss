@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
+import AppSelect from "@/components/AppSelect";
 import { colors, radius, shadow } from "@/app/design";
 import { fetchClients } from "@/lib/clientService";
 import { fetchCrmContracts, type CrmContract } from "@/lib/crmContractService";
@@ -59,6 +60,7 @@ const STATUS_OPTIONS: { value: RodoProcessingContractStatus; label: string }[] =
   { value: "podpisana", label: "Podpisana" },
   { value: "anulowana", label: "Anulowana" },
 ];
+const STATUS_FILTER_OPTIONS = [{ value: "Wszystkie", label: "Wszystkie statusy" }, ...STATUS_OPTIONS];
 
 export default function RodoPage() {
   return (
@@ -144,10 +146,7 @@ function RodoContent() {
           <h2 style={sectionTitleStyle}>Rejestr umów powierzenia przetwarzania danych osobowych</h2>
           <div style={tableActionsStyle}>
             <button style={secondaryButtonStyle} type="button" onClick={() => window.print()}>Drukuj rejestr</button>
-            <select style={filterStyle} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-              <option value="Wszystkie">Wszystkie statusy</option>
-              {STATUS_OPTIONS.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}
-            </select>
+            <AppSelect style={filterStyle} value={statusFilter} options={STATUS_FILTER_OPTIONS} onChange={setStatusFilter} />
           </div>
         </div>
 
@@ -650,7 +649,7 @@ function EditableInput({ label, value, onChange, type = "text" }: { label: strin
 }
 
 function EditableSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: { value: string; label: string }[] }) {
-  return <label style={editableRowStyle}><span>{label}</span><select value={value} onChange={(event) => onChange(event.target.value)} style={inputStyle}>{options.map((option) => <option key={option.value || "empty"} value={option.value}>{option.label}</option>)}</select></label>;
+  return <label style={editableRowStyle}><span>{label}</span><AppSelect value={value} onChange={onChange} style={inputStyle} options={options} /></label>;
 }
 
 function SearchablePicker({ label, value, placeholder, options, onInputChange, onSelect, onClear }: { label: string; value: string; placeholder: string; options: SearchOption[]; onInputChange: (value: string) => void; onSelect: (value: string) => void; onClear: () => void }) {

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from
 import Link from "next/link";
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
+import AppSelect from "@/components/AppSelect";
 import { colors, radius, shadow } from "@/app/design";
 import { supabase } from "@/lib/supabaseClient";
 import { fetchClients } from "@/lib/clientService";
@@ -50,6 +51,13 @@ type Profile = {
 };
 
 type StageState = "done" | "progress" | "blocked" | "todo";
+const STATUS_FILTER_OPTIONS = [
+  { value: "Wszystkie", label: "Wszystkie statusy" },
+  { value: "Do rozpoczęcia", label: "Do rozpoczęcia" },
+  { value: "W trakcie", label: "W trakcie" },
+  { value: "Czeka na formalności", label: "Czeka na formalności" },
+  { value: "Zakończony", label: "Zakończony" },
+];
 
 type OnboardingStage = {
   key: OnboardingStageKey;
@@ -192,13 +200,7 @@ function OnboardingContent() {
             <h2 style={sectionTitleStyle}>Klienci w onboardingu</h2>
             <p style={hintStyle}>Lista pokazuje klientów ze statusem onboarding lub z powiązanymi umowami startowymi.</p>
           </div>
-          <select style={filterStyle} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-            <option value="Wszystkie">Wszystkie statusy</option>
-            <option value="Do rozpoczęcia">Do rozpoczęcia</option>
-            <option value="W trakcie">W trakcie</option>
-            <option value="Czeka na formalności">Czeka na formalności</option>
-            <option value="Zakończony">Zakończony</option>
-          </select>
+          <AppSelect style={filterStyle} value={statusFilter} options={STATUS_FILTER_OPTIONS} onChange={setStatusFilter} />
         </div>
 
         {loading ? <div style={emptyStyle}>Ładowanie onboardingu...</div> : filteredRows.length === 0 ? <div style={emptyStyle}>Brak klientów dla wybranego filtra.</div> : (

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
+import AppSelect from "@/components/AppSelect";
 import { colors, radius, shadow } from "@/app/design";
 import { supabase } from "@/lib/supabaseClient";
 import {
@@ -99,6 +100,9 @@ const STATUSES = [
   { value: "wygrana", label: "Wygrana" },
   { value: "przegrana", label: "Przegrana" },
 ];
+const STAGE_FILTER_OPTIONS = [{ value: EMPTY_FILTER, label: "Etap" }, ...PIPELINE_STAGES.map((stage) => ({ value: stage, label: PIPELINE_LABELS[stage] }))];
+const STATUS_FILTER_OPTIONS = [{ value: EMPTY_FILTER, label: "Status" }, ...STATUSES];
+const PAYROLL_FILTER_OPTIONS = [{ value: EMPTY_FILTER, label: "Kadry" }, { value: "Tak", label: "Tak" }, { value: "Nie", label: "Nie" }];
 
 export default function CrmPage() {
   return (
@@ -252,19 +256,9 @@ function CrmContent() {
           <span style={counterStyle}>{loading ? "Ładowanie..." : `${filteredLeads.length} pozycji`}</span>
         </div>
         <div style={filtersStyle}>
-          <select style={filterStyle} value={stageFilter} onChange={(event) => setStageFilter(event.target.value)}>
-            <option value={EMPTY_FILTER}>Etap</option>
-            {PIPELINE_STAGES.map((stage) => <option key={stage} value={stage}>{PIPELINE_LABELS[stage]}</option>)}
-          </select>
-          <select style={filterStyle} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-            <option value={EMPTY_FILTER}>Status</option>
-            {STATUSES.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}
-          </select>
-          <select style={filterStyle} value={kadryFilter} onChange={(event) => setKadryFilter(event.target.value)}>
-            <option value={EMPTY_FILTER}>Kadry</option>
-            <option value="Tak">Tak</option>
-            <option value="Nie">Nie</option>
-          </select>
+          <AppSelect style={filterStyle} value={stageFilter} options={STAGE_FILTER_OPTIONS} onChange={setStageFilter} />
+          <AppSelect style={filterStyle} value={statusFilter} options={STATUS_FILTER_OPTIONS} onChange={setStatusFilter} />
+          <AppSelect style={filterStyle} value={kadryFilter} options={PAYROLL_FILTER_OPTIONS} onChange={setKadryFilter} />
         </div>
         {loading ? <div style={emptyStyle}>Ładowanie danych...</div> : filteredLeads.length === 0 ? <div style={emptyStyle}>Brak szans sprzedaży do wyświetlenia</div> : (
           <div style={tableWrapperStyle}>
@@ -498,7 +492,7 @@ function statusLabel(status: string | null) { return STATUSES.find((item) => ite
 function SummaryCard({ label, value }: { label: string; value: string | number }) { return <div style={summaryCardStyle}><span>{label}</span><strong>{value}</strong></div>; }
 function FormSection({ title, children }: { title: string; children: React.ReactNode }) { return <section style={drawerSectionStyle}><h3>{title}</h3>{children}</section>; }
 function EditableInput({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (value: string) => void; type?: "text" | "number" | "email" | "date" }) { return <label style={editableRowStyle}><span>{label}</span><input type={type} value={value} onChange={(event) => onChange(event.target.value)} style={inputStyle} /></label>; }
-function EditableSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: { value: string; label: string }[] }) { return <label style={editableRowStyle}><span>{label}</span><select value={value} onChange={(event) => onChange(event.target.value)} style={inputStyle}>{options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>; }
+function EditableSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: { value: string; label: string }[] }) { return <label style={editableRowStyle}><span>{label}</span><AppSelect value={value} onChange={onChange} style={inputStyle} options={options} /></label>; }
 function EditableCheckbox({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) { return <label style={editableRowStyle}><span>{label}</span><input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} /></label>; }
 function EditableTextarea({ label, value, onChange, rows = 4 }: { label: string; value: string; onChange: (value: string) => void; rows?: number }) { return <label style={textareaRowStyle}><span>{label}</span><textarea value={value} onChange={(event) => onChange(event.target.value)} style={textareaStyle} rows={rows} /></label>; }
 function Th({ children }: { children: React.ReactNode }) { return <th style={thStyle}>{children}</th>; }

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
+import AppSelect from "@/components/AppSelect";
 import ContractClientOnboardingPanel from "@/components/ContractClientOnboardingPanel";
 import { colors, radius, shadow } from "@/app/design";
 import { fetchCrmLeads } from "@/lib/crmService";
@@ -74,6 +75,7 @@ const CONTRACT_STATUSES: { value: CrmContractStatus; label: string }[] = [
   { value: "podpisana", label: "Podpisana" },
   { value: "anulowana", label: "Anulowana" },
 ];
+const CONTRACT_STATUS_FILTER_OPTIONS = [{ value: "Wszystkie", label: "Wszystkie statusy" }, ...CONTRACT_STATUSES];
 
 export default function CrmContractsPage() {
   return (
@@ -154,10 +156,7 @@ function CrmContractsContent() {
       <section style={cardStyle}>
         <div style={tableHeaderStyle}>
           <h2 style={sectionTitleStyle}>Rejestr umów</h2>
-          <select style={filterStyle} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-            <option value="Wszystkie">Wszystkie statusy</option>
-            {CONTRACT_STATUSES.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}
-          </select>
+          <AppSelect style={filterStyle} value={statusFilter} options={CONTRACT_STATUS_FILTER_OPTIONS} onChange={setStatusFilter} />
         </div>
 
         {loading ? <div style={emptyStyle}>Ładowanie umów...</div> : filteredContracts.length === 0 ? <div style={emptyStyle}>Brak umów do wyświetlenia.</div> : (
@@ -527,7 +526,7 @@ function EditableInput({ label, value, onChange, type = "text" }: { label: strin
 }
 
 function EditableSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: { value: string; label: string }[] }) {
-  return <label style={editableRowStyle}><span>{label}</span><select value={value} onChange={(event) => onChange(event.target.value)} style={inputStyle}>{options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>;
+  return <label style={editableRowStyle}><span>{label}</span><AppSelect value={value} onChange={onChange} style={inputStyle} options={options} /></label>;
 }
 
 function SearchableLeadSelect({ label, value, leads, onChange }: { label: string; value: string; leads: Lead[]; onChange: (value: string) => void }) {

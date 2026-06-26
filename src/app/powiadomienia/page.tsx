@@ -5,6 +5,7 @@ import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
 import { colors, radius, shadow } from "@/app/design";
 import {
+  createDueNotifications,
   fetchNotifications,
   markAllNotificationsRead,
   markNotificationRead,
@@ -34,6 +35,8 @@ function NotificationsContent() {
 
   async function loadNotifications() {
     setLoading(true);
+    const dueResult = await createDueNotifications();
+    if (dueResult.error) console.error("Błąd tworzenia bieżących powiadomień:", dueResult.error);
     const { data, error } = await fetchNotifications();
     if (error) console.error("Błąd pobierania powiadomień:", error);
     else setNotifications((data || []) as AppNotification[]);

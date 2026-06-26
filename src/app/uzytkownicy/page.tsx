@@ -353,7 +353,7 @@ function TemplatesTab({ templates, clients, users, draft, loading, saving, setDr
       <div ref={formRef} style={formAnchorStyle}>
         {draft.id && (
           <div style={editNoticeStyle}>
-            <div>
+            <div style={editNoticeTextStyle}>
               <strong>Edytujesz szablon</strong>
               <span>{editingTemplate?.tytul || draft.tytul}</span>
             </div>
@@ -621,6 +621,7 @@ const formGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "mi
 const editingFormGridStyle: CSSProperties = { ...formGridStyle, borderColor: colors.navy, boxShadow: "0 0 0 3px rgba(23, 59, 115, 0.10)" };
 const formAnchorStyle: CSSProperties = { scrollMarginTop: "24px" };
 const editNoticeStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", border: `1px solid ${colors.navy}`, borderRadius: radius.input, background: "rgba(23, 59, 115, 0.08)", color: colors.navy, padding: "12px 14px", marginBottom: "12px", flexWrap: "wrap" };
+const editNoticeTextStyle: CSSProperties = { display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" };
 const fieldStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "7px" };
 const labelStyle: CSSProperties = { color: colors.muted, fontSize: "13px", fontWeight: 850 };
 const inputStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, padding: "10px 12px", fontWeight: 700, minHeight: "42px", width: "100%" };

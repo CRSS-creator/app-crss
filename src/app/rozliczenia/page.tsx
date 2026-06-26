@@ -25,6 +25,7 @@ import {
   stopRecurringTaskTimer,
   type RecurringTask,
 } from "@/lib/recurringTasksService";
+import { fetchTaxObligations, type TaxObligation, type TaxFetchStatus, type TaxSendStatus } from "@/lib/taxObligationService";
 import type { TaskPriority, TimeEntry } from "@/lib/taskService";
 
 const EMPTY_FILTER = "Wszystkie";
@@ -58,6 +59,7 @@ function SettlementsContent() {
   const [settlements, setSettlements] = useState<MonthlySettlement[]>([]);
   const [progressRows, setProgressRows] = useState<SettlementProgress[]>([]);
   const [recurringTasks, setRecurringTasks] = useState<RecurringTask[]>([]);
+  const [taxObligations, setTaxObligations] = useState<TaxObligation[]>([]);
   const [activeTimers, setActiveTimers] = useState<TimeEntry[]>([]);
   const [selected, setSelected] = useState<MonthlySettlement | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -96,21 +98,24 @@ function SettlementsContent() {
     const userId = userResult.data.user?.id || null;
     setCurrentUserId(userId);
 
-    const [settlementsResult, progressResult, recurringResult, timersResult] = await Promise.all([
+    const [settlementsResult, progressResult, recurringResult, taxResult, timersResult] = await Promise.all([
       fetchMonthlySettlements(normalizedPeriod),
       fetchSettlementTaskProgress(normalizedPeriod),
       fetchRecurringTasks(),
+      fetchTaxObligations(normalizedPeriod),
       userId ? fetchActiveRecurringTaskTimers(userId) : Promise.resolve({ data: [], error: null }),
     ]);
 
     if (settlementsResult.error) console.error("Błąd pobierania rozliczeń:", settlementsResult.error);
     if (progressResult.error) console.error("Błąd pobierania postępu zadań:", progressResult.error);
     if (recurringResult.error) console.error("Błąd pobierania zadań cyklicznych:", recurringResult.error);
+    if (taxResult.error) console.error("Błąd pobierania zobowiązań podatkowych:", taxResult.error);
     if (timersResult.error) console.error("Błąd pobierania aktywnych liczników:", timersResult.error);
 
     setSettlements((settlementsResult.data || []) as MonthlySettlement[]);
     setProgressRows((progressResult.data || []) as SettlementProgress[]);
     setRecurringTasks((recurringResult.data || []) as RecurringTask[]);
+    setTaxObligations((taxResult.data || []) as TaxObligation[]);
     setActiveTimers((timersResult.data || []) as TimeEntry[]);
     setLoading(false);
   }
@@ -212,6 +217,7 @@ function SettlementsContent() {
           settlement={selected}
           progress={progressBySettlement[selected.id] || { progress: 0, total_tasks: 0, done_tasks: 0, rozliczenie_id: selected.id }}
           recurringTasks={getMatchingRecurringTasks(recurringTasks, getClient(selected.klienci), selected.okres)}
+          taxObligations={taxObligations.filter((obligation) => obligation.rozliczenie_id === selected.id)}
           activeTimers={activeTimers}
           onClose={() => setSelected(null)}
           onSave={patchSettlement}
@@ -223,10 +229,11 @@ function SettlementsContent() {
   );
 }
 
-function SettlementDrawer({ settlement, progress, recurringTasks, activeTimers, onClose, onSave, onToggleRecurringTimer, saving }: {
+function SettlementDrawer({ settlement, progress, recurringTasks, taxObligations, activeTimers, onClose, onSave, onToggleRecurringTimer, saving }: {
   settlement: MonthlySettlement;
   progress: SettlementProgress;
   recurringTasks: RecurringTask[];
+  taxObligations: TaxObligation[];
   activeTimers: TimeEntry[];
   onClose: () => void;
   onSave: (settlement: MonthlySettlement, payload: Partial<MonthlySettlement>) => void;
@@ -251,6 +258,35 @@ function SettlementDrawer({ settlement, progress, recurringTasks, activeTimers, 
           </section>
 
           <SettlementAdditionalFeesPanel settlementId={settlement.id} />
+
+          <section style={drawerSectionStyle}>
+            <div style={sectionHeaderRowStyle}>
+              <h3 style={drawerSectionTitleStyle}>Zobowiązania podatkowe</h3>
+              <span style={mutedBadgeStyle}>wFirma</span>
+            </div>
+            {taxObligations.length === 0 ? (
+              <div style={emptyStateStyle}>Brak zobowiązań wynikających z danych klienta.</div>
+            ) : (
+              <div style={taxObligationListStyle}>
+                {taxObligations.map((obligation) => (
+                  <article key={obligation.id} style={taxObligationItemStyle}>
+                    <div style={taxObligationMainStyle}>
+                      <strong>{obligation.nazwa}</strong>
+                      <span>{formatCurrency(obligation.kwota)}</span>
+                    </div>
+                    <div style={taxObligationMetaStyle}>
+                      <span>Termin: <strong>{formatDate(obligation.termin_platnosci)}</strong></span>
+                      <span>Pobranie: <strong>{fetchStatusLabel(obligation.status_pobrania)}</strong></span>
+                    </div>
+                    <div style={taxStatusGridStyle}>
+                      <span style={sendStatusStyle(obligation.status_email)}>E-mail: {sendStatusLabel(obligation.status_email)}</span>
+                      <span style={sendStatusStyle(obligation.status_sms)}>SMS: {sendStatusLabel(obligation.status_sms)}</span>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
 
           <section style={drawerSectionStyle}>
             <h3 style={drawerSectionTitleStyle}>Zadania cykliczne</h3>
@@ -290,7 +326,16 @@ function currentMonthInput() {
   return `${year}-${String(month).padStart(2, "0")}`;
 }
 function formatMonth(value: string) { return new Intl.DateTimeFormat("pl-PL", { month: "long", year: "numeric" }).format(new Date(`${value}-01T12:00:00`)); }
+function formatDate(value: string | null) { return value ? new Intl.DateTimeFormat("pl-PL").format(new Date(`${value}T12:00:00`)) : "Do ustalenia"; }
+function formatCurrency(value: number | null) { return value === null || value === undefined ? "Do pobrania" : new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN" }).format(value); }
 function priorityLabel(priority: TaskPriority) { return PRIORITY_OPTIONS.find((item) => item.value === priority)?.label || priority; }
+function fetchStatusLabel(status: TaxFetchStatus) { if (status === "pobrane") return "pobrane"; if (status === "blad") return "błąd"; return "do pobrania"; }
+function sendStatusLabel(status: TaxSendStatus) { if (status === "wyslane") return "wysłane"; if (status === "blad") return "błąd"; return "niewysłane"; }
+function sendStatusStyle(status: TaxSendStatus): CSSProperties {
+  if (status === "wyslane") return { ...taxSendBadgeStyle, background: "#dcfce7", color: "#15803d" };
+  if (status === "blad") return { ...taxSendBadgeStyle, background: "#fee2e2", color: "#b91c1c" };
+  return taxSendBadgeStyle;
+}
 function getMatchingRecurringTasks(tasks: RecurringTask[], client: ReturnType<typeof getClient>, settlementPeriod: string) {
   const month = Number(settlementPeriod.slice(5, 7));
   return tasks.filter((task) =>
@@ -331,15 +376,17 @@ const detailsButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`
 const timerButtonStyle: CSSProperties = { ...detailsButtonStyle, display: "inline-flex", alignItems: "center", gap: "7px", padding: "9px 11px", background: "#eef5ff", borderColor: "#c8d8f0" };
 const timerActiveButtonStyle: CSSProperties = { ...timerButtonStyle, background: colors.success, borderColor: colors.success, color: colors.white };
 const emptyStateStyle: CSSProperties = { padding: "18px", borderRadius: radius.input, background: colors.inputBackground, border: `1px dashed ${colors.border}`, color: colors.muted, textAlign: "center", fontWeight: 800 };
-const drawerOverlayStyle: CSSProperties = { position: "fixed", inset: 0, background: "rgba(15, 23, 42, 0.32)", display: "flex", justifyContent: "flex-end", zIndex: 50 };
-const drawerStyle: CSSProperties = { width: "min(760px, 100%)", height: "100vh", background: colors.card, borderLeft: `1px solid ${colors.border}`, boxShadow: shadow.card, display: "flex", flexDirection: "column" };
+const drawerOverlayStyle: CSSProperties = { position: "fixed", inset: 0, background: "rgba(15, 23, 42, 0.32)", display: "flex", justifyContent: "center", alignItems: "stretch", padding: "18px", zIndex: 50 };
+const drawerStyle: CSSProperties = { width: "min(1280px, 100%)", height: "calc(100vh - 36px)", background: colors.card, border: `1px solid ${colors.border}`, borderRadius: radius.card, boxShadow: shadow.card, display: "flex", flexDirection: "column", overflow: "hidden" };
 const drawerHeaderStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "18px", padding: "28px", borderBottom: `1px solid ${colors.border}` };
 const drawerTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "26px" };
 const drawerMetaStyle: CSSProperties = { margin: "8px 0 0", color: colors.muted, fontWeight: 800 };
 const closeButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.inputBackground, color: colors.text, cursor: "pointer", padding: "10px 14px", height: "42px", fontWeight: 800 };
-const drawerContentStyle: CSSProperties = { padding: "24px 28px 34px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "18px" };
+const drawerContentStyle: CSSProperties = { padding: "24px 28px 34px", overflowY: "auto", display: "grid", gridTemplateColumns: "minmax(0, 0.95fr) minmax(0, 1.05fr)", alignItems: "start", gap: "18px" };
 const drawerSectionStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: "22px", background: colors.card };
 const drawerSectionTitleStyle: CSSProperties = { margin: "0 0 14px", color: colors.navy, fontSize: "20px" };
+const sectionHeaderRowStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", marginBottom: "14px" };
+const mutedBadgeStyle: CSSProperties = { borderRadius: radius.badge, background: "#eef2f7", color: colors.muted, padding: "7px 10px", fontSize: "12px", fontWeight: 850 };
 const fieldStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "7px", marginBottom: "14px" };
 const labelStyle: CSSProperties = { color: colors.muted, fontSize: "13px", fontWeight: 800 };
 const threeColumnsStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "14px" };
@@ -348,3 +395,9 @@ const recurringListStyle: CSSProperties = { display: "flex", flexDirection: "col
 const recurringItemStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "12px", background: colors.inputBackground };
 const recurringMetaStyle: CSSProperties = { margin: "5px 0 0", color: colors.muted, fontWeight: 700, fontSize: "13px" };
 const recurringActionsStyle: CSSProperties = { display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "8px", flexWrap: "wrap" };
+const taxObligationListStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "10px" };
+const taxObligationItemStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "13px", display: "flex", flexDirection: "column", gap: "9px" };
+const taxObligationMainStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "12px", color: colors.navy, fontSize: "15px", fontWeight: 850 };
+const taxObligationMetaStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "4px", color: colors.muted, fontSize: "12px", fontWeight: 700 };
+const taxStatusGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "7px" };
+const taxSendBadgeStyle: CSSProperties = { borderRadius: radius.badge, background: "#eef2f7", color: colors.muted, padding: "7px 8px", fontSize: "12px", fontWeight: 850, textAlign: "center" };

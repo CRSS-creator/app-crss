@@ -458,15 +458,18 @@ function LeadDrawer({ mode, lead, tasks, onClose, onCreated, onSaved, onDeleted,
             )}
           </FormSection>
 
-          <FormSection title="Terminy i notatki">
-            <EditableInput label="Data telefonu" type="date" value={draft.data_telefonu} onChange={(value) => updateDraft("data_telefonu", value)} />
-            <EditableInput label="Data spotkania online" type="date" value={draft.data_spotkania_online} onChange={(value) => updateDraft("data_spotkania_online", value)} />
-            <EditableInput label="Data wysłania propozycji" type="date" value={draft.data_wyslania_oferty} onChange={(value) => updateDraft("data_wyslania_oferty", value)} />
-            <EditableInput label="Data follow-up" type="date" value={draft.data_follow_up} onChange={(value) => updateDraft("data_follow_up", value)} />
-            <EditableTextarea label="Powód kontaktu" value={draft.powod_kontaktu} onChange={(value) => updateDraft("powod_kontaktu", value)} />
-            <EditableTextarea label="Powód przegranej" value={draft.powod_przegranej} onChange={(value) => updateDraft("powod_przegranej", value)} />
-            <EditableTextarea label="Notatki" value={draft.notatki} onChange={(value) => updateDraft("notatki", value)} rows={8} />
-          </FormSection>
+          <TermsAndNotesSection>
+            <div style={notesColumnStyle}>
+              <EditableTextarea label="Powód kontaktu" value={draft.powod_kontaktu} onChange={(value) => updateDraft("powod_kontaktu", value)} rows={7} />
+              <EditableTextarea label="Notatki" value={draft.notatki} onChange={(value) => updateDraft("notatki", value)} rows={16} />
+            </div>
+            <div style={datesColumnStyle}>
+              <EditableInput label="Data telefonu" type="date" value={draft.data_telefonu} onChange={(value) => updateDraft("data_telefonu", value)} />
+              <EditableInput label="Data spotkania" type="date" value={draft.data_spotkania_online} onChange={(value) => updateDraft("data_spotkania_online", value)} />
+              <EditableInput label="Data wysłania propozycji" type="date" value={draft.data_wyslania_oferty} onChange={(value) => updateDraft("data_wyslania_oferty", value)} />
+              <EditableInput label="Data follow-up" type="date" value={draft.data_follow_up} onChange={(value) => updateDraft("data_follow_up", value)} />
+            </div>
+          </TermsAndNotesSection>
         </div>
       </aside>
     </div>
@@ -491,6 +494,7 @@ function statusLabel(status: string | null) { return STATUSES.find((item) => ite
 
 function SummaryCard({ label, value }: { label: string; value: string | number }) { return <div style={summaryCardStyle}><span>{label}</span><strong>{value}</strong></div>; }
 function FormSection({ title, children }: { title: string; children: React.ReactNode }) { return <section style={drawerSectionStyle}><h3>{title}</h3>{children}</section>; }
+function TermsAndNotesSection({ children }: { children: React.ReactNode }) { return <section style={termsSectionStyle}><h3>Terminy i notatki</h3><div style={termsGridStyle}>{children}</div></section>; }
 function EditableInput({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (value: string) => void; type?: "text" | "number" | "email" | "date" }) { return <label style={editableRowStyle}><span>{label}</span><input type={type} value={value} onClick={(event) => { if (type === "date") (event.currentTarget as HTMLInputElement & { showPicker?: () => void }).showPicker?.(); }} onChange={(event) => onChange(event.target.value)} style={inputStyle} /></label>; }
 function EditableSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: { value: string; label: string }[] }) { return <label style={editableRowStyle}><span>{label}</span><AppSelect value={value} onChange={onChange} style={inputStyle} options={options} /></label>; }
 function EditableCheckbox({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) { return <label style={editableRowStyle}><span>{label}</span><input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} /></label>; }
@@ -536,6 +540,10 @@ const drawerTitleStyle: React.CSSProperties = { margin: 0, color: colors.navy, f
 const closeButtonStyle: React.CSSProperties = { width: "40px", height: "40px", borderRadius: "999px", border: `1px solid ${colors.border}`, background: colors.white, color: colors.navy, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" };
 const drawerContentStyle: React.CSSProperties = { display: "flex", flexDirection: "column", gap: "18px" };
 const drawerSectionStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: "20px", background: colors.white };
+const termsSectionStyle: React.CSSProperties = { ...drawerSectionStyle, position: "relative" };
+const termsGridStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1.45fr) minmax(300px, 0.85fr)", gap: "18px 22px", alignItems: "start" };
+const notesColumnStyle: React.CSSProperties = { display: "flex", flexDirection: "column", gap: "18px", minWidth: 0 };
+const datesColumnStyle: React.CSSProperties = { display: "flex", flexDirection: "column", gap: "14px", minWidth: 0, position: "relative", zIndex: 1 };
 const editableRowStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "180px 1fr", gap: "14px", alignItems: "center", padding: "10px 0", borderBottom: `1px solid ${colors.border}`, color: colors.muted, fontWeight: 700 };
 const textareaRowStyle: React.CSSProperties = { display: "flex", flexDirection: "column", gap: "8px", color: colors.muted, fontWeight: 700 };
 const inputStyle: React.CSSProperties = { width: "100%", border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "10px 12px", background: colors.inputBackground, color: colors.text, fontWeight: 650, outline: "none" };

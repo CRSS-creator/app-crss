@@ -35,3 +35,17 @@ export async function fetchTaxObligations(period: string) {
     .order("termin_platnosci", { ascending: true })
     .order("typ", { ascending: true });
 }
+
+export async function sendTaxObligations(settlementId: string, channel: "email" | "sms") {
+  const sessionResult = await supabase.auth.getSession();
+  const token = sessionResult.data.session?.access_token;
+
+  return fetch("/api/rozliczenia/tax-obligations/send", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ settlementId, channel }),
+  });
+}

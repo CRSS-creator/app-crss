@@ -9,8 +9,8 @@ type ReminderPayload = {
 };
 
 type AuthorizedResult =
-  | { admin: SupabaseClient; requesterId: string; role: string; error: null }
-  | { admin: null; requesterId: null; role: null; error: NextResponse };
+  | { admin: SupabaseClient; requesterId: string; requesterName: string; role: string; error: null }
+  | { admin: null; requesterId: null; requesterName?: null; role: null; error: NextResponse };
 
 type WebhookConfig =
   | { webhookUrl: string; error: null }
@@ -70,7 +70,7 @@ async function getAuthorizedUser(request: NextRequest): Promise<AuthorizedResult
 
   const { data: profile } = await admin
     .from("profiles")
-    .select("role, aktywne")
+    .select("role, aktywne, full_name, email")
     .eq("id", requesterId)
     .single();
 
@@ -83,7 +83,7 @@ async function getAuthorizedUser(request: NextRequest): Promise<AuthorizedResult
     return { admin: null, requesterId: null, role: null, error: NextResponse.json({ error: "Brak uprawnień do wysyłki przypomnienia." }, { status: 403 }) };
   }
 
-  return { admin, requesterId, role, error: null };
+  return { admin, requesterId, requesterName: profile?.full_name || profile?.email || "Nieustalony użytkownik", role, error: null };
 }
 
 function reminderDueDate(period: string) {
@@ -201,7 +201,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: message }, { status: 502 });
     }
 
-    return NextResponse.json({ ok: true });
+    const sentAt = new Date().toISOString();
+    const { error: updateError } = await auth.admin
+      .from("rozliczenia_miesieczne")
+      .update({
+        przypomnienie_dokumenty_wyslane_at: sentAt,
+        przypomnienie_dokumenty_wyslane_przez: auth.requesterId,
+        przypomnienie_dokumenty_wyslane_przez_nazwa: auth.requesterName,
+      })
+      .eq("id", settlement.id);
+
+    if (updateError) {
+      return NextResponse.json({ error: "Przypomnienie wysłano, ale nie udało się zapisać historii wysyłki." }, { status: 502 });
+    }
+
+    return NextResponse.json({
+      ok: true,
+      reminder: {
+        sentAt,
+        sentById: auth.requesterId,
+        sentByName: auth.requesterName,
+      },
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Nie udało się połączyć z n8n.";
     return NextResponse.json({ error: `Nie udało się połączyć z automatyzacją n8n: ${message}` }, { status: 502 });

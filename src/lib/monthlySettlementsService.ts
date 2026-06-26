@@ -35,6 +35,9 @@ export type MonthlySettlement = {
   liczba_pracownikow: number;
   liczba_zleceniobiorcow: number;
   data_dostarczenia_dokumentow: string | null;
+  przypomnienie_dokumenty_wyslane_at: string | null;
+  przypomnienie_dokumenty_wyslane_przez: string | null;
+  przypomnienie_dokumenty_wyslane_przez_nazwa: string | null;
   uwagi: string | null;
   klienci?: SettlementClient | SettlementClient[] | null;
 };

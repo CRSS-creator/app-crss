@@ -130,6 +130,16 @@ function SettlementsContent() {
     setSelected((current) => current?.id === updated.id ? updated : current);
   }
 
+  function markDocumentsReminderSent(settlementId: string, reminder: { sentAt: string; sentById: string; sentByName: string }) {
+    const patch = {
+      przypomnienie_dokumenty_wyslane_at: reminder.sentAt,
+      przypomnienie_dokumenty_wyslane_przez: reminder.sentById,
+      przypomnienie_dokumenty_wyslane_przez_nazwa: reminder.sentByName,
+    };
+    setSettlements((current) => current.map((item) => item.id === settlementId ? { ...item, ...patch } : item));
+    setSelected((current) => current?.id === settlementId ? { ...current, ...patch } : current);
+  }
+
   async function toggleRecurringTimer(settlement: MonthlySettlement, task: RecurringTaskRealization) {
     if (!currentUserId) {
       alert("Nie udało się rozpoznać użytkownika. Zaloguj się ponownie.");
@@ -236,6 +246,7 @@ function SettlementsContent() {
           onSave={patchSettlement}
           onToggleRecurringTimer={toggleRecurringTimer}
           onToggleRecurringDone={toggleRecurringDone}
+          onReminderSent={markDocumentsReminderSent}
           saving={savingId === selected.id}
         />
       )}
@@ -243,7 +254,7 @@ function SettlementsContent() {
   );
 }
 
-function SettlementDrawer({ settlement, progress, recurringTasks, taxObligations, activeTimers, onClose, onSave, onToggleRecurringTimer, onToggleRecurringDone, saving }: {
+function SettlementDrawer({ settlement, progress, recurringTasks, taxObligations, activeTimers, onClose, onSave, onToggleRecurringTimer, onToggleRecurringDone, onReminderSent, saving }: {
   settlement: MonthlySettlement;
   progress: SettlementProgress;
   recurringTasks: RecurringTaskRealization[];
@@ -253,6 +264,7 @@ function SettlementDrawer({ settlement, progress, recurringTasks, taxObligations
   onSave: (settlement: MonthlySettlement, payload: Partial<MonthlySettlement>) => void;
   onToggleRecurringTimer: (settlement: MonthlySettlement, task: RecurringTaskRealization) => void;
   onToggleRecurringDone: (task: RecurringTaskRealization) => void;
+  onReminderSent: (settlementId: string, reminder: { sentAt: string; sentById: string; sentByName: string }) => void;
   saving: boolean;
 }) {
   const client = getClient(settlement.klienci);
@@ -270,7 +282,9 @@ function SettlementDrawer({ settlement, progress, recurringTasks, taxObligations
       return;
     }
 
-    alert("Przypomnienie zostało przekazane do wysyłki.");
+    if (result.reminder?.sentAt && result.reminder?.sentByName) {
+      onReminderSent(settlement.id, result.reminder);
+    }
   }
 
   return (
@@ -289,6 +303,11 @@ function SettlementDrawer({ settlement, progress, recurringTasks, taxObligations
               <button type="button" style={sendingReminder || Boolean(settlement.data_dostarczenia_dokumentow) ? disabledReminderButtonStyle : reminderButtonStyle} disabled={sendingReminder || Boolean(settlement.data_dostarczenia_dokumentow)} onClick={requestDocumentsReminder}>
                 {sendingReminder ? "Wysyłanie..." : "Przypomnij o dokumentach"}
               </button>
+              {settlement.przypomnienie_dokumenty_wyslane_at && (
+                <p style={reminderMetaStyle}>
+                  Przypomnienie wysłane {formatReminderTimestamp(settlement.przypomnienie_dokumenty_wyslane_at)} przez {settlement.przypomnienie_dokumenty_wyslane_przez_nazwa || "nieustalonego użytkownika"}.
+                </p>
+              )}
               <div style={hasPayroll ? countFieldsGridStyle : oneColumnStyle}>
                 <Field label="Liczba dokumentów"><NumberInput value={settlement.liczba_dokumentow} disabled={false} onChange={(value) => onSave(settlement, { liczba_dokumentow: value })} /></Field>
                 {hasPayroll && <Field label="Liczba pracowników"><NumberInput value={settlement.liczba_pracownikow} disabled={false} onChange={(value) => onSave(settlement, { liczba_pracownikow: value })} /></Field>}
@@ -371,6 +390,15 @@ function currentMonthInput() {
 }
 function formatMonth(value: string) { return new Intl.DateTimeFormat("pl-PL", { month: "long", year: "numeric" }).format(new Date(`${value}-01T12:00:00`)); }
 function formatDate(value: string | null) { return value ? new Intl.DateTimeFormat("pl-PL").format(new Date(`${value}T12:00:00`)) : "Do ustalenia"; }
+function formatReminderTimestamp(value: string) {
+  return new Intl.DateTimeFormat("pl-PL", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
 function formatDateForInput(value: string | null) { return value ? value.slice(0, 10) : ""; }
 function formatCurrency(value: number | null) { return value === null || value === undefined ? "Do pobrania" : new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN" }).format(value); }
 function fetchStatusLabel(status: TaxFetchStatus) { if (status === "pobrane") return "pobrane"; if (status === "blad") return "błąd"; return "do pobrania"; }
@@ -419,6 +447,7 @@ const progressLargeStyle: CSSProperties = { ...progressStyle, width: "100%", pad
 const detailsButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "9px 12px", background: colors.card, color: colors.navy, fontWeight: 800, cursor: "pointer" };
 const reminderButtonStyle: CSSProperties = { border: "none", borderRadius: radius.button, padding: "12px 16px", background: colors.red, color: colors.white, fontWeight: 850, cursor: "pointer", margin: "0 0 16px", minHeight: "44px" };
 const disabledReminderButtonStyle: CSSProperties = { ...reminderButtonStyle, background: "#e8eef8", color: colors.muted, cursor: "not-allowed" };
+const reminderMetaStyle: CSSProperties = { margin: "-8px 0 16px", color: colors.muted, fontSize: "12px", lineHeight: 1.5, fontWeight: 700 };
 const timerButtonStyle: CSSProperties = { ...detailsButtonStyle, display: "inline-flex", alignItems: "center", gap: "7px", padding: "9px 11px", background: "#eef5ff", borderColor: "#c8d8f0" };
 const timerActiveButtonStyle: CSSProperties = { ...timerButtonStyle, background: colors.success, borderColor: colors.success, color: colors.white };
 const emptyStateStyle: CSSProperties = { padding: "18px", borderRadius: radius.input, background: colors.inputBackground, border: `1px dashed ${colors.border}`, color: colors.muted, textAlign: "center", fontWeight: 800 };

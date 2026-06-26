@@ -268,9 +268,9 @@ function SettlementDrawer({ settlement, progress, recurringTasks, taxObligations
           <section style={drawerSectionStyle}>
             <h3 style={drawerSectionTitleStyle}>Status miesiąca</h3>
             <Field label="Status księgowości"><select style={{ ...inputStyle, ...statusSelectStyle(settlement.status_ksiegowosci) }} value={settlement.status_ksiegowosci} disabled={saving} onChange={(event) => onSave(settlement, { status_ksiegowosci: event.target.value as SettlementStatus })}>{STATUS_OPTIONS.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}</select></Field>
-            <div style={hasPayroll ? threeColumnsStyle : twoColumnsStyle}>
+            <Field label="Data dostarczenia dokumentów"><input style={inputStyle} type="date" value={formatDateForInput(settlement.data_dostarczenia_dokumentow)} disabled={saving} onChange={(event) => onSave(settlement, { data_dostarczenia_dokumentow: event.target.value || null })} /></Field>
+            <div style={hasPayroll ? threeColumnsStyle : oneColumnStyle}>
               <Field label="Liczba dokumentów"><NumberInput value={settlement.liczba_dokumentow} disabled={false} onChange={(value) => onSave(settlement, { liczba_dokumentow: value })} /></Field>
-              <Field label="Data dostarczenia dokumentów"><input style={inputStyle} type="date" value={formatDateForInput(settlement.data_dostarczenia_dokumentow)} disabled={saving} onChange={(event) => onSave(settlement, { data_dostarczenia_dokumentow: event.target.value || null })} /></Field>
               {hasPayroll && <Field label="Liczba pracowników"><NumberInput value={settlement.liczba_pracownikow} disabled={false} onChange={(value) => onSave(settlement, { liczba_pracownikow: value })} /></Field>}
               {hasPayroll && <Field label="Liczba zleceniobiorców"><NumberInput value={settlement.liczba_zleceniobiorcow} disabled={false} onChange={(value) => onSave(settlement, { liczba_zleceniobiorcow: value })} /></Field>}
             </div>
@@ -411,7 +411,7 @@ const mutedBadgeStyle: CSSProperties = { borderRadius: radius.badge, background:
 const fieldStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "7px", marginBottom: "14px" };
 const labelStyle: CSSProperties = { color: colors.muted, fontSize: "13px", fontWeight: 800 };
 const threeColumnsStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "14px" };
-const twoColumnsStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "14px" };
+const oneColumnStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "14px" };
 const clientContextStyle: CSSProperties = { display: "flex", gap: "10px", flexWrap: "wrap", margin: "12px 0", color: colors.muted, fontSize: "13px" };
 const recurringListStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "10px", marginTop: "12px" };
 const recurringItemStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "12px", background: colors.inputBackground };

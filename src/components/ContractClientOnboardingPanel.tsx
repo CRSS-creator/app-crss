@@ -23,9 +23,11 @@ type ClientOnboardingDraft = {
   czynny_vat: boolean;
   vat_ue: boolean;
   schemat_zus: string;
+  model_fakturowania: string;
   ostatni_okres_rozliczeniowy: string;
   koszt_obslugi_pracownika: string;
   koszt_obslugi_zleceniobiorcy: string;
+  koszt_dodatkowego_dokumentu: string;
   notatki: string;
 };
 
@@ -38,6 +40,10 @@ type Props = {
 
 const CLIENT_STATUSES = ["Onboarding", "Aktywny", "Zawieszony", "Do zamknięcia", "Archiwalny"];
 const ZUS_OPTIONS = ["", "Brak", "Preferencyjny", "Mały ZUS Plus", "Pełny ZUS", "Tylko zdrowotna"];
+const BILLING_MODEL_OPTIONS = [
+  { value: "z_dolu", label: "Z dołu" },
+  { value: "z_gory", label: "Z góry" },
+];
 
 export default function ContractClientOnboardingPanel({ contract, onCreated }: Props) {
   const [caregivers, setCaregivers] = useState<Caregiver[]>([]);
@@ -94,12 +100,14 @@ export default function ContractClientOnboardingPanel({ contract, onCreated }: P
       czynny_vat: draft.czynny_vat,
       vat_ue: draft.vat_ue,
       schemat_zus: emptyToNull(draft.schemat_zus),
+      model_fakturowania: draft.model_fakturowania || "z_dolu",
       abonament: contract.abonament_netto ?? null,
       limit_dokumentow: contract.limit_dokumentow ?? null,
       pierwszy_okres_rozliczeniowy: normalizeMonth(monthInputFromText(contract.pierwszy_okres)),
       ostatni_okres_rozliczeniowy: normalizeMonth(draft.ostatni_okres_rozliczeniowy),
       koszt_obslugi_pracownika: numberOrNull(draft.koszt_obslugi_pracownika),
       koszt_obslugi_zleceniobiorcy: numberOrNull(draft.koszt_obslugi_zleceniobiorcy),
+      koszt_dodatkowego_dokumentu: numberOrNull(draft.koszt_dodatkowego_dokumentu),
       dodatkowe_uslugi: nullableToNull(contract.ustalenia_indywidualne),
       notatki: emptyToNull(draft.notatki),
     });
@@ -147,9 +155,11 @@ export default function ContractClientOnboardingPanel({ contract, onCreated }: P
         <SelectField label="Opodatkowanie" value={draft.forma_opodatkowania} onChange={(value) => updateDraft("forma_opodatkowania", value)} options={[{ value: "", label: "Do uzupełnienia" }, ...TAXATION_FORM_OPTIONS]} />
         <SelectField label="Status klienta" value={draft.status_klienta} onChange={(value) => updateDraft("status_klienta", value)} options={CLIENT_STATUSES.map((status) => ({ value: status, label: status }))} />
         <SelectField label="Schemat ZUS" value={draft.schemat_zus} onChange={(value) => updateDraft("schemat_zus", value)} options={ZUS_OPTIONS.map((option) => ({ value: option, label: option || "Do uzupełnienia" }))} />
+        <SelectField label="Schemat płatności faktury" value={draft.model_fakturowania} onChange={(value) => updateDraft("model_fakturowania", value)} options={BILLING_MODEL_OPTIONS} />
         <TextField label="Ostatni okres" type="month" value={draft.ostatni_okres_rozliczeniowy} onChange={(value) => updateDraft("ostatni_okres_rozliczeniowy", value)} />
         <TextField label="Koszt pracownika" type="number" value={draft.koszt_obslugi_pracownika} onChange={(value) => updateDraft("koszt_obslugi_pracownika", value)} />
         <TextField label="Koszt zleceniobiorcy" type="number" value={draft.koszt_obslugi_zleceniobiorcy} onChange={(value) => updateDraft("koszt_obslugi_zleceniobiorcy", value)} />
+        <TextField label="Koszt dodatkowego dokumentu" type="number" value={draft.koszt_dodatkowego_dokumentu} onChange={(value) => updateDraft("koszt_dodatkowego_dokumentu", value)} />
         <div style={checkboxGroupStyle}>
           <CheckboxField label="Czynny VAT" checked={draft.czynny_vat} onChange={(value) => updateDraft("czynny_vat", value)} />
           <CheckboxField label="VAT-UE" checked={draft.vat_ue} onChange={(value) => updateDraft("vat_ue", value)} />
@@ -170,9 +180,11 @@ function createEmptyDraft(contract: CrmContract): ClientOnboardingDraft {
     czynny_vat: false,
     vat_ue: false,
     schemat_zus: "",
+    model_fakturowania: "z_dolu",
     ostatni_okres_rozliczeniowy: "",
     koszt_obslugi_pracownika: "",
     koszt_obslugi_zleceniobiorcy: "",
+    koszt_dodatkowego_dokumentu: "",
     notatki: "",
   };
 }

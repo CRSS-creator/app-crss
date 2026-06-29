@@ -45,10 +45,12 @@ type Client = {
   obsluga_kadrowa: boolean | null;
   status_klienta: string | null;
   abonament: number | null;
+  model_fakturowania: string | null;
   czynny_vat: boolean | null;
   vat_ue: boolean | null;
   schemat_zus: string | null;
   limit_dokumentow: number | null;
+  koszt_dodatkowego_dokumentu: number | null;
   pierwszy_okres_rozliczeniowy: string | null;
   ostatni_okres_rozliczeniowy: string | null;
   koszt_obslugi_pracownika: number | null;
@@ -73,11 +75,13 @@ type ClientDraft = {
   obsluga_kadrowa: boolean;
   status_klienta: string;
   abonament: string;
+  model_fakturowania: string;
   opiekun_id: string;
   czynny_vat: boolean;
   vat_ue: boolean;
   schemat_zus: string;
   limit_dokumentow: string;
+  koszt_dodatkowego_dokumentu: string;
   pierwszy_okres_rozliczeniowy: string;
   ostatni_okres_rozliczeniowy: string;
   koszt_obslugi_pracownika: string;
@@ -129,6 +133,11 @@ const PAYROLL_FILTER_OPTIONS = [
   { value: EMPTY_FILTER, label: "Kadry" },
   { value: "Tak", label: "Tak" },
   { value: "Nie", label: "Nie" },
+];
+
+const BILLING_MODEL_OPTIONS = [
+  { value: "z_dolu", label: "Z dołu" },
+  { value: "z_gory", label: "Z góry" },
 ];
 
 function formatClientsCount(count: number) {
@@ -595,6 +604,7 @@ function ClientDrawer({
           obsluga_kadrowa: draft.obsluga_kadrowa,
           status_klienta: draft.status_klienta.trim() || null,
           abonament: draft.abonament ? Number(draft.abonament) : null,
+          model_fakturowania: draft.model_fakturowania || "z_dolu",
           pierwszy_okres_rozliczeniowy: normalizeMonthInput(
             draft.pierwszy_okres_rozliczeniowy
           ),
@@ -606,6 +616,9 @@ function ClientDrawer({
             : null,
           koszt_obslugi_zleceniobiorcy: draft.koszt_obslugi_zleceniobiorcy
             ? Number(draft.koszt_obslugi_zleceniobiorcy)
+            : null,
+          koszt_dodatkowego_dokumentu: draft.koszt_dodatkowego_dokumentu
+            ? Number(draft.koszt_dodatkowego_dokumentu)
             : null,
           opiekun_id: draft.opiekun_id || null,
         }
@@ -839,6 +852,12 @@ function ClientDrawer({
                   value={draft.abonament}
                   onChange={(value) => updateDraft("abonament", value)}
                 />
+                <EditableSelect
+                  label="Schemat płatności faktury"
+                  value={draft.model_fakturowania}
+                  onChange={(value) => updateDraft("model_fakturowania", value)}
+                  options={BILLING_MODEL_OPTIONS}
+                />
                 <EditableInput
                   label="Pierwszy okres rozliczeniowy"
                   type="month"
@@ -871,6 +890,14 @@ function ClientDrawer({
                     updateDraft("koszt_obslugi_zleceniobiorcy", value)
                   }
                 />
+                <EditableInput
+                  label="Koszt dodatkowego dokumentu"
+                  type="number"
+                  value={draft.koszt_dodatkowego_dokumentu}
+                  onChange={(value) =>
+                    updateDraft("koszt_dodatkowego_dokumentu", value)
+                  }
+                />
               </>
             ) : (
               <>
@@ -879,8 +906,12 @@ function ClientDrawer({
                   value={
                     client.abonament !== null
                       ? `${client.abonament.toLocaleString("pl-PL")} zł`
-                      : null
+                    : null
                   }
+                />
+                <InfoRow
+                  label="Schemat płatności faktury"
+                  value={billingModelLabel(client.model_fakturowania)}
                 />
                 <InfoRow
                   label="Pierwszy okres rozliczeniowy"
@@ -901,6 +932,10 @@ function ClientDrawer({
                 <InfoRow
                   label="Koszt obsługi zleceniobiorcy"
                   value={formatMoney(client.koszt_obslugi_zleceniobiorcy)}
+                />
+                <InfoRow
+                  label="Koszt dodatkowego dokumentu"
+                  value={formatMoney(client.koszt_dodatkowego_dokumentu)}
                 />
               </>
             )}
@@ -1047,11 +1082,13 @@ function CreateClientDrawer({
     obsluga_kadrowa: false,
     status_klienta: "Aktywny",
     abonament: "",
+    model_fakturowania: "z_dolu",
     opiekun_id: "",
     czynny_vat: false,
     vat_ue: false,
     schemat_zus: "",
     limit_dokumentow: "",
+    koszt_dodatkowego_dokumentu: "",
     pierwszy_okres_rozliczeniowy: "",
     ostatni_okres_rozliczeniowy: "",
     koszt_obslugi_pracownika: "",
@@ -1092,6 +1129,7 @@ function CreateClientDrawer({
       obsluga_kadrowa: draft.obsluga_kadrowa,
       status_klienta: draft.status_klienta.trim() || "Aktywny",
       abonament: draft.abonament ? Number(draft.abonament) : null,
+      model_fakturowania: draft.model_fakturowania || "z_dolu",
       pierwszy_okres_rozliczeniowy: normalizeMonthInput(
         draft.pierwszy_okres_rozliczeniowy
       ),
@@ -1103,6 +1141,9 @@ function CreateClientDrawer({
         : null,
       koszt_obslugi_zleceniobiorcy: draft.koszt_obslugi_zleceniobiorcy
         ? Number(draft.koszt_obslugi_zleceniobiorcy)
+        : null,
+      koszt_dodatkowego_dokumentu: draft.koszt_dodatkowego_dokumentu
+        ? Number(draft.koszt_dodatkowego_dokumentu)
         : null,
       opiekun_id: draft.opiekun_id || null,
       czynny_vat: draft.czynny_vat,
@@ -1299,6 +1340,13 @@ function CreateClientDrawer({
     onChange={(v) => updateDraft("abonament", v)}
   />
 
+  <EditableSelect
+    label="Schemat płatności faktury"
+    value={draft.model_fakturowania}
+    onChange={(v) => updateDraft("model_fakturowania", v)}
+    options={BILLING_MODEL_OPTIONS}
+  />
+
   <EditableInput
     label="Pierwszy okres rozliczeniowy"
     type="month"
@@ -1325,6 +1373,13 @@ function CreateClientDrawer({
     type="number"
     value={draft.koszt_obslugi_zleceniobiorcy}
     onChange={(v) => updateDraft("koszt_obslugi_zleceniobiorcy", v)}
+  />
+
+  <EditableInput
+    label="Koszt dodatkowego dokumentu"
+    type="number"
+    value={draft.koszt_dodatkowego_dokumentu}
+    onChange={(v) => updateDraft("koszt_dodatkowego_dokumentu", v)}
   />
 
   <EditableInput
@@ -1368,6 +1423,7 @@ function createDraft(client: Client): ClientDraft {
       client.abonament !== null && client.abonament !== undefined
         ? String(client.abonament)
         : "",
+    model_fakturowania: client.model_fakturowania || "z_dolu",
     opiekun_id: client.opiekun_id || "",
     czynny_vat: Boolean(client.czynny_vat),
     vat_ue: Boolean(client.vat_ue),
@@ -1375,6 +1431,11 @@ function createDraft(client: Client): ClientDraft {
     limit_dokumentow:
       client.limit_dokumentow !== null && client.limit_dokumentow !== undefined
         ? String(client.limit_dokumentow)
+        : "",
+    koszt_dodatkowego_dokumentu:
+      client.koszt_dodatkowego_dokumentu !== null &&
+      client.koszt_dodatkowego_dokumentu !== undefined
+        ? String(client.koszt_dodatkowego_dokumentu)
         : "",
     pierwszy_okres_rozliczeniowy: toMonthInputValue(
       client.pierwszy_okres_rozliczeniowy
@@ -1421,6 +1482,13 @@ function formatMoney(value: number | null | undefined) {
   return value !== null && value !== undefined
     ? `${value.toLocaleString("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} zł`
     : null;
+}
+
+function billingModelLabel(value: string | null | undefined) {
+  return (
+    BILLING_MODEL_OPTIONS.find((option) => option.value === value)?.label ||
+    "Z dołu"
+  );
 }
 
 function EditableInput({

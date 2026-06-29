@@ -43,6 +43,7 @@ type Client = {
   obsluga_kadrowa: boolean | null;
   abonament: number | null;
   limit_dokumentow: number | null;
+  model_fakturowania: string | null;
 };
 
 type ContractDraft = {
@@ -374,7 +375,7 @@ function ContractDrawer({ contract, leads, clients, onClose, onSaved }: { contra
         <div style={drawerContentStyle}>
           <FormSection title="Powiązanie">
             <SearchableLeadSelect label="Szansa CRM" value={draft.crm_id} leads={wonLeads} onChange={fillFromLead} />
-            <EditableSelect label="Klient" value={draft.klient_id} onChange={fillFromClient} options={[{ value: "", label: "Bez klienta" }, ...clients.map((client) => ({ value: client.id, label: client.nazwa || "Bez nazwy" }))]} />
+            <SearchableClientSelect label="Klient" value={draft.klient_id} clients={clients} onChange={fillFromClient} />
             <EditableSelect label="Typ umowy" value={draft.typ_umowy} onChange={(value) => updateDraft("typ_umowy", value as CrmContractType)} options={CONTRACT_TYPES.map((item) => ({ value: item.value, label: item.label }))} />
             <EditableSelect label="Status" value={draft.status} onChange={(value) => updateDraft("status", value as CrmContractStatus)} options={CONTRACT_STATUSES} />
           </FormSection>
@@ -569,6 +570,56 @@ function SearchableLeadSelect({ label, value, leads, onChange }: { label: string
               <button key={lead.id} type="button" style={comboOptionStyle} onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery(lead.nazwa || "Bez nazwy"); setOpen(false); onChange(lead.id); }}>
                 <strong>{lead.nazwa || "Bez nazwy"}</strong>
                 <span>{[lead.osoba_kontaktowa, lead.email, lead.nip].filter(Boolean).join(" · ") || "Wygrana szansa"}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SearchableClientSelect({ label, value, clients, onChange }: { label: string; value: string; clients: Client[]; onChange: (value: string) => void }) {
+  const selectedClient = clients.find((client) => client.id === value) || null;
+  const [query, setQuery] = useState(selectedClient?.nazwa || "");
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    setQuery(selectedClient?.nazwa || "");
+  }, [selectedClient?.id, selectedClient?.nazwa]);
+
+  const visibleClients = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    const filtered = normalizedQuery
+      ? clients.filter((client) => [client.nazwa, client.nip, client.email].filter(Boolean).join(" ").toLowerCase().includes(normalizedQuery))
+      : clients;
+
+    return filtered.slice(0, 8);
+  }, [clients, query]);
+
+  return (
+    <div style={editableRowStyle}>
+      <span>{label}</span>
+      <div style={comboWrapStyle}>
+        <input
+          value={query}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            setOpen(true);
+            if (value) onChange("");
+          }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setTimeout(() => setOpen(false), 120)}
+          placeholder="Wpisz nazwę klienta"
+          style={{ ...inputStyle, paddingRight: query ? "88px" : inputStyle.padding }}
+        />
+        {query && <button type="button" style={clearComboButtonStyle} onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery(""); setOpen(false); onChange(""); }}>Wyczyść</button>}
+        {open && (
+          <div style={comboListStyle}>
+            {visibleClients.length === 0 ? <div style={comboEmptyStyle}>Brak klientów pasujących do wpisanego tekstu.</div> : visibleClients.map((client) => (
+              <button key={client.id} type="button" style={comboOptionStyle} onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery(client.nazwa || "Bez nazwy"); setOpen(false); onChange(client.id); }}>
+                <strong>{client.nazwa || "Bez nazwy"}</strong>
+                <span>{[client.nip, client.email].filter(Boolean).join(" · ") || "Klient"}</span>
               </button>
             ))}
           </div>

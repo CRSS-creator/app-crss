@@ -16,6 +16,7 @@ const CLIENT_SELECT = `
       vat_ue,
       schemat_zus,
       limit_dokumentow,
+      koszt_dodatkowego_dokumentu,
       pierwszy_okres_rozliczeniowy,
       ostatni_okres_rozliczeniowy,
       koszt_obslugi_pracownika,

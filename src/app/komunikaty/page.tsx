@@ -39,6 +39,15 @@ type CommunicationHistoryRecord = {
   created_at: string;
   sent_by_name: string | null;
   subject: string | null;
+  message: string | null;
+  recipients: {
+    clientId?: string | null;
+    clientName?: string | null;
+    clientNip?: string | null;
+    email?: string | null;
+    caregiverName?: string | null;
+    caregiverEmail?: string | null;
+  }[] | null;
   recipients_count: number | null;
   skipped_count: number | null;
 };
@@ -96,6 +105,7 @@ function KomunikatyContent() {
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
   const [history, setHistory] = useState<CommunicationHistoryRecord[]>([]);
+  const [openHistoryId, setOpenHistoryId] = useState<string | null>(null);
   const [showRecipientList, setShowRecipientList] = useState(false);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -117,7 +127,7 @@ function KomunikatyContent() {
   async function loadHistory() {
     const { data, error } = await supabase
       .from("komunikaty_historia")
-      .select("id, created_at, sent_by_name, subject, recipients_count, skipped_count")
+      .select("id, created_at, sent_by_name, subject, message, recipients, recipients_count, skipped_count")
       .order("created_at", { ascending: false })
       .limit(10);
 
@@ -359,17 +369,53 @@ function KomunikatyContent() {
         <div style={historyListStyle}>
           {history.length === 0 ? (
             <div style={historyEmptyStyle}>Brak zapisanych wysyłek komunikatów.</div>
-          ) : history.map((record) => (
-            <div key={record.id} style={historyItemStyle}>
-              <div>
-                <div style={historySubjectStyle}>{record.subject || "Bez tematu"}</div>
-                <div style={historyMetaStyle}>
-                  Wysłane {formatHistoryDate(record.created_at)} przez {record.sent_by_name || "nieustalonego użytkownika"}.
+          ) : history.map((record) => {
+            const isOpen = openHistoryId === record.id;
+            const recipients = Array.isArray(record.recipients) ? record.recipients : [];
+            return (
+              <div key={record.id} style={historyItemStyle}>
+                <div style={historyItemTopStyle}>
+                  <div>
+                    <div style={historySubjectStyle}>{record.subject || "Bez tematu"}</div>
+                    <div style={historyMetaStyle}>
+                      Wysłane {formatHistoryDate(record.created_at)} przez {record.sent_by_name || "nieustalonego użytkownika"}.
+                    </div>
+                  </div>
+                  <div style={historyActionsStyle}>
+                    <span style={historyCountStyle}>{record.recipients_count || 0} odbiorców</span>
+                    <button type="button" style={historyDetailsButtonStyle} onClick={() => setOpenHistoryId(isOpen ? null : record.id)}>
+                      {isOpen ? "Ukryj" : "Szczegóły"}
+                    </button>
+                  </div>
                 </div>
+
+                {isOpen && (
+                  <div style={historyDetailsStyle}>
+                    <div>
+                      <h3 style={historyDetailsTitleStyle}>Treść komunikatu</h3>
+                      <div style={historyMessageStyle}>{record.message || "Brak zapisanej treści."}</div>
+                    </div>
+                    <div>
+                      <h3 style={historyDetailsTitleStyle}>Odbiorcy</h3>
+                      {recipients.length === 0 ? (
+                        <div style={historyEmptyRecipientsStyle}>Brak listy odbiorców dla tej wysyłki.</div>
+                      ) : (
+                        <div style={historyRecipientsStyle}>
+                          {recipients.map((recipient, index) => (
+                            <div key={`${recipient.clientId || recipient.email || index}`} style={historyRecipientStyle}>
+                              <strong>{recipient.clientName || "Klient bez nazwy"}</strong>
+                              <span>{recipient.email || "Brak e-maila"}</span>
+                              <small>{recipient.clientNip ? `NIP: ${recipient.clientNip}` : "Brak NIP"} · Opiekun: {recipient.caregiverName || "Brak opiekuna"}</small>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
-              <span style={historyCountStyle}>{record.recipients_count || 0} odbiorców</span>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
     </>
@@ -443,8 +489,17 @@ const secondaryButtonStyle: React.CSSProperties = { border: `1px solid ${colors.
 const helperStyle: React.CSSProperties = { color: colors.muted, fontSize: "14px", fontWeight: 700 };
 const resultStyle: React.CSSProperties = { margin: "14px 0 0", color: colors.navy, fontSize: "15px", fontWeight: 850 };
 const historyListStyle: React.CSSProperties = { marginTop: "18px", display: "grid", gap: "10px" };
-const historyItemStyle: React.CSSProperties = { display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "center", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "14px 16px" };
+const historyItemStyle: React.CSSProperties = { display: "grid", gap: "14px", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "14px 16px" };
+const historyItemTopStyle: React.CSSProperties = { display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "center" };
 const historySubjectStyle: React.CSSProperties = { color: colors.navy, fontSize: "16px", fontWeight: 850 };
 const historyMetaStyle: React.CSSProperties = { marginTop: "4px", color: colors.muted, fontSize: "13px", fontWeight: 650 };
+const historyActionsStyle: React.CSSProperties = { flexShrink: 0, display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", justifyContent: "flex-end" };
 const historyCountStyle: React.CSSProperties = { flexShrink: 0, display: "inline-flex", alignItems: "center", minHeight: "32px", padding: "4px 12px", borderRadius: radius.badge, background: "#e8eef8", color: colors.navy, fontSize: "13px", fontWeight: 850 };
+const historyDetailsButtonStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.card, color: colors.navy, minHeight: "36px", padding: "7px 13px", fontSize: "14px", fontWeight: 850, cursor: "pointer" };
+const historyDetailsStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1.1fr) minmax(280px, 0.9fr)", gap: "14px", borderTop: `1px solid ${colors.border}`, paddingTop: "14px" };
+const historyDetailsTitleStyle: React.CSSProperties = { margin: "0 0 8px", color: colors.navy, fontSize: "15px", fontWeight: 850 };
+const historyMessageStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.card, padding: "14px", color: colors.text, fontSize: "14px", lineHeight: 1.55, whiteSpace: "pre-wrap" };
+const historyRecipientsStyle: React.CSSProperties = { display: "grid", gap: "8px" };
+const historyRecipientStyle: React.CSSProperties = { display: "grid", gap: "4px", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.card, padding: "11px 13px", color: colors.text, fontSize: "13px" };
+const historyEmptyRecipientsStyle: React.CSSProperties = { border: `1px dashed ${colors.border}`, borderRadius: radius.input, background: colors.card, padding: "14px", color: colors.muted, fontWeight: 750, textAlign: "center" };
 const historyEmptyStyle: React.CSSProperties = { border: `1px dashed ${colors.border}`, borderRadius: radius.input, padding: "20px", textAlign: "center", color: colors.text, fontWeight: 800 };

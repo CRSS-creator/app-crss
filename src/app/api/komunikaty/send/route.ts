@@ -213,6 +213,17 @@ export async function POST(request: NextRequest) {
       subject,
       message,
       recipients_count: recipients.length,
+      recipients: recipients.map((client) => {
+        const caregiver = Array.isArray(client.profiles) ? client.profiles[0] : client.profiles;
+        return {
+          clientId: client.id,
+          clientName: client.nazwa,
+          clientNip: client.nip,
+          email: client.email,
+          caregiverName: caregiver?.full_name || null,
+          caregiverEmail: caregiver?.email || null,
+        };
+      }),
       skipped_count: allowedClients.length - recipients.length,
       failed_count: 0,
       filter_snapshot: payload.filterSnapshot || {},

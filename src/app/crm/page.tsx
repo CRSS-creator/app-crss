@@ -124,6 +124,7 @@ function CrmContent() {
   const [stageFilter, setStageFilter] = useState(EMPTY_FILTER);
   const [statusFilter, setStatusFilter] = useState(EMPTY_FILTER);
   const [kadryFilter, setKadryFilter] = useState(EMPTY_FILTER);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     loadInitialData();
@@ -189,10 +190,26 @@ function CrmContent() {
   }
 
   const filteredLeads = leads.filter((lead) => {
+    const normalizedSearch = searchQuery.trim().toLowerCase();
+    const searchableText = [
+      lead.nazwa,
+      lead.osoba_kontaktowa,
+      lead.email,
+      lead.telefon,
+      lead.nip,
+      lead.forma_prawna,
+      lead.zrodlo_leada,
+      lead.powod_kontaktu,
+      lead.notatki,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
     const matchesStage = stageFilter === EMPTY_FILTER || lead.etap === stageFilter;
     const matchesStatus = statusFilter === EMPTY_FILTER || lead.status === statusFilter;
     const matchesKadry = kadryFilter === EMPTY_FILTER || (kadryFilter === "Tak" && lead.czy_kadry) || (kadryFilter === "Nie" && !lead.czy_kadry);
-    return matchesStage && matchesStatus && matchesKadry;
+    const matchesSearch = !normalizedSearch || searchableText.includes(normalizedSearch);
+    return matchesSearch && matchesStage && matchesStatus && matchesKadry;
   });
   const activeLeads = leads.filter((lead) => lead.status === "otwarta");
   const totalMrr = activeLeads.reduce((sum, lead) => sum + Number(lead.szacowany_mrr || 0), 0);
@@ -255,6 +272,12 @@ function CrmContent() {
           <h2 style={sectionTitleStyle}>Lista szans sprzedaży</h2>
           <span style={counterStyle}>{loading ? "Ładowanie..." : `${filteredLeads.length} pozycji`}</span>
         </div>
+        <input
+          style={searchInputStyle}
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+          placeholder="Szukaj po nazwie szansy, kontakcie, NIP lub notatce"
+        />
         <div style={filtersStyle}>
           <AppSelect style={filterStyle} value={stageFilter} options={STAGE_FILTER_OPTIONS} onChange={setStageFilter} />
           <AppSelect style={filterStyle} value={statusFilter} options={STATUS_FILTER_OPTIONS} onChange={setStatusFilter} />
@@ -523,6 +546,7 @@ const pipelineTitleStyle: React.CSSProperties = { margin: 0, color: colors.navy,
 const pipelineMetaStyle: React.CSSProperties = { margin: "6px 0 14px", color: colors.muted, fontSize: "13px", fontWeight: 700 };
 const pipelineCardsStyle: React.CSSProperties = { display: "flex", flexDirection: "column", gap: "10px" };
 const pipelineCardStyle: React.CSSProperties = { background: colors.white, border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "14px", cursor: "grab", display: "flex", flexDirection: "column", gap: "5px", textAlign: "left", color: colors.text };
+const searchInputStyle: React.CSSProperties = { width: "100%", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, color: colors.text, padding: "13px 18px", fontSize: "14px", fontWeight: 600, marginBottom: "16px" };
 const filtersStyle: React.CSSProperties = { display: "flex", gap: "12px", flexWrap: "wrap", marginBottom: "18px" };
 const filterStyle: React.CSSProperties = { width: "180px", flex: "0 0 180px", border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "10px 14px", background: colors.card, color: colors.text };
 const tableWrapperStyle: React.CSSProperties = { overflowX: "auto" };

@@ -83,10 +83,19 @@ function injectPrintStyles() {
       }
 
       [data-printable-rodo-register="true"] h2 {
-        margin: 0 0 8mm !important;
+        margin: 0 0 3mm !important;
         color: #000 !important;
         font-size: 15pt !important;
         line-height: 1.2 !important;
+      }
+
+      [data-printable-rodo-register="true"] [data-rodo-print-meta] {
+        display: block !important;
+        margin: 0 0 6mm !important;
+        color: #000 !important;
+        font-size: 9pt !important;
+        line-height: 1.35 !important;
+        font-weight: 600 !important;
       }
 
       [data-printable-rodo-register="true"] table {

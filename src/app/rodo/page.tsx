@@ -40,6 +40,11 @@ type UserProfile = {
   email: string | null;
 };
 
+type PrintInfo = {
+  userName: string;
+  printedAt: string;
+};
+
 type RodoDraft = {
   klient_id: string;
   umowa_ksiegowa_id: string;
@@ -81,6 +86,8 @@ function RodoContent() {
   const [statusFilter, setStatusFilter] = useState("Wszystkie");
   const [selectedContract, setSelectedContract] = useState<RodoProcessingContract | null>(null);
   const [creatingContract, setCreatingContract] = useState(false);
+  const [currentUserName, setCurrentUserName] = useState("Nieustalony użytkownik");
+  const [printInfo, setPrintInfo] = useState<PrintInfo | null>(null);
 
   useEffect(() => {
     void loadInitialData();
@@ -88,11 +95,12 @@ function RodoContent() {
 
   async function loadInitialData() {
     setLoading(true);
-    const [contractsResult, clientsResult, accountingContractsResult, profilesResult] = await Promise.all([
+    const [contractsResult, clientsResult, accountingContractsResult, profilesResult, userResult] = await Promise.all([
       fetchRodoProcessingContracts(),
       fetchClients(),
       fetchCrmContracts(),
       fetchRodoProfiles(),
+      supabase.auth.getUser(),
     ]);
 
     if (!contractsResult.error) setContracts((contractsResult.data || []) as RodoProcessingContract[]);
@@ -104,7 +112,14 @@ function RodoContent() {
     if (!accountingContractsResult.error) setAccountingContracts((accountingContractsResult.data || []) as CrmContract[]);
     else console.error("Błąd pobierania umów księgowych:", accountingContractsResult.error);
 
-    if (!profilesResult.error) setProfiles((profilesResult.data || []) as UserProfile[]);
+    if (!profilesResult.error) {
+      const nextProfiles = (profilesResult.data || []) as UserProfile[];
+      const currentUserId = userResult.data.user?.id || null;
+      const currentProfile = nextProfiles.find((profile) => profile.id === currentUserId);
+
+      setProfiles(nextProfiles);
+      setCurrentUserName(currentProfile?.full_name || currentProfile?.email || userResult.data.user?.email || "Nieustalony użytkownik");
+    }
     else console.error("Błąd pobierania użytkowników:", profilesResult.error);
 
     setLoading(false);
@@ -122,6 +137,15 @@ function RodoContent() {
     setCreatingContract(false);
     setSelectedContract(contract);
     void loadInitialData();
+  }
+
+  function handlePrintRegister() {
+    setPrintInfo({
+      userName: currentUserName,
+      printedAt: new Date().toISOString(),
+    });
+
+    window.requestAnimationFrame(() => window.print());
   }
 
   return (
@@ -145,9 +169,12 @@ function RodoContent() {
         <div style={tableHeaderStyle}>
           <h2 style={sectionTitleStyle}>Rejestr umów powierzenia przetwarzania danych osobowych</h2>
           <div style={tableActionsStyle}>
-            <button style={secondaryButtonStyle} type="button" onClick={() => window.print()}>Drukuj rejestr</button>
+            <button style={secondaryButtonStyle} type="button" onClick={handlePrintRegister}>Drukuj rejestr</button>
             <AppSelect style={filterStyle} value={statusFilter} options={STATUS_FILTER_OPTIONS} onChange={setStatusFilter} />
           </div>
+        </div>
+        <div data-rodo-print-meta style={printMetaStyle}>
+          Wydrukował: {printInfo?.userName || currentUserName} · {formatPrintDateTime(printInfo?.printedAt)}
         </div>
 
         {loading ? <div style={emptyStyle}>Ładowanie umów...</div> : filteredContracts.length === 0 ? <div style={emptyStyle}>Brak umów powierzenia do wyświetlenia.</div> : (
@@ -604,6 +631,17 @@ function formatTime(value: string | null | undefined) {
   return new Intl.DateTimeFormat("pl-PL", { hour: "2-digit", minute: "2-digit" }).format(new Date(value));
 }
 
+function formatPrintDateTime(value: string | null | undefined) {
+  const date = value ? new Date(value) : new Date();
+  return new Intl.DateTimeFormat("pl-PL", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
 function matchesSearch(option: SearchOption, search: string) {
   const normalizedSearch = search.trim().toLowerCase();
   if (!normalizedSearch) return true;
@@ -712,6 +750,7 @@ const cardStyle: CSSProperties = { background: colors.card, border: `1px solid $
 const tableHeaderStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "16px", marginBottom: "18px" };
 const tableActionsStyle: CSSProperties = { display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "10px", flexWrap: "wrap" };
 const sectionTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "24px" };
+const printMetaStyle: CSSProperties = { display: "none" };
 const filterStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "10px 14px", background: colors.card, color: colors.text, minWidth: "190px", fontWeight: 700 };
 const tableWrapperStyle: CSSProperties = { overflowX: "auto" };
 const tableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse" };

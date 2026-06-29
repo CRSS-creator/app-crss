@@ -27,6 +27,17 @@ export type TaxObligation = {
   metadata: Record<string, unknown>;
 };
 
+export type ManualTaxObligationPayload = {
+  rozliczenie_id: string;
+  klient_id: string;
+  okres: string;
+  typ: TaxObligationType;
+  nazwa: string;
+  kwota: number | null;
+  termin_platnosci: string | null;
+  status_pobrania: TaxFetchStatus;
+};
+
 export async function fetchTaxObligations(period: string) {
   return supabase
     .from("zobowiazania_podatkowe")
@@ -34,6 +45,35 @@ export async function fetchTaxObligations(period: string) {
     .eq("okres", period)
     .order("termin_platnosci", { ascending: true })
     .order("typ", { ascending: true });
+}
+
+export async function createManualTaxObligation(payload: ManualTaxObligationPayload) {
+  return supabase
+    .from("zobowiazania_podatkowe")
+    .insert({
+      ...payload,
+      zrodlo: "recznie",
+      status_email: "niewyslane",
+      status_sms: "niewyslane",
+    })
+    .select("*")
+    .single();
+}
+
+export async function updateTaxObligation(id: string, payload: Partial<Pick<TaxObligation, "typ" | "nazwa" | "kwota" | "termin_platnosci" | "status_pobrania">>) {
+  return supabase
+    .from("zobowiazania_podatkowe")
+    .update({ ...payload, zrodlo: "recznie" })
+    .eq("id", id)
+    .select("*")
+    .single();
+}
+
+export async function deleteTaxObligation(id: string) {
+  return supabase
+    .from("zobowiazania_podatkowe")
+    .delete()
+    .eq("id", id);
 }
 
 export async function sendTaxObligations(settlementId: string, channel: "email" | "sms") {

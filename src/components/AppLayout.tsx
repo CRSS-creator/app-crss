@@ -51,6 +51,7 @@ const menu = [
       { href: "/klienci", label: "Klienci", icon: Users, page: "klienci" },
       { href: "/zadania", label: "Zadania", icon: ListTodo, page: "zadania" },
       { href: "/rozliczenia", label: "Rozliczenia", icon: BarChart3, page: "rozliczenia" },
+      { href: "/komunikaty", label: "Komunikaty", icon: Megaphone, page: "komunikaty" },
       { href: "/kadry", label: "Kadry i terminy", icon: CalendarClock, page: "kadry" },
       { href: "/limity", label: "Limity", icon: TriangleAlert, page: "limity" },
       { href: "/onboarding", label: "Onboarding", icon: Rocket, page: "onboarding" },

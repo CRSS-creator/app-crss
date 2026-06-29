@@ -6,6 +6,7 @@ export type AppModule =
   | "klienci"
   | "zadania"
   | "rozliczenia"
+  | "komunikaty"
   | "kadry"
   | "limity"
   | "onboarding"
@@ -25,6 +26,7 @@ const moduleAccess: Record<AppModule, string[]> = {
   klienci: ["owner", "manager", "admin", "accountant"],
   zadania: ["owner", "manager", "admin", "accountant"],
   rozliczenia: ["owner", "manager", "admin", "accountant"],
+  komunikaty: ["owner", "manager", "admin", "accountant"],
   kadry: ["owner", "manager", "admin", "accountant"],
   limity: ["owner", "manager", "admin"],
   onboarding: ["owner", "manager", "admin", "accountant"],

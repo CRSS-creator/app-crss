@@ -49,6 +49,7 @@ export default function ContractClientOnboardingPanel({ contract, onCreated }: P
   const [caregivers, setCaregivers] = useState<Caregiver[]>([]);
   const [saving, setSaving] = useState(false);
   const [draft, setDraft] = useState<ClientOnboardingDraft>(() => createEmptyDraft(contract));
+  const isDraftJdg = isJdgLegalForm(draft.forma_prawna);
 
   useEffect(() => {
     setDraft(createEmptyDraft(contract));
@@ -99,7 +100,7 @@ export default function ContractClientOnboardingPanel({ contract, onCreated }: P
       obsluga_kadrowa: Boolean(contract.obsluga_kadrowa),
       czynny_vat: draft.czynny_vat,
       vat_ue: draft.vat_ue,
-      schemat_zus: emptyToNull(draft.schemat_zus),
+      schemat_zus: isDraftJdg ? emptyToNull(draft.schemat_zus) : null,
       model_fakturowania: draft.model_fakturowania || "z_dolu",
       abonament: contract.abonament_netto ?? null,
       limit_dokumentow: contract.limit_dokumentow ?? null,
@@ -151,10 +152,10 @@ export default function ContractClientOnboardingPanel({ contract, onCreated }: P
       <div style={gridStyle}>
         <TextField label="Telefon" value={draft.telefon} onChange={(value) => updateDraft("telefon", value)} />
         <SelectField label="Opiekun" value={draft.opiekun_id} onChange={(value) => updateDraft("opiekun_id", value)} options={[{ value: "", label: "Do uzupełnienia" }, ...caregivers.map((caregiver) => ({ value: caregiver.id, label: caregiver.full_name || caregiver.email || "Użytkownik" }))]} />
-        <SelectField label="Forma prawna" value={draft.forma_prawna} onChange={(value) => updateDraft("forma_prawna", value)} options={[{ value: "", label: "Do uzupełnienia" }, ...LEGAL_FORM_OPTIONS]} />
+        <SelectField label="Forma prawna" value={draft.forma_prawna} onChange={(value) => { updateDraft("forma_prawna", value); if (!isJdgLegalForm(value)) updateDraft("schemat_zus", ""); }} options={[{ value: "", label: "Do uzupełnienia" }, ...LEGAL_FORM_OPTIONS]} />
         <SelectField label="Opodatkowanie" value={draft.forma_opodatkowania} onChange={(value) => updateDraft("forma_opodatkowania", value)} options={[{ value: "", label: "Do uzupełnienia" }, ...TAXATION_FORM_OPTIONS]} />
         <SelectField label="Status klienta" value={draft.status_klienta} onChange={(value) => updateDraft("status_klienta", value)} options={CLIENT_STATUSES.map((status) => ({ value: status, label: status }))} />
-        <SelectField label="Schemat ZUS" value={draft.schemat_zus} onChange={(value) => updateDraft("schemat_zus", value)} options={ZUS_OPTIONS.map((option) => ({ value: option, label: option || "Do uzupełnienia" }))} />
+        {isDraftJdg && <SelectField label="Schemat ZUS" value={draft.schemat_zus} onChange={(value) => updateDraft("schemat_zus", value)} options={ZUS_OPTIONS.map((option) => ({ value: option, label: option || "Do uzupełnienia" }))} />}
         <SelectField label="Schemat płatności faktury" value={draft.model_fakturowania} onChange={(value) => updateDraft("model_fakturowania", value)} options={BILLING_MODEL_OPTIONS} />
         <TextField label="Ostatni okres" type="month" value={draft.ostatni_okres_rozliczeniowy} onChange={(value) => updateDraft("ostatni_okres_rozliczeniowy", value)} />
         <TextField label="Koszt pracownika" type="number" value={draft.koszt_obslugi_pracownika} onChange={(value) => updateDraft("koszt_obslugi_pracownika", value)} />
@@ -217,6 +218,11 @@ function numberOrNull(value: string) {
   if (!value.trim()) return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function isJdgLegalForm(value: string) {
+  const normalized = value.toLowerCase();
+  return normalized.includes("jdg") || normalized.includes("jednoosob");
 }
 
 function TextField({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (value: string) => void; type?: "text" | "email" | "number" | "month" }) {

@@ -483,6 +483,8 @@ function ClientDrawer({
   const [draft, setDraft] = useState<ClientDraft>(() => createDraft(client));
 
   const canEditAdministrative = canEditClientAdministrative(role);
+  const isDraftJdg = isJdgLegalForm(draft.forma_prawna);
+  const isClientJdg = isJdgLegalForm(client.forma_prawna || "");
 
   useEffect(() => {
     setDraft(createDraft(client));
@@ -587,7 +589,7 @@ function ClientDrawer({
       email: draft.email.trim() || null,
       czynny_vat: draft.czynny_vat,
       vat_ue: draft.vat_ue,
-      schemat_zus: draft.schemat_zus.trim() || null,
+      schemat_zus: isDraftJdg ? draft.schemat_zus.trim() || null : null,
       limit_dokumentow: draft.limit_dokumentow
         ? Number(draft.limit_dokumentow)
         : null,
@@ -769,7 +771,10 @@ function ClientDrawer({
                 <EditableSelect
                   label="Forma prawna"
                   value={draft.forma_prawna}
-                  onChange={(value) => updateDraft("forma_prawna", value)}
+                  onChange={(value) => {
+                    updateDraft("forma_prawna", value);
+                    if (!isJdgLegalForm(value)) updateDraft("schemat_zus", "");
+                  }}
                   options={LEGAL_FORM_OPTIONS}
                 />
                 <EditableSelect
@@ -803,20 +808,22 @@ function ClientDrawer({
                   checked={draft.vat_ue}
                   onChange={(value) => updateDraft("vat_ue", value)}
                 />
-                <EditableSelect
-                  label="Schemat ZUS"
-                  value={draft.schemat_zus}
-                  onChange={(value) => updateDraft("schemat_zus", value)}
-                  options={[
-                    { value: "", label: "Wybierz" },
-                    { value: "Duży ZUS", label: "Duży ZUS" },
-                    { value: "Preferencyjny ZUS", label: "Preferencyjny ZUS" },
-                    { value: "Mały ZUS Plus", label: "Mały ZUS Plus" },
-                    { value: "Ulga na start", label: "Ulga na start" },
-                    { value: "Brak ZUS", label: "Brak ZUS" },
-                    { value: "Inny", label: "Inny" },
-                  ]}
-                />
+                {isDraftJdg && (
+                  <EditableSelect
+                    label="Schemat ZUS"
+                    value={draft.schemat_zus}
+                    onChange={(value) => updateDraft("schemat_zus", value)}
+                    options={[
+                      { value: "", label: "Wybierz" },
+                      { value: "Duży ZUS", label: "Duży ZUS" },
+                      { value: "Preferencyjny ZUS", label: "Preferencyjny ZUS" },
+                      { value: "Mały ZUS Plus", label: "Mały ZUS Plus" },
+                      { value: "Ulga na start", label: "Ulga na start" },
+                      { value: "Brak ZUS", label: "Brak ZUS" },
+                      { value: "Inny", label: "Inny" },
+                    ]}
+                  />
+                )}
               </>
             ) : (
               <>
@@ -825,7 +832,7 @@ function ClientDrawer({
                   value={client.czynny_vat ? "Tak" : "Nie"}
                 />
                 <InfoRow label="VAT UE" value={client.vat_ue ? "Tak" : "Nie"} />
-                <InfoRow label="Schemat ZUS" value={client.schemat_zus} />
+                {isClientJdg && <InfoRow label="Schemat ZUS" value={client.schemat_zus} />}
               </>
             )}
 
@@ -1489,6 +1496,11 @@ function billingModelLabel(value: string | null | undefined) {
     BILLING_MODEL_OPTIONS.find((option) => option.value === value)?.label ||
     "Z dołu"
   );
+}
+
+function isJdgLegalForm(value: string) {
+  const normalized = value.toLowerCase();
+  return normalized.includes("jdg") || normalized.includes("jednoosob");
 }
 
 function EditableInput({

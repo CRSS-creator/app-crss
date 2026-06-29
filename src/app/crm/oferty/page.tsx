@@ -80,8 +80,10 @@ function CrmOffersContent() {
       return;
     }
     const list = (data || []) as Lead[];
+    const requestedLeadId = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("leadId") || "" : "";
+    const leadFromUrl = requestedLeadId ? list.find((lead) => lead.id === requestedLeadId) : null;
     setLeads(list);
-    setSelectedLeadId(list[0]?.id || "");
+    setSelectedLeadId(leadFromUrl?.id || list[0]?.id || "");
     setLoading(false);
     loadLeadCtaStatuses(list);
   }

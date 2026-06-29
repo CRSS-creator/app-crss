@@ -452,7 +452,7 @@ function LeadDrawer({ mode, lead, tasks, onClose, onCreated, onSaved, onDeleted,
           <FormSection title="Propozycja współpracy">
             {mode === "create" ? <div style={emptyStyle}>Najpierw zapisz szansę, a potem przygotuj propozycję współpracy.</div> : (
               <div style={offerLinkPanelStyle}>
-                <Link href="/crm/oferty" style={proposalButtonStyle}>Przejdź do propozycji</Link>
+                <Link href={`/crm/oferty?leadId=${lead?.id}`} style={proposalButtonStyle}>Przejdź do propozycji</Link>
               </div>
             )}
           </FormSection>

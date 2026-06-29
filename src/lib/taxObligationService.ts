@@ -27,17 +27,6 @@ export type TaxObligation = {
   metadata: Record<string, unknown>;
 };
 
-export type ManualTaxObligationPayload = {
-  rozliczenie_id: string;
-  klient_id: string;
-  okres: string;
-  typ: TaxObligationType;
-  nazwa: string;
-  kwota: number | null;
-  termin_platnosci: string | null;
-  status_pobrania: TaxFetchStatus;
-};
-
 export async function fetchTaxObligations(period: string) {
   return supabase
     .from("zobowiazania_podatkowe")
@@ -47,20 +36,7 @@ export async function fetchTaxObligations(period: string) {
     .order("typ", { ascending: true });
 }
 
-export async function createManualTaxObligation(payload: ManualTaxObligationPayload) {
-  return supabase
-    .from("zobowiazania_podatkowe")
-    .insert({
-      ...payload,
-      zrodlo: "recznie",
-      status_email: "niewyslane",
-      status_sms: "niewyslane",
-    })
-    .select("*")
-    .single();
-}
-
-export async function updateTaxObligation(id: string, payload: Partial<Pick<TaxObligation, "typ" | "nazwa" | "kwota" | "termin_platnosci" | "status_pobrania">>) {
+export async function updateTaxObligation(id: string, payload: Partial<Pick<TaxObligation, "typ" | "nazwa" | "kwota" | "termin_platnosci">>) {
   return supabase
     .from("zobowiazania_podatkowe")
     .update({ ...payload, zrodlo: "recznie" })
@@ -76,7 +52,7 @@ export async function deleteTaxObligation(id: string) {
     .eq("id", id);
 }
 
-export async function sendTaxObligations(settlementId: string, channel: "email" | "sms") {
+export async function sendTaxObligations(settlementId: string, channel: "email" | "sms", obligationIds?: string[]) {
   const sessionResult = await supabase.auth.getSession();
   const token = sessionResult.data.session?.access_token;
 
@@ -86,6 +62,6 @@ export async function sendTaxObligations(settlementId: string, channel: "email" 
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: JSON.stringify({ settlementId, channel }),
+    body: JSON.stringify({ settlementId, channel, obligationIds }),
   });
 }

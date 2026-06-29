@@ -8,6 +8,7 @@ type SendChannel = "email" | "sms";
 type SendPayload = {
   settlementId?: string;
   channel?: SendChannel;
+  obligationIds?: string[];
 };
 
 type AuthorizedResult =
@@ -160,12 +161,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Klient nie ma uzupełnionego numeru telefonu." }, { status: 400 });
   }
 
-  const { data: obligations, error: obligationsError } = await auth.admin
+  let obligationsQuery = auth.admin
     .from("zobowiazania_podatkowe")
     .select("*")
     .eq("rozliczenie_id", settlement.id)
     .order("termin_platnosci", { ascending: true })
     .order("typ", { ascending: true });
+
+  const obligationIds = Array.isArray(payload.obligationIds) ? payload.obligationIds.filter(Boolean) : [];
+  if (obligationIds.length > 0) {
+    obligationsQuery = obligationsQuery.in("id", obligationIds);
+  }
+
+  const { data: obligations, error: obligationsError } = await obligationsQuery;
 
   if (obligationsError) {
     return NextResponse.json({ error: "Nie udało się pobrać zobowiązań." }, { status: 500 });

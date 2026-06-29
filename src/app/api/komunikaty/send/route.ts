@@ -89,12 +89,16 @@ function escapeHtml(value: string) {
     .replaceAll('"', "&quot;");
 }
 
+function renderInlineFormatting(value: string) {
+  return escapeHtml(value).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+}
+
 function buildHtmlMessage(message: string) {
   const paragraphs = message
     .split(/\n{2,}/)
     .map((paragraph) => paragraph.trim())
     .filter(Boolean)
-    .map((paragraph) => `<p style="margin:0 0 16px 0;">${escapeHtml(paragraph).replaceAll("\n", "<br>")}</p>`)
+    .map((paragraph) => `<p style="margin:0 0 16px 0;">${renderInlineFormatting(paragraph).replaceAll("\n", "<br>")}</p>`)
     .join("");
 
   return `

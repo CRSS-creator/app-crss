@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
 import AppSelect from "@/components/AppSelect";
@@ -74,6 +74,7 @@ export default function KomunikatyPage() {
 }
 
 function KomunikatyContent() {
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [clients, setClients] = useState<Client[]>([]);
   const [caregivers, setCaregivers] = useState<Profile[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -85,6 +86,7 @@ function KomunikatyContent() {
   const [statusFilter, setStatusFilter] = useState("Aktywny");
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
+  const [showRecipientList, setShowRecipientList] = useState(false);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [resultMessage, setResultMessage] = useState("");
@@ -134,7 +136,9 @@ function KomunikatyContent() {
   const filteredIds = filteredClients.map((client) => client.id);
   const selectedClients = clients.filter((client) => selectedIds.includes(client.id));
   const selectedWithEmail = selectedClients.filter((client) => Boolean(client.email));
+  const filteredWithEmail = filteredClients.filter((client) => Boolean(client.email));
   const allFilteredSelected = filteredIds.length > 0 && filteredIds.every((id) => selectedIds.includes(id));
+  const shouldShowList = showRecipientList || Boolean(searchQuery.trim()) || selectedIds.length > 0;
 
   function toggleClient(clientId: string) {
     setSelectedIds((current) => current.includes(clientId) ? current.filter((id) => id !== clientId) : [...current, clientId]);
@@ -144,6 +148,25 @@ function KomunikatyContent() {
     setSelectedIds((current) => {
       if (allFilteredSelected) return current.filter((id) => !filteredIds.includes(id));
       return Array.from(new Set([...current, ...filteredIds]));
+    });
+  }
+
+  function applyBold() {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selected = message.slice(start, end);
+    const replacement = selected ? `**${selected}**` : "**pogrubiony tekst**";
+    const nextMessage = `${message.slice(0, start)}${replacement}${message.slice(end)}`;
+    setMessage(nextMessage);
+
+    requestAnimationFrame(() => {
+      textarea.focus();
+      const cursorStart = selected ? start + replacement.length : start + 2;
+      const cursorEnd = selected ? cursorStart : start + replacement.length - 2;
+      textarea.setSelectionRange(cursorStart, cursorEnd);
     });
   }
 
@@ -202,59 +225,74 @@ function KomunikatyContent() {
         <div style={sectionHeaderStyle}>
           <div>
             <h2 style={sectionTitleStyle}>Odbiorcy</h2>
-            <p style={sectionSubtitleStyle}>Wybierz klientów filtrami albo zaznacz pojedyncze pozycje z listy.</p>
+            <p style={sectionSubtitleStyle}>Najpierw wybierz grupę filtrami, a potem zaznacz odbiorców do wysyłki.</p>
           </div>
-          <button type="button" style={secondaryButtonStyle} onClick={toggleFilteredClients} disabled={filteredClients.length === 0}>
-            {allFilteredSelected ? "Odznacz widocznych" : "Zaznacz widocznych"}
-          </button>
         </div>
 
-        <input style={searchInputStyle} value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Szukaj po nazwie, NIP, e-mailu lub opiekunie" />
-        <div style={filtersStyle}>
-          <span style={filterLabelStyle}>Filtry:</span>
-          <AppSelect value={statusFilter} onChange={setStatusFilter} options={STATUS_OPTIONS} style={filterSelectStyle} />
-          <AppSelect value={caregiverFilter} onChange={setCaregiverFilter} options={caregiverOptions} style={filterSelectStyle} />
-          <AppSelect value={legalFormFilter} onChange={setLegalFormFilter} options={LEGAL_FORM_OPTIONS} style={filterSelectStyle} />
-          <AppSelect value={taxationFilter} onChange={setTaxationFilter} options={TAXATION_OPTIONS} style={filterSelectStyle} />
-          <AppSelect value={payrollFilter} onChange={setPayrollFilter} options={PAYROLL_OPTIONS} style={filterSelectStyle} />
+        <div style={recipientPickerStyle}>
+          <input style={searchInputStyle} value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Szukaj po nazwie, NIP, e-mailu lub opiekunie" />
+          <div style={filtersStyle}>
+            <span style={filterLabelStyle}>Filtry:</span>
+            <AppSelect value={statusFilter} onChange={setStatusFilter} options={STATUS_OPTIONS} style={filterSelectStyle} />
+            <AppSelect value={caregiverFilter} onChange={setCaregiverFilter} options={caregiverOptions} style={filterSelectStyle} />
+            <AppSelect value={legalFormFilter} onChange={setLegalFormFilter} options={LEGAL_FORM_OPTIONS} style={filterSelectStyle} />
+            <AppSelect value={taxationFilter} onChange={setTaxationFilter} options={TAXATION_OPTIONS} style={filterSelectStyle} />
+            <AppSelect value={payrollFilter} onChange={setPayrollFilter} options={PAYROLL_OPTIONS} style={filterSelectStyle} />
+          </div>
+
+          <div style={recipientSummaryStyle}>
+            <div>
+              <strong>{filteredClients.length}</strong> klientów spełnia warunki, w tym <strong>{filteredWithEmail.length}</strong> z adresem e-mail.
+            </div>
+            <div style={recipientActionsStyle}>
+              <button type="button" style={secondaryButtonStyle} onClick={toggleFilteredClients} disabled={filteredClients.length === 0}>
+                {allFilteredSelected ? "Odznacz grupę" : "Zaznacz grupę"}
+              </button>
+              <button type="button" style={secondaryButtonStyle} onClick={() => setShowRecipientList((current) => !current)}>
+                {shouldShowList ? "Ukryj listę" : "Pokaż listę"}
+              </button>
+            </div>
+          </div>
         </div>
 
-        <div style={tableWrapStyle}>
-          <table style={tableStyle}>
-            <thead>
-              <tr>
-                <Th width="56px"> </Th>
-                <Th>Klient</Th>
-                <Th>NIP</Th>
-                <Th>Opiekun</Th>
-                <Th>E-mail</Th>
-                <Th>Status</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr><td colSpan={6} style={emptyStyle}>Ładowanie klientów...</td></tr>
-              ) : filteredClients.length === 0 ? (
-                <tr><td colSpan={6} style={emptyStyle}>Brak klientów dla wybranych filtrów.</td></tr>
-              ) : filteredClients.map((client) => {
-                const caregiver = getCaregiver(client);
-                const selected = selectedIds.includes(client.id);
-                return (
-                  <tr key={client.id}>
-                    <td style={tdStyle}>
-                      <input type="checkbox" checked={selected} onChange={() => toggleClient(client.id)} />
-                    </td>
-                    <td style={nameTdStyle}>{client.nazwa || "Brak nazwy"}</td>
-                    <td style={tdStyle}>{client.nip || "Brak NIP"}</td>
-                    <td style={tdStyle}>{caregiver?.full_name || "Brak opiekuna"}</td>
-                    <td style={tdStyle}>{client.email || "Brak e-maila"}</td>
-                    <td style={tdStyle}><span style={pillStyle}>{client.status_klienta || "Brak statusu"}</span></td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        {shouldShowList && (
+          <div style={tableWrapStyle}>
+            <table style={tableStyle}>
+              <thead>
+                <tr>
+                  <Th width="56px"> </Th>
+                  <Th>Klient</Th>
+                  <Th>NIP</Th>
+                  <Th>Opiekun</Th>
+                  <Th>E-mail</Th>
+                  <Th>Status</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td colSpan={6} style={emptyStyle}>Ładowanie klientów...</td></tr>
+                ) : filteredClients.length === 0 ? (
+                  <tr><td colSpan={6} style={emptyStyle}>Brak klientów dla wybranych filtrów.</td></tr>
+                ) : filteredClients.map((client) => {
+                  const caregiver = getCaregiver(client);
+                  const selected = selectedIds.includes(client.id);
+                  return (
+                    <tr key={client.id}>
+                      <td style={tdStyle}>
+                        <input type="checkbox" checked={selected} onChange={() => toggleClient(client.id)} />
+                      </td>
+                      <td style={nameTdStyle}>{client.nazwa || "Brak nazwy"}</td>
+                      <td style={tdStyle}>{client.nip || "Brak NIP"}</td>
+                      <td style={tdStyle}>{caregiver?.full_name || "Brak opiekuna"}</td>
+                      <td style={tdStyle}>{client.email || "Brak e-maila"}</td>
+                      <td style={tdStyle}><span style={pillStyle}>{client.status_klienta || "Brak statusu"}</span></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
 
       <section style={cardStyle}>
@@ -266,7 +304,11 @@ function KomunikatyContent() {
           </label>
           <label style={fieldStyle}>
             <span style={labelStyle}>Wiadomość</span>
-            <textarea style={textareaStyle} value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Wpisz treść wiadomości. Akapity oddziel pustą linią." />
+            <div style={toolbarStyle}>
+              <button type="button" style={toolbarButtonStyle} onClick={applyBold} title="Pogrubienie">B</button>
+              <span style={toolbarHintStyle}>Zaznacz tekst i kliknij B, aby go pogrubić.</span>
+            </div>
+            <textarea ref={textareaRef} style={textareaStyle} value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Wpisz treść wiadomości. Akapity oddziel pustą linią." />
           </label>
         </div>
         <div style={sendRowStyle}>
@@ -310,10 +352,13 @@ const cardStyle: React.CSSProperties = { marginBottom: "24px", padding: "26px", 
 const sectionHeaderStyle: React.CSSProperties = { display: "flex", justifyContent: "space-between", gap: "18px", alignItems: "flex-start", marginBottom: "18px" };
 const sectionTitleStyle: React.CSSProperties = { margin: 0, color: colors.navy, fontSize: "27px", fontWeight: 500 };
 const sectionSubtitleStyle: React.CSSProperties = { margin: "8px 0 0", color: colors.text, fontSize: "16px" };
-const searchInputStyle: React.CSSProperties = { width: "100%", minHeight: "50px", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "0 18px", fontSize: "15px", fontWeight: 750, color: colors.text, outline: "none", boxSizing: "border-box" };
+const recipientPickerStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: "#f8fafc", padding: "18px" };
+const searchInputStyle: React.CSSProperties = { width: "100%", minHeight: "50px", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.card, padding: "0 18px", fontSize: "15px", fontWeight: 750, color: colors.text, outline: "none", boxSizing: "border-box" };
 const filtersStyle: React.CSSProperties = { marginTop: "14px", display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" };
 const filterLabelStyle: React.CSSProperties = { fontSize: "15px", fontWeight: 850, color: colors.text };
-const filterSelectStyle: React.CSSProperties = { width: "180px" };
+const filterSelectStyle: React.CSSProperties = { width: "180px", background: colors.card };
+const recipientSummaryStyle: React.CSSProperties = { marginTop: "16px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "16px", color: colors.text, fontSize: "15px", fontWeight: 700 };
+const recipientActionsStyle: React.CSSProperties = { display: "flex", gap: "10px", flexWrap: "wrap", justifyContent: "flex-end" };
 const tableWrapStyle: React.CSSProperties = { marginTop: "18px", border: `1px solid ${colors.border}`, borderRadius: radius.input, overflow: "hidden" };
 const tableStyle: React.CSSProperties = { width: "100%", borderCollapse: "collapse" };
 const thStyle: React.CSSProperties = { padding: "15px 14px", borderBottom: `1px solid ${colors.border}`, textAlign: "left", color: colors.navy, fontSize: "13px", textTransform: "uppercase", letterSpacing: "0", fontWeight: 800 };
@@ -325,6 +370,9 @@ const messageGridStyle: React.CSSProperties = { marginTop: "18px", display: "gri
 const fieldStyle: React.CSSProperties = { display: "grid", gap: "8px" };
 const labelStyle: React.CSSProperties = { fontSize: "15px", fontWeight: 850, color: colors.text };
 const inputStyle: React.CSSProperties = { minHeight: "50px", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "0 16px", fontSize: "16px", fontWeight: 750, color: colors.text, outline: "none" };
+const toolbarStyle: React.CSSProperties = { display: "flex", alignItems: "center", gap: "10px" };
+const toolbarButtonStyle: React.CSSProperties = { width: "40px", height: "36px", border: `1px solid ${colors.border}`, borderRadius: "10px", background: colors.card, color: colors.navy, fontSize: "17px", fontWeight: 900, cursor: "pointer" };
+const toolbarHintStyle: React.CSSProperties = { color: colors.muted, fontSize: "13px", fontWeight: 650 };
 const textareaStyle: React.CSSProperties = { minHeight: "180px", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "16px", fontSize: "16px", lineHeight: 1.55, fontWeight: 650, color: colors.text, outline: "none", resize: "vertical" };
 const sendRowStyle: React.CSSProperties = { marginTop: "18px", display: "flex", gap: "14px", alignItems: "center", flexWrap: "wrap" };
 const primaryButtonStyle: React.CSSProperties = { border: "none", borderRadius: radius.button, padding: "15px 22px", background: colors.red, color: colors.white, fontWeight: 900, fontSize: "17px", cursor: "pointer" };

@@ -12,6 +12,7 @@ type BulkNotificationPayload = {
   clientIds?: string[];
   subject?: string;
   message?: string;
+  filterSnapshot?: Record<string, unknown>;
 };
 
 function getWebhookUrl() {
@@ -111,7 +112,7 @@ function buildHtmlMessage(message: string) {
       ${paragraphs}
       <p style="margin:24px 0 0 0;">Pozdrawiamy serdecznie,<br><strong>Zespół CRSS</strong></p>
     </div>
-    <p style="margin:18px 4px 0;color:#7a8598;font-size:13px;">Wiadomość wysłana automatycznie. W razie pytań odpowiedź trafi do opiekuna klienta.</p>
+    <p style="margin:18px 4px 0;color:#7a8598;font-size:13px;">Wiadomość wysłana automatycznie.</p>
   </div>
 </div>`.trim();
 }
@@ -203,6 +204,19 @@ export async function POST(request: NextRequest) {
       { status: 502 }
     );
   }
+
+  await auth.admin
+    .from("komunikaty_historia")
+    .insert({
+      sent_by: auth.requesterId,
+      sent_by_name: auth.requesterName,
+      subject,
+      message,
+      recipients_count: recipients.length,
+      skipped_count: allowedClients.length - recipients.length,
+      failed_count: 0,
+      filter_snapshot: payload.filterSnapshot || {},
+    });
 
   return NextResponse.json({
     sent: recipients.length,

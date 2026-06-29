@@ -34,6 +34,15 @@ type Client = {
   }[] | null;
 };
 
+type CommunicationHistoryRecord = {
+  id: string;
+  created_at: string;
+  sent_by_name: string | null;
+  subject: string | null;
+  recipients_count: number | null;
+  skipped_count: number | null;
+};
+
 const EMPTY_FILTER = "Wszystkie";
 const LEGAL_FORM_OPTIONS = [
   { value: EMPTY_FILTER, label: "Forma prawna" },
@@ -86,6 +95,7 @@ function KomunikatyContent() {
   const [statusFilter, setStatusFilter] = useState("Aktywny");
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
+  const [history, setHistory] = useState<CommunicationHistoryRecord[]>([]);
   const [showRecipientList, setShowRecipientList] = useState(false);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -93,6 +103,7 @@ function KomunikatyContent() {
 
   useEffect(() => {
     loadData();
+    loadHistory();
   }, []);
 
   async function loadData() {
@@ -101,6 +112,16 @@ function KomunikatyContent() {
     setClients(clientsResult.error ? [] : ((clientsResult.data || []) as Client[]));
     setCaregivers(caregiversResult.error ? [] : ((caregiversResult.data || []) as Profile[]));
     setLoading(false);
+  }
+
+  async function loadHistory() {
+    const { data, error } = await supabase
+      .from("komunikaty_historia")
+      .select("id, created_at, sent_by_name, subject, recipients_count, skipped_count")
+      .order("created_at", { ascending: false })
+      .limit(10);
+
+    if (!error) setHistory((data || []) as CommunicationHistoryRecord[]);
   }
 
   const caregiverOptions = useMemo(
@@ -193,7 +214,19 @@ function KomunikatyContent() {
         "Content-Type": "application/json",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
-      body: JSON.stringify({ clientIds: selectedIds, subject, message }),
+      body: JSON.stringify({
+        clientIds: selectedIds,
+        subject,
+        message,
+        filterSnapshot: {
+          status: statusFilter,
+          opiekun: caregiverOptions.find((option) => option.value === caregiverFilter)?.label || caregiverFilter,
+          formaPrawna: legalFormFilter,
+          opodatkowanie: taxationFilter,
+          kadry: payrollFilter,
+          wyszukiwanie: searchQuery.trim(),
+        },
+      }),
     });
 
     const result = await response.json().catch(() => ({}));
@@ -205,6 +238,7 @@ function KomunikatyContent() {
     }
 
     setResultMessage(`Przekazano do wysyłki: ${result.sent || 0}. Pominięto bez e-maila: ${result.skipped || 0}.`);
+    await loadHistory();
   }
 
   return (
@@ -319,6 +353,25 @@ function KomunikatyContent() {
         </div>
         {resultMessage && <p style={resultStyle}>{resultMessage}</p>}
       </section>
+
+      <section style={cardStyle}>
+        <h2 style={sectionTitleStyle}>Historia wysyłek</h2>
+        <div style={historyListStyle}>
+          {history.length === 0 ? (
+            <div style={historyEmptyStyle}>Brak zapisanych wysyłek komunikatów.</div>
+          ) : history.map((record) => (
+            <div key={record.id} style={historyItemStyle}>
+              <div>
+                <div style={historySubjectStyle}>{record.subject || "Bez tematu"}</div>
+                <div style={historyMetaStyle}>
+                  Wysłane {formatHistoryDate(record.created_at)} przez {record.sent_by_name || "nieustalonego użytkownika"}.
+                </div>
+              </div>
+              <span style={historyCountStyle}>{record.recipients_count || 0} odbiorców</span>
+            </div>
+          ))}
+        </div>
+      </section>
     </>
   );
 }
@@ -338,6 +391,16 @@ function SummaryCard({ label, value }: { label: string; value: number }) {
 
 function Th({ children, width }: { children: React.ReactNode; width?: string }) {
   return <th style={{ ...thStyle, width }}>{children}</th>;
+}
+
+function formatHistoryDate(value: string) {
+  return new Intl.DateTimeFormat("pl-PL", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
 }
 
 const headerStyle: React.CSSProperties = { display: "flex", justifyContent: "space-between", gap: "24px", alignItems: "flex-start", marginBottom: "28px" };
@@ -379,3 +442,9 @@ const primaryButtonStyle: React.CSSProperties = { border: "none", borderRadius: 
 const secondaryButtonStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "12px 17px", background: colors.card, color: colors.navy, fontWeight: 850, fontSize: "15px", cursor: "pointer" };
 const helperStyle: React.CSSProperties = { color: colors.muted, fontSize: "14px", fontWeight: 700 };
 const resultStyle: React.CSSProperties = { margin: "14px 0 0", color: colors.navy, fontSize: "15px", fontWeight: 850 };
+const historyListStyle: React.CSSProperties = { marginTop: "18px", display: "grid", gap: "10px" };
+const historyItemStyle: React.CSSProperties = { display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "center", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "14px 16px" };
+const historySubjectStyle: React.CSSProperties = { color: colors.navy, fontSize: "16px", fontWeight: 850 };
+const historyMetaStyle: React.CSSProperties = { marginTop: "4px", color: colors.muted, fontSize: "13px", fontWeight: 650 };
+const historyCountStyle: React.CSSProperties = { flexShrink: 0, display: "inline-flex", alignItems: "center", minHeight: "32px", padding: "4px 12px", borderRadius: radius.badge, background: "#e8eef8", color: colors.navy, fontSize: "13px", fontWeight: 850 };
+const historyEmptyStyle: React.CSSProperties = { border: `1px dashed ${colors.border}`, borderRadius: radius.input, padding: "20px", textAlign: "center", color: colors.text, fontWeight: 800 };

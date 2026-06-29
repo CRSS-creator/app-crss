@@ -30,11 +30,13 @@ import {
   createManualTaxObligation,
   deleteTaxObligation,
   fetchTaxObligations,
+  sendTaxObligations,
   updateTaxObligation,
   type ManualTaxObligationPayload,
   type TaxFetchStatus,
   type TaxObligation,
   type TaxObligationType,
+  type TaxSendStatus,
 } from "@/lib/taxObligationService";
 import type { TimeEntry } from "@/lib/taskService";
 
@@ -207,6 +209,12 @@ function SettlementsContent() {
     setTaxObligations((current) => current.filter((obligation) => obligation.id !== id));
   }
 
+  function markTaxObligationsSent(updatedObligations: TaxObligation[]) {
+    if (updatedObligations.length === 0) return;
+    const updatedById = Object.fromEntries(updatedObligations.map((obligation) => [obligation.id, obligation]));
+    setTaxObligations((current) => current.map((obligation) => updatedById[obligation.id] || obligation));
+  }
+
   async function toggleRecurringTimer(settlement: MonthlySettlement, task: RecurringTaskRealization) {
     if (!currentUserId) {
       alert("Nie udało się rozpoznać użytkownika. Zaloguj się ponownie.");
@@ -317,6 +325,7 @@ function SettlementsContent() {
           onTaxObligationCreate={addTaxObligation}
           onTaxObligationUpdate={patchTaxObligation}
           onTaxObligationDelete={removeTaxObligation}
+          onTaxObligationsSent={markTaxObligationsSent}
           saving={savingId === selected.id}
         />
       )}
@@ -324,7 +333,7 @@ function SettlementsContent() {
   );
 }
 
-function SettlementDrawer({ settlement, progress, recurringTasks, taxObligations, activeTimers, onClose, onSave, onToggleRecurringTimer, onToggleRecurringDone, onReminderSent, onTaxObligationCreate, onTaxObligationUpdate, onTaxObligationDelete, saving }: {
+function SettlementDrawer({ settlement, progress, recurringTasks, taxObligations, activeTimers, onClose, onSave, onToggleRecurringTimer, onToggleRecurringDone, onReminderSent, onTaxObligationCreate, onTaxObligationUpdate, onTaxObligationDelete, onTaxObligationsSent, saving }: {
   settlement: MonthlySettlement;
   progress: SettlementProgress;
   recurringTasks: RecurringTaskRealization[];
@@ -338,17 +347,21 @@ function SettlementDrawer({ settlement, progress, recurringTasks, taxObligations
   onTaxObligationCreate: (settlement: MonthlySettlement, payload: Omit<ManualTaxObligationPayload, "rozliczenie_id" | "klient_id" | "okres">) => void;
   onTaxObligationUpdate: (id: string, payload: Partial<Pick<TaxObligation, "typ" | "nazwa" | "kwota" | "termin_platnosci" | "status_pobrania">>) => void;
   onTaxObligationDelete: (id: string) => void;
+  onTaxObligationsSent: (obligations: TaxObligation[]) => void;
   saving: boolean;
 }) {
   const client = getClient(settlement.klienci);
   const hasPayroll = Boolean(client?.obsluga_kadrowa);
   const [sendingReminder, setSendingReminder] = useState(false);
+  const [sendingTaxChannel, setSendingTaxChannel] = useState<"email" | "sms" | null>(null);
   const [newTaxObligation, setNewTaxObligation] = useState({
     typ: "ZUS" as TaxObligationType,
     kwota: "",
     termin_platnosci: "",
     status_pobrania: "do_pobrania" as TaxFetchStatus,
   });
+  const hasEmailObligationsToSend = taxObligations.some((obligation) => obligation.kwota !== null && obligation.termin_platnosci && obligation.status_email !== "wyslane");
+  const hasSmsObligationsToSend = taxObligations.some((obligation) => obligation.kwota !== null && obligation.termin_platnosci && obligation.status_sms !== "wyslane");
 
   async function requestDocumentsReminder() {
     setSendingReminder(true);
@@ -375,6 +388,22 @@ function SettlementDrawer({ settlement, progress, recurringTasks, taxObligations
       status_pobrania: newTaxObligation.status_pobrania,
     });
     setNewTaxObligation({ typ: "ZUS", kwota: "", termin_platnosci: "", status_pobrania: "do_pobrania" });
+  }
+
+  async function requestTaxObligationSend(channel: "email" | "sms") {
+    setSendingTaxChannel(channel);
+    const response = await sendTaxObligations(settlement.id, channel);
+    setSendingTaxChannel(null);
+
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      alert(result.error || "Nie udało się wysłać informacji o zobowiązaniach.");
+      return;
+    }
+
+    if (Array.isArray(result.obligations)) {
+      onTaxObligationsSent(result.obligations as TaxObligation[]);
+    }
   }
 
   return (
@@ -409,7 +438,15 @@ function SettlementDrawer({ settlement, progress, recurringTasks, taxObligations
             <section style={drawerSectionStyle}>
               <div style={sectionHeaderRowStyle}>
                 <h3 style={drawerSectionTitleStyle}>Zobowiązania publicznoprawne</h3>
-                <span style={mutedBadgeStyle}>Ręczne uzupełnianie</span>
+                <div style={taxHeaderActionsStyle}>
+                  <span style={mutedBadgeStyle}>Ręczne uzupełnianie</span>
+                  <button type="button" style={taxActionButtonStyle} disabled={!hasEmailObligationsToSend || sendingTaxChannel !== null} onClick={() => requestTaxObligationSend("email")}>
+                    {sendingTaxChannel === "email" ? "Wysyłanie..." : "Wyślij e-mail"}
+                  </button>
+                  <button type="button" style={taxActionButtonStyle} disabled={!hasSmsObligationsToSend || sendingTaxChannel !== null} onClick={() => requestTaxObligationSend("sms")}>
+                    {sendingTaxChannel === "sms" ? "Wysyłanie..." : "Wyślij SMS"}
+                  </button>
+                </div>
               </div>
               {taxObligations.length === 0 ? (
                 <div style={emptyStateStyle}>Brak zobowiązań dla tego miesiąca.</div>
@@ -417,6 +454,10 @@ function SettlementDrawer({ settlement, progress, recurringTasks, taxObligations
                 <div style={taxObligationListStyle}>
                   {taxObligations.map((obligation) => (
                     <article key={obligation.id} style={taxObligationItemStyle}>
+                      <div style={taxObligationMainStyle}>
+                        <strong>{obligation.nazwa}</strong>
+                        <span>{formatCurrency(obligation.kwota)}</span>
+                      </div>
                       <div style={taxObligationFieldsStyle}>
                         <Field label="Rodzaj">
                           <AppSelect
@@ -446,7 +487,11 @@ function SettlementDrawer({ settlement, progress, recurringTasks, taxObligations
                           />
                         </Field>
                       </div>
-                      <button type="button" style={deleteTaxButtonStyle} onClick={() => onTaxObligationDelete(obligation.id)}>Usuń</button>
+                      <div style={taxStatusGridStyle}>
+                        <span style={sendStatusStyle(obligation.status_email)}>E-mail: {sendStatusLabel(obligation.status_email)}</span>
+                        <span style={sendStatusStyle(obligation.status_sms)}>SMS: {sendStatusLabel(obligation.status_sms)}</span>
+                        <button type="button" style={deleteTaxButtonStyle} onClick={() => onTaxObligationDelete(obligation.id)}>Usuń</button>
+                      </div>
                     </article>
                   ))}
                 </div>
@@ -544,6 +589,13 @@ function formatReminderTimestamp(value: string) {
   }).format(new Date(value));
 }
 function formatDateForInput(value: string | null) { return value ? value.slice(0, 10) : ""; }
+function formatCurrency(value: number | null) { return value === null || value === undefined ? "Do uzupełnienia" : new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN" }).format(value); }
+function sendStatusLabel(status: TaxSendStatus) { if (status === "wyslane") return "wysłane"; if (status === "blad") return "błąd"; return "niewysłane"; }
+function sendStatusStyle(status: TaxSendStatus): CSSProperties {
+  if (status === "wyslane") return { ...taxSendBadgeStyle, background: "#dcfce7", color: "#15803d" };
+  if (status === "blad") return { ...taxSendBadgeStyle, background: "#fee2e2", color: "#b91c1c" };
+  return taxSendBadgeStyle;
+}
 function parseOptionalAmount(value: string) {
   const normalized = value.replace(",", ".").trim();
   if (normalized === "") return null;
@@ -607,6 +659,8 @@ const drawerSectionStyle: CSSProperties = { border: `1px solid ${colors.border}`
 const drawerSectionTitleStyle: CSSProperties = { margin: "0 0 14px", color: colors.navy, fontSize: "20px" };
 const sectionHeaderRowStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", marginBottom: "14px" };
 const mutedBadgeStyle: CSSProperties = { borderRadius: radius.badge, background: "#eef2f7", color: colors.muted, padding: "7px 10px", fontSize: "12px", fontWeight: 850 };
+const taxHeaderActionsStyle: CSSProperties = { display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "8px", flexWrap: "wrap" };
+const taxActionButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.card, color: colors.navy, padding: "8px 11px", minHeight: "36px", fontSize: "12px", fontWeight: 850, cursor: "pointer" };
 const fieldStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "7px", marginBottom: "14px" };
 const labelStyle: CSSProperties = { color: colors.muted, fontSize: "13px", fontWeight: 800 };
 const countFieldsGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(190px, 1fr))", gap: "14px", alignItems: "start" };
@@ -621,7 +675,10 @@ const recurringMetaStyle: CSSProperties = { margin: "5px 0 0", color: colors.mut
 const recurringActionsStyle: CSSProperties = { display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "8px", flexWrap: "wrap" };
 const taxObligationListStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "10px" };
 const taxObligationItemStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "13px", display: "flex", flexDirection: "column", gap: "9px" };
+const taxObligationMainStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "12px", color: colors.navy, fontSize: "15px", fontWeight: 850 };
 const taxObligationFieldsStyle: CSSProperties = { display: "grid", gridTemplateColumns: "1fr 130px 160px 170px", gap: "10px", alignItems: "start" };
+const taxStatusGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr)) auto", gap: "7px", alignItems: "center" };
+const taxSendBadgeStyle: CSSProperties = { borderRadius: radius.badge, background: "#eef2f7", color: colors.muted, padding: "7px 8px", fontSize: "12px", fontWeight: 850, textAlign: "center" };
 const newTaxObligationStyle: CSSProperties = { display: "grid", gridTemplateColumns: "1fr 130px 160px 170px auto", gap: "10px", alignItems: "center", marginTop: "12px", paddingTop: "12px", borderTop: `1px solid ${colors.border}` };
 const addTaxButtonStyle: CSSProperties = { border: "none", borderRadius: radius.button, background: colors.red, color: colors.white, padding: "11px 16px", fontWeight: 850, cursor: "pointer" };
 const deleteTaxButtonStyle: CSSProperties = { alignSelf: "flex-end", border: `1px solid #fecaca`, borderRadius: radius.button, background: "#fff1f2", color: "#b91c1c", padding: "8px 12px", fontWeight: 850, cursor: "pointer" };

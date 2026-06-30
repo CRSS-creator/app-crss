@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
@@ -111,6 +111,7 @@ function OnboardingContent() {
   const [statusFilter, setStatusFilter] = useState("Wszystkie");
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const historySectionRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     void loadData();
@@ -177,6 +178,13 @@ function OnboardingContent() {
     }
 
     await loadData();
+  }
+
+  function openHistory() {
+    setHistoryOpen(true);
+    window.setTimeout(() => {
+      historySectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 80);
   }
 
   return (
@@ -261,7 +269,7 @@ function OnboardingContent() {
             <section style={drawerSectionStyle}>
               <div style={sectionHeaderInlineStyle}>
                 <h3 style={drawerSectionTitleStyle}>Proces rozpoczęcia współpracy</h3>
-                <button style={secondaryButtonStyle} onClick={() => setHistoryOpen((current) => !current)}>Historia zmian</button>
+                <button style={secondaryButtonStyle} onClick={openHistory}>Historia zmian</button>
               </div>
               <div style={stageGridStyle}>
                 {selectedRow.stages.map((stage) => (
@@ -283,7 +291,7 @@ function OnboardingContent() {
             </section>
 
             {historyOpen && (
-              <section style={drawerSectionStyle}>
+              <section ref={historySectionRef} style={drawerSectionStyle}>
                 <h3 style={drawerSectionTitleStyle}>Historia modyfikacji</h3>
                 {selectedRow.history.length === 0 ? <div style={emptyStyle}>Brak historii dla tego onboardingu.</div> : (
                   <div style={historyListStyle}>
@@ -605,8 +613,8 @@ const neutralPillStyle: CSSProperties = { ...pillBaseStyle, background: "rgba(23
 const progressShellStyle: CSSProperties = { position: "relative", width: "110px", height: "30px", borderRadius: radius.badge, background: "#eef2f7", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", color: colors.navy, fontWeight: 900, fontSize: "12px" };
 const progressBarStyle: CSSProperties = { position: "absolute", left: 0, top: 0, bottom: 0, background: "rgba(22, 163, 74, 0.18)" };
 const secondaryButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.navy, padding: "10px 13px", fontWeight: 850, cursor: "pointer", whiteSpace: "nowrap", textDecoration: "none", display: "inline-flex", alignItems: "center", justifyContent: "center" };
-const overlayStyle: CSSProperties = { position: "fixed", inset: 0, zIndex: 60, background: "rgba(15, 23, 42, 0.32)", display: "flex", justifyContent: "flex-end" };
-const drawerStyle: CSSProperties = { width: "min(1040px, calc(100vw - 270px))", minHeight: "100vh", background: colors.card, borderLeft: `1px solid ${colors.border}`, padding: "30px", overflowY: "auto", boxShadow: "-12px 0 30px rgba(15, 23, 42, 0.12)" };
+const overlayStyle: CSSProperties = { position: "fixed", inset: 0, zIndex: 60, background: "rgba(15, 23, 42, 0.32)", display: "flex", justifyContent: "center", alignItems: "stretch", padding: "18px" };
+const drawerStyle: CSSProperties = { width: "min(1480px, 100%)", height: "calc(100vh - 36px)", background: colors.card, border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: "30px", overflowY: "auto", boxShadow: shadow.card };
 const drawerHeaderStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "flex-start", marginBottom: "18px" };
 const drawerTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "30px" };
 const drawerSubtitleStyle: CSSProperties = { margin: "8px 0 0", color: colors.muted, fontWeight: 700 };

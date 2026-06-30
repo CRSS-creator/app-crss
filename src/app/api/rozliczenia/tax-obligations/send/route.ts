@@ -156,6 +156,18 @@ function buildEmailHtml(input: {
     </div>
   `;
 }
+
+function buildSmsMessage(input: {
+  periodLabel: string;
+  obligations: Array<{ name: string; amountLabel: string | null; dueDateLabel: string | null }>;
+}) {
+  const items = input.obligations
+    .map((obligation) => `${obligation.name}: ${obligation.amountLabel || "kwota do uzupełnienia"}, termin ${obligation.dueDateLabel || "do ustalenia"}`)
+    .join("; ");
+
+  return `CRSS: zobowiązania publicznoprawne za ${input.periodLabel}: ${items}.`;
+}
+
 export async function POST(request: NextRequest) {
   const auth = await getAuthorizedUser(request);
   if (auth.error) return auth.error;
@@ -268,6 +280,10 @@ export async function POST(request: NextRequest) {
     caregiverName: caregiver?.full_name || null,
     caregiverEmail: caregiver?.email || null,
   });
+  const smsMessage = buildSmsMessage({
+    periodLabel,
+    obligations: preparedObligations,
+  });
 
   try {
     const response = await fetch(webhookConfig.webhookUrl, {
@@ -286,6 +302,7 @@ export async function POST(request: NextRequest) {
         periodLabel,
         subject,
         messageHtml,
+        smsMessage,
         replyToEmail: caregiver?.email || null,
         obligations: preparedObligations,
         caregiverName: caregiver?.full_name || null,

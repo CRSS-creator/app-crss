@@ -310,7 +310,8 @@ function SettlementDrawer({ settlement, progress, recurringTasks, taxObligations
   const client = getClient(settlement.klienci);
   const hasPayroll = Boolean(client?.obsluga_kadrowa);
   const [sendingReminder, setSendingReminder] = useState(false);
-  const [sendingTaxObligations, setSendingTaxObligations] = useState(false);
+  const [sendingTaxEmail, setSendingTaxEmail] = useState(false);
+  const [sendingTaxSms, setSendingTaxSms] = useState(false);
   const [selectedTaxObligationIds, setSelectedTaxObligationIds] = useState<string[]>([]);
 
   useEffect(() => {
@@ -341,32 +342,34 @@ function SettlementDrawer({ settlement, progress, recurringTasks, taxObligations
     );
   }
 
-  async function requestTaxObligationSend() {
+  async function requestTaxObligationSend(channel: "email" | "sms") {
     if (selectedTaxObligationIds.length === 0) return;
 
-    setSendingTaxObligations(true);
-    const updatedObligations: TaxObligation[] = [];
+    const isEmail = channel === "email";
     const selectedObligations = taxObligations.filter((obligation) => selectedTaxObligationIds.includes(obligation.id));
-    if (selectedObligations.every((obligation) => obligation.status_email === "wyslane")) {
-      setSendingTaxObligations(false);
-      alert("Zaznaczone zobowiązania zostały już wysłane e-mailem.");
+    const alreadySent = selectedObligations.every((obligation) => isEmail ? obligation.status_email === "wyslane" : obligation.status_sms === "wyslane");
+    if (alreadySent) {
+      alert(isEmail ? "Zaznaczone zobowi\u0105zania zosta\u0142y ju\u017c wys\u0142ane e-mailem." : "Zaznaczone zobowi\u0105zania zosta\u0142y ju\u017c wys\u0142ane SMS-em.");
       return;
     }
 
-    const response = await sendTaxObligations(settlement.id, "email", selectedTaxObligationIds);
+    if (isEmail) setSendingTaxEmail(true);
+    else setSendingTaxSms(true);
+
+    const response = await sendTaxObligations(settlement.id, channel, selectedTaxObligationIds);
     const result = await response.json().catch(() => ({}));
+    if (isEmail) setSendingTaxEmail(false);
+    else setSendingTaxSms(false);
+
     if (!response.ok) {
-      setSendingTaxObligations(false);
-      alert(result.error || "Nie udało się wysłać informacji o zobowiązaniach.");
+      alert(result.error || (isEmail ? "Nie uda\u0142o si\u0119 wys\u0142a\u0107 e-maila z zobowi\u0105zaniami." : "Nie uda\u0142o si\u0119 wys\u0142a\u0107 SMS-a z zobowi\u0105zaniami."));
       return;
     }
     if (Array.isArray(result.obligations)) {
-      updatedObligations.push(...(result.obligations as TaxObligation[]));
+      onTaxObligationsSent(result.obligations as TaxObligation[]);
     }
 
-    setSendingTaxObligations(false);
     setSelectedTaxObligationIds([]);
-    onTaxObligationsSent(updatedObligations);
   }
 
   return (
@@ -443,16 +446,26 @@ function SettlementDrawer({ settlement, progress, recurringTasks, taxObligations
                   ))}
                   <div style={taxBulkActionsStyle}>
                     <span style={taxBulkHintStyle}>
-                      Zaznacz zobowiązania, które mają trafić do klienta e-mailem.
+                      Zaznacz zobowiązania, które mają trafić do klienta e-mailem albo SMS-em.
                     </span>
-                    <button
-                      type="button"
-                      style={selectedTaxObligationIds.length === 0 || sendingTaxObligations ? disabledSendTaxInfoButtonStyle : sendTaxInfoButtonStyle}
-                      disabled={selectedTaxObligationIds.length === 0 || sendingTaxObligations}
-                      onClick={requestTaxObligationSend}
-                    >
-                      {sendingTaxObligations ? "Wysyłanie..." : `Wyślij e-mail (${selectedTaxObligationIds.length})`}
-                    </button>
+                    <div style={taxBulkButtonsStyle}>
+                      <button
+                        type="button"
+                        style={selectedTaxObligationIds.length === 0 || sendingTaxEmail ? disabledSendTaxInfoButtonStyle : sendTaxInfoButtonStyle}
+                        disabled={selectedTaxObligationIds.length === 0 || sendingTaxEmail}
+                        onClick={() => requestTaxObligationSend("email")}
+                      >
+                        {sendingTaxEmail ? "Wysy\u0142anie..." : `Wy\u015blij e-mail (${selectedTaxObligationIds.length})`}
+                      </button>
+                      <button
+                        type="button"
+                        style={selectedTaxObligationIds.length === 0 || sendingTaxSms ? disabledSendTaxSmsButtonStyle : sendTaxSmsButtonStyle}
+                        disabled={selectedTaxObligationIds.length === 0 || sendingTaxSms}
+                        onClick={() => requestTaxObligationSend("sms")}
+                      >
+                        {sendingTaxSms ? "Wysy\u0142anie..." : `Wy\u015blij SMS (${selectedTaxObligationIds.length})`}
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -610,6 +623,9 @@ const taxStatusGridStyle: CSSProperties = { display: "grid", gridTemplateColumns
 const taxSendBadgeStyle: CSSProperties = { borderRadius: radius.badge, background: "#eef2f7", color: colors.muted, padding: "7px 8px", fontSize: "12px", fontWeight: 850, textAlign: "center" };
 const sendTaxInfoButtonStyle: CSSProperties = { border: "none", borderRadius: radius.button, background: colors.red, color: colors.white, padding: "11px 14px", minHeight: "41px", fontSize: "13px", fontWeight: 850, cursor: "pointer", whiteSpace: "nowrap" };
 const disabledSendTaxInfoButtonStyle: CSSProperties = { ...sendTaxInfoButtonStyle, background: "#e8eef8", color: colors.muted, cursor: "not-allowed" };
+const sendTaxSmsButtonStyle: CSSProperties = { ...sendTaxInfoButtonStyle, background: colors.navy };
+const disabledSendTaxSmsButtonStyle: CSSProperties = { ...sendTaxSmsButtonStyle, background: "#e8eef8", color: colors.muted, cursor: "not-allowed" };
 const deleteTaxButtonStyle: CSSProperties = { alignSelf: "flex-end", border: `1px solid #fecaca`, borderRadius: radius.button, background: "#fff1f2", color: "#b91c1c", padding: "8px 12px", fontWeight: 850, cursor: "pointer" };
 const taxBulkActionsStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", padding: "12px 2px 0", flexWrap: "wrap" };
+const taxBulkButtonsStyle: CSSProperties = { display: "flex", justifyContent: "flex-end", gap: "10px", flexWrap: "wrap" };
 const taxBulkHintStyle: CSSProperties = { color: colors.muted, fontSize: "12px", fontWeight: 750 };

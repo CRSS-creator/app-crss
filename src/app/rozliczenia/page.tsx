@@ -428,7 +428,7 @@ function SettlementDrawer({ settlement, progress, recurringTasks, taxObligations
                         </Field>
                         <Field label="Termin">
                           <input
-                            style={inputStyle}
+                            style={taxFieldInputStyle}
                             type="date"
                             value={formatDateForInput(obligation.termin_platnosci)}
                             onChange={(event) => onTaxObligationUpdate(obligation.id, { termin_platnosci: event.target.value || null })}
@@ -491,7 +491,7 @@ function NumberInput({ value, disabled, onChange }: { value: number; disabled: b
 function AmountInput({ value, onChange }: { value: number | null; onChange: (value: number | null) => void }) {
   const [localValue, setLocalValue] = useState(value === null || value === undefined ? "" : String(value));
   useEffect(() => setLocalValue(value === null || value === undefined ? "" : String(value)), [value]);
-  return <input style={inputStyle} type="number" min={0} step="0.01" value={localValue} onChange={(event) => setLocalValue(event.target.value)} onBlur={() => onChange(parseOptionalAmount(localValue))} />;
+  return <input style={taxFieldInputStyle} type="number" min={0} step="0.01" value={localValue} onChange={(event) => setLocalValue(event.target.value)} onBlur={() => onChange(parseOptionalAmount(localValue))} />;
 }
 
 function ProgressBadge({ progress, done, total, large }: { progress: number; done: number; total: number; large?: boolean }) { return <div style={large ? progressLargeStyle : progressStyle}><strong>{progress}%</strong><span>{done}/{total} zadań</span></div>; }
@@ -606,6 +606,7 @@ const taxObligationItemStyle: CSSProperties = { border: `1px solid ${colors.bord
 const taxObligationMainStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "12px", color: colors.navy, fontSize: "15px", fontWeight: 850 };
 const taxObligationSelectStyle: CSSProperties = { display: "inline-flex", alignItems: "center", gap: "9px", minWidth: 0 };
 const taxObligationFieldsStyle: CSSProperties = { display: "grid", gridTemplateColumns: "130px 160px", gap: "10px", alignItems: "start" };
+const taxFieldInputStyle: CSSProperties = { ...inputStyle, background: colors.white, boxShadow: "0 1px 0 rgba(15, 23, 42, 0.03)" };
 const taxStatusGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr)) auto", gap: "7px", alignItems: "center" };
 const taxSendBadgeStyle: CSSProperties = { borderRadius: radius.badge, background: "#eef2f7", color: colors.muted, padding: "7px 8px", fontSize: "12px", fontWeight: 850, textAlign: "center" };
 const sendTaxInfoButtonStyle: CSSProperties = { border: "none", borderRadius: radius.button, background: colors.red, color: colors.white, padding: "11px 14px", minHeight: "41px", fontSize: "13px", fontWeight: 850, cursor: "pointer", whiteSpace: "nowrap" };

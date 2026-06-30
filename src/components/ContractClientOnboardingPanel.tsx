@@ -74,13 +74,18 @@ export default function ContractClientOnboardingPanel({ contract, onCreated }: P
 
   const canCreate = useMemo(() => contract.status === "podpisana" && !contract.klient_id, [contract.status, contract.klient_id]);
 
-  if (!canCreate) return null;
+  if (contract.klient_id) return null;
 
   function updateDraft<K extends keyof ClientOnboardingDraft>(key: K, value: ClientOnboardingDraft[K]) {
     setDraft((current) => ({ ...current, [key]: value }));
   }
 
   async function createClientFromContract() {
+    if (!canCreate) {
+      alert("Klienta można utworzyć dopiero po oznaczeniu umowy jako podpisanej.");
+      return;
+    }
+
     if (!contract.nazwa_klienta.trim()) {
       alert("Umowa nie ma nazwy klienta. Uzupełnij ją w danych umowy.");
       return;
@@ -144,10 +149,11 @@ export default function ContractClientOnboardingPanel({ contract, onCreated }: P
           <p style={eyebrowStyle}>Onboarding klienta</p>
           <h3 style={titleStyle}>Uzupełnij dane operacyjne klienta</h3>
         </div>
-        <button type="button" style={primaryButtonStyle} onClick={createClientFromContract} disabled={saving}>
-          {saving ? "Tworzenie..." : "Utwórz klienta"}
+        <button type="button" style={canCreate ? primaryButtonStyle : disabledButtonStyle} onClick={createClientFromContract} disabled={saving || !canCreate}>
+          {saving ? "Tworzenie..." : canCreate ? "Utwórz klienta" : "Najpierw podpisz umowę"}
         </button>
       </div>
+      {!canCreate && <p style={hintStyle}>Sekcja tworzenia klienta jest gotowa. Przycisk aktywuje się po zapisaniu umowy ze statusem „Podpisana”.</p>}
 
       <div style={gridStyle}>
         <TextField label="Telefon" value={draft.telefon} onChange={(value) => updateDraft("telefon", value)} />
@@ -381,4 +387,20 @@ const primaryButtonStyle: CSSProperties = {
   alignItems: "center",
   justifyContent: "center",
   textAlign: "center",
+};
+
+const disabledButtonStyle: CSSProperties = {
+  ...primaryButtonStyle,
+  background: "#e8eef8",
+  color: colors.muted,
+  cursor: "not-allowed",
+  boxShadow: "none",
+};
+
+const hintStyle: CSSProperties = {
+  margin: "-6px 0 16px",
+  color: colors.muted,
+  fontSize: "13px",
+  fontWeight: 700,
+  lineHeight: 1.5,
 };

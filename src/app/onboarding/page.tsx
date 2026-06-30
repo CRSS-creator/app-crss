@@ -68,6 +68,7 @@ type OnboardingStage = {
   record?: OnboardingStageRecord;
   moduleLabel?: string;
   href?: string;
+  actionLabel?: string;
 };
 
 type HistoryEntry = {
@@ -259,7 +260,7 @@ function OnboardingContent() {
 
             <section style={drawerSectionStyle}>
               <div style={sectionHeaderInlineStyle}>
-                <h3 style={drawerSectionTitleStyle}>Etapy startu</h3>
+                <h3 style={drawerSectionTitleStyle}>Proces rozpoczęcia współpracy</h3>
                 <button style={secondaryButtonStyle} onClick={() => setHistoryOpen((current) => !current)}>Historia zmian</button>
               </div>
               <div style={stageGridStyle}>
@@ -375,14 +376,13 @@ function buildStages(accountingContract: CrmContract | null, rodoContract: RodoP
       href: "/rodo",
     },
     buildManualStage("aml", "Do obsługi w module AML. Onboarding pokazuje status wykonania etapu.", recordByKey.aml, "/aml", "Przejdź do AML"),
-    buildManualStage("powers", "Formularze albo instrukcje online dotyczące ZUS i US.", recordByKey.powers),
-    buildManualStage("wfirma", "Konto klienta, opiekun, daty, VAT, US, ZUS oraz ustawienia KH/KU.", recordByKey.wfirma),
-    buildManualStage("drive", "Dysk Google, foldery, kontakt Gmail, newsletter i instrukcja dla klienta.", recordByKey.drive),
-    buildManualStage("recurring", "Szablony miesięczne i roczne pozostają w ustawieniach oraz rozliczeniach.", recordByKey.recurring, "/uzytkownicy", "Przejdź do ustawień"),
+    buildManualStage("client_card", "Dane organizacyjne klienta potrzebne do rozpoczęcia obsługi w biurze.", recordByKey.client_card, undefined, undefined, "Wyślij e-mail"),
+    buildManualStage("powers", "Instrukcje i pełnomocnictwa dotyczące ZUS oraz US.", recordByKey.powers, undefined, undefined, "Wyślij instrukcję e-mailem"),
+    buildManualStage("wfirma", "Konfiguracja konta klienta i ustawień operacyjnych w systemie wFirma.", recordByKey.wfirma, undefined, undefined, "Szczegóły"),
   ];
 }
 
-function buildManualStage(key: OnboardingStageKey, description: string, record?: OnboardingStageRecord, href?: string, moduleLabel?: string): OnboardingStage {
+function buildManualStage(key: OnboardingStageKey, description: string, record?: OnboardingStageRecord, href?: string, moduleLabel?: string, actionLabel?: string): OnboardingStage {
   return {
     key,
     title: stageLabel(key),
@@ -392,6 +392,7 @@ function buildManualStage(key: OnboardingStageKey, description: string, record?:
     record,
     href,
     moduleLabel,
+    actionLabel,
   };
 }
 
@@ -556,11 +557,11 @@ function StageCard({
       <p style={stageDescriptionStyle}>{stage.description}</p>
       <div style={stageActionsStyle}>
         {stage.href && <Link href={stage.href} style={secondaryButtonStyle}>{stage.moduleLabel || "Przejdź"}</Link>}
+        {stage.actionLabel && <button type="button" style={secondaryButtonStyle}>{stage.actionLabel}</button>}
         {stage.editable && stage.record && (
           <>
             <button style={smallButtonStyle} disabled={saving} onClick={() => onStatusChange("w_toku")}>W toku</button>
             <button style={smallButtonStyle} disabled={saving} onClick={() => onStatusChange("gotowe")}>Gotowe</button>
-            <button style={dangerSmallButtonStyle} disabled={saving} onClick={() => onStatusChange("zablokowane")}>Blokada</button>
           </>
         )}
       </div>

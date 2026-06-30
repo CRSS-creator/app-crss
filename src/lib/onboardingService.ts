@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/supabaseClient";
 
-export type OnboardingStageKey = "contract" | "rodo" | "aml" | "powers" | "wfirma" | "drive" | "recurring";
+export type OnboardingStageKey = "contract" | "rodo" | "aml" | "client_card" | "powers" | "wfirma" | "drive" | "recurring";
 export type OnboardingStageStatus = "do_wykonania" | "w_toku" | "gotowe" | "zablokowane";
 
 export type OnboardingStageRecord = {
@@ -33,10 +33,9 @@ export const ONBOARDING_STAGE_KEYS: OnboardingStageKey[] = [
   "contract",
   "rodo",
   "aml",
+  "client_card",
   "powers",
   "wfirma",
-  "drive",
-  "recurring",
 ];
 
 export async function fetchOnboardingStages() {
@@ -97,7 +96,7 @@ export async function updateOnboardingStageStatus(
     akcja: "zmiana_statusu",
     old_status: stage.status,
     new_status: status,
-    opis: `Zmieniono status etapu „${stageLabel(stage.etap)}” z „${statusLabel(stage.status)}” na „${statusLabel(status)}”.`,
+    opis: `Zmieniono status etapu "${stageLabel(stage.etap)}" z "${statusLabel(stage.status)}" na "${statusLabel(status)}".`,
     created_by: userId,
   });
 
@@ -108,7 +107,8 @@ export function stageLabel(stage: OnboardingStageKey) {
   if (stage === "contract") return "Umowa księgowa";
   if (stage === "rodo") return "Umowa powierzenia";
   if (stage === "aml") return "AML";
-  if (stage === "powers") return "Pełnomocnictwa ZUS/US";
+  if (stage === "client_card") return "Karta klienta biura rachunkowego";
+  if (stage === "powers") return "Pełnomocnictwa";
   if (stage === "wfirma") return "Konfiguracja wFirma";
   if (stage === "drive") return "Dysk i komunikacja";
   return "Zadania cykliczne";

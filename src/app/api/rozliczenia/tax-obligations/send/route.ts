@@ -179,7 +179,7 @@ function buildSmsMessage(input: {
   obligations: Array<{ name: string; amountLabel: string | null; dueDateLabel: string | null }>;
 }) {
   const items = input.obligations
-    .map((obligation) => `zobowiazanie ${toSmsText(obligation.name)} w kwocie ${toSmsText(obligation.amountLabel || "kwota do uzupelnienia")}`)
+    .map((obligation) => `zobowiazanie ${toSmsText(obligation.name)} za miesiac ${toSmsText(input.periodLabel)} w kwocie ${toSmsText(obligation.amountLabel || "kwota do uzupelnienia")}`)
     .join("; ");
 
   return `Dzien dobry, do zaplaty z ${toSmsText(input.clientName || "firmy")} ${items}. Pozdrawiamy, CRSS Sp. z o.o.`;

@@ -32,7 +32,6 @@ import {
   sendTaxObligations,
   updateTaxObligation,
   type TaxObligation,
-  type TaxObligationType,
   type TaxSendStatus,
 } from "@/lib/taxObligationService";
 import type { TimeEntry } from "@/lib/taskService";
@@ -47,15 +46,6 @@ const STATUS_OPTIONS: { value: SettlementStatus; label: string }[] = [
   { value: "podatki_wyslane", label: "Podatki wysłane" },
 ];
 const STATUS_FILTER_OPTIONS = [{ value: EMPTY_FILTER, label: "Status" }, ...STATUS_OPTIONS];
-const TAX_OBLIGATION_TYPE_OPTIONS: { value: TaxObligationType; label: string }[] = [
-  { value: "ZUS", label: "ZUS" },
-  { value: "VAT", label: "VAT" },
-  { value: "VAT-UE", label: "VAT-UE" },
-  { value: "VAT-9M", label: "VAT-9M" },
-  { value: "CIT", label: "CIT" },
-  { value: "PIT", label: "PIT" },
-  { value: "PIT-4", label: "PIT-4" },
-];
 
 export default function SettlementsPage() {
   return (
@@ -157,7 +147,7 @@ function SettlementsContent() {
     setSelected((current) => current?.id === settlementId ? { ...current, ...patch } : current);
   }
 
-  async function patchTaxObligation(id: string, payload: Partial<Pick<TaxObligation, "typ" | "nazwa" | "kwota" | "termin_platnosci">>) {
+  async function patchTaxObligation(id: string, payload: Partial<Pick<TaxObligation, "kwota" | "termin_platnosci">>) {
     const result = await updateTaxObligation(id, payload);
     if (result.error) {
       console.error("Błąd zapisu zobowiązania:", result.error);
@@ -312,7 +302,7 @@ function SettlementDrawer({ settlement, progress, recurringTasks, taxObligations
   onToggleRecurringTimer: (settlement: MonthlySettlement, task: RecurringTaskRealization) => void;
   onToggleRecurringDone: (task: RecurringTaskRealization) => void;
   onReminderSent: (settlementId: string, reminder: { sentAt: string; sentById: string; sentByName: string }) => void;
-  onTaxObligationUpdate: (id: string, payload: Partial<Pick<TaxObligation, "typ" | "nazwa" | "kwota" | "termin_platnosci">>) => void;
+  onTaxObligationUpdate: (id: string, payload: Partial<Pick<TaxObligation, "kwota" | "termin_platnosci">>) => void;
   onTaxObligationDelete: (id: string) => void;
   onTaxObligationsSent: (obligations: TaxObligation[]) => void;
   saving: boolean;
@@ -433,14 +423,6 @@ function SettlementDrawer({ settlement, progress, recurringTasks, taxObligations
                         <span>{formatCurrency(obligation.kwota)}</span>
                       </div>
                       <div style={taxObligationFieldsStyle}>
-                        <Field label="Rodzaj">
-                          <AppSelect
-                            style={inputStyle}
-                            value={obligation.typ}
-                            options={TAX_OBLIGATION_TYPE_OPTIONS}
-                            onChange={(value) => onTaxObligationUpdate(obligation.id, { typ: value as TaxObligationType, nazwa: value })}
-                          />
-                        </Field>
                         <Field label="Kwota">
                           <AmountInput value={obligation.kwota} onChange={(value) => onTaxObligationUpdate(obligation.id, { kwota: value })} />
                         </Field>
@@ -623,7 +605,7 @@ const taxObligationListStyle: CSSProperties = { display: "flex", flexDirection: 
 const taxObligationItemStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "13px", display: "flex", flexDirection: "column", gap: "9px" };
 const taxObligationMainStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "12px", color: colors.navy, fontSize: "15px", fontWeight: 850 };
 const taxObligationSelectStyle: CSSProperties = { display: "inline-flex", alignItems: "center", gap: "9px", minWidth: 0 };
-const taxObligationFieldsStyle: CSSProperties = { display: "grid", gridTemplateColumns: "1fr 130px 160px", gap: "10px", alignItems: "start" };
+const taxObligationFieldsStyle: CSSProperties = { display: "grid", gridTemplateColumns: "130px 160px", gap: "10px", alignItems: "start" };
 const taxStatusGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr)) auto", gap: "7px", alignItems: "center" };
 const taxSendBadgeStyle: CSSProperties = { borderRadius: radius.badge, background: "#eef2f7", color: colors.muted, padding: "7px 8px", fontSize: "12px", fontWeight: 850, textAlign: "center" };
 const sendTaxInfoButtonStyle: CSSProperties = { border: "none", borderRadius: radius.button, background: colors.red, color: colors.white, padding: "11px 14px", minHeight: "41px", fontSize: "13px", fontWeight: 850, cursor: "pointer", whiteSpace: "nowrap" };

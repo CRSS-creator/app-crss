@@ -123,9 +123,9 @@ export default function SettlementAdditionalFeesPanel({ settlementId }: { settle
                 <button style={dangerButtonStyle} disabled={savingId === fee.id} onClick={() => removeFee(fee)}>Usuń</button>
               </div>
               <div style={rowStyle}>
-                <label style={fieldStyle}><span>Kwota netto</span><input style={inputStyle} type="number" min={0} step="0.01" value={fee.kwota_netto} onChange={(event) => updateFee(fee, { kwota_netto: Number(event.target.value || 0) })} /></label>
-                <label style={fieldStyle}><span>Ilość</span><input style={inputStyle} type="number" min={0} step="0.01" value={fee.ilosc} onChange={(event) => updateFee(fee, { ilosc: Number(event.target.value || 0) })} /></label>
-                <label style={fieldStyle}><span>Razem</span><input style={inputStyle} value={formatMoney(Number(fee.kwota_netto || 0) * Number(fee.ilosc || 0))} readOnly /></label>
+                <label style={fieldStyle}><span>Kwota netto</span><input style={financialInputStyle} type="number" min={0} step="0.01" value={fee.kwota_netto} onChange={(event) => updateFee(fee, { kwota_netto: Number(event.target.value || 0) })} /></label>
+                <label style={fieldStyle}><span>Ilość</span><input style={financialInputStyle} type="number" min={0} step="0.01" value={fee.ilosc} onChange={(event) => updateFee(fee, { ilosc: Number(event.target.value || 0) })} /></label>
+                <label style={fieldStyle}><span>Razem</span><input style={financialInputStyle} value={formatMoney(Number(fee.kwota_netto || 0) * Number(fee.ilosc || 0))} readOnly /></label>
               </div>
               <label style={fieldStyle}><span>Uwagi</span><input style={inputStyle} value={fee.uwagi || ""} onChange={(event) => updateFee(fee, { uwagi: event.target.value })} placeholder="Opcjonalna informacja do rozliczenia" /></label>
             </article>
@@ -146,6 +146,7 @@ const titleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "20
 const totalStyle: CSSProperties = { display: "inline-flex", borderRadius: radius.badge, background: "rgba(23, 59, 115, 0.10)", color: colors.navy, padding: "7px 10px", fontWeight: 850 };
 const searchBoxStyle: CSSProperties = { position: "relative", marginBottom: "14px" };
 const inputStyle: CSSProperties = { width: "100%", border: `1px solid ${colors.border}`, borderRadius: radius.input, color: colors.text, background: colors.inputBackground, padding: "10px 12px", fontWeight: 700, fontSize: "14px", minHeight: "42px" };
+const financialInputStyle: CSSProperties = { ...inputStyle, background: colors.white };
 const suggestionsStyle: CSSProperties = { position: "absolute", zIndex: 4, inset: "calc(100% + 6px) 0 auto 0", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, boxShadow: "0 18px 44px rgba(23, 59, 115, 0.16)", padding: "8px", display: "grid", gap: "6px" };
 const suggestionButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, color: colors.text, padding: "9px 10px", textAlign: "left", cursor: "pointer", display: "flex", justifyContent: "space-between", gap: "10px", fontWeight: 800 };
 const emptyStateStyle: CSSProperties = { padding: "16px", borderRadius: radius.input, background: colors.inputBackground, border: `1px dashed ${colors.border}`, color: colors.muted, textAlign: "center", fontWeight: 800 };

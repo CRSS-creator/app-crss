@@ -129,16 +129,19 @@ function buildEmailHtml(input: {
   const obligationCards = input.obligations.map((obligation, index) => `
     <div style="padding:${index === 0 ? "4px" : "16px"} 0 16px;border-bottom:${index === input.obligations.length - 1 ? "none" : "1px solid #dbe5f2"};">
       <div style="margin:0 0 10px;color:#173B73;font-size:17px;font-weight:800;">${escapeHtml(obligation.name)}</div>
-      <div style="display:flex;gap:16px;flex-wrap:wrap;">
-        <div style="flex:1 1 180px;background:#ffffff;border:1px solid #c9d6e8;border-radius:12px;padding:12px;">
-          <div style="margin:0 0 6px;color:#43516a;font-size:13px;font-weight:700;">Kwota</div>
-          <div style="color:#173B73;font-size:20px;font-weight:850;">${escapeHtml(obligation.amountLabel || "Do uzupełnienia")}</div>
-        </div>
-        <div style="flex:1 1 180px;background:#ffffff;border:1px solid #c9d6e8;border-radius:12px;padding:12px;">
-          <div style="margin:0 0 6px;color:#43516a;font-size:13px;font-weight:700;">Termin płatności</div>
-          <div style="color:#173B73;font-size:20px;font-weight:850;">${escapeHtml(obligation.dueDateLabel || "Do ustalenia")}</div>
-        </div>
-      </div>
+      <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:separate;border-spacing:0;">
+        <tr>
+          <td width="48%" valign="top" style="background:#ffffff;border:1px solid #c9d6e8;border-radius:12px;padding:12px;">
+            <div style="margin:0 0 6px;color:#43516a;font-size:13px;font-weight:700;">Kwota</div>
+            <div style="color:#173B73;font-size:20px;font-weight:850;">${escapeHtml(obligation.amountLabel || "Do uzupełnienia")}</div>
+          </td>
+          <td width="16" style="font-size:0;line-height:0;">&nbsp;</td>
+          <td width="48%" valign="top" style="background:#ffffff;border:1px solid #c9d6e8;border-radius:12px;padding:12px;">
+            <div style="margin:0 0 6px;color:#43516a;font-size:13px;font-weight:700;">Termin płatności</div>
+            <div style="color:#173B73;font-size:20px;font-weight:850;">${escapeHtml(obligation.dueDateLabel || "Do ustalenia")}</div>
+          </td>
+        </tr>
+      </table>
     </div>
   `).join("");
 

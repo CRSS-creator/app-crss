@@ -7,7 +7,7 @@ import AccessGuard from "@/components/AccessGuard";
 import AppSelect from "@/components/AppSelect";
 import { colors, radius, shadow } from "@/app/design";
 import { supabase } from "@/lib/supabaseClient";
-import { fetchClients } from "@/lib/clientService";
+import { fetchClientCaregivers, fetchClients, updateClient } from "@/lib/clientService";
 import { fetchCrmContracts, type CrmContract } from "@/lib/crmContractService";
 import { fetchRodoProcessingContracts, type RodoProcessingContract } from "@/lib/rodoProcessingContractService";
 import {
@@ -48,6 +48,8 @@ type Profile = {
   id: string;
   full_name: string | null;
   email: string | null;
+  role?: string | null;
+  aktywne?: boolean | null;
 };
 
 type StageState = "done" | "progress" | "blocked" | "todo";
@@ -69,6 +71,8 @@ type OnboardingStage = {
   moduleLabel?: string;
   href?: string;
   actionLabel?: string;
+  responsibleLabel: string;
+  fullWidth?: boolean;
 };
 
 type HistoryEntry = {
@@ -106,8 +110,10 @@ function OnboardingContent() {
   const [onboardingStages, setOnboardingStages] = useState<OnboardingStageRecord[]>([]);
   const [onboardingHistory, setOnboardingHistory] = useState<OnboardingHistoryRecord[]>([]);
   const [profilesById, setProfilesById] = useState<Record<string, Profile>>({});
+  const [caregivers, setCaregivers] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingStageId, setSavingStageId] = useState<string | null>(null);
+  const [savingCaregiver, setSavingCaregiver] = useState(false);
   const [statusFilter, setStatusFilter] = useState("Wszystkie");
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -119,11 +125,12 @@ function OnboardingContent() {
 
   async function loadData() {
     setLoading(true);
-    const [clientsResult, contractsResult, rodoResult, profilesResult] = await Promise.all([
+    const [clientsResult, contractsResult, rodoResult, profilesResult, caregiversResult] = await Promise.all([
       fetchClients(),
       fetchCrmContracts(),
       fetchRodoProcessingContracts(),
-      supabase.from("profiles").select("id, full_name, email"),
+      supabase.from("profiles").select("id, full_name, email, role, aktywne"),
+      fetchClientCaregivers(),
     ]);
 
     const nextClients = clientsResult.error ? [] : ((clientsResult.data || []) as unknown as Client[]);
@@ -134,6 +141,8 @@ function OnboardingContent() {
     if (contractsResult.error) console.error("Błąd pobierania umów do onboardingu:", contractsResult.error);
     if (rodoResult.error) console.error("Błąd pobierania umów RODO do onboardingu:", rodoResult.error);
     if (profilesResult.error) console.error("Błąd pobierania użytkowników do historii onboardingu:", profilesResult.error);
+
+    if (caregiversResult.error) console.error("Nie udało się pobrać opiekunów do onboardingu:", caregiversResult.error);
 
     const onboardingClientIds = findOnboardingClientIds(nextClients, nextContracts, nextRodoContracts);
     if (onboardingClientIds.length > 0) {
@@ -152,6 +161,7 @@ function OnboardingContent() {
     setContracts(nextContracts);
     setRodoContracts(nextRodoContracts);
     setProfilesById(profilesResult.error ? {} : indexProfiles((profilesResult.data || []) as Profile[]));
+    setCaregivers(caregiversResult.error ? [] : ((caregiversResult.data || []) as Profile[]));
     setOnboardingStages(stagesResult.error ? [] : ((stagesResult.data || []) as OnboardingStageRecord[]));
     setOnboardingHistory(historyResult.error ? [] : ((historyResult.data || []) as OnboardingHistoryRecord[]));
     setLoading(false);
@@ -174,6 +184,19 @@ function OnboardingContent() {
 
     if (result.error) {
       alert("Nie udało się zapisać etapu onboardingu.");
+      return;
+    }
+
+    await loadData();
+  }
+
+  async function handleCaregiverChange(client: Client, caregiverId: string) {
+    setSavingCaregiver(true);
+    const result = await updateClient(client.id, { opiekun_id: caregiverId || null });
+    setSavingCaregiver(false);
+
+    if (result.error) {
+      alert("Nie udało się zapisać opiekuna księgowego.");
       return;
     }
 
@@ -267,6 +290,28 @@ function OnboardingContent() {
             </section>
 
             <section style={drawerSectionStyle}>
+              <div style={caregiverSectionStyle}>
+                <div>
+                  <h3 style={drawerSectionTitleStyle}>Opiekun księgowy</h3>
+                  <p style={hintStyle}>Opiekuna dla procesu ustawia manager. Etapy po stronie opiekuna będą przypisane do tej osoby.</p>
+                </div>
+                <AppSelect
+                  style={caregiverSelectStyle}
+                  value={selectedRow.client.opiekun_id || ""}
+                  options={[
+                    { value: "", label: "Brak opiekuna" },
+                    ...caregivers.map((caregiver) => ({
+                      value: caregiver.id,
+                      label: caregiver.full_name || caregiver.email || "Użytkownik",
+                    })),
+                  ]}
+                  onChange={(value) => handleCaregiverChange(selectedRow.client, value)}
+                  disabled={savingCaregiver}
+                />
+              </div>
+            </section>
+
+            <section style={drawerSectionStyle}>
               <div style={sectionHeaderInlineStyle}>
                 <h3 style={drawerSectionTitleStyle}>Proces rozpoczęcia współpracy</h3>
                 <button style={secondaryButtonStyle} onClick={openHistory}>Historia zmian</button>
@@ -334,7 +379,7 @@ function buildRows(
     const rodoContract = rodoContracts.find((contract) => matchesClient(client, contract.klient_id, contract.nip, contract.nazwa_klienta)) || null;
     const clientStages = onboardingStages.filter((stage) => stage.klient_id === client.id);
     const clientHistory = onboardingHistory.filter((entry) => entry.klient_id === client.id);
-    const stages = buildStages(accountingContract, rodoContract, clientStages);
+    const stages = buildStages(client, accountingContract, rodoContract, clientStages);
     const done = stages.filter((stage) => stage.state === "done").length;
     const progress = Math.round((done / stages.length) * 100);
     const nextStep = stages.find((stage) => stage.state !== "done")?.title || "Gotowy do obsługi";
@@ -353,7 +398,7 @@ function buildRows(
   }).sort((a, b) => a.progress - b.progress || (a.client.nazwa || "").localeCompare(b.client.nazwa || "", "pl"));
 }
 
-function buildStages(accountingContract: CrmContract | null, rodoContract: RodoProcessingContract | null, records: OnboardingStageRecord[]): OnboardingStage[] {
+function buildStages(client: Client, accountingContract: CrmContract | null, rodoContract: RodoProcessingContract | null, records: OnboardingStageRecord[]): OnboardingStage[] {
   const recordByKey = records.reduce<Partial<Record<OnboardingStageKey, OnboardingStageRecord>>>((acc, record) => {
     acc[record.etap] = record;
     return acc;
@@ -367,6 +412,7 @@ function buildStages(accountingContract: CrmContract | null, rodoContract: RodoP
       state: accountingContract?.status === "podpisana" || accountingContract?.podpisany_pdf_path ? "done" : accountingContract ? "progress" : "blocked",
       moduleLabel: "Przejdź do umów",
       href: "/crm/umowy",
+      responsibleLabel: "Owner",
     },
     {
       key: "rodo",
@@ -375,15 +421,18 @@ function buildStages(accountingContract: CrmContract | null, rodoContract: RodoP
       state: rodoContract?.status === "podpisana" || rodoContract?.podpisany_pdf_path ? "done" : rodoContract ? "progress" : "blocked",
       moduleLabel: "Przejdź do RODO",
       href: "/rodo",
+      responsibleLabel: "Owner",
     },
     buildManualStage("aml", "Do obsługi w module AML. Onboarding pokazuje status wykonania etapu.", recordByKey.aml, "/aml", "Przejdź do AML"),
     buildManualStage("client_card", "Dane organizacyjne klienta potrzebne do rozpoczęcia obsługi w biurze.", recordByKey.client_card, undefined, undefined, "Wyślij e-mail"),
     buildManualStage("powers", "Instrukcje i pełnomocnictwa dotyczące ZUS oraz US.", recordByKey.powers, undefined, undefined, "Wyślij instrukcję e-mailem"),
-    buildManualStage("wfirma", "Konfiguracja konta klienta i ustawień operacyjnych w systemie wFirma.", recordByKey.wfirma, undefined, undefined, "Szczegóły"),
+    buildManualStage("wfirma_account", "Utworzenie konta klienta w systemie wFirma.", recordByKey.wfirma_account),
+    { ...buildManualStage("wfirma", "Konfiguracja konta klienta i ustawień operacyjnych w systemie wFirma.", recordByKey.wfirma, undefined, undefined, "Szczegóły", true), responsibleLabel: `Opiekun: ${caregiverLabel(client)}` },
+    { ...buildManualStage("documents_takeover", "Dokumenty i informacje potrzebne do przejęcia obsługi klienta.", recordByKey.documents_takeover), responsibleLabel: `Opiekun: ${caregiverLabel(client)}` },
   ];
 }
 
-function buildManualStage(key: OnboardingStageKey, description: string, record?: OnboardingStageRecord, href?: string, moduleLabel?: string, actionLabel?: string): OnboardingStage {
+function buildManualStage(key: OnboardingStageKey, description: string, record?: OnboardingStageRecord, href?: string, moduleLabel?: string, actionLabel?: string, fullWidth?: boolean): OnboardingStage {
   return {
     key,
     title: stageLabel(key),
@@ -394,6 +443,8 @@ function buildManualStage(key: OnboardingStageKey, description: string, record?:
     href,
     moduleLabel,
     actionLabel,
+    responsibleLabel: responsibleLabelForStage(key),
+    fullWidth,
   };
 }
 
@@ -482,6 +533,13 @@ function caregiverLabel(client: Client) {
   return profile?.full_name || profile?.email || "Brak opiekuna";
 }
 
+function responsibleLabelForStage(stage: OnboardingStageKey) {
+  if (stage === "contract" || stage === "rodo") return "Owner";
+  if (stage === "aml" || stage === "client_card" || stage === "powers" || stage === "wfirma_account") return "Admin";
+  if (stage === "wfirma" || stage === "documents_takeover") return "Opiekun";
+  return "Admin";
+}
+
 function matchesClient(client: Client, klientId: string | null | undefined, nip: string | null | undefined, name: string | null | undefined) {
   if (klientId && klientId === client.id) return true;
   if (client.nip && nip && normalize(client.nip) === normalize(nip)) return true;
@@ -550,11 +608,12 @@ function StageCard({
   onStatusChange: (status: OnboardingStageStatus) => void;
 }) {
   return (
-    <div style={stageCardStyle}>
+    <div style={{ ...stageCardStyle, ...(stage.fullWidth ? stageFullWidthStyle : {}) }}>
       <div style={stageCardHeaderStyle}>
         <h4 style={stageTitleStyle}>{stage.title}</h4>
         <StagePill stage={stage} />
       </div>
+      <span style={responsibleStyle}>Odpowiedzialny: {stage.responsibleLabel}</span>
       <p style={stageDescriptionStyle}>{stage.description}</p>
       <div style={stageActionsStyle}>
         {stage.href && <Link href={stage.href} style={secondaryButtonStyle}>{stage.moduleLabel || "Przejdź"}</Link>}
@@ -604,12 +663,16 @@ const drawerSubtitleStyle: CSSProperties = { margin: "8px 0 0", color: colors.mu
 const closeButtonStyle: CSSProperties = { width: "46px", height: "46px", borderRadius: "999px", border: `1px solid ${colors.border}`, background: colors.white, color: colors.navy, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" };
 const drawerSummaryStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "12px", marginBottom: "18px" };
 const drawerSectionStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.inputBackground, padding: "18px", marginBottom: "16px" };
+const caregiverSectionStyle: CSSProperties = { display: "grid", gridTemplateColumns: "1fr minmax(260px, 360px)", gap: "18px", alignItems: "center" };
+const caregiverSelectStyle: CSSProperties = { width: "100%" };
 const sectionHeaderInlineStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", marginBottom: "14px" };
 const drawerSectionTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "22px" };
 const stageGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "12px" };
 const stageCardStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, padding: "15px", display: "flex", flexDirection: "column", gap: "10px" };
+const stageFullWidthStyle: CSSProperties = { gridColumn: "1 / -1" };
 const stageCardHeaderStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "10px", alignItems: "flex-start" };
 const stageTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "17px" };
+const responsibleStyle: CSSProperties = { color: colors.muted, fontSize: "13px", fontWeight: 800 };
 const stageDescriptionStyle: CSSProperties = { margin: 0, color: colors.muted, lineHeight: 1.5, fontWeight: 650 };
 const stageActionsStyle: CSSProperties = { display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" };
 const smallButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.navy, padding: "8px 10px", fontWeight: 850, cursor: "pointer" };

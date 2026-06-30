@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/supabaseClient";
 
-export type OnboardingStageKey = "contract" | "rodo" | "aml" | "client_card" | "powers" | "wfirma" | "drive" | "recurring";
+export type OnboardingStageKey = "contract" | "rodo" | "aml" | "client_card" | "powers" | "wfirma_account" | "wfirma" | "documents_takeover" | "drive" | "recurring";
 export type OnboardingStageStatus = "do_wykonania" | "w_toku" | "gotowe" | "zablokowane";
 
 export type OnboardingStageRecord = {
@@ -35,7 +35,9 @@ export const ONBOARDING_STAGE_KEYS: OnboardingStageKey[] = [
   "aml",
   "client_card",
   "powers",
+  "wfirma_account",
   "wfirma",
+  "documents_takeover",
 ];
 
 export async function fetchOnboardingStages() {
@@ -109,7 +111,9 @@ export function stageLabel(stage: OnboardingStageKey) {
   if (stage === "aml") return "AML";
   if (stage === "client_card") return "Karta klienta biura rachunkowego";
   if (stage === "powers") return "Pełnomocnictwa";
+  if (stage === "wfirma_account") return "Utworzenie konta wFirma";
   if (stage === "wfirma") return "Konfiguracja wFirma";
+  if (stage === "documents_takeover") return "Dokumenty do przejęcia";
   if (stage === "drive") return "Dysk i komunikacja";
   return "Zadania cykliczne";
 }

@@ -11,6 +11,7 @@ import { fetchClients } from "@/lib/clientService";
 import {
   createCrmContract,
   createCrmContractSignedUrl,
+  deleteUnsignedCrmContract,
   fetchCrmContracts,
   updateCrmContract,
   uploadCrmContractPdf,
@@ -135,6 +136,19 @@ function CrmContractsContent() {
     void loadInitialData();
   }
 
+  async function handleDeleted(contract: CrmContract) {
+    if (!confirm(`Usunąć umowę ${contract.numer_umowy || contract.nazwa_klienta || ""}?`)) return;
+
+    const result = await deleteUnsignedCrmContract(contract);
+    if (result.error) {
+      alert(result.error.message || "Nie udało się usunąć umowy.");
+      return;
+    }
+
+    setContracts((current) => current.filter((item) => item.id !== contract.id));
+    setSelectedContract((current) => current?.id === contract.id ? null : current);
+  }
+
   return (
     <>
       <section style={headerStyle}>
@@ -183,7 +197,14 @@ function CrmContractsContent() {
                     <Td><StatusBadge status={contract.status} /></Td>
                     <Td>{formatMoney(contract.abonament_netto)}</Td>
                     <Td>{contract.podpisany_pdf_path ? "Podpisana" : contract.wygenerowany_pdf_path ? "Wygenerowana" : "Brak PDF"}</Td>
-                    <Td><button style={secondaryButtonStyle} onClick={() => setSelectedContract(contract)}>Szczegóły</button></Td>
+                    <Td>
+                      <div style={tableActionsStyle}>
+                        <button style={secondaryButtonStyle} onClick={() => setSelectedContract(contract)}>Szczegóły</button>
+                        {canDeleteContract(contract) && (
+                          <button style={dangerButtonStyle} onClick={() => handleDeleted(contract)}>Usuń</button>
+                        )}
+                      </div>
+                    </Td>
                   </tr>
                 ))}
               </tbody>
@@ -202,13 +223,14 @@ function CrmContractsContent() {
             setSelectedContract(null);
           }}
           onSaved={handleSaved}
+          onDeleted={handleDeleted}
         />
       )}
     </>
   );
 }
 
-function ContractDrawer({ contract, leads, clients, onClose, onSaved }: { contract: CrmContract | null; leads: Lead[]; clients: Client[]; onClose: () => void; onSaved: (contract: CrmContract) => void }) {
+function ContractDrawer({ contract, leads, clients, onClose, onSaved, onDeleted }: { contract: CrmContract | null; leads: Lead[]; clients: Client[]; onClose: () => void; onSaved: (contract: CrmContract) => void; onDeleted: (contract: CrmContract) => void }) {
   const generatedInputRef = useRef<HTMLInputElement | null>(null);
   const signedInputRef = useRef<HTMLInputElement | null>(null);
   const [draft, setDraft] = useState<ContractDraft>(() => contract ? createDraft(contract) : createEmptyDraft());
@@ -369,6 +391,9 @@ function ContractDrawer({ contract, leads, clients, onClose, onSaved }: { contra
         </div>
 
         <div style={drawerActionsStyle}>
+          {contract && canDeleteContract(contract) && (
+            <button style={dangerButtonStyle} onClick={() => onDeleted(contract)}>Usuń umowę</button>
+          )}
           <button style={primarySmallButtonStyle} onClick={() => saveContract()} disabled={saving}>{saving ? "Zapisywanie..." : "Zapisz"}</button>
         </div>
 
@@ -530,6 +555,10 @@ function EditableSelect({ label, value, onChange, options }: { label: string; va
   return <label style={editableRowStyle}><span>{label}</span><AppSelect value={value} onChange={onChange} style={inputStyle} options={options} /></label>;
 }
 
+function canDeleteContract(contract: CrmContract) {
+  return contract.status !== "podpisana" && !contract.podpisany_pdf_path;
+}
+
 function SearchableLeadSelect({ label, value, leads, onChange }: { label: string; value: string; leads: Lead[]; onChange: (value: string) => void }) {
   const selectedLead = leads.find((lead) => lead.id === value) || null;
   const [query, setQuery] = useState(selectedLead?.nazwa || "");
@@ -657,12 +686,14 @@ function Td({ children, strong }: { children: React.ReactNode; strong?: boolean 
 
 const headerStyle: React.CSSProperties = { display: "flex", justifyContent: "space-between", gap: "24px", alignItems: "flex-start", marginBottom: "28px" };
 const headerActionsStyle: React.CSSProperties = { display: "flex", gap: "12px", flexWrap: "wrap", justifyContent: "flex-end" };
+const tableActionsStyle: React.CSSProperties = { display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" };
 const eyebrowStyle: React.CSSProperties = { color: colors.red, fontWeight: 800, margin: "0 0 8px" };
 const titleStyle: React.CSSProperties = { fontSize: "42px", lineHeight: 1.05, margin: 0, color: colors.navy };
 const subtitleStyle: React.CSSProperties = { maxWidth: "780px", fontSize: "17px", lineHeight: 1.7, color: colors.muted, marginTop: "14px" };
 const primaryButtonStyle: React.CSSProperties = { border: "none", borderRadius: radius.button, padding: "14px 18px", minHeight: "46px", background: colors.red, color: colors.white, fontWeight: 800, cursor: "pointer", textDecoration: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", textAlign: "center" };
 const primarySmallButtonStyle: React.CSSProperties = { ...primaryButtonStyle, padding: "11px 15px", minHeight: "42px" };
 const secondaryButtonStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "10px 14px", minHeight: "42px", background: colors.white, color: colors.navy, fontWeight: 800, cursor: "pointer", textDecoration: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", textAlign: "center" };
+const dangerButtonStyle: React.CSSProperties = { ...secondaryButtonStyle, borderColor: "#fecaca", background: "#fff1f2", color: "#b91c1c" };
 const summaryGridStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "18px", marginBottom: "24px" };
 const summaryCardStyle: React.CSSProperties = { background: colors.card, border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: "22px", boxShadow: shadow.soft, display: "flex", flexDirection: "column", gap: "10px", color: colors.muted, fontWeight: 800 };
 const cardStyle: React.CSSProperties = { background: colors.card, border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: "28px", boxShadow: shadow.soft, marginBottom: "24px" };

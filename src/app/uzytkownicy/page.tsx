@@ -66,7 +66,7 @@ const MONTH_OPTIONS = [
   { value: 12, label: "Grudzień" },
 ] as const;
 
-type SettingsTab = "templates" | "fees" | "users";
+type SettingsTab = "templates" | "fees" | "users" | "taxHistory";
 type VatMode = typeof VAT_OPTIONS[number]["value"];
 type VatUeMode = typeof VAT_UE_OPTIONS[number]["value"];
 type PayrollMode = typeof PAYROLL_OPTIONS[number]["value"];
@@ -84,6 +84,22 @@ type ClientRow = {
   vat_ue: boolean | null;
   obsluga_kadrowa: boolean | null;
   opiekun_id: string | null;
+};
+
+type TaxObligationHistoryRow = {
+  id: string;
+  created_at: string;
+  channel: "email" | "sms";
+  client_id: string | null;
+  client_name: string | null;
+  client_nip: string | null;
+  period: string;
+  period_label: string;
+  subject: string | null;
+  recipient_email: string | null;
+  recipient_phone: string | null;
+  obligations: Array<{ name?: string; amountLabel?: string | null; dueDateLabel?: string | null }>;
+  sent_by_name: string | null;
 };
 
 type TemplateDraft = {
@@ -144,6 +160,7 @@ function SettingsContent() {
   const [templates, setTemplates] = useState<RecurringTask[]>([]);
   const [clients, setClients] = useState<ClientRow[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
+  const [taxHistory, setTaxHistory] = useState<TaxObligationHistoryRow[]>([]);
   const [draft, setDraft] = useState<TemplateDraft>(emptyDraft);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -154,10 +171,11 @@ function SettingsContent() {
 
   async function loadSettings() {
     setLoading(true);
-    const [templatesResult, clientsResult, usersResult] = await Promise.all([
+    const [templatesResult, clientsResult, usersResult, taxHistoryResult] = await Promise.all([
       fetchRecurringTaskTemplates(),
       fetchClients(),
       supabase.from("profiles").select("id, full_name, email, role").order("full_name", { ascending: true }),
+      supabase.from("zobowiazania_wysylki_historia").select("*").order("created_at", { ascending: false }).limit(250),
     ]);
 
     if (templatesResult.error) console.error("Błąd pobierania szablonów:", templatesResult.error);
@@ -167,6 +185,7 @@ function SettingsContent() {
     setTemplates((templatesResult.data || []) as RecurringTask[]);
     setClients((clientsResult.data || []) as ClientRow[]);
     setUsers((usersResult.data || []) as UserProfile[]);
+    setTaxHistory((taxHistoryResult.data || []) as TaxObligationHistoryRow[]);
     setLoading(false);
   }
 
@@ -279,6 +298,7 @@ function SettingsContent() {
         <button style={activeTab === "templates" ? activeTabStyle : tabStyle} onClick={() => setActiveTab("templates")}>Szablony cykliczne</button>
         <button style={activeTab === "fees" ? activeTabStyle : tabStyle} onClick={() => setActiveTab("fees")}>Opłaty dodatkowe</button>
         <button style={activeTab === "users" ? activeTabStyle : tabStyle} onClick={() => setActiveTab("users")}>Użytkownicy</button>
+        <button style={activeTab === "taxHistory" ? activeTabStyle : tabStyle} onClick={() => setActiveTab("taxHistory")}>Historia podatków</button>
       </div>
 
       {activeTab === "templates" ? (
@@ -297,10 +317,100 @@ function SettingsContent() {
         />
       ) : activeTab === "fees" ? (
         <AdditionalFeesSettingsPanel />
+      ) : activeTab === "taxHistory" ? (
+        <TaxHistoryTab entries={taxHistory} loading={loading} />
       ) : (
         <UsersTab users={users} loading={loading} onRoleChange={updateUserRole} onUserCreated={(user) => setUsers((current) => [user, ...current])} />
       )}
     </>
+  );
+}
+
+function TaxHistoryTab({ entries, loading }: { entries: TaxObligationHistoryRow[]; loading: boolean }) {
+  const [clientQuery, setClientQuery] = useState("");
+  const [periodFilter, setPeriodFilter] = useState("");
+  const [channelFilter, setChannelFilter] = useState("all");
+
+  const filteredEntries = useMemo(() => {
+    const query = clientQuery.trim().toLowerCase();
+    return entries.filter((entry) => {
+      const clientText = [entry.client_name, entry.client_nip].filter(Boolean).join(" ").toLowerCase();
+      const matchesClient = !query || clientText.includes(query);
+      const matchesPeriod = !periodFilter || entry.period?.slice(0, 7) === periodFilter;
+      const matchesChannel = channelFilter === "all" || entry.channel === channelFilter;
+      return matchesClient && matchesPeriod && matchesChannel;
+    });
+  }, [channelFilter, clientQuery, entries, periodFilter]);
+
+  return (
+    <section style={panelStyle}>
+      <div style={panelHeaderStyle}>
+        <div>
+          <h2 style={sectionTitleStyle}>Historia powiadomień o podatkach</h2>
+          <p style={hintStyle}>Rejestr pokazuje kto, kiedy, jakim kanałem i za jaki miesiąc wysłał informacje do klienta.</p>
+        </div>
+        <Badge>{filteredEntries.length} wpisów</Badge>
+      </div>
+      <div style={historyFiltersStyle}>
+        <input
+          style={inputStyle}
+          value={clientQuery}
+          onChange={(event) => setClientQuery(event.target.value)}
+          placeholder="Szukaj po kliencie lub NIP"
+        />
+        <input
+          style={inputStyle}
+          type="month"
+          value={periodFilter}
+          onChange={(event) => setPeriodFilter(event.target.value)}
+        />
+        <AppSelect
+          style={inputStyle}
+          value={channelFilter}
+          options={[
+            { value: "all", label: "Wszystkie kanały" },
+            { value: "email", label: "E-mail" },
+            { value: "sms", label: "SMS" },
+          ]}
+          onChange={setChannelFilter}
+        />
+      </div>
+      <div style={tableShellStyle}>
+        <table style={tableStyle}>
+          <thead>
+            <tr>
+              <Th>Data wysyłki</Th>
+              <Th>Klient</Th>
+              <Th>Miesiąc</Th>
+              <Th>Kanał</Th>
+              <Th>Zobowiązania</Th>
+              <Th>Odbiorca</Th>
+              <Th>Wysłał</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr><Td colSpan={7}>Ładowanie historii...</Td></tr>
+            ) : filteredEntries.length === 0 ? (
+              <tr><Td colSpan={7}>Brak wysyłek dla wybranych filtrów.</Td></tr>
+            ) : filteredEntries.map((entry) => {
+              const obligations = Array.isArray(entry.obligations) ? entry.obligations : [];
+              return (
+                <tr key={entry.id} style={rowStyle}>
+                  <Td>{formatDateTime(entry.created_at)}</Td>
+                  <Td strong>{entry.client_name || "Brak klienta"}<small style={smallTextStyle}>{entry.client_nip || "Brak NIP"}</small></Td>
+                  <Td>{entry.period_label || formatMonthFromDate(entry.period)}</Td>
+                  <Td><Badge>{entry.channel === "email" ? "E-mail" : "SMS"}</Badge></Td>
+                  <Td>{obligations.map((item) => `${item.name || "Zobowiązanie"}${item.amountLabel ? ` - ${item.amountLabel}` : ""}`).join(", ") || "Brak danych"}</Td>
+                  <Td>{entry.channel === "email" ? entry.recipient_email || "Brak e-maila" : entry.recipient_phone || "Brak telefonu"}</Td>
+                  <Td>{entry.sent_by_name || "Nieustalony użytkownik"}</Td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 
@@ -605,6 +715,20 @@ function generateTemporaryPassword() {
   return Array.from(values, (value) => alphabet[value % alphabet.length]).join("");
 }
 
+function formatDateTime(value: string) {
+  return new Intl.DateTimeFormat("pl-PL", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
+function formatMonthFromDate(value: string | null | undefined) {
+  return value ? new Intl.DateTimeFormat("pl-PL", { month: "long", year: "numeric" }).format(new Date(`${value.slice(0, 7)}-01T12:00:00`)) : "Brak miesiąca";
+}
+
 const headerStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "24px", alignItems: "flex-start", marginBottom: "24px", flexWrap: "wrap" };
 const eyebrowStyle: CSSProperties = { margin: "0 0 8px", color: colors.red, fontWeight: 850 };
 const titleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "42px", lineHeight: 1.05 };
@@ -642,6 +766,7 @@ const primaryButtonStyle: CSSProperties = { border: "none", borderRadius: radius
 const secondaryButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.navy, padding: "9px 12px", fontWeight: 850, cursor: "pointer", whiteSpace: "nowrap" };
 const dangerButtonStyle: CSSProperties = { ...secondaryButtonStyle, color: colors.danger, background: "#fff5f5" };
 const templateFilterStyle: CSSProperties = { marginBottom: "12px" };
+const historyFiltersStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(260px, 1fr) 180px 220px", gap: "12px", marginBottom: "14px", alignItems: "center" };
 const tableShellStyle: CSSProperties = { overflowX: "auto", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white };
 const userCreateFormStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(4, minmax(160px, 1fr)) auto auto", gap: "12px", alignItems: "end", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "14px", marginBottom: "18px" };
 const temporaryPasswordBoxStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "14px", alignItems: "center", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "14px", marginBottom: "18px", flexWrap: "wrap" };

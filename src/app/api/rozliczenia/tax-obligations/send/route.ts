@@ -351,6 +351,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `${channelLabel} wysĹ‚ano, ale nie udaĹ‚o siÄ™ zapisaÄ‡ statusu wysyĹ‚ki.` }, { status: 502 });
     }
 
+    await auth.admin
+      .from("zobowiazania_wysylki_historia")
+      .insert({
+        created_at: sentAt,
+        channel: payload.channel,
+        settlement_id: settlement.id,
+        client_id: client.id,
+        client_name: client.nazwa,
+        client_nip: client.nip,
+        period: settlement.okres,
+        period_label: periodLabel,
+        subject,
+        recipient_email: payload.channel === "email" ? client.email : null,
+        recipient_phone: payload.channel === "sms" ? client.telefon : null,
+        obligations: preparedObligations,
+        sent_by: auth.requesterId,
+        sent_by_name: auth.requesterName,
+      });
+
     const obligationsWithSender = (updatedObligations || []).map((obligation) => payload.channel === "email"
       ? { ...obligation, email_sent_by_name: auth.requesterName }
       : { ...obligation, sms_sent_by_name: auth.requesterName }

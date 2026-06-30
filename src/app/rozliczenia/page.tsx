@@ -446,8 +446,14 @@ function SettlementDrawer({ settlement, progress, recurringTasks, taxObligations
                         </Field>
                       </div>
                       <div style={taxStatusGridStyle}>
-                        <span style={sendStatusStyle(obligation.status_email)}>E-mail: {sendStatusLabel(obligation.status_email)}</span>
-                        <span style={sendStatusStyle(obligation.status_sms)}>SMS: {sendStatusLabel(obligation.status_sms)}</span>
+                        <div>
+                          <span style={sendStatusStyle(obligation.status_email)}>E-mail: {sendStatusLabel(obligation.status_email)}</span>
+                          {sendStatusDetails(obligation.email_sent_at, obligation.email_sent_by_name) ? <p style={taxSentInfoStyle}>{sendStatusDetails(obligation.email_sent_at, obligation.email_sent_by_name)}</p> : null}
+                        </div>
+                        <div>
+                          <span style={sendStatusStyle(obligation.status_sms)}>SMS: {sendStatusLabel(obligation.status_sms)}</span>
+                          {sendStatusDetails(obligation.sms_sent_at, obligation.sms_sent_by_name) ? <p style={taxSentInfoStyle}>{sendStatusDetails(obligation.sms_sent_at, obligation.sms_sent_by_name)}</p> : null}
+                        </div>
                         <button type="button" style={deleteTaxButtonStyle} onClick={() => onTaxObligationDelete(obligation.id)}>Usuń</button>
                       </div>
                     </article>
@@ -533,9 +539,13 @@ function formatDateForInput(value: string | null) { return value ? value.slice(0
 function formatCurrency(value: number | null) { return value === null || value === undefined ? "Do uzupełnienia" : new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN" }).format(value); }
 function sendStatusLabel(status: TaxSendStatus) { if (status === "wyslane") return "wysłane"; if (status === "blad") return "błąd"; return "niewysłane"; }
 function sendStatusStyle(status: TaxSendStatus): CSSProperties {
-  if (status === "wyslane") return { ...taxSendBadgeStyle, background: "#fee2e2", color: "#b91c1c" };
+  if (status === "wyslane") return { ...taxSendBadgeStyle, background: "#dcfce7", color: "#15803d" };
   if (status === "blad") return { ...taxSendBadgeStyle, background: "#fee2e2", color: "#b91c1c" };
   return taxSendBadgeStyle;
+}
+function sendStatusDetails(sentAt: string | null, sentByName?: string | null) {
+  if (!sentAt) return null;
+  return `Wysłane ${formatReminderTimestamp(sentAt)}${sentByName ? ` przez ${sentByName}` : ""}.`;
 }
 function parseOptionalAmount(value: string) {
   const normalized = value.replace(",", ".").trim();
@@ -619,6 +629,7 @@ const taxObligationFieldsStyle: CSSProperties = { display: "grid", gridTemplateC
 const taxFieldInputStyle: CSSProperties = { ...inputStyle, background: colors.white, boxShadow: "0 1px 0 rgba(15, 23, 42, 0.03)" };
 const taxStatusGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr)) auto", gap: "7px", alignItems: "center" };
 const taxSendBadgeStyle: CSSProperties = { borderRadius: radius.badge, background: "#eef2f7", color: colors.muted, padding: "7px 8px", fontSize: "12px", fontWeight: 850, textAlign: "center" };
+const taxSentInfoStyle: CSSProperties = { margin: "5px 0 0", color: colors.muted, fontSize: "11px", lineHeight: 1.35, fontWeight: 650 };
 const sendTaxInfoButtonStyle: CSSProperties = { border: "none", borderRadius: radius.button, background: colors.red, color: colors.white, padding: "11px 14px", minHeight: "41px", fontSize: "13px", fontWeight: 850, cursor: "pointer", whiteSpace: "nowrap" };
 const disabledSendTaxInfoButtonStyle: CSSProperties = { ...sendTaxInfoButtonStyle, background: "#e8eef8", color: colors.muted, cursor: "not-allowed" };
 const deleteTaxButtonStyle: CSSProperties = { alignSelf: "flex-end", border: `1px solid #fecaca`, borderRadius: radius.button, background: "#fff1f2", color: "#b91c1c", padding: "8px 12px", fontWeight: 850, cursor: "pointer" };

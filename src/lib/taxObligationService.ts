@@ -20,8 +20,10 @@ export type TaxObligation = {
   status_sms: TaxSendStatus;
   email_sent_at: string | null;
   email_sent_by: string | null;
+  email_sent_by_name?: string | null;
   sms_sent_at: string | null;
   sms_sent_by: string | null;
+  sms_sent_by_name?: string | null;
   zrodlo: "wfirma" | "recznie";
   external_id: string | null;
   metadata: Record<string, unknown>;

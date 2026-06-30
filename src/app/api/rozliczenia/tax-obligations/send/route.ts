@@ -106,6 +106,19 @@ function escapeHtml(value: string | null | undefined) {
     .replace(/'/g, "&#039;");
 }
 
+function toSmsText(value: string | null | undefined) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/ł/g, "l")
+    .replace(/Ł/g, "L")
+    .replace(/zł/g, "zl")
+    .replace(/ZŁ/g, "ZL")
+    .replace(/[^\x20-\x7E]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function buildEmailHtml(input: {
   clientName: string | null;
   periodLabel: string;
@@ -116,7 +129,7 @@ function buildEmailHtml(input: {
   const obligationCards = input.obligations.map((obligation, index) => `
     <div style="padding:${index === 0 ? "4px" : "16px"} 0 16px;border-bottom:${index === input.obligations.length - 1 ? "none" : "1px solid #dbe5f2"};">
       <div style="margin:0 0 10px;color:#173B73;font-size:17px;font-weight:800;">${escapeHtml(obligation.name)}</div>
-      <div style="display:flex;gap:12px;flex-wrap:wrap;">
+      <div style="display:flex;gap:16px;flex-wrap:wrap;">
         <div style="flex:1 1 180px;background:#ffffff;border:1px solid #c9d6e8;border-radius:12px;padding:12px;">
           <div style="margin:0 0 6px;color:#43516a;font-size:13px;font-weight:700;">Kwota</div>
           <div style="color:#173B73;font-size:20px;font-weight:850;">${escapeHtml(obligation.amountLabel || "Do uzupełnienia")}</div>
@@ -148,6 +161,9 @@ function buildEmailHtml(input: {
             <div style="margin:0 0 12px;color:#43516a;font-size:13px;font-weight:800;">Zobowiązania do zapłaty</div>
             ${obligationCards}
           </div>
+          <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#26364f;">
+            Jeżeli masz jakieś wątpliwości, skontaktuj się ze swoim opiekunem. Wszystkie deklaracje znajdziesz na swoim koncie w systemie wFirma.
+          </p>
           ${caregiver}
           <p style="margin:24px 0 0;font-size:16px;line-height:1.7;">Pozdrawiamy serdecznie,<br><strong>Zespół CRSS</strong></p>
         </div>
@@ -158,14 +174,15 @@ function buildEmailHtml(input: {
 }
 
 function buildSmsMessage(input: {
+  clientName: string | null;
   periodLabel: string;
   obligations: Array<{ name: string; amountLabel: string | null; dueDateLabel: string | null }>;
 }) {
   const items = input.obligations
-    .map((obligation) => `${obligation.name}: ${obligation.amountLabel || "kwota do uzupełnienia"}, termin ${obligation.dueDateLabel || "do ustalenia"}`)
+    .map((obligation) => `zobowiazanie ${toSmsText(obligation.name)} w kwocie ${toSmsText(obligation.amountLabel || "kwota do uzupelnienia")}`)
     .join("; ");
 
-  return `CRSS: zobowiązania publicznoprawne za ${input.periodLabel}: ${items}.`;
+  return `Dzien dobry, do zaplaty z ${toSmsText(input.clientName || "firmy")} ${items}. Pozdrawiamy, CRSS Sp. z o.o.`;
 }
 
 export async function POST(request: NextRequest) {
@@ -281,6 +298,7 @@ export async function POST(request: NextRequest) {
     caregiverEmail: caregiver?.email || null,
   });
   const smsMessage = buildSmsMessage({
+    clientName: client.nazwa,
     periodLabel,
     obligations: preparedObligations,
   });
@@ -333,13 +351,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `${channelLabel} wysĹ‚ano, ale nie udaĹ‚o siÄ™ zapisaÄ‡ statusu wysyĹ‚ki.` }, { status: 502 });
     }
 
+    const obligationsWithSender = (updatedObligations || []).map((obligation) => payload.channel === "email"
+      ? { ...obligation, email_sent_by_name: auth.requesterName }
+      : { ...obligation, sms_sent_by_name: auth.requesterName }
+    );
+
     return NextResponse.json({
       ok: true,
       channel: payload.channel,
       sentAt,
       sentById: auth.requesterId,
       sentByName: auth.requesterName,
-      obligations: updatedObligations || [],
+      obligations: obligationsWithSender,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Nie udaĹ‚o siÄ™ poĹ‚Ä…czyÄ‡ z n8n.";

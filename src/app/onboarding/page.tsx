@@ -283,13 +283,6 @@ function OnboardingContent() {
               </div>
             </section>
 
-            <section style={drawerSectionStyle}>
-              <h3 style={drawerSectionTitleStyle}>Zadania onboardingowe</h3>
-              <div style={taskListStyle}>
-                {selectedRow.stages.map((stage) => <TaskRow key={stage.key} stage={stage} />)}
-              </div>
-            </section>
-
             {historyOpen && (
               <section ref={historySectionRef} style={drawerSectionStyle}>
                 <h3 style={drawerSectionTitleStyle}>Historia modyfikacji</h3>
@@ -577,16 +570,6 @@ function StageCard({
   );
 }
 
-function TaskRow({ stage }: { stage: OnboardingStage }) {
-  return (
-    <div style={taskRowStyle}>
-      <span style={stage.state === "done" ? taskDoneDotStyle : stage.state === "blocked" ? taskBlockedDotStyle : taskTodoDotStyle} />
-      <strong>{stage.title}</strong>
-      <StagePill stage={stage} />
-    </div>
-  );
-}
-
 const headerStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "24px", alignItems: "flex-start", marginBottom: "24px" };
 const eyebrowStyle: CSSProperties = { margin: "0 0 8px", color: colors.red, fontWeight: 850 };
 const titleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "42px", lineHeight: 1.05 };
@@ -631,10 +614,5 @@ const stageDescriptionStyle: CSSProperties = { margin: 0, color: colors.muted, l
 const stageActionsStyle: CSSProperties = { display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" };
 const smallButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.navy, padding: "8px 10px", fontWeight: 850, cursor: "pointer" };
 const dangerSmallButtonStyle: CSSProperties = { ...smallButtonStyle, background: "#fff1f2", color: colors.danger };
-const taskListStyle: CSSProperties = { display: "grid", gap: "9px" };
-const taskRowStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, padding: "12px", display: "grid", gridTemplateColumns: "auto 1fr auto", gap: "10px", alignItems: "center", color: colors.text };
-const taskDoneDotStyle: CSSProperties = { width: "11px", height: "11px", borderRadius: "999px", background: colors.success };
-const taskTodoDotStyle: CSSProperties = { width: "11px", height: "11px", borderRadius: "999px", background: "#f59e0b" };
-const taskBlockedDotStyle: CSSProperties = { width: "11px", height: "11px", borderRadius: "999px", background: colors.danger };
 const historyListStyle: CSSProperties = { display: "grid", gap: "10px" };
 const historyItemStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, padding: "12px", display: "grid", gap: "4px", color: colors.text };

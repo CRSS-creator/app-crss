@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+﻿import { NextRequest, NextResponse } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 const ALLOWED_ROLES = new Set(["owner", "manager", "admin", "accountant"]);
@@ -22,7 +22,7 @@ function getWebhookUrl() {
     return {
       webhookUrl: null,
       error: NextResponse.json(
-        { error: "Brak konfiguracji wysyłki zobowiązań. Uzupełnij N8N_TAX_OBLIGATIONS_WEBHOOK_URL." },
+        { error: "Brak konfiguracji wysyĹ‚ki zobowiÄ…zaĹ„. UzupeĹ‚nij N8N_TAX_OBLIGATIONS_WEBHOOK_URL." },
         { status: 500 }
       ),
     };
@@ -32,7 +32,7 @@ function getWebhookUrl() {
     return {
       webhookUrl: null,
       error: NextResponse.json(
-        { error: "W aplikacji ustawiony jest testowy webhook n8n. Użyj produkcyjnego adresu /webhook/... i aktywuj workflow w n8n." },
+        { error: "W aplikacji ustawiony jest testowy webhook n8n. UĹĽyj produkcyjnego adresu /webhook/... i aktywuj workflow w n8n." },
         { status: 500 }
       ),
     };
@@ -51,7 +51,7 @@ async function getAuthorizedUser(request: NextRequest): Promise<AuthorizedResult
 
   const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
   if (!token) {
-    return { admin: null, requesterId: null, role: null, error: NextResponse.json({ error: "Brak aktywnej sesji użytkownika." }, { status: 401 }) };
+    return { admin: null, requesterId: null, role: null, error: NextResponse.json({ error: "Brak aktywnej sesji uĹĽytkownika." }, { status: 401 }) };
   }
 
   const admin = createClient(supabaseUrl, serviceRoleKey, {
@@ -64,7 +64,7 @@ async function getAuthorizedUser(request: NextRequest): Promise<AuthorizedResult
   const { data: requesterData, error: requesterError } = await admin.auth.getUser(token);
   const requesterId = requesterData.user?.id;
   if (requesterError || !requesterId) {
-    return { admin: null, requesterId: null, role: null, error: NextResponse.json({ error: "Nie udało się potwierdzić sesji użytkownika." }, { status: 401 }) };
+    return { admin: null, requesterId: null, role: null, error: NextResponse.json({ error: "Nie udaĹ‚o siÄ™ potwierdziÄ‡ sesji uĹĽytkownika." }, { status: 401 }) };
   }
 
   const { data: profile } = await admin
@@ -74,15 +74,15 @@ async function getAuthorizedUser(request: NextRequest): Promise<AuthorizedResult
     .single();
 
   if (profile?.aktywne === false) {
-    return { admin: null, requesterId: null, role: null, error: NextResponse.json({ error: "Konto użytkownika jest nieaktywne." }, { status: 403 }) };
+    return { admin: null, requesterId: null, role: null, error: NextResponse.json({ error: "Konto uĹĽytkownika jest nieaktywne." }, { status: 403 }) };
   }
 
   const role = profile?.role || "";
   if (!ALLOWED_ROLES.has(role)) {
-    return { admin: null, requesterId: null, role: null, error: NextResponse.json({ error: "Brak uprawnień do wysyłki zobowiązań." }, { status: 403 }) };
+    return { admin: null, requesterId: null, role: null, error: NextResponse.json({ error: "Brak uprawnieĹ„ do wysyĹ‚ki zobowiÄ…zaĹ„." }, { status: 403 }) };
   }
 
-  return { admin, requesterId, requesterName: profile?.full_name || profile?.email || "Nieustalony użytkownik", role, error: null };
+  return { admin, requesterId, requesterName: profile?.full_name || profile?.email || "Nieustalony uĹĽytkownik", role, error: null };
 }
 
 function formatPeriod(period: string) {
@@ -113,12 +113,20 @@ function buildEmailHtml(input: {
   caregiverName: string | null;
   caregiverEmail: string | null;
 }) {
-  const rows = input.obligations.map((obligation) => `
-    <tr>
-      <td style="padding:12px;border-bottom:1px solid #e2e8f0;font-weight:800;color:#173B73;">${escapeHtml(obligation.name)}</td>
-      <td style="padding:12px;border-bottom:1px solid #e2e8f0;text-align:right;color:#26364f;font-weight:800;">${escapeHtml(obligation.amountLabel || "Do uzupełnienia")}</td>
-      <td style="padding:12px;border-bottom:1px solid #e2e8f0;text-align:right;color:#26364f;">${escapeHtml(obligation.dueDateLabel || "Do ustalenia")}</td>
-    </tr>
+  const obligationCards = input.obligations.map((obligation, index) => `
+    <div style="padding:${index === 0 ? "4px" : "16px"} 0 16px;border-bottom:${index === input.obligations.length - 1 ? "none" : "1px solid #dbe5f2"};">
+      <div style="margin:0 0 10px;color:#173B73;font-size:17px;font-weight:800;">${escapeHtml(obligation.name)}</div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;">
+        <div style="flex:1 1 180px;background:#ffffff;border:1px solid #c9d6e8;border-radius:12px;padding:12px;">
+          <div style="margin:0 0 6px;color:#43516a;font-size:13px;font-weight:700;">Kwota</div>
+          <div style="color:#173B73;font-size:20px;font-weight:850;">${escapeHtml(obligation.amountLabel || "Do uzupełnienia")}</div>
+        </div>
+        <div style="flex:1 1 180px;background:#ffffff;border:1px solid #c9d6e8;border-radius:12px;padding:12px;">
+          <div style="margin:0 0 6px;color:#43516a;font-size:13px;font-weight:700;">Termin płatności</div>
+          <div style="color:#173B73;font-size:20px;font-weight:850;">${escapeHtml(obligation.dueDateLabel || "Do ustalenia")}</div>
+        </div>
+      </div>
+    </div>
   `).join("");
 
   const caregiver = input.caregiverName || input.caregiverEmail
@@ -136,16 +144,10 @@ function buildEmailHtml(input: {
           <p style="margin:0 0 22px;font-size:16px;line-height:1.7;">
             przekazujemy informacje o zobowiązaniach publicznoprawnych za miesiąc <strong>${escapeHtml(input.periodLabel)}</strong>${input.clientName ? ` dla <strong>${escapeHtml(input.clientName)}</strong>` : ""}.
           </p>
-          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:separate;border-spacing:0;border:1px solid #c9d6e8;border-radius:14px;overflow:hidden;background:#ffffff;">
-            <thead>
-              <tr style="background:#eef3fb;">
-                <th align="left" style="padding:12px;color:#43516a;font-size:13px;">Zobowiązanie</th>
-                <th align="right" style="padding:12px;color:#43516a;font-size:13px;">Kwota</th>
-                <th align="right" style="padding:12px;color:#43516a;font-size:13px;">Termin</th>
-              </tr>
-            </thead>
-            <tbody>${rows}</tbody>
-          </table>
+          <div style="background:#eef3fb;border:1px solid #c9d6e8;border-radius:16px;padding:18px 20px;margin:0 0 22px;">
+            <div style="margin:0 0 12px;color:#43516a;font-size:13px;font-weight:800;">Zobowiązania do zapłaty</div>
+            ${obligationCards}
+          </div>
           ${caregiver}
           <p style="margin:24px 0 0;font-size:16px;line-height:1.7;">Pozdrawiamy serdecznie,<br><strong>Zespół CRSS</strong></p>
         </div>
@@ -154,7 +156,6 @@ function buildEmailHtml(input: {
     </div>
   `;
 }
-
 export async function POST(request: NextRequest) {
   const auth = await getAuthorizedUser(request);
   if (auth.error) return auth.error;
@@ -166,7 +167,7 @@ export async function POST(request: NextRequest) {
   try {
     payload = await request.json();
   } catch {
-    return NextResponse.json({ error: "Nieprawidłowe dane wysyłki." }, { status: 400 });
+    return NextResponse.json({ error: "NieprawidĹ‚owe dane wysyĹ‚ki." }, { status: 400 });
   }
 
   if (!payload.settlementId) {
@@ -174,7 +175,7 @@ export async function POST(request: NextRequest) {
   }
 
   if (payload.channel !== "email" && payload.channel !== "sms") {
-    return NextResponse.json({ error: "Wybierz kanał wysyłki: email albo sms." }, { status: 400 });
+    return NextResponse.json({ error: "Wybierz kanaĹ‚ wysyĹ‚ki: email albo sms." }, { status: 400 });
   }
 
   const { data: settlement, error: settlementError } = await auth.admin
@@ -204,19 +205,19 @@ export async function POST(request: NextRequest) {
 
   const client = Array.isArray(settlement.klienci) ? settlement.klienci[0] : settlement.klienci;
   if (!client) {
-    return NextResponse.json({ error: "Rozliczenie nie ma powiązanego klienta." }, { status: 400 });
+    return NextResponse.json({ error: "Rozliczenie nie ma powiÄ…zanego klienta." }, { status: 400 });
   }
 
   if (auth.role === "accountant" && client.opiekun_id !== auth.requesterId) {
-    return NextResponse.json({ error: "Możesz wysłać zobowiązania tylko dla swoich klientów." }, { status: 403 });
+    return NextResponse.json({ error: "MoĹĽesz wysĹ‚aÄ‡ zobowiÄ…zania tylko dla swoich klientĂłw." }, { status: 403 });
   }
 
   if (payload.channel === "email" && !client.email) {
-    return NextResponse.json({ error: "Klient nie ma uzupełnionego adresu e-mail." }, { status: 400 });
+    return NextResponse.json({ error: "Klient nie ma uzupeĹ‚nionego adresu e-mail." }, { status: 400 });
   }
 
   if (payload.channel === "sms" && !client.telefon) {
-    return NextResponse.json({ error: "Klient nie ma uzupełnionego numeru telefonu." }, { status: 400 });
+    return NextResponse.json({ error: "Klient nie ma uzupeĹ‚nionego numeru telefonu." }, { status: 400 });
   }
 
   let obligationsQuery = auth.admin
@@ -234,7 +235,7 @@ export async function POST(request: NextRequest) {
   const { data: obligations, error: obligationsError } = await obligationsQuery;
 
   if (obligationsError) {
-    return NextResponse.json({ error: "Nie udało się pobrać zobowiązań." }, { status: 500 });
+    return NextResponse.json({ error: "Nie udaĹ‚o siÄ™ pobraÄ‡ zobowiÄ…zaĹ„." }, { status: 500 });
   }
 
   const sendStatusColumn = payload.channel === "email" ? "status_email" : "status_sms";
@@ -244,7 +245,7 @@ export async function POST(request: NextRequest) {
     obligation[sendStatusColumn] !== "wyslane"
   );
   if (readyObligations.length === 0) {
-    return NextResponse.json({ error: "Brak nowych zobowiązań do wysłania tym kanałem." }, { status: 400 });
+    return NextResponse.json({ error: "Brak nowych zobowiÄ…zaĹ„ do wysĹ‚ania tym kanaĹ‚em." }, { status: 400 });
   }
 
   const caregiver = Array.isArray(client.profiles) ? client.profiles[0] : client.profiles;
@@ -259,7 +260,7 @@ export async function POST(request: NextRequest) {
     dueDate: obligation.termin_platnosci,
     dueDateLabel: formatDate(obligation.termin_platnosci),
   }));
-  const subject = `Informacja o zobowiązaniach publicznoprawnych za ${periodLabel}`;
+  const subject = `Zobowiązania publicznoprawne za ${periodLabel}${client.nazwa ? ` - ${client.nazwa}` : ""}`;
   const messageHtml = buildEmailHtml({
     clientName: client.nazwa,
     periodLabel,
@@ -296,7 +297,7 @@ export async function POST(request: NextRequest) {
 
     if (!response.ok) {
       const details = await response.text().catch(() => "");
-      const message = details ? `Automatyzacja zwróciła status ${response.status}: ${details}` : `Automatyzacja zwróciła status ${response.status}.`;
+      const message = details ? `Automatyzacja zwrĂłciĹ‚a status ${response.status}: ${details}` : `Automatyzacja zwrĂłciĹ‚a status ${response.status}.`;
       return NextResponse.json({ error: message }, { status: 502 });
     }
 
@@ -312,7 +313,7 @@ export async function POST(request: NextRequest) {
       .select("*");
 
     if (updateError) {
-      return NextResponse.json({ error: `${channelLabel} wysłano, ale nie udało się zapisać statusu wysyłki.` }, { status: 502 });
+      return NextResponse.json({ error: `${channelLabel} wysĹ‚ano, ale nie udaĹ‚o siÄ™ zapisaÄ‡ statusu wysyĹ‚ki.` }, { status: 502 });
     }
 
     return NextResponse.json({
@@ -324,7 +325,7 @@ export async function POST(request: NextRequest) {
       obligations: updatedObligations || [],
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Nie udało się połączyć z n8n.";
-    return NextResponse.json({ error: `Nie udało się połączyć z automatyzacją n8n: ${message}` }, { status: 502 });
+    const message = error instanceof Error ? error.message : "Nie udaĹ‚o siÄ™ poĹ‚Ä…czyÄ‡ z n8n.";
+    return NextResponse.json({ error: `Nie udaĹ‚o siÄ™ poĹ‚Ä…czyÄ‡ z automatyzacjÄ… n8n: ${message}` }, { status: 502 });
   }
 }

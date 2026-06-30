@@ -97,6 +97,64 @@ function formatCurrency(value: number | null) {
   return value === null || value === undefined ? null : new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN" }).format(value);
 }
 
+function escapeHtml(value: string | null | undefined) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function buildEmailHtml(input: {
+  clientName: string | null;
+  periodLabel: string;
+  obligations: Array<{ name: string; amountLabel: string | null; dueDateLabel: string | null }>;
+  caregiverName: string | null;
+  caregiverEmail: string | null;
+}) {
+  const rows = input.obligations.map((obligation) => `
+    <tr>
+      <td style="padding:12px;border-bottom:1px solid #e2e8f0;font-weight:800;color:#173B73;">${escapeHtml(obligation.name)}</td>
+      <td style="padding:12px;border-bottom:1px solid #e2e8f0;text-align:right;color:#26364f;font-weight:800;">${escapeHtml(obligation.amountLabel || "Do uzupełnienia")}</td>
+      <td style="padding:12px;border-bottom:1px solid #e2e8f0;text-align:right;color:#26364f;">${escapeHtml(obligation.dueDateLabel || "Do ustalenia")}</td>
+    </tr>
+  `).join("");
+
+  const caregiver = input.caregiverName || input.caregiverEmail
+    ? `<p style="margin:18px 0 0;color:#43516a;font-size:14px;line-height:1.6;">W razie pytań prosimy o kontakt z opiekunem: <strong>${escapeHtml(input.caregiverName || input.caregiverEmail)}</strong>${input.caregiverEmail ? `, ${escapeHtml(input.caregiverEmail)}` : ""}.</p>`
+    : "";
+
+  return `
+    <div style="margin:0;padding:0;background:#f6f8fb;font-family:Arial,sans-serif;color:#26364f;">
+      <div style="max-width:680px;margin:0 auto;padding:28px 18px;">
+        <div style="background:#ffffff;border:1px solid #c9d6e8;border-radius:18px;padding:28px;">
+          <div style="margin-bottom:24px;">
+            <img src="${APP_URL}/logo-crss-mail.png" alt="CRSS" style="height:54px;max-width:180px;display:block;">
+          </div>
+          <p style="margin:0 0 18px;font-size:16px;line-height:1.7;">Dzień dobry,</p>
+          <p style="margin:0 0 22px;font-size:16px;line-height:1.7;">
+            przekazujemy informacje o zobowiązaniach publicznoprawnych za miesiąc <strong>${escapeHtml(input.periodLabel)}</strong>${input.clientName ? ` dla <strong>${escapeHtml(input.clientName)}</strong>` : ""}.
+          </p>
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:separate;border-spacing:0;border:1px solid #c9d6e8;border-radius:14px;overflow:hidden;background:#ffffff;">
+            <thead>
+              <tr style="background:#eef3fb;">
+                <th align="left" style="padding:12px;color:#43516a;font-size:13px;">Zobowiązanie</th>
+                <th align="right" style="padding:12px;color:#43516a;font-size:13px;">Kwota</th>
+                <th align="right" style="padding:12px;color:#43516a;font-size:13px;">Termin</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+          ${caregiver}
+          <p style="margin:24px 0 0;font-size:16px;line-height:1.7;">Pozdrawiamy serdecznie,<br><strong>Zespół CRSS</strong></p>
+        </div>
+        <p style="margin:18px 4px 0;color:#8b96a8;font-size:13px;line-height:1.5;">Wiadomość wysłana automatycznie, prosimy na nią nie odpowiadać.</p>
+      </div>
+    </div>
+  `;
+}
+
 export async function POST(request: NextRequest) {
   const auth = await getAuthorizedUser(request);
   if (auth.error) return auth.error;
@@ -192,6 +250,23 @@ export async function POST(request: NextRequest) {
   const caregiver = Array.isArray(client.profiles) ? client.profiles[0] : client.profiles;
   const channelLabel = payload.channel === "email" ? "e-mail" : "SMS";
   const periodLabel = formatPeriod(settlement.okres);
+  const preparedObligations = readyObligations.map((obligation) => ({
+    id: obligation.id,
+    type: obligation.typ,
+    name: obligation.nazwa,
+    amount: Number(obligation.kwota),
+    amountLabel: formatCurrency(Number(obligation.kwota)),
+    dueDate: obligation.termin_platnosci,
+    dueDateLabel: formatDate(obligation.termin_platnosci),
+  }));
+  const subject = `Informacja o zobowiązaniach publicznoprawnych za ${periodLabel}`;
+  const messageHtml = buildEmailHtml({
+    clientName: client.nazwa,
+    periodLabel,
+    obligations: preparedObligations,
+    caregiverName: caregiver?.full_name || null,
+    caregiverEmail: caregiver?.email || null,
+  });
 
   try {
     const response = await fetch(webhookConfig.webhookUrl, {
@@ -208,16 +283,10 @@ export async function POST(request: NextRequest) {
         recipientPhone: client.telefon,
         period: settlement.okres,
         periodLabel,
-        subject: `Informacja o zobowiązaniach publicznoprawnych za ${periodLabel}`,
-        obligations: readyObligations.map((obligation) => ({
-          id: obligation.id,
-          type: obligation.typ,
-          name: obligation.nazwa,
-          amount: Number(obligation.kwota),
-          amountLabel: formatCurrency(Number(obligation.kwota)),
-          dueDate: obligation.termin_platnosci,
-          dueDateLabel: formatDate(obligation.termin_platnosci),
-        })),
+        subject,
+        messageHtml,
+        replyToEmail: caregiver?.email || null,
+        obligations: preparedObligations,
         caregiverName: caregiver?.full_name || null,
         caregiverEmail: caregiver?.email || null,
         requestedByName: auth.requesterName,

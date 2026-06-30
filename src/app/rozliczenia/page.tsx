@@ -347,22 +347,21 @@ function SettlementDrawer({ settlement, progress, recurringTasks, taxObligations
     setSendingTaxObligations(true);
     const updatedObligations: TaxObligation[] = [];
     const selectedObligations = taxObligations.filter((obligation) => selectedTaxObligationIds.includes(obligation.id));
-    const channels: ("email" | "sms")[] = [];
-    if (selectedObligations.some((obligation) => obligation.status_email !== "wyslane")) channels.push("email");
-    if (selectedObligations.some((obligation) => obligation.status_sms !== "wyslane")) channels.push("sms");
+    if (selectedObligations.every((obligation) => obligation.status_email === "wyslane")) {
+      setSendingTaxObligations(false);
+      alert("Zaznaczone zobowiązania zostały już wysłane e-mailem.");
+      return;
+    }
 
-    for (const channel of channels) {
-      const response = await sendTaxObligations(settlement.id, channel, selectedTaxObligationIds);
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        setSendingTaxObligations(false);
-        if (updatedObligations.length > 0) onTaxObligationsSent(updatedObligations);
-        alert(result.error || "Nie udało się wysłać informacji o zobowiązaniach.");
-        return;
-      }
-      if (Array.isArray(result.obligations)) {
-        updatedObligations.push(...(result.obligations as TaxObligation[]));
-      }
+    const response = await sendTaxObligations(settlement.id, "email", selectedTaxObligationIds);
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setSendingTaxObligations(false);
+      alert(result.error || "Nie udało się wysłać informacji o zobowiązaniach.");
+      return;
+    }
+    if (Array.isArray(result.obligations)) {
+      updatedObligations.push(...(result.obligations as TaxObligation[]));
     }
 
     setSendingTaxObligations(false);
@@ -444,7 +443,7 @@ function SettlementDrawer({ settlement, progress, recurringTasks, taxObligations
                   ))}
                   <div style={taxBulkActionsStyle}>
                     <span style={taxBulkHintStyle}>
-                      Zaznacz zobowiązania, które mają trafić do klienta e-mailem i SMS-em.
+                      Zaznacz zobowiązania, które mają trafić do klienta e-mailem.
                     </span>
                     <button
                       type="button"
@@ -452,7 +451,7 @@ function SettlementDrawer({ settlement, progress, recurringTasks, taxObligations
                       disabled={selectedTaxObligationIds.length === 0 || sendingTaxObligations}
                       onClick={requestTaxObligationSend}
                     >
-                      {sendingTaxObligations ? "Wysyłanie..." : `Wyślij zaznaczone (${selectedTaxObligationIds.length})`}
+                      {sendingTaxObligations ? "Wysyłanie..." : `Wyślij e-mail (${selectedTaxObligationIds.length})`}
                     </button>
                   </div>
                 </div>

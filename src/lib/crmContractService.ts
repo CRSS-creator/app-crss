@@ -111,7 +111,7 @@ export async function createCrmContract(payload: CrmContractPayload) {
     .single();
 }
 
-export async function updateCrmContract(contractId: string, payload: Partial<CrmContractPayload>) {
+export async function updateCrmContract(contractId: string, payload: Partial<CrmContractPayload>, options?: { startOnboarding?: boolean }) {
   const result = await supabase
     .from("crm_umowy")
     .update({ ...payload, updated_at: new Date().toISOString() })
@@ -122,7 +122,7 @@ export async function updateCrmContract(contractId: string, payload: Partial<Crm
   if (result.error || !result.data) return result;
 
   const contract = result.data as CrmContract;
-  if (contract.status === "podpisana" && contract.klient_id && !contract.onboarding_uruchomiony_at) {
+  if (options?.startOnboarding && contract.status === "podpisana" && contract.klient_id && !contract.onboarding_uruchomiony_at) {
     const onboardingResult = await startOnboardingFromSignedContract(contract.id);
     if (!onboardingResult.error && onboardingResult.data) {
       return onboardingResult;

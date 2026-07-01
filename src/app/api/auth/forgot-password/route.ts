@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 const APP_URL = "https://app.crss.com.pl";
+const LOGO_URL = `${APP_URL}/logo-crss-mail.png`;
 
 type Profile = {
   id: string;
@@ -20,6 +21,61 @@ function generateTemporaryPassword() {
 
 function normalizeEmail(email: unknown) {
   return typeof email === "string" ? email.trim().toLowerCase() : "";
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function buildTemporaryPasswordEmail(profile: Profile, temporaryPassword: string) {
+  const recipientName = escapeHtml(profile.full_name || profile.email || "Użytkowniku");
+  const recipientEmail = escapeHtml(profile.email || "");
+  const safePassword = escapeHtml(temporaryPassword);
+
+  return `
+<div style="margin:0;padding:0;background:#f6f8fb;font-family:Arial,sans-serif;color:#173b73;">
+  <div style="max-width:640px;margin:0 auto;padding:28px 18px;">
+    <div style="background:#ffffff;border:1px solid #c9d6e8;border-radius:18px;padding:28px;">
+      <div style="margin-bottom:24px;">
+        <img src="${LOGO_URL}" alt="CRSS" style="height:54px;max-width:180px;display:block;">
+      </div>
+
+      <p style="margin:0 0 18px 0;font-size:16px;line-height:1.55;color:#173b73;">Dzień dobry,</p>
+
+      <p style="margin:0 0 20px 0;font-size:16px;line-height:1.55;color:#173b73;">
+        otrzymaliśmy prośbę o reset hasła do aplikacji CRSS dla użytkownika
+        <strong>${recipientName}</strong>.
+      </p>
+
+      <div style="background:#eef3fb;border:1px solid #c9d6e8;border-radius:14px;padding:18px 20px;margin:22px 0;">
+        <p style="margin:0 0 10px 0;font-size:13px;font-weight:bold;color:#465675;">Dane logowania</p>
+        <p style="margin:0 0 12px 0;font-size:15px;line-height:1.5;color:#173b73;">
+          Login: <strong>${recipientEmail}</strong>
+        </p>
+        <p style="margin:0;font-size:15px;line-height:1.5;color:#173b73;">
+          Hasło tymczasowe:
+          <span style="display:inline-block;background:#ffffff;border:1px solid #c9d6e8;border-radius:10px;padding:8px 12px;font-size:18px;font-weight:bold;color:#173b73;">${safePassword}</span>
+        </p>
+      </div>
+
+      <p style="margin:0 0 22px 0;font-size:15px;line-height:1.55;color:#173b73;">
+        Po zalogowaniu system poprosi o ustawienie własnego hasła.
+      </p>
+
+      <p style="margin:0 0 6px 0;font-size:16px;line-height:1.55;color:#173b73;">Pozdrawiamy serdecznie,</p>
+      <p style="margin:0;font-size:16px;font-weight:bold;color:#173b73;">Zespół CRSS</p>
+    </div>
+
+    <p style="margin:18px 4px 0 4px;font-size:13px;line-height:1.45;color:#7c8799;">
+      Wiadomość wysłana automatycznie, prosimy na nią nie odpowiadać.
+    </p>
+  </div>
+</div>`.trim();
 }
 
 function temporaryPasswordWebhookUrl() {
@@ -44,9 +100,10 @@ async function sendTemporaryPasswordMail(profile: Profile, temporaryPassword: st
       role: profile.role,
       appUrl: APP_URL,
       subject: "Reset hasła do aplikacji CRSS",
+      html: buildTemporaryPasswordEmail(profile, temporaryPassword),
       template: {
         type: "temporary_password",
-        signatureSource: "n8n_html_template",
+        signatureSource: "app_html_template",
       },
     }),
   });

@@ -407,7 +407,7 @@ function buildStages(client: Client, accountingContract: CrmContract | null, rod
   const adminResponsible = profileByRoleLabel(profilesById, "admin", "Brak użytkownika admin");
   const caregiverResponsible = caregiverLabel(client);
 
-  return [
+  const stages: OnboardingStage[] = [
     {
       key: "contract",
       title: "Umowa księgowa",
@@ -427,12 +427,20 @@ function buildStages(client: Client, accountingContract: CrmContract | null, rod
       responsibleLabel: ownerResponsible,
     },
     buildManualStage("aml", "Do obsługi w module AML. Onboarding pokazuje status wykonania etapu.", recordByKey.aml, "/aml", "Przejdź do AML", undefined, undefined, adminResponsible),
-    buildManualStage("client_card", "Dane organizacyjne klienta potrzebne do rozpoczęcia obsługi w biurze.", recordByKey.client_card, undefined, undefined, "Wyślij e-mail", undefined, adminResponsible),
+  ];
+
+  if (isJdg(client.forma_prawna)) {
+    stages.push(buildManualStage("client_card", "Dane organizacyjne klienta potrzebne do rozpoczęcia obsługi w biurze.", recordByKey.client_card, undefined, undefined, "Wyślij e-mail", undefined, adminResponsible));
+  }
+
+  stages.push(
     buildManualStage("powers", "Instrukcje i pełnomocnictwa dotyczące ZUS oraz US.", recordByKey.powers, undefined, undefined, "Wyślij instrukcję e-mailem", undefined, adminResponsible),
     buildManualStage("wfirma_account", "Utworzenie konta klienta w systemie wFirma.", recordByKey.wfirma_account, undefined, undefined, undefined, undefined, adminResponsible),
     buildManualStage("wfirma", "Konfiguracja konta klienta i ustawień operacyjnych w systemie wFirma.", recordByKey.wfirma, undefined, undefined, "Szczegóły", undefined, caregiverResponsible),
     buildManualStage("documents_takeover", "Dokumenty i informacje potrzebne do przejęcia obsługi klienta.", recordByKey.documents_takeover, undefined, undefined, undefined, undefined, caregiverResponsible),
-  ];
+  );
+
+  return stages;
 }
 
 function buildManualStage(key: OnboardingStageKey, description: string, record?: OnboardingStageRecord, href?: string, moduleLabel?: string, actionLabel?: string, fullWidth?: boolean, responsibleLabel?: string): OnboardingStage {
@@ -542,6 +550,10 @@ function caregiverLabel(client: Client) {
   return profile?.full_name || profile?.email || "Brak opiekuna";
 }
 
+function isJdg(legalForm: string | null | undefined) {
+  return (legalForm || "").trim().toLowerCase() === "jdg";
+}
+
 function responsibleLabelForStage(stage: OnboardingStageKey) {
   if (stage === "contract" || stage === "rodo") return "Owner";
   if (stage === "aml" || stage === "client_card" || stage === "powers" || stage === "wfirma_account") return "Admin";
@@ -626,7 +638,7 @@ function StageCard({
       <p style={stageDescriptionStyle}>{stage.description}</p>
       <div style={stageActionsStyle}>
         {stage.href && <Link href={stage.href} style={secondaryButtonStyle}>{stage.moduleLabel || "Przejdź"}</Link>}
-        {stage.actionLabel && <button type="button" style={secondaryButtonStyle}>{stage.actionLabel}</button>}
+        {stage.actionLabel && <button type="button" style={stage.key === "client_card" ? primaryActionButtonStyle : secondaryButtonStyle}>{stage.actionLabel}</button>}
         {stage.editable && stage.record && (
           <>
             <button style={smallButtonStyle} disabled={saving} onClick={() => onStatusChange("w_toku")}>W toku</button>
@@ -664,6 +676,7 @@ const neutralPillStyle: CSSProperties = { ...pillBaseStyle, background: "rgba(23
 const progressShellStyle: CSSProperties = { position: "relative", width: "110px", height: "30px", borderRadius: radius.badge, background: "#eef2f7", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", color: colors.navy, fontWeight: 900, fontSize: "12px" };
 const progressBarStyle: CSSProperties = { position: "absolute", left: 0, top: 0, bottom: 0, background: "rgba(22, 163, 74, 0.18)" };
 const secondaryButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.navy, padding: "10px 13px", fontWeight: 850, cursor: "pointer", whiteSpace: "nowrap", textDecoration: "none", display: "inline-flex", alignItems: "center", justifyContent: "center" };
+const primaryActionButtonStyle: CSSProperties = { ...secondaryButtonStyle, borderColor: colors.red, background: colors.red, color: colors.white };
 const overlayStyle: CSSProperties = { position: "fixed", inset: 0, zIndex: 60, background: "rgba(15, 23, 42, 0.32)", display: "flex", justifyContent: "center", alignItems: "stretch", padding: "18px" };
 const drawerStyle: CSSProperties = { width: "min(1480px, 100%)", height: "calc(100vh - 36px)", background: colors.card, border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: "30px", overflowY: "auto", boxShadow: shadow.card };
 const drawerHeaderStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "flex-start", marginBottom: "18px" };

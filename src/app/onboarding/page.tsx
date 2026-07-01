@@ -115,6 +115,7 @@ function OnboardingContent() {
   const [loading, setLoading] = useState(true);
   const [savingStageId, setSavingStageId] = useState<string | null>(null);
   const [savingCaregiver, setSavingCaregiver] = useState(false);
+  const [sendingPowersInstructions, setSendingPowersInstructions] = useState(false);
   const [statusFilter, setStatusFilter] = useState("Wszystkie");
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -207,6 +208,36 @@ function OnboardingContent() {
 
     if (result.error) {
       alert("Nie udało się zapisać opiekuna księgowego.");
+      return;
+    }
+
+    await loadData();
+  }
+
+  async function handleStageAction(stage: OnboardingStage, row: OnboardingRow) {
+    if (stage.key !== "powers") return;
+
+    if (!row.client.email) {
+      alert("Klient nie ma uzupełnionego adresu e-mail.");
+      return;
+    }
+
+    setSendingPowersInstructions(true);
+    const sessionResult = await supabase.auth.getSession();
+    const token = sessionResult.data.session?.access_token;
+    const response = await fetch("/api/onboarding/powers-instructions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ clientId: row.client.id }),
+    });
+    setSendingPowersInstructions(false);
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => null);
+      alert(data?.error || "Nie udało się wysłać instrukcji pełnomocnictw.");
       return;
     }
 
@@ -330,8 +361,9 @@ function OnboardingContent() {
                   <StageCard
                     key={stage.key}
                     stage={stage}
-                    saving={savingStageId === stage.record?.id}
+                    saving={savingStageId === stage.record?.id || (stage.key === "powers" && sendingPowersInstructions)}
                     onStatusChange={(status) => handleStageStatusChange(stage, status)}
+                    onAction={() => handleStageAction(stage, selectedRow)}
                   />
                 ))}
               </div>
@@ -443,7 +475,7 @@ function buildStages(client: Client, accountingContract: CrmContract | null, rod
   }
 
   stages.push(
-    buildManualStage("powers", "Instrukcje i pełnomocnictwa dotyczące ZUS oraz US.", recordByKey.powers, undefined, undefined, "Wyślij instrukcję e-mailem", undefined, adminResponsible),
+    buildManualStage("powers", "Instrukcje i pełnomocnictwa dotyczące ZUS oraz US.", recordByKey.powers, undefined, undefined, "Wyślij instrukcje e-mailem", undefined, adminResponsible),
     buildManualStage("wfirma_account", "Utworzenie konta klienta w systemie wFirma.", recordByKey.wfirma_account, undefined, undefined, undefined, undefined, adminResponsible),
     buildManualStage("wfirma", "Konfiguracja konta klienta i ustawień operacyjnych w systemie wFirma.", recordByKey.wfirma, undefined, undefined, "Szczegóły", undefined, caregiverResponsible),
     buildManualStage("documents_takeover", "Dokumenty i informacje potrzebne do przejęcia obsługi klienta.", recordByKey.documents_takeover, undefined, undefined, undefined, undefined, caregiverResponsible),
@@ -632,10 +664,12 @@ function StageCard({
   stage,
   saving,
   onStatusChange,
+  onAction,
 }: {
   stage: OnboardingStage;
   saving: boolean;
   onStatusChange: (status: OnboardingStageStatus) => void;
+  onAction: () => void;
 }) {
   return (
     <div style={{ ...stageCardStyle, ...(stage.fullWidth ? stageFullWidthStyle : {}) }}>
@@ -647,7 +681,16 @@ function StageCard({
       <p style={stageDescriptionStyle}>{stage.description}</p>
       <div style={stageActionsStyle}>
         {stage.href && <Link href={stage.href} style={secondaryButtonStyle}>{stage.moduleLabel || "Przejdź"}</Link>}
-        {stage.actionLabel && <button type="button" style={stage.key === "client_card" ? primaryActionButtonStyle : secondaryButtonStyle}>{stage.actionLabel}</button>}
+        {stage.actionLabel && (
+          <button
+            type="button"
+            style={stage.key === "client_card" || stage.key === "powers" ? primaryActionButtonStyle : secondaryButtonStyle}
+            disabled={saving}
+            onClick={onAction}
+          >
+            {saving && stage.key === "powers" ? "Wysyłanie..." : stage.actionLabel}
+          </button>
+        )}
         {stage.editable && stage.record && (
           <>
             <button style={smallButtonStyle} disabled={saving} onClick={() => onStatusChange("w_toku")}>W toku</button>

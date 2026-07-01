@@ -112,6 +112,7 @@ function buildInstructionHtml(client: ClientWithCaregiver) {
         <p style="margin:0;"><strong>Numer telefonu:</strong> 600-950-940</p>
       </div>
       <p style="margin:0 0 16px 0;">Prosimy o przekazanie pełnomocnictw zgodnie z załączonymi instrukcjami.</p>
+      <p style="margin:0 0 16px 0;">Po złożeniu upoważnień prosimy o poinformowanie opiekuna księgowego.</p>
       <p style="margin:24px 0 0 0;">Pozdrawiamy serdecznie,<br><strong>Zespół CRSS</strong></p>
     </div>
     <p style="margin:18px 4px 0;color:#7a8598;font-size:13px;">Wiadomość wysłana automatycznie.</p>
@@ -212,18 +213,28 @@ export async function POST(request: NextRequest) {
 
     const { data: stage } = await auth.admin
       .from("onboarding_etapy")
-      .select("id")
+      .select("id, status")
       .eq("klient_id", clientRecord.id)
       .eq("etap", "powers")
       .maybeSingle();
+
+    if (stage?.id && stage.status !== "gotowe") {
+      await auth.admin
+        .from("onboarding_etapy")
+        .update({
+          status: "w_toku",
+          updated_by: auth.requesterId,
+        })
+        .eq("id", stage.id);
+    }
 
     await auth.admin.from("onboarding_historia").insert({
       klient_id: clientRecord.id,
       onboarding_etap_id: stage?.id || null,
       etap: "powers",
       akcja: "wysylka_instrukcji",
-      old_status: null,
-      new_status: null,
+      old_status: stage?.status || null,
+      new_status: stage?.status === "gotowe" ? "gotowe" : "w_toku",
       opis: `Wysłano instrukcje pełnomocnictw do klienta ${clientRecord.nazwa || "bez nazwy"}.`,
       created_by: auth.requesterId,
     });

@@ -73,6 +73,7 @@ type OnboardingStage = {
   actionLabel?: string;
   responsibleLabel: string;
   fullWidth?: boolean;
+  actionInfo?: string;
 };
 
 type HistoryEntry = {
@@ -420,7 +421,7 @@ function buildRows(
     const rodoContract = rodoContracts.find((contract) => matchesClient(client, contract.klient_id, contract.nip, contract.nazwa_klienta)) || null;
     const clientStages = onboardingStages.filter((stage) => stage.klient_id === client.id);
     const clientHistory = onboardingHistory.filter((entry) => entry.klient_id === client.id);
-    const stages = buildStages(client, accountingContract, rodoContract, clientStages, profilesById);
+    const stages = buildStages(client, accountingContract, rodoContract, clientStages, clientHistory, profilesById);
     const done = stages.filter((stage) => stage.state === "done").length;
     const progress = Math.round((done / stages.length) * 100);
     const nextStep = stages.find((stage) => stage.state !== "done")?.title || "Gotowy do obsługi";
@@ -439,7 +440,14 @@ function buildRows(
   }).sort((a, b) => a.progress - b.progress || (a.client.nazwa || "").localeCompare(b.client.nazwa || "", "pl"));
 }
 
-function buildStages(client: Client, accountingContract: CrmContract | null, rodoContract: RodoProcessingContract | null, records: OnboardingStageRecord[], profilesById: Record<string, Profile>): OnboardingStage[] {
+function buildStages(
+  client: Client,
+  accountingContract: CrmContract | null,
+  rodoContract: RodoProcessingContract | null,
+  records: OnboardingStageRecord[],
+  onboardingHistory: OnboardingHistoryRecord[],
+  profilesById: Record<string, Profile>
+): OnboardingStage[] {
   const recordByKey = records.reduce<Partial<Record<OnboardingStageKey, OnboardingStageRecord>>>((acc, record) => {
     acc[record.etap] = record;
     return acc;
@@ -475,7 +483,7 @@ function buildStages(client: Client, accountingContract: CrmContract | null, rod
   }
 
   stages.push(
-    buildManualStage("powers", "Instrukcje i pełnomocnictwa dotyczące ZUS oraz US.", recordByKey.powers, undefined, undefined, "Wyślij instrukcje e-mailem", undefined, adminResponsible),
+    buildManualStage("powers", "Instrukcje i pełnomocnictwa dotyczące ZUS oraz US.", recordByKey.powers, undefined, undefined, "Wyślij instrukcje e-mailem", undefined, adminResponsible, latestInstructionInfo(onboardingHistory, profilesById)),
     buildManualStage("wfirma_account", "Utworzenie konta klienta w systemie wFirma.", recordByKey.wfirma_account, undefined, undefined, undefined, undefined, adminResponsible),
     buildManualStage("wfirma", "Konfiguracja konta klienta i ustawień operacyjnych w systemie wFirma.", recordByKey.wfirma, undefined, undefined, "Szczegóły", undefined, caregiverResponsible),
     buildManualStage("documents_takeover", "Dokumenty i informacje potrzebne do przejęcia obsługi klienta.", recordByKey.documents_takeover, undefined, undefined, undefined, undefined, caregiverResponsible),
@@ -484,7 +492,7 @@ function buildStages(client: Client, accountingContract: CrmContract | null, rod
   return stages;
 }
 
-function buildManualStage(key: OnboardingStageKey, description: string, record?: OnboardingStageRecord, href?: string, moduleLabel?: string, actionLabel?: string, fullWidth?: boolean, responsibleLabel?: string): OnboardingStage {
+function buildManualStage(key: OnboardingStageKey, description: string, record?: OnboardingStageRecord, href?: string, moduleLabel?: string, actionLabel?: string, fullWidth?: boolean, responsibleLabel?: string, actionInfo?: string): OnboardingStage {
   return {
     key,
     title: stageLabel(key),
@@ -497,7 +505,18 @@ function buildManualStage(key: OnboardingStageKey, description: string, record?:
     actionLabel,
     responsibleLabel: responsibleLabel || responsibleLabelForStage(key),
     fullWidth,
+    actionInfo,
   };
+}
+
+function latestInstructionInfo(onboardingHistory: OnboardingHistoryRecord[], profilesById: Record<string, Profile>) {
+  const entry = onboardingHistory
+    .filter((item) => item.etap === "powers" && item.akcja === "wysylka_instrukcji")
+    .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())[0];
+
+  if (!entry) return undefined;
+
+  return `Instrukcje wysłane ${formatDateTime(entry.created_at)} przez ${profileLabel(entry.created_by, profilesById)}.`;
 }
 
 function buildHistory(
@@ -698,6 +717,7 @@ function StageCard({
           </>
         )}
       </div>
+      {stage.actionInfo && <small style={stageActionInfoStyle}>{stage.actionInfo}</small>}
     </div>
   );
 }
@@ -749,6 +769,7 @@ const stageTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize
 const responsibleStyle: CSSProperties = { color: colors.muted, fontSize: "13px", fontWeight: 800 };
 const stageDescriptionStyle: CSSProperties = { margin: 0, color: colors.muted, lineHeight: 1.5, fontWeight: 650 };
 const stageActionsStyle: CSSProperties = { display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" };
+const stageActionInfoStyle: CSSProperties = { color: colors.muted, fontSize: "12px", lineHeight: 1.45, fontWeight: 650 };
 const smallButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.navy, padding: "8px 10px", fontWeight: 850, cursor: "pointer" };
 const dangerSmallButtonStyle: CSSProperties = { ...smallButtonStyle, background: "#fff1f2", color: colors.danger };
 const historyListStyle: CSSProperties = { display: "grid", gap: "10px" };

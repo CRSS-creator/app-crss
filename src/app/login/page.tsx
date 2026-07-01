@@ -91,14 +91,7 @@ export default function LoginPage() {
           <img src="/logo-crss.svg" alt="CRSS" style={logoStyle} />
         </div>
 
-        <h1 style={titleStyle}>Jedno miejsce do zarządzania biurem rachunkowym</h1>
-
-        <p style={descriptionStyle}>
-          Autorski system CRSS porządkuje kluczowe obszary pracy biura: klientów,
-          rozliczenia miesięczne, statusy obsługi, rentowność oraz dane zarządcze.
-          To prywatne centrum decyzyjne, które pomaga szybciej reagować, lepiej
-          planować i mieć pełniejszy obraz działania firmy.
-        </p>
+        <h1 style={titleStyle}>Aplikacja CRSS</h1>
       </section>
 
       <section style={cardStyle}>

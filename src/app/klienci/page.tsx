@@ -153,6 +153,13 @@ function formatClientsCount(count: number) {
   return `${count} klientów`;
 }
 
+function sortClientsByName(first: Client, second: Client) {
+  return (first.nazwa || "").localeCompare(second.nazwa || "", "pl", {
+    sensitivity: "base",
+    numeric: true,
+  });
+}
+
 export default function ClientsPage() {
   return (
     <AppLayout activePage="klienci">
@@ -185,7 +192,7 @@ function ClientsContent({ currentRole }: { currentRole: UserRole | null }) {
     opodatkowanieFilter !== EMPTY_FILTER ||
     kadryFilter !== EMPTY_FILTER;
 
-const filteredClients = clients.filter((client) => {
+const filteredClients = [...clients].filter((client) => {
   const opiekunName =
     client.profiles?.[0]?.full_name ||
     client.profiles?.[0]?.email ||
@@ -236,7 +243,7 @@ const filteredClients = clients.filter((client) => {
     matchesOpodatkowanie &&
     matchesKadry
   );
-});
+}).sort(sortClientsByName);
   
 useEffect(() => {
     loadInitialData();

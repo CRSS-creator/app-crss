@@ -76,14 +76,14 @@ function SettlementsContent() {
     [progressRows]
   );
 
-  const visibleSettlements = settlements.filter((settlement) => {
+  const visibleSettlements = [...settlements].filter((settlement) => {
     const client = getClient(settlement.klienci);
     const query = searchQuery.trim().toLowerCase();
     const haystack = [client?.nazwa, client?.nip, getCaregiverName(client), settlement.uwagi].filter(Boolean).join(" ").toLowerCase();
     const matchesSearch = !query || haystack.includes(query);
     const matchesStatus = statusFilter === EMPTY_FILTER || settlement.status_ksiegowosci === statusFilter;
     return matchesSearch && matchesStatus;
-  });
+  }).sort(sortSettlementsByClientName);
 
   const avgProgress = settlements.length
     ? Math.round(settlements.reduce((sum, settlement) => sum + (progressBySettlement[settlement.id]?.progress || 0), 0) / settlements.length)
@@ -517,6 +517,15 @@ function Td({ children, strong }: { children: ReactNode; strong?: boolean }) { r
 
 function getClient(value: MonthlySettlement["klienci"]) { return Array.isArray(value) ? value[0] : value; }
 function getCaregiverName(client: ReturnType<typeof getClient>) { return client?.profiles?.[0]?.full_name || client?.profiles?.[0]?.email || "Brak opiekuna"; }
+function sortSettlementsByClientName(first: MonthlySettlement, second: MonthlySettlement) {
+  const firstClient = getClient(first.klienci);
+  const secondClient = getClient(second.klienci);
+
+  return (firstClient?.nazwa || "").localeCompare(secondClient?.nazwa || "", "pl", {
+    sensitivity: "base",
+    numeric: true,
+  });
+}
 function currentMonthInput() { 
   const today = new Date();
   const year = today.getMonth() === 0 ? today.getFullYear() - 1 : today.getFullYear();

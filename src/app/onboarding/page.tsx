@@ -699,7 +699,7 @@ function StageCard({
       <span style={responsibleStyle}>Odpowiedzialny: {stage.responsibleLabel}</span>
       <p style={stageDescriptionStyle}>{stage.description}</p>
       <div style={stageActionsStyle}>
-        {stage.href && <Link href={stage.href} style={secondaryButtonStyle}>{stage.moduleLabel || "Przejdź"}</Link>}
+        {stage.href && <Link href={stage.href} style={primaryActionButtonStyle}>{stage.moduleLabel || "Przejdź"}</Link>}
         {stage.actionLabel && (
           <button
             type="button"

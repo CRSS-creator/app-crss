@@ -100,6 +100,13 @@ const STATUSES = [
   { value: "wygrana", label: "Wygrana" },
   { value: "przegrana", label: "Przegrana" },
 ];
+const LEGAL_FORM_OPTIONS = [
+  { value: "", label: "Wybierz" },
+  { value: "JDG", label: "JDG" },
+  { value: "sp. z o.o.", label: "sp. z o.o." },
+  { value: "prosta spółka akcyjna", label: "prosta spółka akcyjna" },
+  { value: "organizacja", label: "organizacja" },
+];
 const STAGE_FILTER_OPTIONS = [{ value: EMPTY_FILTER, label: "Etap" }, ...PIPELINE_STAGES.map((stage) => ({ value: stage, label: PIPELINE_LABELS[stage] }))];
 const STATUS_FILTER_OPTIONS = [{ value: EMPTY_FILTER, label: "Status" }, ...STATUSES];
 const PAYROLL_FILTER_OPTIONS = [{ value: EMPTY_FILTER, label: "Kadry" }, { value: "Tak", label: "Tak" }, { value: "Nie", label: "Nie" }];
@@ -422,7 +429,7 @@ function LeadDrawer({ mode, lead, tasks, onClose, onCreated, onSaved, onDeleted,
           </FormSection>
 
           <FormSection title="Zakres obsługi">
-            <EditableInput label="Forma prawna" value={draft.forma_prawna} onChange={(value) => updateDraft("forma_prawna", value)} />
+            <EditableSelect label="Forma prawna" value={draft.forma_prawna} onChange={(value) => updateDraft("forma_prawna", value)} options={LEGAL_FORM_OPTIONS} />
             <EditableInput label="Liczba dokumentów" type="number" value={draft.liczba_dokumentow} onChange={(value) => updateDraft("liczba_dokumentow", value)} />
             <EditableInput label="Liczba transakcji" type="number" value={draft.liczba_transakcji} onChange={(value) => updateDraft("liczba_transakcji", value)} />
             <EditableCheckbox label="Kadry" checked={draft.czy_kadry} onChange={(value) => updateDraft("czy_kadry", value)} />

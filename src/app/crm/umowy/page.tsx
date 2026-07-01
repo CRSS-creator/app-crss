@@ -243,6 +243,14 @@ function ContractDrawer({ contract, leads, clients, onClose, onSaved, onDeleted 
     setDraft((current) => ({ ...current, [key]: value }));
   }
 
+  function updateContractType(type: CrmContractType) {
+    setDraft((current) => ({
+      ...current,
+      typ_umowy: type,
+      numer_umowy: replaceContractTypeInNumber(current.numer_umowy, type),
+    }));
+  }
+
   function fillFromLead(leadId: string) {
     updateDraft("crm_id", leadId);
     const lead = leads.find((item) => item.id === leadId);
@@ -275,7 +283,7 @@ function ContractDrawer({ contract, leads, clients, onClose, onSaved, onDeleted 
       abonament_netto: client.abonament ? String(client.abonament) : current.abonament_netto,
       limit_dokumentow: client.limit_dokumentow ? String(client.limit_dokumentow) : current.limit_dokumentow,
       obsluga_kadrowa: Boolean(client.obsluga_kadrowa),
-      typ_umowy: client.forma_opodatkowania === "CIT" || client.forma_prawna?.toLowerCase().includes("sp.") ? "KH" : current.typ_umowy,
+      ...resolveContractTypeDraftPatch(current, client),
     }));
   }
 
@@ -401,7 +409,7 @@ function ContractDrawer({ contract, leads, clients, onClose, onSaved, onDeleted 
           <FormSection title="Powiązanie">
             <SearchableLeadSelect label="Szansa CRM" value={draft.crm_id} leads={wonLeads} onChange={fillFromLead} />
             <SearchableClientSelect label="Klient" value={draft.klient_id} clients={clients} onChange={fillFromClient} />
-            <EditableSelect label="Typ umowy" value={draft.typ_umowy} onChange={(value) => updateDraft("typ_umowy", value as CrmContractType)} options={CONTRACT_TYPES.map((item) => ({ value: item.value, label: item.label }))} />
+            <EditableSelect label="Typ umowy" value={draft.typ_umowy} onChange={(value) => updateContractType(value as CrmContractType)} options={CONTRACT_TYPES.map((item) => ({ value: item.value, label: item.label }))} />
             <EditableSelect label="Status" value={draft.status} onChange={(value) => updateDraft("status", value as CrmContractStatus)} options={CONTRACT_STATUSES} />
           </FormSection>
 
@@ -498,6 +506,26 @@ function createDraft(contract: CrmContract): ContractDraft {
     obsluga_kadrowa: Boolean(contract.obsluga_kadrowa),
     ustalenia_indywidualne: contract.ustalenia_indywidualne || "",
   };
+}
+
+function resolveContractTypeDraftPatch(current: ContractDraft, client: Client): Pick<ContractDraft, "typ_umowy" | "numer_umowy"> {
+  const resolvedType: CrmContractType = client.forma_opodatkowania === "CIT" || client.forma_prawna?.toLowerCase().includes("sp.") ? "KH" : current.typ_umowy;
+  return {
+    typ_umowy: resolvedType,
+    numer_umowy: replaceContractTypeInNumber(current.numer_umowy, resolvedType),
+  };
+}
+
+function replaceContractTypeInNumber(contractNumber: string, type: CrmContractType) {
+  const year = new Date().getFullYear();
+  const fallback = `...../${type}/...../${year}`;
+  const value = contractNumber.trim() || fallback;
+
+  if (/(^|\/)(KH|KU)(\/|$)/i.test(value)) {
+    return value.replace(/(^|\/)(KH|KU)(\/|$)/i, `$1${type}$3`);
+  }
+
+  return fallback;
 }
 
 function emptyToNull(value: string) {

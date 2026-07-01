@@ -257,7 +257,6 @@ function KomunikatyContent() {
         <div>
           <p style={eyebrowStyle}>Moduł operacyjny</p>
           <h1 style={titleStyle}>Komunikaty</h1>
-          <p style={subtitleStyle}>Wysyłka zbiorczych wiadomości do wybranych grup klientów.</p>
         </div>
         <div style={summaryStyle}>
           <SummaryCard label="Wybrani" value={selectedIds.length} />

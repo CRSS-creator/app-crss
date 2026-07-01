@@ -397,7 +397,6 @@ function CsoContent() {
         <div>
           <p style={eyebrowStyle}>Zarządzanie</p>
           <h1 style={titleStyle}>CSO</h1>
-          <p style={subtitleStyle}>Planowanie tematów i notatek do materiałów marketingowych CRSS.</p>
         </div>
         <div style={headerStatsStyle}>
           <Summary label="Tematy" value={topics.length} />

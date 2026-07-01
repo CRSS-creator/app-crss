@@ -154,7 +154,6 @@ function RodoContent() {
         <div>
           <p style={eyebrowStyle}>RODO</p>
           <h1 style={titleStyle}>Umowy powierzenia</h1>
-          <p style={subtitleStyle}>Rejestr umów powierzenia przetwarzania danych osobowych, powiązany z klientami i umowami księgowymi.</p>
         </div>
         <button style={primaryButtonStyle} onClick={() => setCreatingContract(true)}>Dodaj umowę</button>
       </section>

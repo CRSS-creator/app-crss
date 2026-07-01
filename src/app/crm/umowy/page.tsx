@@ -197,7 +197,6 @@ function CrmContractsContent() {
         <div>
           <p style={eyebrowStyle}>CRM</p>
           <h1 style={titleStyle}>Umowy</h1>
-          <p style={subtitleStyle}>Rejestr umów, dane do szablonów DOCX, pliki PDF i status podpisu.</p>
         </div>
         <div style={headerActionsStyle}>
           <button style={primaryButtonStyle} onClick={() => setCreatingContract(true)}>Dodaj umowę</button>

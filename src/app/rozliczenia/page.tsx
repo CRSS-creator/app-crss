@@ -222,7 +222,6 @@ function SettlementsContent() {
         <div>
           <p style={eyebrowStyle}>Operacyjne</p>
           <h1 style={titleStyle}>Rozliczenia miesięczne</h1>
-          <p style={subtitleStyle}>Statusy księgowości, dokumenty, kadry, zadania cykliczne i czas pracy przypisany do klienta.</p>
         </div>
         <input style={monthInputStyle} type="month" value={period} onChange={(event) => setPeriod(event.target.value)} />
       </section>

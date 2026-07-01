@@ -227,7 +227,6 @@ function CrmContent() {
         <div>
           <p style={eyebrowStyle}>Moduł zarządczy</p>
           <h1 style={titleStyle}>CRM</h1>
-          <p style={subtitleStyle}>Szanse sprzedaży, pipeline, zadania, pliki i propozycje współpracy.</p>
         </div>
         <div style={headerActionsStyle}>
           <Link href="/crm/oferty" style={secondaryButtonStyle}>Propozycje współpracy</Link>

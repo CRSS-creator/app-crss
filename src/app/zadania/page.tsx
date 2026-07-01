@@ -189,7 +189,6 @@ function TasksContent({ currentRole }: { currentRole: UserRole | null }) {
         <div>
           <p style={eyebrowStyle}>Moduł operacyjny</p>
           <h1 style={titleStyle}>Zadania</h1>
-          <p style={subtitleStyle}>Zadania zespołu, terminy, notatki, dokumenty i rejestr czasu pracy przypisany do klienta albo spraw wewnętrznych.</p>
         </div>
         <button style={primaryButtonStyle} onClick={() => setCreatingTask(true)}>
           <Plus size={18} />

@@ -388,7 +388,6 @@ function OnboardingContent() {
         <div>
           <p style={eyebrowStyle}>Moduł operacyjny</p>
           <h1 style={titleStyle}>Onboarding</h1>
-          <p style={subtitleStyle}>Centrum koordynacji startu klienta. Umowy, RODO i AML pozostają osobnymi modułami, a onboarding zbiera statusy i kolejne kroki w jednym miejscu.</p>
         </div>
       </section>
 

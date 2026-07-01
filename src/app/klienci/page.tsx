@@ -300,10 +300,6 @@ return (
         <div>
           <p style={eyebrowStyle}>Moduł operacyjny</p>
           <h1 style={titleStyle}>Klienci</h1>
-          <p style={subtitleStyle}>
-            Lista klientów biura wraz z przypisanym opiekunem, formą prawną,
-            opodatkowaniem i obsługą kadrową.
-          </p>
         </div>
 
 {canManageClients && (

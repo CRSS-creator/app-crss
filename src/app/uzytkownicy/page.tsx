@@ -285,7 +285,6 @@ function SettingsContent() {
         <div>
           <p style={eyebrowStyle}>Administracja</p>
           <h1 style={titleStyle}>Ustawienia</h1>
-          <p style={subtitleStyle}>Szablony cykliczne, opłaty dodatkowe i użytkownicy aplikacji.</p>
         </div>
         <div style={summaryGridStyle}>
           <Summary label="Szablony" value={templates.length} />

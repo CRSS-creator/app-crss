@@ -17,10 +17,6 @@ export default function DashboardPage() {
           <div>
             <p style={eyebrowStyle}>Panel właściciela</p>
             <h1 style={titleStyle}>Dashboard CRSS</h1>
-            <p style={subtitleStyle}>
-              Centrum zarządzania biurem: klienci, rozliczenia, finanse,
-              rentowność i praca zespołu.
-            </p>
           </div>
         </header>
 

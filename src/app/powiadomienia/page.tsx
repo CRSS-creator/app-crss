@@ -67,7 +67,6 @@ function NotificationsContent() {
         <div>
           <p style={eyebrowStyle}>Aplikacja CRSS</p>
           <h1 style={titleStyle}>Powiadomienia</h1>
-          <p style={subtitleStyle}>Najważniejsze komunikaty z CRM i pracy operacyjnej.</p>
         </div>
         <button style={secondaryButtonStyle} onClick={markAllRead} disabled={unreadCount === 0}>Oznacz jako przeczytane</button>
       </section>

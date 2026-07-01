@@ -39,6 +39,7 @@ type Client = {
   email: string | null;
   forma_prawna: string | null;
   forma_opodatkowania: string | null;
+  obsluga_kadrowa: boolean | null;
   status_klienta: string | null;
   pierwszy_okres_rozliczeniowy: string | null;
   opiekun_id: string | null;
@@ -129,6 +130,7 @@ function OnboardingContent() {
   const [sendingCaregiverNotification, setSendingCaregiverNotification] = useState(false);
   const [sendingPowersInstructions, setSendingPowersInstructions] = useState(false);
   const [sendingWfirmaAccountNotification, setSendingWfirmaAccountNotification] = useState(false);
+  const [sendingDocumentsNotification, setSendingDocumentsNotification] = useState(false);
   const [savingChecklistId, setSavingChecklistId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState("Wszystkie");
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
@@ -291,6 +293,30 @@ function OnboardingContent() {
       if (!response.ok) {
         const data = await response.json().catch(() => null);
         alert(data?.error || "Nie udało się wysłać powiadomienia o koncie wFirma.");
+        return;
+      }
+
+      await loadData();
+      return;
+    }
+
+    if (stage.key === "documents_takeover") {
+      setSendingDocumentsNotification(true);
+      const sessionResult = await supabase.auth.getSession();
+      const token = sessionResult.data.session?.access_token;
+      const response = await fetch("/api/onboarding/documents-notification", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ clientId: row.client.id }),
+      });
+      setSendingDocumentsNotification(false);
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        alert(data?.error || "Nie udało się wysłać listy dokumentów.");
         return;
       }
 
@@ -481,7 +507,12 @@ function OnboardingContent() {
                   <StageCard
                     key={stage.key}
                     stage={stage}
-                    saving={savingStageId === stage.record?.id || (stage.key === "powers" && sendingPowersInstructions) || (stage.key === "wfirma_account" && sendingWfirmaAccountNotification)}
+                    saving={
+                      savingStageId === stage.record?.id ||
+                      (stage.key === "powers" && sendingPowersInstructions) ||
+                      (stage.key === "wfirma_account" && sendingWfirmaAccountNotification) ||
+                      (stage.key === "documents_takeover" && sendingDocumentsNotification)
+                    }
                     savingChecklistId={savingChecklistId}
                     checklistExpanded={Boolean(expandedChecklistStages[stage.record?.id || stage.key])}
                     onToggleChecklist={() => {
@@ -626,7 +657,17 @@ function buildStages(
       ...buildManualStage("wfirma", "Konfiguracja konta klienta i ustawień operacyjnych w systemie wFirma.", recordByKey.wfirma, undefined, undefined, undefined, undefined, caregiverResponsible),
       checklist: buildWfirmaChecklist(client.forma_prawna, recordByKey.wfirma),
     },
-    buildManualStage("documents_takeover", "Dokumenty i informacje potrzebne do przejęcia obsługi klienta.", recordByKey.documents_takeover, undefined, undefined, undefined, undefined, caregiverResponsible),
+    buildManualStage(
+      "documents_takeover",
+      "Dokumenty i informacje potrzebne do przejęcia obsługi klienta.",
+      recordByKey.documents_takeover,
+      undefined,
+      undefined,
+      "Wyślij listę dokumentów",
+      undefined,
+      caregiverResponsible,
+      latestDocumentsNotificationInfo(onboardingHistory, profilesById) || "Dokumenty klient powinien przesłać bezpośrednio do opiekuna księgowego."
+    ),
   );
 
   return stages;
@@ -723,6 +764,16 @@ function latestWfirmaAccountNotificationInfo(onboardingHistory: OnboardingHistor
   if (!entry) return undefined;
 
   return `Powiadomienie wysłane ${formatDateTime(entry.created_at)} przez ${profileLabel(entry.created_by, profilesById)}.`;
+}
+
+function latestDocumentsNotificationInfo(onboardingHistory: OnboardingHistoryRecord[], profilesById: Record<string, Profile>) {
+  const entry = onboardingHistory
+    .filter((item) => item.etap === "documents_takeover" && item.akcja === "wysylka_listy_dokumentow")
+    .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())[0];
+
+  if (!entry) return undefined;
+
+  return `Lista dokumentów wysłana ${formatDateTime(entry.created_at)} przez ${profileLabel(entry.created_by, profilesById)}.`;
 }
 
 function buildHistory(
@@ -950,11 +1001,11 @@ function StageCard({
         {stage.actionLabel && (
           <button
             type="button"
-            style={stage.key === "client_card" || stage.key === "powers" || stage.key === "wfirma_account" ? primaryActionButtonStyle : secondaryButtonStyle}
+            style={stage.key === "client_card" || stage.key === "powers" || stage.key === "wfirma_account" || stage.key === "documents_takeover" ? primaryActionButtonStyle : secondaryButtonStyle}
             disabled={saving}
             onClick={onAction}
           >
-            {saving && (stage.key === "powers" || stage.key === "wfirma_account") ? "Wysyłanie..." : stage.actionLabel}
+            {saving && (stage.key === "powers" || stage.key === "wfirma_account" || stage.key === "documents_takeover") ? "Wysyłanie..." : stage.actionLabel}
           </button>
         )}
         {stage.editable && stage.record && (

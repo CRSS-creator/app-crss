@@ -133,6 +133,7 @@ function OnboardingContent() {
   const [statusFilter, setStatusFilter] = useState("Wszystkie");
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [expandedChecklistStages, setExpandedChecklistStages] = useState<Record<string, boolean>>({});
   const historySectionRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
@@ -482,6 +483,11 @@ function OnboardingContent() {
                     stage={stage}
                     saving={savingStageId === stage.record?.id || (stage.key === "powers" && sendingPowersInstructions) || (stage.key === "wfirma_account" && sendingWfirmaAccountNotification)}
                     savingChecklistId={savingChecklistId}
+                    checklistExpanded={Boolean(expandedChecklistStages[stage.record?.id || stage.key])}
+                    onToggleChecklist={() => {
+                      const key = stage.record?.id || stage.key;
+                      setExpandedChecklistStages((current) => ({ ...current, [key]: !current[key] }));
+                    }}
                     onStatusChange={(status) => handleStageStatusChange(stage, status)}
                     onAction={() => handleStageAction(stage, selectedRow)}
                     onChecklistChange={(item, checked) => handleChecklistChange(stage, item, checked)}
@@ -883,6 +889,8 @@ function StageCard({
   stage,
   saving,
   savingChecklistId,
+  checklistExpanded,
+  onToggleChecklist,
   onStatusChange,
   onAction,
   onChecklistChange,
@@ -890,6 +898,8 @@ function StageCard({
   stage: OnboardingStage;
   saving: boolean;
   savingChecklistId: string | null;
+  checklistExpanded: boolean;
+  onToggleChecklist: () => void;
   onStatusChange: (status: OnboardingStageStatus) => void;
   onAction: () => void;
   onChecklistChange: (item: OnboardingChecklistItem, checked: boolean) => void;
@@ -905,6 +915,11 @@ function StageCard({
       <span style={responsibleStyle}>Odpowiedzialny: {stage.responsibleLabel}</span>
       <p style={stageDescriptionStyle}>{stage.description}</p>
       {stage.checklist && stage.checklist.length > 0 && (
+        <button type="button" style={checklistToggleStyle} onClick={onToggleChecklist}>
+          {checklistExpanded ? "Ukryj zadania" : "Pokaż zadania"}
+        </button>
+      )}
+      {stage.checklist && stage.checklist.length > 0 && checklistExpanded && (
         <div style={checklistStyle}>
           {checklistGroups.map((group) => (
             <div key={group.name} style={checklistGroupStyle}>
@@ -1015,6 +1030,7 @@ const responsibleStyle: CSSProperties = { color: colors.muted, fontSize: "13px",
 const stageDescriptionStyle: CSSProperties = { margin: 0, color: colors.muted, lineHeight: 1.5, fontWeight: 650 };
 const stageActionsStyle: CSSProperties = { display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" };
 const stageActionInfoStyle: CSSProperties = { color: colors.muted, fontSize: "12px", lineHeight: 1.45, fontWeight: 650 };
+const checklistToggleStyle: CSSProperties = { ...secondaryButtonStyle, alignSelf: "flex-start", padding: "8px 11px" };
 const checklistStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "12px", display: "grid", gap: "12px" };
 const checklistGroupStyle: CSSProperties = { display: "grid", gap: "8px" };
 const checklistGroupTitleStyle: CSSProperties = { color: colors.navy, fontSize: "13px" };

@@ -183,7 +183,8 @@ function OnboardingContent() {
   const filteredRows = rows.filter((row) => statusFilter === "Wszystkie" || row.status === statusFilter);
   const blockedCount = rows.filter((row) => row.status === "Czeka na formalności").length;
   const doneCount = rows.filter((row) => row.status === "Zakończony").length;
-  const canAssignCaregiver = (currentUserRole || "").toLowerCase() === "manager";
+  const currentRole = (currentUserRole || "").toLowerCase();
+  const canAssignCaregiver = currentRole === "manager" || currentRole === "owner";
 
   async function handleStageStatusChange(stage: OnboardingStage, status: OnboardingStageStatus) {
     if (!stage.record) return;
@@ -200,8 +201,8 @@ function OnboardingContent() {
   }
 
   async function handleCaregiverChange(client: Client, caregiverId: string) {
-    if ((currentUserRole || "").toLowerCase() !== "manager") {
-      alert("Opiekuna księgowego może ustawić tylko manager.");
+    if (!canAssignCaregiver) {
+      alert("Opiekuna księgowego może ustawić tylko owner albo manager.");
       return;
     }
 
@@ -218,8 +219,8 @@ function OnboardingContent() {
   }
 
   async function handleCaregiverNotification(row: OnboardingRow) {
-    if ((currentUserRole || "").toLowerCase() !== "manager") {
-      alert("Informację o opiekunie może wysłać tylko manager.");
+    if (!canAssignCaregiver) {
+      alert("Informację o opiekunie może wysłać tylko owner albo manager.");
       return;
     }
 

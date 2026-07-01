@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 const APP_URL = "https://app.crss.com.pl";
+const ALLOWED_ROLES = new Set(["owner", "manager"]);
 
 type AuthorizedResult =
   | { admin: SupabaseClient; requesterId: string; requesterName: string; role: string; error: null }
@@ -80,8 +81,8 @@ async function getAuthorizedUser(request: NextRequest): Promise<AuthorizedResult
   }
 
   const role = profile?.role || "";
-  if (role !== "manager") {
-    return { admin: null, requesterId: null, role: null, error: NextResponse.json({ error: "Informację o opiekunie może wysłać tylko manager." }, { status: 403 }) };
+  if (!ALLOWED_ROLES.has(role)) {
+    return { admin: null, requesterId: null, role: null, error: NextResponse.json({ error: "Informację o opiekunie może wysłać tylko owner albo manager." }, { status: 403 }) };
   }
 
   return { admin, requesterId, requesterName: profile?.full_name || profile?.email || "Nieustalony użytkownik", role, error: null };

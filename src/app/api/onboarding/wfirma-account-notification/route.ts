@@ -105,7 +105,7 @@ function buildNotificationHtml(client: ClientWithCaregiver) {
         <img src="${APP_URL}/logo-crss-mail.png?v=6" alt="CRSS" width="180" style="display:block;width:180px;max-width:180px;height:auto;border:0;outline:none;text-decoration:none;">
       </div>
       <p style="margin:0 0 16px 0;">Dzień dobry,</p>
-      <p style="margin:0 0 16px 0;">informujemy, że dla <strong>${clientName}</strong> zostało utworzone konto w systemie wFirma.</p>
+      <p style="margin:0 0 16px 0;">informujemy, że dla <strong>${clientName}</strong> zostało utworzone konto w systemie wFirma, na ten adres mailowy powinna przyjść informacja systemowa o utworzeniu konta przedsiębiorcy i konieczności ustawienia hasła.</p>
       <div style="background:#eef3fb;border:1px solid #c9d6e8;border-radius:14px;padding:18px;margin:24px 0;">
         <p style="margin:0 0 12px 0;font-weight:850;">Instrukcja KSeF</p>
         <p style="margin:0;">W załączeniu przesyłamy instrukcję integracji KSeF z wFirmą oraz informacje dotyczące uprawnień i certyfikatów.</p>

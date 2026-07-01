@@ -105,6 +105,40 @@ export async function updateOnboardingStageStatus(
   return updateResult;
 }
 
+export async function updateOnboardingStageNotes(
+  stage: OnboardingStageRecord,
+  notes: string,
+  description: string
+) {
+  const { data: userData } = await supabase.auth.getUser();
+  const userId = userData.user?.id || null;
+
+  const updateResult = await supabase
+    .from("onboarding_etapy")
+    .update({
+      uwagi: notes,
+      updated_by: userId,
+    })
+    .eq("id", stage.id)
+    .select("*")
+    .single();
+
+  if (updateResult.error) return updateResult;
+
+  await supabase.from("onboarding_historia").insert({
+    klient_id: stage.klient_id,
+    onboarding_etap_id: stage.id,
+    etap: stage.etap,
+    akcja: "aktualizacja_szczegolow",
+    old_status: stage.status,
+    new_status: stage.status,
+    opis: description,
+    created_by: userId,
+  });
+
+  return updateResult;
+}
+
 export function stageLabel(stage: OnboardingStageKey) {
   if (stage === "contract") return "Umowa księgowa";
   if (stage === "rodo") return "Umowa powierzenia";

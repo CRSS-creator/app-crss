@@ -16,6 +16,7 @@ import {
   fetchOnboardingStages,
   stageLabel,
   statusLabel,
+  updateOnboardingStageNotes,
   updateOnboardingStageStatus,
   type OnboardingHistoryRecord,
   type OnboardingStageKey,
@@ -74,6 +75,14 @@ type OnboardingStage = {
   responsibleLabel: string;
   fullWidth?: boolean;
   actionInfo?: string;
+  checklist?: OnboardingChecklistItem[];
+};
+
+type OnboardingChecklistItem = {
+  id: string;
+  label: string;
+  group?: string;
+  done: boolean;
 };
 
 type HistoryEntry = {
@@ -119,6 +128,7 @@ function OnboardingContent() {
   const [savingCaregiver, setSavingCaregiver] = useState(false);
   const [sendingCaregiverNotification, setSendingCaregiverNotification] = useState(false);
   const [sendingPowersInstructions, setSendingPowersInstructions] = useState(false);
+  const [savingChecklistId, setSavingChecklistId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState("Wszystkie");
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -286,6 +296,33 @@ function OnboardingContent() {
     await loadData();
   }
 
+  async function handleChecklistChange(stage: OnboardingStage, item: OnboardingChecklistItem, checked: boolean) {
+    if (!stage.record) return;
+
+    const nextState = {
+      ...parseStageNotes(stage.record.uwagi),
+      wfirmaChecklist: {
+        ...parseStageNotes(stage.record.uwagi).wfirmaChecklist,
+        [item.id]: checked,
+      },
+    };
+
+    setSavingChecklistId(`${stage.record.id}-${item.id}`);
+    const result = await updateOnboardingStageNotes(
+      stage.record,
+      JSON.stringify(nextState),
+      `${checked ? "Oznaczono jako wykonane" : "Odznaczono"} zadanie konfiguracji wFirma: ${item.label}.`
+    );
+    setSavingChecklistId(null);
+
+    if (result.error) {
+      alert("Nie udało się zapisać kroku konfiguracji wFirma.");
+      return;
+    }
+
+    await loadData();
+  }
+
   function openHistory() {
     setHistoryOpen(true);
     window.setTimeout(() => {
@@ -419,8 +456,10 @@ function OnboardingContent() {
                     key={stage.key}
                     stage={stage}
                     saving={savingStageId === stage.record?.id || (stage.key === "powers" && sendingPowersInstructions)}
+                    savingChecklistId={savingChecklistId}
                     onStatusChange={(status) => handleStageStatusChange(stage, status)}
                     onAction={() => handleStageAction(stage, selectedRow)}
+                    onChecklistChange={(item, checked) => handleChecklistChange(stage, item, checked)}
                   />
                 ))}
               </div>
@@ -542,7 +581,10 @@ function buildStages(
   stages.push(
     buildManualStage("powers", "Instrukcje i pełnomocnictwa dotyczące ZUS oraz US.", recordByKey.powers, undefined, undefined, "Wyślij instrukcje e-mailem", undefined, adminResponsible, latestInstructionInfo(onboardingHistory, profilesById)),
     buildManualStage("wfirma_account", "Utworzenie konta klienta w systemie wFirma.", recordByKey.wfirma_account, undefined, undefined, undefined, undefined, adminResponsible),
-    buildManualStage("wfirma", "Konfiguracja konta klienta i ustawień operacyjnych w systemie wFirma.", recordByKey.wfirma, undefined, undefined, "Szczegóły", undefined, caregiverResponsible),
+    {
+      ...buildManualStage("wfirma", "Konfiguracja konta klienta i ustawień operacyjnych w systemie wFirma.", recordByKey.wfirma, undefined, undefined, undefined, undefined, caregiverResponsible),
+      checklist: buildWfirmaChecklist(client.forma_prawna, recordByKey.wfirma),
+    },
     buildManualStage("documents_takeover", "Dokumenty i informacje potrzebne do przejęcia obsługi klienta.", recordByKey.documents_takeover, undefined, undefined, undefined, undefined, caregiverResponsible),
   );
 
@@ -565,6 +607,52 @@ function buildManualStage(key: OnboardingStageKey, description: string, record?:
     actionInfo,
   };
 }
+
+function buildWfirmaChecklist(legalForm: string | null | undefined, record?: OnboardingStageRecord): OnboardingChecklistItem[] {
+  const saved = parseStageNotes(record?.uwagi).wfirmaChecklist;
+  const tasks = isJdg(legalForm)
+    ? [...WFIRMA_COMMON_TASKS, ...WFIRMA_JDG_TASKS]
+    : [...WFIRMA_COMMON_TASKS, ...WFIRMA_FULL_BOOKS_TASKS];
+
+  return tasks.map((task) => ({
+    ...task,
+    done: Boolean(saved[task.id]),
+  }));
+}
+
+function parseStageNotes(value: string | null | undefined): { wfirmaChecklist: Record<string, boolean> } {
+  if (!value) return { wfirmaChecklist: {} };
+
+  try {
+    const parsed = JSON.parse(value) as { wfirmaChecklist?: Record<string, boolean> };
+    return { wfirmaChecklist: parsed.wfirmaChecklist || {} };
+  } catch {
+    return { wfirmaChecklist: {} };
+  }
+}
+
+const WFIRMA_COMMON_TASKS: Omit<OnboardingChecklistItem, "done">[] = [
+  { id: "start_date", label: "Ustaw datę rozpoczęcia księgowości w systemie.", group: "Wspólne" },
+  { id: "declarant_data", label: "Zmień dane osoby wysyłającej deklaracje: Mateusz Marcinkowski, tel. 600-950-940, e-mail: biuro@crss.com.pl.", group: "Wspólne" },
+  { id: "tax_microaccount", label: "Potwierdź mikrorachunek podatkowy oraz rachunek do składek ZUS.", group: "Wspólne" },
+  { id: "vat_scheme", label: "Ustaw schemat podatku VAT zgodnie ze statusem klienta.", group: "Wspólne" },
+  { id: "tax_office_permissions", label: "Ustaw urząd skarbowy i uprawnienia użytkownika: księgowanie, plik JPK, wydatki.", group: "Wspólne" },
+  { id: "bank_account", label: "Dodaj konto przedsiębiorcy i wyłącz możliwość księgowania.", group: "Wspólne" },
+];
+
+const WFIRMA_JDG_TASKS: Omit<OnboardingChecklistItem, "done">[] = [
+  { id: "zus_owner_scheme", label: "Ustaw schemat składek ZUS przedsiębiorcy.", group: "JDG" },
+  { id: "owner_basic_data", label: "Uzupełnij dane właściciela w Dane podstawowe -> Rodzaj firmy i właściciele.", group: "JDG" },
+];
+
+const WFIRMA_FULL_BOOKS_TASKS: Omit<OnboardingChecklistItem, "done">[] = [
+  { id: "fiscal_year", label: "Dodaj rok obrotowy.", group: "Pełne księgi" },
+  { id: "chart_of_accounts", label: "Dodaj plan kont.", group: "Pełne księgi" },
+  { id: "opening_balance", label: "Nanieś bilans otwarcia.", group: "Pełne księgi" },
+  { id: "advance_tax_schemes", label: "Zmodyfikuj schematy zaliczek na podatek dochodowy.", group: "Pełne księgi" },
+  { id: "balance_and_pl_schemes", label: "Zmodyfikuj schemat bilansu oraz RZiS.", group: "Pełne księgi" },
+  { id: "accounting_schemes", label: "Utwórz potrzebne schematy księgowe.", group: "Pełne księgi" },
+];
 
 function latestInstructionInfo(onboardingHistory: OnboardingHistoryRecord[], profilesById: Record<string, Profile>) {
   const entry = onboardingHistory
@@ -749,14 +837,20 @@ function StagePill({ stage }: { stage: OnboardingStage }) {
 function StageCard({
   stage,
   saving,
+  savingChecklistId,
   onStatusChange,
   onAction,
+  onChecklistChange,
 }: {
   stage: OnboardingStage;
   saving: boolean;
+  savingChecklistId: string | null;
   onStatusChange: (status: OnboardingStageStatus) => void;
   onAction: () => void;
+  onChecklistChange: (item: OnboardingChecklistItem, checked: boolean) => void;
 }) {
+  const checklistGroups = groupChecklist(stage.checklist || []);
+
   return (
     <div style={{ ...stageCardStyle, ...(stage.fullWidth ? stageFullWidthStyle : {}) }}>
       <div style={stageCardHeaderStyle}>
@@ -765,6 +859,32 @@ function StageCard({
       </div>
       <span style={responsibleStyle}>Odpowiedzialny: {stage.responsibleLabel}</span>
       <p style={stageDescriptionStyle}>{stage.description}</p>
+      {stage.checklist && stage.checklist.length > 0 && (
+        <div style={checklistStyle}>
+          {checklistGroups.map((group) => (
+            <div key={group.name} style={checklistGroupStyle}>
+              <strong style={checklistGroupTitleStyle}>{group.name}</strong>
+              <div style={checklistItemsStyle}>
+                {group.items.map((item) => {
+                  const itemSaving = savingChecklistId === `${stage.record?.id}-${item.id}`;
+                  return (
+                    <label key={item.id} style={checklistItemStyle}>
+                      <input
+                        type="checkbox"
+                        checked={item.done}
+                        disabled={saving || itemSaving || !stage.record}
+                        onChange={(event) => onChecklistChange(item, event.target.checked)}
+                        style={checklistCheckboxStyle}
+                      />
+                      <span>{item.label}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
       <div style={stageActionsStyle}>
         {stage.href && <Link href={stage.href} style={secondaryButtonStyle}>{stage.moduleLabel || "Przejdź"}</Link>}
         {stage.actionLabel && (
@@ -787,6 +907,16 @@ function StageCard({
       {stage.actionInfo && <small style={stageActionInfoStyle}>{stage.actionInfo}</small>}
     </div>
   );
+}
+
+function groupChecklist(items: OnboardingChecklistItem[]) {
+  return items.reduce<{ name: string; items: OnboardingChecklistItem[] }[]>((groups, item) => {
+    const name = item.group || "Pozostałe";
+    const existing = groups.find((group) => group.name === name);
+    if (existing) existing.items.push(item);
+    else groups.push({ name, items: [item] });
+    return groups;
+  }, []);
 }
 
 const headerStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "24px", alignItems: "flex-start", marginBottom: "24px" };
@@ -840,6 +970,12 @@ const responsibleStyle: CSSProperties = { color: colors.muted, fontSize: "13px",
 const stageDescriptionStyle: CSSProperties = { margin: 0, color: colors.muted, lineHeight: 1.5, fontWeight: 650 };
 const stageActionsStyle: CSSProperties = { display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" };
 const stageActionInfoStyle: CSSProperties = { color: colors.muted, fontSize: "12px", lineHeight: 1.45, fontWeight: 650 };
+const checklistStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "12px", display: "grid", gap: "12px" };
+const checklistGroupStyle: CSSProperties = { display: "grid", gap: "8px" };
+const checklistGroupTitleStyle: CSSProperties = { color: colors.navy, fontSize: "13px" };
+const checklistItemsStyle: CSSProperties = { display: "grid", gap: "8px" };
+const checklistItemStyle: CSSProperties = { display: "grid", gridTemplateColumns: "18px 1fr", gap: "9px", alignItems: "start", color: colors.text, fontSize: "13px", lineHeight: 1.45, fontWeight: 700 };
+const checklistCheckboxStyle: CSSProperties = { width: "16px", height: "16px", margin: "2px 0 0", accentColor: colors.navy };
 const smallButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.navy, padding: "8px 10px", fontWeight: 850, cursor: "pointer" };
 const dangerSmallButtonStyle: CSSProperties = { ...smallButtonStyle, background: "#fff1f2", color: colors.danger };
 const historyListStyle: CSSProperties = { display: "grid", gap: "10px" };

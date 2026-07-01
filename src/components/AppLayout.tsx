@@ -52,7 +52,7 @@ const menu = [
       { href: "/zadania", label: "Zadania", icon: ListTodo, page: "zadania" },
       { href: "/rozliczenia", label: "Rozliczenia", icon: BarChart3, page: "rozliczenia" },
       { href: "/komunikaty", label: "Komunikaty", icon: Megaphone, page: "komunikaty" },
-      { href: "/kadry", label: "Kadry i terminy", icon: CalendarClock, page: "kadry" },
+      { href: "/kadry", label: "Kadry i ZUS", icon: CalendarClock, page: "kadry" },
       { href: "/limity", label: "Limity", icon: TriangleAlert, page: "limity" },
       { href: "/onboarding", label: "Onboarding", icon: Rocket, page: "onboarding" },
       { href: "/zamykanie-roku", label: "Zamykanie roku", icon: FolderCheck, page: "zamykanie-roku" },

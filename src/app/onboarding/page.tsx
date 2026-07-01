@@ -379,7 +379,7 @@ function buildRows(
     const rodoContract = rodoContracts.find((contract) => matchesClient(client, contract.klient_id, contract.nip, contract.nazwa_klienta)) || null;
     const clientStages = onboardingStages.filter((stage) => stage.klient_id === client.id);
     const clientHistory = onboardingHistory.filter((entry) => entry.klient_id === client.id);
-    const stages = buildStages(client, accountingContract, rodoContract, clientStages);
+    const stages = buildStages(client, accountingContract, rodoContract, clientStages, profilesById);
     const done = stages.filter((stage) => stage.state === "done").length;
     const progress = Math.round((done / stages.length) * 100);
     const nextStep = stages.find((stage) => stage.state !== "done")?.title || "Gotowy do obsługi";
@@ -398,11 +398,14 @@ function buildRows(
   }).sort((a, b) => a.progress - b.progress || (a.client.nazwa || "").localeCompare(b.client.nazwa || "", "pl"));
 }
 
-function buildStages(client: Client, accountingContract: CrmContract | null, rodoContract: RodoProcessingContract | null, records: OnboardingStageRecord[]): OnboardingStage[] {
+function buildStages(client: Client, accountingContract: CrmContract | null, rodoContract: RodoProcessingContract | null, records: OnboardingStageRecord[], profilesById: Record<string, Profile>): OnboardingStage[] {
   const recordByKey = records.reduce<Partial<Record<OnboardingStageKey, OnboardingStageRecord>>>((acc, record) => {
     acc[record.etap] = record;
     return acc;
   }, {});
+  const ownerResponsible = profileByRoleLabel(profilesById, "owner", "Brak użytkownika owner");
+  const adminResponsible = profileByRoleLabel(profilesById, "admin", "Brak użytkownika admin");
+  const caregiverResponsible = caregiverLabel(client);
 
   return [
     {
@@ -412,7 +415,7 @@ function buildStages(client: Client, accountingContract: CrmContract | null, rod
       state: accountingContract?.status === "podpisana" || accountingContract?.podpisany_pdf_path ? "done" : accountingContract ? "progress" : "blocked",
       moduleLabel: "Przejdź do umów",
       href: "/crm/umowy",
-      responsibleLabel: "Owner",
+      responsibleLabel: ownerResponsible,
     },
     {
       key: "rodo",
@@ -421,18 +424,18 @@ function buildStages(client: Client, accountingContract: CrmContract | null, rod
       state: rodoContract?.status === "podpisana" || rodoContract?.podpisany_pdf_path ? "done" : rodoContract ? "progress" : "blocked",
       moduleLabel: "Przejdź do RODO",
       href: "/rodo",
-      responsibleLabel: "Owner",
+      responsibleLabel: ownerResponsible,
     },
-    buildManualStage("aml", "Do obsługi w module AML. Onboarding pokazuje status wykonania etapu.", recordByKey.aml, "/aml", "Przejdź do AML"),
-    buildManualStage("client_card", "Dane organizacyjne klienta potrzebne do rozpoczęcia obsługi w biurze.", recordByKey.client_card, undefined, undefined, "Wyślij e-mail"),
-    buildManualStage("powers", "Instrukcje i pełnomocnictwa dotyczące ZUS oraz US.", recordByKey.powers, undefined, undefined, "Wyślij instrukcję e-mailem"),
-    buildManualStage("wfirma_account", "Utworzenie konta klienta w systemie wFirma.", recordByKey.wfirma_account),
-    { ...buildManualStage("wfirma", "Konfiguracja konta klienta i ustawień operacyjnych w systemie wFirma.", recordByKey.wfirma, undefined, undefined, "Szczegóły", true), responsibleLabel: `Opiekun: ${caregiverLabel(client)}` },
-    { ...buildManualStage("documents_takeover", "Dokumenty i informacje potrzebne do przejęcia obsługi klienta.", recordByKey.documents_takeover), responsibleLabel: `Opiekun: ${caregiverLabel(client)}` },
+    buildManualStage("aml", "Do obsługi w module AML. Onboarding pokazuje status wykonania etapu.", recordByKey.aml, "/aml", "Przejdź do AML", undefined, undefined, adminResponsible),
+    buildManualStage("client_card", "Dane organizacyjne klienta potrzebne do rozpoczęcia obsługi w biurze.", recordByKey.client_card, undefined, undefined, "Wyślij e-mail", undefined, adminResponsible),
+    buildManualStage("powers", "Instrukcje i pełnomocnictwa dotyczące ZUS oraz US.", recordByKey.powers, undefined, undefined, "Wyślij instrukcję e-mailem", undefined, adminResponsible),
+    buildManualStage("wfirma_account", "Utworzenie konta klienta w systemie wFirma.", recordByKey.wfirma_account, undefined, undefined, undefined, undefined, adminResponsible),
+    buildManualStage("wfirma", "Konfiguracja konta klienta i ustawień operacyjnych w systemie wFirma.", recordByKey.wfirma, undefined, undefined, "Szczegóły", undefined, caregiverResponsible),
+    buildManualStage("documents_takeover", "Dokumenty i informacje potrzebne do przejęcia obsługi klienta.", recordByKey.documents_takeover, undefined, undefined, undefined, undefined, caregiverResponsible),
   ];
 }
 
-function buildManualStage(key: OnboardingStageKey, description: string, record?: OnboardingStageRecord, href?: string, moduleLabel?: string, actionLabel?: string, fullWidth?: boolean): OnboardingStage {
+function buildManualStage(key: OnboardingStageKey, description: string, record?: OnboardingStageRecord, href?: string, moduleLabel?: string, actionLabel?: string, fullWidth?: boolean, responsibleLabel?: string): OnboardingStage {
   return {
     key,
     title: stageLabel(key),
@@ -443,7 +446,7 @@ function buildManualStage(key: OnboardingStageKey, description: string, record?:
     href,
     moduleLabel,
     actionLabel,
-    responsibleLabel: responsibleLabelForStage(key),
+    responsibleLabel: responsibleLabel || responsibleLabelForStage(key),
     fullWidth,
   };
 }
@@ -526,6 +529,12 @@ function profileLabel(userId: string | null | undefined, profilesById: Record<st
   if (!userId) return "Brak danych o użytkowniku";
   const profile = profilesById[userId];
   return profile?.full_name || profile?.email || "Brak danych o użytkowniku";
+}
+
+function profileByRoleLabel(profilesById: Record<string, Profile>, role: string, fallback: string) {
+  const normalizedRole = role.toLowerCase();
+  const profile = Object.values(profilesById).find((item) => (item.role || "").toLowerCase() === normalizedRole && item.aktywne !== false);
+  return profile?.full_name || profile?.email || fallback;
 }
 
 function caregiverLabel(client: Client) {

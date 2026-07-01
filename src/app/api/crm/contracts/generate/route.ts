@@ -126,7 +126,7 @@ function buildTemplateFields(contract: CrmContract) {
 
   return {
     numer_umowy: contract.numer_umowy || "",
-    pierwszy_okres: contract.pierwszy_okres || "",
+    pierwszy_okres: formatMonthLabel(contract.pierwszy_okres),
     nazwa_klienta: contract.nazwa_klienta || "",
     siedziba: contract.siedziba || "",
     nip: contract.nip || "",
@@ -145,6 +145,31 @@ function formatTemplateValue(value: string | number | null | undefined) {
   if (value === null || value === undefined) return "";
   return String(value);
 }
+
+function formatMonthLabel(value: string | null | undefined) {
+  if (!value) return "";
+  const trimmed = value.trim();
+  const match = trimmed.match(/^(\d{4})-(\d{2})(?:-\d{2})?$/);
+  if (!match) return trimmed;
+
+  const month = POLISH_MONTH_LABELS[match[2]];
+  return month ? `${month} ${match[1]}` : trimmed;
+}
+
+const POLISH_MONTH_LABELS: Record<string, string> = {
+  "01": "styczeń",
+  "02": "luty",
+  "03": "marzec",
+  "04": "kwiecień",
+  "05": "maj",
+  "06": "czerwiec",
+  "07": "lipiec",
+  "08": "sierpień",
+  "09": "wrzesień",
+  "10": "październik",
+  "11": "listopad",
+  "12": "grudzień",
+};
 
 async function convertDocxToPdf(docxPath: string, outputDir: string) {
   const args = ["--headless", "--convert-to", "pdf", "--outdir", outputDir, docxPath];

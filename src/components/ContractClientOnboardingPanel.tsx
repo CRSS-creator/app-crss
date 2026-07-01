@@ -24,6 +24,7 @@ type ClientOnboardingDraft = {
   vat_ue: boolean;
   schemat_zus: string;
   model_fakturowania: string;
+  pierwszy_okres_rozliczeniowy: string;
   ostatni_okres_rozliczeniowy: string;
   koszt_obslugi_pracownika: string;
   koszt_obslugi_zleceniobiorcy: string;
@@ -106,10 +107,10 @@ export default function ContractClientOnboardingPanel({ contract, onCreated }: P
       czynny_vat: draft.czynny_vat,
       vat_ue: draft.vat_ue,
       schemat_zus: isDraftJdg ? emptyToNull(draft.schemat_zus) : null,
-      model_fakturowania: draft.model_fakturowania || "z_dolu",
+      model_fakturowania: draft.model_fakturowania || "z_gory",
       abonament: contract.abonament_netto ?? null,
       limit_dokumentow: contract.limit_dokumentow ?? null,
-      pierwszy_okres_rozliczeniowy: normalizeMonth(monthInputFromText(contract.pierwszy_okres)),
+      pierwszy_okres_rozliczeniowy: normalizeMonth(draft.pierwszy_okres_rozliczeniowy),
       ostatni_okres_rozliczeniowy: normalizeMonth(draft.ostatni_okres_rozliczeniowy),
       koszt_obslugi_pracownika: numberOrNull(draft.koszt_obslugi_pracownika),
       koszt_obslugi_zleceniobiorcy: numberOrNull(draft.koszt_obslugi_zleceniobiorcy),
@@ -163,6 +164,7 @@ export default function ContractClientOnboardingPanel({ contract, onCreated }: P
         <SelectField label="Status klienta" value={draft.status_klienta} onChange={(value) => updateDraft("status_klienta", value)} options={CLIENT_STATUSES.map((status) => ({ value: status, label: status }))} />
         {isDraftJdg && <SelectField label="Schemat ZUS" value={draft.schemat_zus} onChange={(value) => updateDraft("schemat_zus", value)} options={ZUS_OPTIONS.map((option) => ({ value: option, label: option || "Do uzupełnienia" }))} />}
         <SelectField label="Schemat płatności faktury" value={draft.model_fakturowania} onChange={(value) => updateDraft("model_fakturowania", value)} options={BILLING_MODEL_OPTIONS} />
+        <TextField label="Pierwszy okres" type="month" value={draft.pierwszy_okres_rozliczeniowy} onChange={(value) => updateDraft("pierwszy_okres_rozliczeniowy", value)} />
         <TextField label="Ostatni okres" type="month" value={draft.ostatni_okres_rozliczeniowy} onChange={(value) => updateDraft("ostatni_okres_rozliczeniowy", value)} />
         <TextField label="Koszt pracownika" type="number" value={draft.koszt_obslugi_pracownika} onChange={(value) => updateDraft("koszt_obslugi_pracownika", value)} />
         <TextField label="Koszt zleceniobiorcy" type="number" value={draft.koszt_obslugi_zleceniobiorcy} onChange={(value) => updateDraft("koszt_obslugi_zleceniobiorcy", value)} />
@@ -187,7 +189,8 @@ function createEmptyDraft(contract: CrmContract): ClientOnboardingDraft {
     czynny_vat: false,
     vat_ue: false,
     schemat_zus: "",
-    model_fakturowania: "z_dolu",
+    model_fakturowania: "z_gory",
+    pierwszy_okres_rozliczeniowy: monthInputFromText(contract.pierwszy_okres),
     ostatni_okres_rozliczeniowy: "",
     koszt_obslugi_pracownika: "",
     koszt_obslugi_zleceniobiorcy: "",

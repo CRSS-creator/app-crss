@@ -79,6 +79,48 @@ const CONTRACT_STATUSES: { value: CrmContractStatus; label: string }[] = [
 ];
 const CONTRACT_STATUS_FILTER_OPTIONS = [{ value: "Wszystkie", label: "Wszystkie statusy" }, ...CONTRACT_STATUSES];
 
+const POLISH_MONTHS: Record<string, string> = {
+  styczeń: "01",
+  stycznia: "01",
+  luty: "02",
+  lutego: "02",
+  marzec: "03",
+  marca: "03",
+  kwiecień: "04",
+  kwietnia: "04",
+  maj: "05",
+  maja: "05",
+  czerwiec: "06",
+  czerwca: "06",
+  lipiec: "07",
+  lipca: "07",
+  sierpień: "08",
+  sierpnia: "08",
+  wrzesień: "09",
+  września: "09",
+  październik: "10",
+  października: "10",
+  listopad: "11",
+  listopada: "11",
+  grudzień: "12",
+  grudnia: "12",
+};
+
+const POLISH_MONTH_LABELS: Record<string, string> = {
+  "01": "styczeń",
+  "02": "luty",
+  "03": "marzec",
+  "04": "kwiecień",
+  "05": "maj",
+  "06": "czerwiec",
+  "07": "lipiec",
+  "08": "sierpień",
+  "09": "wrzesień",
+  "10": "październik",
+  "11": "listopad",
+  "12": "grudzień",
+};
+
 export default function CrmContractsPage() {
   return (
     <AppLayout activePage="umowy">
@@ -304,7 +346,7 @@ function ContractDrawer({ contract, leads, clients, onClose, onSaved, onDeleted 
       numer_umowy: emptyToNull(draft.numer_umowy),
       data_zawarcia: null,
       miejsce_zawarcia: null,
-      pierwszy_okres: emptyToNull(draft.pierwszy_okres),
+      pierwszy_okres: emptyToNull(monthInputToPolishLabel(draft.pierwszy_okres)),
       nazwa_klienta: draft.nazwa_klienta.trim(),
       siedziba: emptyToNull(draft.siedziba),
       rejestr: null,
@@ -417,7 +459,7 @@ function ContractDrawer({ contract, leads, clients, onClose, onSaved, onDeleted 
 
           <FormSection title="Dane umowy">
             <EditableInput label="Numer umowy" value={draft.numer_umowy} onChange={(value) => updateDraft("numer_umowy", value)} />
-            <EditableInput label="Pierwszy okres" value={draft.pierwszy_okres} onChange={(value) => updateDraft("pierwszy_okres", value)} />
+            <EditableInput label="Pierwszy okres" type="month" value={draft.pierwszy_okres} onChange={(value) => updateDraft("pierwszy_okres", value)} />
           </FormSection>
 
           <FormSection title="Dane klienta">
@@ -511,7 +553,7 @@ function createDraft(contract: CrmContract): ContractDraft {
     typ_umowy: contract.typ_umowy,
     status: contract.status,
     numer_umowy: contract.numer_umowy || "",
-    pierwszy_okres: contract.pierwszy_okres || "",
+    pierwszy_okres: monthInputFromText(contract.pierwszy_okres),
     nazwa_klienta: contract.nazwa_klienta || "",
     siedziba: contract.siedziba || "",
     nip: contract.nip || "",
@@ -542,6 +584,27 @@ function replaceContractTypeInNumber(contractNumber: string, type: CrmContractTy
   }
 
   return fallback;
+}
+
+function monthInputFromText(value: string | null) {
+  if (!value) return "";
+  const trimmed = value.trim();
+  if (/^\d{4}-\d{2}/.test(trimmed)) return trimmed.slice(0, 7);
+
+  const match = trimmed.toLowerCase().match(/^([a-ząćęłńóśźż]+)\s+(\d{4})$/);
+  if (!match) return "";
+
+  const month = POLISH_MONTHS[match[1]];
+  return month ? `${match[2]}-${month}` : "";
+}
+
+function monthInputToPolishLabel(value: string) {
+  if (!value) return "";
+  const match = value.match(/^(\d{4})-(\d{2})$/);
+  if (!match) return value;
+
+  const month = POLISH_MONTH_LABELS[match[2]];
+  return month ? `${month} ${match[1]}` : value;
 }
 
 function emptyToNull(value: string) {
@@ -591,7 +654,7 @@ function FormSection({ title, children }: { title: string; children: React.React
   return <section style={drawerSectionStyle}><h3 style={formSectionTitleStyle}>{title}</h3>{children}</section>;
 }
 
-function EditableInput({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (value: string) => void; type?: "text" | "number" | "email" }) {
+function EditableInput({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (value: string) => void; type?: "text" | "number" | "email" | "month" }) {
   return <label style={editableRowStyle}><span>{label}</span><input type={type} value={value} onChange={(event) => onChange(event.target.value)} style={inputStyle} /></label>;
 }
 

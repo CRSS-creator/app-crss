@@ -164,7 +164,7 @@ function OnboardingContent() {
 
     if (caregiversResult.error) console.error("Nie udało się pobrać opiekunów do onboardingu:", caregiversResult.error);
 
-    const onboardingClientIds = findOnboardingClientIds(nextClients, nextContracts, nextRodoContracts);
+    const onboardingClientIds = findOnboardingClientIds(nextClients, nextContracts);
     if (onboardingClientIds.length > 0) {
       await Promise.all(onboardingClientIds.map((clientId) => ensureClientOnboarding(clientId)));
     }
@@ -401,7 +401,7 @@ function OnboardingContent() {
         <div style={tableHeaderStyle}>
           <div>
             <h2 style={sectionTitleStyle}>Klienci w onboardingu</h2>
-            <p style={hintStyle}>Lista pokazuje klientów ze statusem onboarding lub z powiązanymi umowami startowymi.</p>
+            <p style={hintStyle}>Lista pokazuje klientów ze statusem onboarding lub z umową, która uruchomiła proces onboardingu.</p>
           </div>
           <AppSelect style={filterStyle} value={statusFilter} options={STATUS_FILTER_OPTIONS} onChange={setStatusFilter} />
         </div>
@@ -563,13 +563,14 @@ function OnboardingContent() {
   );
 }
 
-function findOnboardingClientIds(clients: Client[], contracts: CrmContract[], rodoContracts: RodoProcessingContract[]) {
+function findOnboardingClientIds(clients: Client[], contracts: CrmContract[]) {
   return clients
     .filter((client) => {
       const status = normalize(client.status_klienta);
-      const hasContract = contracts.some((contract) => matchesClient(client, contract.klient_id, contract.nip, contract.nazwa_klienta));
-      const hasRodoContract = rodoContracts.some((contract) => matchesClient(client, contract.klient_id, contract.nip, contract.nazwa_klienta));
-      return status === "onboarding" || hasContract || hasRodoContract;
+      const hasStartedContractOnboarding = contracts.some((contract) => (
+        Boolean(contract.onboarding_uruchomiony_at) && matchesClient(client, contract.klient_id, contract.nip, contract.nazwa_klienta)
+      ));
+      return status === "onboarding" || hasStartedContractOnboarding;
     })
     .map((client) => client.id);
 }
@@ -582,7 +583,7 @@ function buildRows(
   onboardingHistory: OnboardingHistoryRecord[],
   profilesById: Record<string, Profile>
 ): OnboardingRow[] {
-  const onboardingClientIds = new Set(findOnboardingClientIds(clients, contracts, rodoContracts));
+  const onboardingClientIds = new Set(findOnboardingClientIds(clients, contracts));
   const onboardingClients = clients.filter((client) => onboardingClientIds.has(client.id));
 
   return onboardingClients.map((client) => {

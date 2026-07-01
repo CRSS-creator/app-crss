@@ -238,6 +238,8 @@ function ContractDrawer({ contract, leads, clients, onClose, onSaved, onDeleted 
   const [uploading, setUploading] = useState(false);
 
   const wonLeads = useMemo(() => leads.filter((lead) => lead.status === "wygrana"), [leads]);
+  const shouldShowClientCreation = draft.status === "podpisana" && !draft.klient_id;
+  const hasSavedSignedContract = Boolean(contract && contract.status === "podpisana" && !contract.klient_id);
 
   function updateDraft<K extends keyof ContractDraft>(key: K, value: ContractDraft[K]) {
     setDraft((current) => ({ ...current, [key]: value }));
@@ -426,8 +428,22 @@ function ContractDrawer({ contract, leads, clients, onClose, onSaved, onDeleted 
             <EditableInput label="Email klienta" type="email" value={draft.email_klienta} onChange={(value) => updateDraft("email_klienta", value)} />
           </FormSection>
 
-          {contract && contract.status === "podpisana" && !contract.klient_id && (
+          {shouldShowClientCreation && hasSavedSignedContract && contract && (
             <ContractClientOnboardingPanel contract={contract} onCreated={(updatedContract) => onSaved(updatedContract)} />
+          )}
+
+          {shouldShowClientCreation && !hasSavedSignedContract && (
+            <FormSection title="Utworzenie klienta">
+              <div style={clientCreationPromptStyle}>
+                <div>
+                  <strong>Umowa musi być najpierw zapisana jako podpisana.</strong>
+                  <p>Po zapisie pojawi się formularz uzupełnienia danych operacyjnych klienta i uruchomienia onboardingu.</p>
+                </div>
+                <button style={primarySmallButtonStyle} onClick={() => saveContract("podpisana")} disabled={saving}>
+                  {saving ? "Zapisywanie..." : "Zapisz i dodaj klienta"}
+                </button>
+              </div>
+            </FormSection>
           )}
 
           <FormSection title="Warunki finansowe">
@@ -744,6 +760,7 @@ const closeButtonStyle: React.CSSProperties = { width: "40px", height: "40px", b
 const drawerContentStyle: React.CSSProperties = { display: "flex", flexDirection: "column", gap: "18px" };
 const drawerSectionStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: "20px", background: colors.white };
 const formSectionTitleStyle: React.CSSProperties = { margin: "0 0 12px", color: colors.navy, fontSize: "18px", fontWeight: 500 };
+const clientCreationPromptStyle: React.CSSProperties = { display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "center", border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "16px", background: colors.inputBackground, color: colors.navy };
 const editableRowStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "190px 1fr", gap: "14px", alignItems: "center", padding: "10px 0", borderBottom: `1px solid ${colors.border}`, color: colors.muted, fontWeight: 700 };
 const textareaRowStyle: React.CSSProperties = { display: "flex", flexDirection: "column", gap: "8px", color: colors.muted, fontWeight: 700 };
 const inputStyle: React.CSSProperties = { width: "100%", border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "10px 12px", background: colors.inputBackground, color: colors.text, fontWeight: 650, outline: "none" };

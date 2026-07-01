@@ -92,6 +92,7 @@ type OnboardingRow = {
   nextStep: string;
   status: string;
   history: HistoryEntry[];
+  caregiverNotificationInfo?: string;
 };
 
 export default function OnboardingPage() {
@@ -116,6 +117,7 @@ function OnboardingContent() {
   const [loading, setLoading] = useState(true);
   const [savingStageId, setSavingStageId] = useState<string | null>(null);
   const [savingCaregiver, setSavingCaregiver] = useState(false);
+  const [sendingCaregiverNotification, setSendingCaregiverNotification] = useState(false);
   const [sendingPowersInstructions, setSendingPowersInstructions] = useState(false);
   const [statusFilter, setStatusFilter] = useState("Wszystkie");
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
@@ -209,6 +211,44 @@ function OnboardingContent() {
 
     if (result.error) {
       alert("Nie udało się zapisać opiekuna księgowego.");
+      return;
+    }
+
+    await loadData();
+  }
+
+  async function handleCaregiverNotification(row: OnboardingRow) {
+    if ((currentUserRole || "").toLowerCase() !== "manager") {
+      alert("Informację o opiekunie może wysłać tylko manager.");
+      return;
+    }
+
+    if (!row.client.opiekun_id) {
+      alert("Najpierw wybierz opiekuna księgowego.");
+      return;
+    }
+
+    if (!row.client.email) {
+      alert("Klient nie ma uzupełnionego adresu e-mail.");
+      return;
+    }
+
+    setSendingCaregiverNotification(true);
+    const sessionResult = await supabase.auth.getSession();
+    const token = sessionResult.data.session?.access_token;
+    const response = await fetch("/api/onboarding/caregiver-notification", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ clientId: row.client.id }),
+    });
+    setSendingCaregiverNotification(false);
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => null);
+      alert(data?.error || "Nie udało się wysłać informacji o opiekunie.");
       return;
     }
 
@@ -336,19 +376,32 @@ function OnboardingContent() {
                 <div>
                   <h3 style={drawerSectionTitleStyle}>Opiekun księgowy</h3>
                 </div>
-                <AppSelect
-                  style={caregiverSelectStyle}
-                  value={selectedRow.client.opiekun_id || ""}
-                  options={[
-                    { value: "", label: "Brak opiekuna" },
-                    ...caregivers.map((caregiver) => ({
-                      value: caregiver.id,
-                      label: caregiver.full_name || caregiver.email || "Użytkownik",
-                    })),
-                  ]}
-                  onChange={(value) => handleCaregiverChange(selectedRow.client, value)}
-                  disabled={savingCaregiver || !canAssignCaregiver}
-                />
+                <div style={caregiverActionsStyle}>
+                  <AppSelect
+                    style={caregiverSelectStyle}
+                    value={selectedRow.client.opiekun_id || ""}
+                    options={[
+                      { value: "", label: "Brak opiekuna" },
+                      ...caregivers.map((caregiver) => ({
+                        value: caregiver.id,
+                        label: caregiver.full_name || caregiver.email || "Użytkownik",
+                      })),
+                    ]}
+                    onChange={(value) => handleCaregiverChange(selectedRow.client, value)}
+                    disabled={savingCaregiver || !canAssignCaregiver}
+                  />
+                  {canAssignCaregiver && (
+                    <button
+                      type="button"
+                      style={primaryActionButtonStyle}
+                      disabled={savingCaregiver || sendingCaregiverNotification || !selectedRow.client.opiekun_id}
+                      onClick={() => handleCaregiverNotification(selectedRow)}
+                    >
+                      {sendingCaregiverNotification ? "Wysyłanie..." : "Wyślij informację"}
+                    </button>
+                  )}
+                  {selectedRow.caregiverNotificationInfo && <small style={caregiverInfoStyle}>{selectedRow.caregiverNotificationInfo}</small>}
+                </div>
               </div>
             </section>
 
@@ -436,6 +489,7 @@ function buildRows(
       nextStep,
       status,
       history: buildHistory(accountingContract, rodoContract, clientHistory, profilesById),
+      caregiverNotificationInfo: latestCaregiverNotificationInfo(clientHistory, profilesById),
     };
   }).sort((a, b) => a.progress - b.progress || (a.client.nazwa || "").localeCompare(b.client.nazwa || "", "pl"));
 }
@@ -517,6 +571,16 @@ function latestInstructionInfo(onboardingHistory: OnboardingHistoryRecord[], pro
   if (!entry) return undefined;
 
   return `Instrukcje wysłane ${formatDateTime(entry.created_at)} przez ${profileLabel(entry.created_by, profilesById)}.`;
+}
+
+function latestCaregiverNotificationInfo(onboardingHistory: OnboardingHistoryRecord[], profilesById: Record<string, Profile>) {
+  const entry = onboardingHistory
+    .filter((item) => item.akcja === "wysylka_informacji_o_opiekunie")
+    .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())[0];
+
+  if (!entry) return undefined;
+
+  return `Informacja wysłana ${formatDateTime(entry.created_at)} przez ${profileLabel(entry.created_by, profilesById)}.`;
 }
 
 function buildHistory(
@@ -699,7 +763,7 @@ function StageCard({
       <span style={responsibleStyle}>Odpowiedzialny: {stage.responsibleLabel}</span>
       <p style={stageDescriptionStyle}>{stage.description}</p>
       <div style={stageActionsStyle}>
-        {stage.href && <Link href={stage.href} style={primaryActionButtonStyle}>{stage.moduleLabel || "Przejdź"}</Link>}
+        {stage.href && <Link href={stage.href} style={secondaryButtonStyle}>{stage.moduleLabel || "Przejdź"}</Link>}
         {stage.actionLabel && (
           <button
             type="button"
@@ -759,6 +823,8 @@ const drawerSummaryStyle: CSSProperties = { display: "grid", gridTemplateColumns
 const drawerSectionStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.inputBackground, padding: "18px", marginBottom: "16px" };
 const caregiverSectionStyle: CSSProperties = { display: "grid", gridTemplateColumns: "1fr minmax(260px, 360px)", gap: "18px", alignItems: "center" };
 const caregiverSelectStyle: CSSProperties = { width: "100%", background: colors.white, backgroundColor: colors.white };
+const caregiverActionsStyle: CSSProperties = { display: "flex", justifyContent: "flex-end", alignItems: "center", flexWrap: "wrap", gap: "10px" };
+const caregiverInfoStyle: CSSProperties = { flexBasis: "100%", color: colors.muted, fontSize: "12px", fontWeight: 650, textAlign: "right" };
 const sectionHeaderInlineStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", marginBottom: "14px" };
 const drawerSectionTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "22px" };
 const stageGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "12px" };

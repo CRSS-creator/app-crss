@@ -111,6 +111,7 @@ function OnboardingContent() {
   const [onboardingHistory, setOnboardingHistory] = useState<OnboardingHistoryRecord[]>([]);
   const [profilesById, setProfilesById] = useState<Record<string, Profile>>({});
   const [caregivers, setCaregivers] = useState<Profile[]>([]);
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingStageId, setSavingStageId] = useState<string | null>(null);
   const [savingCaregiver, setSavingCaregiver] = useState(false);
@@ -125,12 +126,13 @@ function OnboardingContent() {
 
   async function loadData() {
     setLoading(true);
-    const [clientsResult, contractsResult, rodoResult, profilesResult, caregiversResult] = await Promise.all([
+    const [clientsResult, contractsResult, rodoResult, profilesResult, caregiversResult, userResult] = await Promise.all([
       fetchClients(),
       fetchCrmContracts(),
       fetchRodoProcessingContracts(),
       supabase.from("profiles").select("id, full_name, email, role, aktywne"),
       fetchClientCaregivers(),
+      supabase.auth.getUser(),
     ]);
 
     const nextClients = clientsResult.error ? [] : ((clientsResult.data || []) as unknown as Client[]);
@@ -160,7 +162,9 @@ function OnboardingContent() {
     setClients(nextClients);
     setContracts(nextContracts);
     setRodoContracts(nextRodoContracts);
-    setProfilesById(profilesResult.error ? {} : indexProfiles((profilesResult.data || []) as Profile[]));
+    const nextProfilesById = profilesResult.error ? {} : indexProfiles((profilesResult.data || []) as Profile[]);
+    setProfilesById(nextProfilesById);
+    setCurrentUserRole(nextProfilesById[userResult.data.user?.id || ""]?.role || null);
     setCaregivers(caregiversResult.error ? [] : ((caregiversResult.data || []) as Profile[]));
     setOnboardingStages(stagesResult.error ? [] : ((stagesResult.data || []) as OnboardingStageRecord[]));
     setOnboardingHistory(historyResult.error ? [] : ((historyResult.data || []) as OnboardingHistoryRecord[]));
@@ -175,6 +179,7 @@ function OnboardingContent() {
   const filteredRows = rows.filter((row) => statusFilter === "Wszystkie" || row.status === statusFilter);
   const blockedCount = rows.filter((row) => row.status === "Czeka na formalności").length;
   const doneCount = rows.filter((row) => row.status === "Zakończony").length;
+  const canAssignCaregiver = (currentUserRole || "").toLowerCase() === "manager";
 
   async function handleStageStatusChange(stage: OnboardingStage, status: OnboardingStageStatus) {
     if (!stage.record) return;
@@ -191,6 +196,11 @@ function OnboardingContent() {
   }
 
   async function handleCaregiverChange(client: Client, caregiverId: string) {
+    if ((currentUserRole || "").toLowerCase() !== "manager") {
+      alert("Opiekuna księgowego może ustawić tylko manager.");
+      return;
+    }
+
     setSavingCaregiver(true);
     const result = await updateClient(client.id, { opiekun_id: caregiverId || null });
     setSavingCaregiver(false);
@@ -293,7 +303,6 @@ function OnboardingContent() {
               <div style={caregiverSectionStyle}>
                 <div>
                   <h3 style={drawerSectionTitleStyle}>Opiekun księgowy</h3>
-                  <p style={hintStyle}>Opiekuna dla procesu ustawia manager. Etapy po stronie opiekuna będą przypisane do tej osoby.</p>
                 </div>
                 <AppSelect
                   style={caregiverSelectStyle}
@@ -306,7 +315,7 @@ function OnboardingContent() {
                     })),
                   ]}
                   onChange={(value) => handleCaregiverChange(selectedRow.client, value)}
-                  disabled={savingCaregiver}
+                  disabled={savingCaregiver || !canAssignCaregiver}
                 />
               </div>
             </section>
@@ -686,7 +695,7 @@ const closeButtonStyle: CSSProperties = { width: "46px", height: "46px", borderR
 const drawerSummaryStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "12px", marginBottom: "18px" };
 const drawerSectionStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.inputBackground, padding: "18px", marginBottom: "16px" };
 const caregiverSectionStyle: CSSProperties = { display: "grid", gridTemplateColumns: "1fr minmax(260px, 360px)", gap: "18px", alignItems: "center" };
-const caregiverSelectStyle: CSSProperties = { width: "100%" };
+const caregiverSelectStyle: CSSProperties = { width: "100%", background: colors.white, backgroundColor: colors.white };
 const sectionHeaderInlineStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", marginBottom: "14px" };
 const drawerSectionTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "22px" };
 const stageGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "12px" };

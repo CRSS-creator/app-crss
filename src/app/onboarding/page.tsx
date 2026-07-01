@@ -392,16 +392,18 @@ function OnboardingContent() {
                     disabled={savingCaregiver || !canAssignCaregiver}
                   />
                   {canAssignCaregiver && (
-                    <button
-                      type="button"
-                      style={primaryActionButtonStyle}
-                      disabled={savingCaregiver || sendingCaregiverNotification || !selectedRow.client.opiekun_id}
-                      onClick={() => handleCaregiverNotification(selectedRow)}
-                    >
-                      {sendingCaregiverNotification ? "Wysyłanie..." : "Wyślij informację"}
-                    </button>
+                    <div style={caregiverSendStackStyle}>
+                      <button
+                        type="button"
+                        style={primaryActionButtonStyle}
+                        disabled={savingCaregiver || sendingCaregiverNotification || !selectedRow.client.opiekun_id}
+                        onClick={() => handleCaregiverNotification(selectedRow)}
+                      >
+                        {sendingCaregiverNotification ? "Wysyłanie..." : "Wyślij informację"}
+                      </button>
+                      {selectedRow.caregiverNotificationInfo && <small style={caregiverInfoStyle}>{selectedRow.caregiverNotificationInfo}</small>}
+                    </div>
                   )}
-                  {selectedRow.caregiverNotificationInfo && <small style={caregiverInfoStyle}>{selectedRow.caregiverNotificationInfo}</small>}
                 </div>
               </div>
             </section>
@@ -825,7 +827,8 @@ const drawerSectionStyle: CSSProperties = { border: `1px solid ${colors.border}`
 const caregiverSectionStyle: CSSProperties = { display: "grid", gridTemplateColumns: "1fr minmax(260px, 360px)", gap: "18px", alignItems: "center" };
 const caregiverSelectStyle: CSSProperties = { width: "100%", background: colors.white, backgroundColor: colors.white };
 const caregiverActionsStyle: CSSProperties = { display: "flex", justifyContent: "flex-end", alignItems: "center", flexWrap: "wrap", gap: "10px" };
-const caregiverInfoStyle: CSSProperties = { flexBasis: "100%", color: colors.muted, fontSize: "12px", fontWeight: 650, textAlign: "right" };
+const caregiverSendStackStyle: CSSProperties = { display: "grid", justifyItems: "end", gap: "6px" };
+const caregiverInfoStyle: CSSProperties = { color: colors.muted, fontSize: "12px", fontWeight: 650, textAlign: "right", lineHeight: 1.35 };
 const sectionHeaderInlineStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", marginBottom: "14px" };
 const drawerSectionTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "22px" };
 const stageGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "12px" };

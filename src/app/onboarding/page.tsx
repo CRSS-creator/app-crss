@@ -128,6 +128,7 @@ function OnboardingContent() {
   const [savingCaregiver, setSavingCaregiver] = useState(false);
   const [sendingCaregiverNotification, setSendingCaregiverNotification] = useState(false);
   const [sendingPowersInstructions, setSendingPowersInstructions] = useState(false);
+  const [sendingWfirmaAccountNotification, setSendingWfirmaAccountNotification] = useState(false);
   const [savingChecklistId, setSavingChecklistId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState("Wszystkie");
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
@@ -267,12 +268,36 @@ function OnboardingContent() {
   }
 
   async function handleStageAction(stage: OnboardingStage, row: OnboardingRow) {
-    if (stage.key !== "powers") return;
-
     if (!row.client.email) {
       alert("Klient nie ma uzupełnionego adresu e-mail.");
       return;
     }
+
+    if (stage.key === "wfirma_account") {
+      setSendingWfirmaAccountNotification(true);
+      const sessionResult = await supabase.auth.getSession();
+      const token = sessionResult.data.session?.access_token;
+      const response = await fetch("/api/onboarding/wfirma-account-notification", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ clientId: row.client.id }),
+      });
+      setSendingWfirmaAccountNotification(false);
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        alert(data?.error || "Nie udało się wysłać powiadomienia o koncie wFirma.");
+        return;
+      }
+
+      await loadData();
+      return;
+    }
+
+    if (stage.key !== "powers") return;
 
     setSendingPowersInstructions(true);
     const sessionResult = await supabase.auth.getSession();
@@ -455,7 +480,7 @@ function OnboardingContent() {
                   <StageCard
                     key={stage.key}
                     stage={stage}
-                    saving={savingStageId === stage.record?.id || (stage.key === "powers" && sendingPowersInstructions)}
+                    saving={savingStageId === stage.record?.id || (stage.key === "powers" && sendingPowersInstructions) || (stage.key === "wfirma_account" && sendingWfirmaAccountNotification)}
                     savingChecklistId={savingChecklistId}
                     onStatusChange={(status) => handleStageStatusChange(stage, status)}
                     onAction={() => handleStageAction(stage, selectedRow)}
@@ -580,7 +605,17 @@ function buildStages(
 
   stages.push(
     buildManualStage("powers", "Instrukcje i pełnomocnictwa dotyczące ZUS oraz US.", recordByKey.powers, undefined, undefined, "Wyślij instrukcje e-mailem", undefined, adminResponsible, latestInstructionInfo(onboardingHistory, profilesById)),
-    buildManualStage("wfirma_account", "Utworzenie konta klienta w systemie wFirma.", recordByKey.wfirma_account, undefined, undefined, undefined, undefined, adminResponsible),
+    buildManualStage(
+      "wfirma_account",
+      "Utworzenie konta klienta w systemie wFirma.",
+      recordByKey.wfirma_account,
+      undefined,
+      undefined,
+      "Wyślij powiadomienie",
+      undefined,
+      adminResponsible,
+      latestWfirmaAccountNotificationInfo(onboardingHistory, profilesById) || "Wraz z powiadomieniem o utworzeniu konta wysyłana jest instrukcja integracji KSeF z wFirmą. W razie pytań prosimy o kontakt z opiekunem księgowym."
+    ),
     {
       ...buildManualStage("wfirma", "Konfiguracja konta klienta i ustawień operacyjnych w systemie wFirma.", recordByKey.wfirma, undefined, undefined, undefined, undefined, caregiverResponsible),
       checklist: buildWfirmaChecklist(client.forma_prawna, recordByKey.wfirma),
@@ -672,6 +707,16 @@ function latestCaregiverNotificationInfo(onboardingHistory: OnboardingHistoryRec
   if (!entry) return undefined;
 
   return `Informacja wysłana ${formatDateTime(entry.created_at)} przez ${profileLabel(entry.created_by, profilesById)}.`;
+}
+
+function latestWfirmaAccountNotificationInfo(onboardingHistory: OnboardingHistoryRecord[], profilesById: Record<string, Profile>) {
+  const entry = onboardingHistory
+    .filter((item) => item.etap === "wfirma_account" && item.akcja === "wysylka_powiadomienia_wfirma")
+    .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())[0];
+
+  if (!entry) return undefined;
+
+  return `Powiadomienie wysłane ${formatDateTime(entry.created_at)} przez ${profileLabel(entry.created_by, profilesById)}.`;
 }
 
 function buildHistory(
@@ -890,11 +935,11 @@ function StageCard({
         {stage.actionLabel && (
           <button
             type="button"
-            style={stage.key === "client_card" || stage.key === "powers" ? primaryActionButtonStyle : secondaryButtonStyle}
+            style={stage.key === "client_card" || stage.key === "powers" || stage.key === "wfirma_account" ? primaryActionButtonStyle : secondaryButtonStyle}
             disabled={saving}
             onClick={onAction}
           >
-            {saving && stage.key === "powers" ? "Wysyłanie..." : stage.actionLabel}
+            {saving && (stage.key === "powers" || stage.key === "wfirma_account") ? "Wysyłanie..." : stage.actionLabel}
           </button>
         )}
         {stage.editable && stage.record && (

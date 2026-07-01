@@ -502,28 +502,41 @@ function OnboardingContent() {
                 <h3 style={drawerSectionTitleStyle}>Proces rozpoczęcia współpracy</h3>
                 <button style={secondaryButtonStyle} onClick={openHistory}>Historia zmian</button>
               </div>
-              <div style={stageGridStyle}>
-                {selectedRow.stages.map((stage) => (
-                  <StageCard
-                    key={stage.key}
-                    stage={stage}
-                    saving={
-                      savingStageId === stage.record?.id ||
-                      (stage.key === "powers" && sendingPowersInstructions) ||
-                      (stage.key === "wfirma_account" && sendingWfirmaAccountNotification) ||
-                      (stage.key === "documents_takeover" && sendingDocumentsNotification)
-                    }
-                    savingChecklistId={savingChecklistId}
-                    checklistExpanded={Boolean(expandedChecklistStages[stage.record?.id || stage.key])}
-                    onToggleChecklist={() => {
-                      const key = stage.record?.id || stage.key;
-                      setExpandedChecklistStages((current) => ({ ...current, [key]: !current[key] }));
-                    }}
-                    onStatusChange={(status) => handleStageStatusChange(stage, status)}
-                    onAction={() => handleStageAction(stage, selectedRow)}
-                    onChecklistChange={(item, checked) => handleChecklistChange(stage, item, checked)}
-                  />
-                ))}
+              <div style={processTableWrapperStyle}>
+                <table style={processTableStyle}>
+                  <thead>
+                    <tr>
+                      <th style={processThStyle}>Etap</th>
+                      <th style={processThStyle}>Odpowiedzialny</th>
+                      <th style={processThStyle}>Status</th>
+                      <th style={processThStyle}>Akcja</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedRow.stages.map((stage) => {
+                      const stageSaving =
+                        savingStageId === stage.record?.id ||
+                        (stage.key === "powers" && sendingPowersInstructions) ||
+                        (stage.key === "wfirma_account" && sendingWfirmaAccountNotification) ||
+                        (stage.key === "documents_takeover" && sendingDocumentsNotification);
+                      const checklistKey = stage.record?.id || stage.key;
+
+                      return (
+                        <StageProcessRow
+                          key={stage.key}
+                          stage={stage}
+                          saving={stageSaving}
+                          savingChecklistId={savingChecklistId}
+                          checklistExpanded={Boolean(expandedChecklistStages[checklistKey])}
+                          onToggleChecklist={() => setExpandedChecklistStages((current) => ({ ...current, [checklistKey]: !current[checklistKey] }))}
+                          onStatusChange={(status) => handleStageStatusChange(stage, status)}
+                          onAction={() => handleStageAction(stage, selectedRow)}
+                          onChecklistChange={(item, checked) => handleChecklistChange(stage, item, checked)}
+                        />
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             </section>
 
@@ -610,8 +623,8 @@ function buildStages(
     acc[record.etap] = record;
     return acc;
   }, {});
-  const ownerResponsible = profileByRoleLabel(profilesById, "owner", "Brak użytkownika owner");
-  const adminResponsible = profileByRoleLabel(profilesById, "admin", "Brak użytkownika admin");
+  const ownerResponsible = profileByRoleLabel(profilesById, "owner", "Do przypisania");
+  const adminResponsible = profileByRoleLabel(profilesById, "admin", "Do przypisania");
   const caregiverResponsible = caregiverLabel(client);
 
   const stages: OnboardingStage[] = [
@@ -872,10 +885,8 @@ function isJdg(legalForm: string | null | undefined) {
 }
 
 function responsibleLabelForStage(stage: OnboardingStageKey) {
-  if (stage === "contract" || stage === "rodo") return "Owner";
-  if (stage === "aml" || stage === "client_card" || stage === "powers" || stage === "wfirma_account") return "Admin";
-  if (stage === "wfirma" || stage === "documents_takeover") return "Opiekun";
-  return "Admin";
+  if (stage === "wfirma" || stage === "documents_takeover") return "Brak opiekuna";
+  return "Do przypisania";
 }
 
 function matchesClient(client: Client, klientId: string | null | undefined, nip: string | null | undefined, name: string | null | undefined) {
@@ -934,6 +945,104 @@ function StatusPill({ status }: { status: string }) {
 function StagePill({ stage }: { stage: OnboardingStage }) {
   const style = stage.state === "done" ? successPillStyle : stage.state === "blocked" ? dangerPillStyle : stage.state === "progress" ? warningPillStyle : neutralPillStyle;
   return <span style={style}>{stage.state === "done" ? "Gotowe" : stage.state === "blocked" ? "Brak" : stage.state === "progress" ? "W toku" : "Do wykonania"}</span>;
+}
+
+function StageProcessRow({
+  stage,
+  saving,
+  savingChecklistId,
+  checklistExpanded,
+  onToggleChecklist,
+  onStatusChange,
+  onAction,
+  onChecklistChange,
+}: {
+  stage: OnboardingStage;
+  saving: boolean;
+  savingChecklistId: string | null;
+  checklistExpanded: boolean;
+  onToggleChecklist: () => void;
+  onStatusChange: (status: OnboardingStageStatus) => void;
+  onAction: () => void;
+  onChecklistChange: (item: OnboardingChecklistItem, checked: boolean) => void;
+}) {
+  const checklistGroups = groupChecklist(stage.checklist || []);
+  const hasChecklist = Boolean(stage.checklist?.length);
+  const primaryAction = stage.key === "client_card" || stage.key === "powers" || stage.key === "wfirma_account" || stage.key === "documents_takeover";
+
+  return (
+    <>
+      <tr style={processRowStyle}>
+        <td style={processTdStyle}>
+          <strong style={processStageTitleStyle}>{stage.title}</strong>
+          <span style={processDescriptionStyle}>{stage.description}</span>
+        </td>
+        <td style={processTdStyle}>
+          <span style={responsibleStyle}>{stage.responsibleLabel}</span>
+        </td>
+        <td style={processTdStyle}>
+          <StagePill stage={stage} />
+        </td>
+        <td style={processActionsTdStyle}>
+          <div style={processActionsStyle}>
+            {stage.href && <Link href={stage.href} style={secondaryButtonStyle}>{stage.moduleLabel || "Przejdź"}</Link>}
+            {hasChecklist && (
+              <button type="button" style={secondaryButtonStyle} onClick={onToggleChecklist}>
+                {checklistExpanded ? "Ukryj zadania" : "Pokaż zadania"}
+              </button>
+            )}
+            {stage.actionLabel && (
+              <button
+                type="button"
+                style={primaryAction ? primaryActionButtonStyle : secondaryButtonStyle}
+                disabled={saving}
+                onClick={onAction}
+              >
+                {saving && primaryAction ? "Wysyłanie..." : stage.actionLabel}
+              </button>
+            )}
+            {stage.editable && stage.record && (
+              <>
+                <button style={smallButtonStyle} disabled={saving} onClick={() => onStatusChange("w_toku")}>W toku</button>
+                <button style={smallButtonStyle} disabled={saving} onClick={() => onStatusChange("gotowe")}>Gotowe</button>
+              </>
+            )}
+          </div>
+          {stage.actionInfo && <small style={stageActionInfoStyle}>{stage.actionInfo}</small>}
+        </td>
+      </tr>
+      {hasChecklist && checklistExpanded && (
+        <tr>
+          <td colSpan={4} style={processChecklistTdStyle}>
+            <div style={checklistStyle}>
+              {checklistGroups.map((group) => (
+                <div key={group.name} style={checklistGroupStyle}>
+                  <strong style={checklistGroupTitleStyle}>{group.name}</strong>
+                  <div style={checklistItemsStyle}>
+                    {group.items.map((item) => {
+                      const itemSaving = savingChecklistId === `${stage.record?.id}-${item.id}`;
+                      return (
+                        <label key={item.id} style={checklistItemStyle}>
+                          <input
+                            type="checkbox"
+                            checked={item.done}
+                            disabled={saving || itemSaving || !stage.record}
+                            onChange={(event) => onChecklistChange(item, event.target.checked)}
+                            style={checklistCheckboxStyle}
+                          />
+                          <span>{item.label}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
+  );
 }
 
 function StageCard({
@@ -1072,6 +1181,16 @@ const caregiverSendStackStyle: CSSProperties = { display: "grid", justifyItems: 
 const caregiverInfoStyle: CSSProperties = { color: colors.muted, fontSize: "12px", fontWeight: 650, textAlign: "right", lineHeight: 1.35 };
 const sectionHeaderInlineStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", marginBottom: "14px" };
 const drawerSectionTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "22px" };
+const processTableWrapperStyle: CSSProperties = { overflowX: "auto", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white };
+const processTableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse", minWidth: "980px" };
+const processThStyle: CSSProperties = { ...thStyle, background: colors.white };
+const processRowStyle: CSSProperties = { background: colors.white };
+const processTdStyle: CSSProperties = { ...tdStyle, verticalAlign: "top" };
+const processActionsTdStyle: CSSProperties = { ...tdStyle, verticalAlign: "top", width: "420px" };
+const processStageTitleStyle: CSSProperties = { display: "block", color: colors.navy, fontSize: "16px", marginBottom: "5px" };
+const processDescriptionStyle: CSSProperties = { display: "block", color: colors.muted, fontSize: "13px", lineHeight: 1.45, fontWeight: 650 };
+const processActionsStyle: CSSProperties = { display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" };
+const processChecklistTdStyle: CSSProperties = { padding: "0 14px 14px", borderBottom: `1px solid ${colors.border}`, background: colors.white };
 const stageGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "12px" };
 const stageCardStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, padding: "15px", display: "flex", flexDirection: "column", gap: "10px" };
 const stageFullWidthStyle: CSSProperties = { gridColumn: "1 / -1" };

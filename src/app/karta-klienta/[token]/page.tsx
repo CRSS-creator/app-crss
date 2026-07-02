@@ -131,7 +131,7 @@ export default function ClientCardPage() {
           </div>
         </div>
 
-        <Section title="Dane podstawowe">
+        <Section title="Dane podstawowe" singleColumn>
           <Field label="Osoba kontaktowa" required>
             <input style={inputStyle} value={draft.osobaKontaktowa} onChange={(event) => updateDraft("osobaKontaktowa", event.target.value)} />
           </Field>
@@ -305,11 +305,11 @@ function StatusMessage({ title, text }: { title: string; text: string }) {
   );
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+function Section({ title, children, singleColumn }: { title: string; children: ReactNode; singleColumn?: boolean }) {
   return (
     <section style={sectionStyle}>
       <h2 style={sectionTitleStyle}>{title}</h2>
-      <div style={gridStyle}>{children}</div>
+      <div style={singleColumn ? singleColumnGridStyle : gridStyle}>{children}</div>
     </section>
   );
 }
@@ -410,6 +410,12 @@ const sectionTitleStyle: CSSProperties = {
 const gridStyle: CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+  gap: "14px",
+};
+
+const singleColumnGridStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1fr",
   gap: "14px",
 };
 

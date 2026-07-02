@@ -76,6 +76,7 @@ type OnboardingStage = {
   responsibleLabel: string;
   fullWidth?: boolean;
   actionInfo?: string;
+  actionDone?: boolean;
   checklist?: OnboardingChecklistItem[];
 };
 
@@ -580,8 +581,8 @@ function OnboardingContent() {
                   </thead>
                   <tbody>
                     {selectedRow.stages.map((stage) => {
-                      const stageSaving =
-                        savingStageId === stage.record?.id ||
+                      const stageSaving = savingStageId === stage.record?.id;
+                      const actionSending =
                         (stage.key === "client_card" && sendingClientCardRequest) ||
                         (stage.key === "powers" && sendingPowersInstructions) ||
                         (stage.key === "wfirma_account" && sendingWfirmaAccountNotification) ||
@@ -593,6 +594,7 @@ function OnboardingContent() {
                           key={stage.key}
                           stage={stage}
                           saving={stageSaving}
+                          actionSending={actionSending}
                           savingChecklistId={savingChecklistId}
                           checklistExpanded={Boolean(expandedChecklistStages[checklistKey])}
                           onToggleChecklist={() => setExpandedChecklistStages((current) => ({ ...current, [checklistKey]: !current[checklistKey] }))}
@@ -775,6 +777,8 @@ function buildStages(
 }
 
 function buildManualStage(key: OnboardingStageKey, description: string, record?: OnboardingStageRecord, href?: string, moduleLabel?: string, actionLabel?: string, fullWidth?: boolean, responsibleLabel?: string, actionInfo?: string): OnboardingStage {
+  const actionDone = Boolean(actionInfo) && !(key === "wfirma_account" && actionInfo?.startsWith("Wraz z powiadomieniem")) && !(key === "documents_takeover" && actionInfo?.startsWith("Dokumenty klient"));
+
   return {
     key,
     title: stageLabel(key),
@@ -788,6 +792,7 @@ function buildManualStage(key: OnboardingStageKey, description: string, record?:
     responsibleLabel: responsibleLabel || responsibleLabelForStage(key),
     fullWidth,
     actionInfo,
+    actionDone,
   };
 }
 
@@ -1069,6 +1074,7 @@ function StagePill({ stage }: { stage: OnboardingStage }) {
 function StageProcessRow({
   stage,
   saving,
+  actionSending,
   savingChecklistId,
   checklistExpanded,
   onToggleChecklist,
@@ -1078,6 +1084,7 @@ function StageProcessRow({
 }: {
   stage: OnboardingStage;
   saving: boolean;
+  actionSending: boolean;
   savingChecklistId: string | null;
   checklistExpanded: boolean;
   onToggleChecklist: () => void;
@@ -1088,6 +1095,8 @@ function StageProcessRow({
   const checklistGroups = groupChecklist(stage.checklist || []);
   const hasChecklist = Boolean(stage.checklist?.length);
   const primaryAction = stage.key === "client_card" || stage.key === "powers" || stage.key === "wfirma_account" || stage.key === "documents_takeover";
+  const actionDisabled = saving || actionSending || Boolean(stage.actionDone);
+  const actionButtonLabel = stage.actionDone ? "Wys\u0142ano" : actionSending && primaryAction ? "Wysy\u0142anie..." : stage.actionLabel;
 
   return (
     <>
@@ -1114,10 +1123,10 @@ function StageProcessRow({
               <button
                 type="button"
                 style={primaryAction ? primaryActionButtonStyle : secondaryButtonStyle}
-                disabled={saving}
+                disabled={actionDisabled}
                 onClick={onAction}
               >
-                {saving && primaryAction ? "Wysyłanie..." : stage.actionLabel}
+                {actionButtonLabel}
               </button>
             )}
             {stage.editable && stage.record && (

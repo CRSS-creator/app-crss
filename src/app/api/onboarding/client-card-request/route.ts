@@ -188,7 +188,6 @@ export async function POST(request: NextRequest) {
         klient_id: clientRecord.id,
         recipient_email: clientRecord.email,
         recipient_name: clientRecord.osoba_kontaktowa,
-        created_by: auth.requesterId,
       })
       .select("id, public_token")
       .single();

@@ -133,6 +133,7 @@ function OnboardingContent() {
   const [sendingPowersInstructions, setSendingPowersInstructions] = useState(false);
   const [sendingWfirmaAccountNotification, setSendingWfirmaAccountNotification] = useState(false);
   const [sendingDocumentsNotification, setSendingDocumentsNotification] = useState(false);
+  const [sendingClientCardRequest, setSendingClientCardRequest] = useState(false);
   const [savingChecklistId, setSavingChecklistId] = useState<string | null>(null);
   const [savingNotes, setSavingNotes] = useState(false);
   const [notesDraft, setNotesDraft] = useState("");
@@ -281,6 +282,30 @@ function OnboardingContent() {
   async function handleStageAction(stage: OnboardingStage, row: OnboardingRow) {
     if (!row.client.email) {
       alert("Klient nie ma uzupełnionego adresu e-mail.");
+      return;
+    }
+
+    if (stage.key === "client_card") {
+      setSendingClientCardRequest(true);
+      const sessionResult = await supabase.auth.getSession();
+      const token = sessionResult.data.session?.access_token;
+      const response = await fetch("/api/onboarding/client-card-request", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ clientId: row.client.id }),
+      });
+      setSendingClientCardRequest(false);
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        alert(data?.error || "Nie udało się wysłać karty klienta.");
+        return;
+      }
+
+      await loadData();
       return;
     }
 
@@ -547,6 +572,7 @@ function OnboardingContent() {
                     {selectedRow.stages.map((stage) => {
                       const stageSaving =
                         savingStageId === stage.record?.id ||
+                        (stage.key === "client_card" && sendingClientCardRequest) ||
                         (stage.key === "powers" && sendingPowersInstructions) ||
                         (stage.key === "wfirma_account" && sendingWfirmaAccountNotification) ||
                         (stage.key === "documents_takeover" && sendingDocumentsNotification);
@@ -702,7 +728,7 @@ function buildStages(
   ];
 
   if (shouldShowClientCard(client, accountingContract)) {
-    stages.push(buildManualStage("client_card", "Dane organizacyjne klienta potrzebne do rozpoczęcia obsługi w biurze.", recordByKey.client_card, undefined, undefined, "Wyślij e-mail", undefined, adminResponsible));
+    stages.push(buildManualStage("client_card", "Dane organizacyjne klienta potrzebne do rozpoczęcia obsługi w biurze.", recordByKey.client_card, undefined, undefined, "Wyślij e-mail", undefined, adminResponsible, latestClientCardRequestInfo(onboardingHistory, profilesById)));
   }
 
   stages.push(
@@ -812,6 +838,16 @@ function latestInstructionInfo(onboardingHistory: OnboardingHistoryRecord[], pro
   if (!entry) return undefined;
 
   return `Instrukcje wysłane ${formatDateTime(entry.created_at)} przez ${profileLabel(entry.created_by, profilesById)}.`;
+}
+
+function latestClientCardRequestInfo(onboardingHistory: OnboardingHistoryRecord[], profilesById: Record<string, Profile>) {
+  const entry = onboardingHistory
+    .filter((item) => item.etap === "client_card" && item.akcja === "wysylka_karty_klienta")
+    .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())[0];
+
+  if (!entry) return undefined;
+
+  return `Karta klienta wysłana ${formatDateTime(entry.created_at)} przez ${profileLabel(entry.created_by, profilesById)}.`;
 }
 
 function latestCaregiverNotificationInfo(onboardingHistory: OnboardingHistoryRecord[], profilesById: Record<string, Profile>) {
@@ -1173,7 +1209,7 @@ function StageCard({
             disabled={saving}
             onClick={onAction}
           >
-            {saving && (stage.key === "powers" || stage.key === "wfirma_account" || stage.key === "documents_takeover") ? "Wysyłanie..." : stage.actionLabel}
+            {saving && (stage.key === "client_card" || stage.key === "powers" || stage.key === "wfirma_account" || stage.key === "documents_takeover") ? "Wysyłanie..." : stage.actionLabel}
           </button>
         )}
         {stage.editable && stage.record && (

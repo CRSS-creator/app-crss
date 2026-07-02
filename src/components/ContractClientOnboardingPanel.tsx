@@ -16,6 +16,7 @@ type Caregiver = {
 
 type ClientOnboardingDraft = {
   telefon: string;
+  osoba_kontaktowa: string;
   forma_prawna: string;
   forma_opodatkowania: string;
   status_klienta: string;
@@ -99,6 +100,7 @@ export default function ContractClientOnboardingPanel({ contract, onCreated }: P
       nip: nullableToNull(contract.nip),
       telefon: emptyToNull(draft.telefon),
       email: nullableToNull(contract.email_klienta),
+      osoba_kontaktowa: emptyToNull(draft.osoba_kontaktowa),
       forma_prawna: emptyToNull(draft.forma_prawna),
       forma_opodatkowania: emptyToNull(draft.forma_opodatkowania),
       status_klienta: draft.status_klienta || "Onboarding",
@@ -158,6 +160,7 @@ export default function ContractClientOnboardingPanel({ contract, onCreated }: P
 
       <div style={gridStyle}>
         <TextField label="Telefon" value={draft.telefon} onChange={(value) => updateDraft("telefon", value)} />
+        <TextField label="Osoba kontaktowa" value={draft.osoba_kontaktowa} onChange={(value) => updateDraft("osoba_kontaktowa", value)} />
         <SelectField label="Opiekun" value={draft.opiekun_id} onChange={(value) => updateDraft("opiekun_id", value)} options={[{ value: "", label: "Do uzupełnienia" }, ...caregivers.map((caregiver) => ({ value: caregiver.id, label: caregiver.full_name || caregiver.email || "Użytkownik" }))]} />
         <SelectField label="Forma prawna" value={draft.forma_prawna} onChange={(value) => { updateDraft("forma_prawna", value); if (!isJdgLegalForm(value)) updateDraft("schemat_zus", ""); }} options={[{ value: "", label: "Do uzupełnienia" }, ...LEGAL_FORM_OPTIONS]} />
         <SelectField label="Opodatkowanie" value={draft.forma_opodatkowania} onChange={(value) => updateDraft("forma_opodatkowania", value)} options={[{ value: "", label: "Do uzupełnienia" }, ...TAXATION_FORM_OPTIONS]} />
@@ -182,6 +185,7 @@ export default function ContractClientOnboardingPanel({ contract, onCreated }: P
 function createEmptyDraft(contract: CrmContract): ClientOnboardingDraft {
   return {
     telefon: "",
+    osoba_kontaktowa: contract.reprezentant || "",
     forma_prawna: "",
     forma_opodatkowania: contract.typ_umowy === "KH" ? "CIT" : "",
     status_klienta: "Onboarding",

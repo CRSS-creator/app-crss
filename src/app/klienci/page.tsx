@@ -40,6 +40,7 @@ type Client = {
   nip: string | null;
   telefon: string | null;
   email: string | null;
+  osoba_kontaktowa: string | null;
   forma_prawna: string | null;
   forma_opodatkowania: string | null;
   obsluga_kadrowa: boolean | null;
@@ -70,6 +71,7 @@ type ClientDraft = {
   nip: string;
   telefon: string;
   email: string;
+  osoba_kontaktowa: string;
   forma_prawna: string;
   forma_opodatkowania: string;
   obsluga_kadrowa: boolean;
@@ -223,6 +225,7 @@ const filteredClients = [...clients].filter((client) => {
     client.nip,
     client.telefon,
     client.email,
+    client.osoba_kontaktowa,
     client.forma_prawna,
     client.forma_opodatkowania,
     client.status_klienta,
@@ -590,6 +593,7 @@ function ClientDrawer({
     const operationalPayload = {
       telefon: draft.telefon.trim() || null,
       email: draft.email.trim() || null,
+      osoba_kontaktowa: draft.osoba_kontaktowa.trim() || null,
       czynny_vat: draft.czynny_vat,
       vat_ue: draft.vat_ue,
       schemat_zus: isDraftJdg ? draft.schemat_zus.trim() || null : null,
@@ -721,11 +725,17 @@ function ClientDrawer({
                   value={draft.email}
                   onChange={(value) => updateDraft("email", value)}
                 />
+                <EditableInput
+                  label="Osoba kontaktowa"
+                  value={draft.osoba_kontaktowa}
+                  onChange={(value) => updateDraft("osoba_kontaktowa", value)}
+                />
               </>
             ) : (
               <>
                 <InfoRow label="Telefon" value={client.telefon} />
                 <InfoRow label="Email" value={client.email} />
+                <InfoRow label="Osoba kontaktowa" value={client.osoba_kontaktowa} />
               </>
             )}
 
@@ -1087,6 +1097,7 @@ function CreateClientDrawer({
     nip: "",
     telefon: "",
     email: "",
+    osoba_kontaktowa: "",
     forma_prawna: "",
     forma_opodatkowania: "",
     obsluga_kadrowa: false,
@@ -1134,6 +1145,7 @@ function CreateClientDrawer({
       nip: draft.nip.trim(),
       telefon: draft.telefon.trim() || null,
       email: draft.email.trim() || null,
+      osoba_kontaktowa: draft.osoba_kontaktowa.trim() || null,
       forma_prawna: draft.forma_prawna.trim() || null,
       forma_opodatkowania: draft.forma_opodatkowania.trim() || null,
       obsluga_kadrowa: draft.obsluga_kadrowa,
@@ -1248,6 +1260,12 @@ function CreateClientDrawer({
               type="email"
               value={draft.email}
               onChange={(v) => updateDraft("email", v)}
+            />
+
+            <EditableInput
+              label="Osoba kontaktowa"
+              value={draft.osoba_kontaktowa}
+              onChange={(v) => updateDraft("osoba_kontaktowa", v)}
             />
           </InfoSection>
 <InfoSection title="Organizacja">
@@ -1425,6 +1443,7 @@ function createDraft(client: Client): ClientDraft {
     nip: client.nip || "",
     telefon: client.telefon || "",
     email: client.email || "",
+    osoba_kontaktowa: client.osoba_kontaktowa || "",
     forma_prawna: client.forma_prawna || "",
     forma_opodatkowania: client.forma_opodatkowania || "",
     obsluga_kadrowa: Boolean(client.obsluga_kadrowa),

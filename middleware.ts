@@ -5,6 +5,8 @@ export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const isLoginPage = pathname === "/login";
   const isPublicOfferPage = pathname.startsWith("/oferta/");
+  const isPublicClientCardPage = pathname.startsWith("/karta-klienta/");
+  const isPublicApiPage = pathname.startsWith("/api/public/");
 
   let response = NextResponse.next({
     request,
@@ -39,7 +41,7 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user && !isLoginPage && !isPublicOfferPage) {
+  if (!user && !isLoginPage && !isPublicOfferPage && !isPublicClientCardPage && !isPublicApiPage) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 

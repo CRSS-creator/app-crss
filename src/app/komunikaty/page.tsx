@@ -31,6 +31,10 @@ type Client = {
     full_name: string | null;
     email: string | null;
     role: string | null;
+  } | {
+    full_name: string | null;
+    email: string | null;
+    role: string | null;
   }[] | null;
 };
 
@@ -155,11 +159,11 @@ function KomunikatyContent() {
         .toLowerCase();
 
       if (query && !haystack.includes(query)) return false;
-      if (legalFormFilter !== EMPTY_FILTER && client.forma_prawna !== legalFormFilter) return false;
-      if (taxationFilter !== EMPTY_FILTER && client.forma_opodatkowania !== taxationFilter) return false;
+      if (legalFormFilter !== EMPTY_FILTER && !isSameOption(client.forma_prawna, legalFormFilter)) return false;
+      if (taxationFilter !== EMPTY_FILTER && !isSameOption(client.forma_opodatkowania, taxationFilter)) return false;
       if (caregiverFilter !== EMPTY_FILTER && client.opiekun_id !== caregiverFilter) return false;
       if (payrollFilter !== EMPTY_FILTER && (client.obsluga_kadrowa ? "Tak" : "Nie") !== payrollFilter) return false;
-      if (statusFilter !== EMPTY_FILTER && client.status_klienta !== statusFilter) return false;
+      if (statusFilter !== EMPTY_FILTER && !isSameOption(client.status_klienta, statusFilter)) return false;
       return true;
     });
   }, [clients, searchQuery, legalFormFilter, taxationFilter, caregiverFilter, payrollFilter, statusFilter]);
@@ -423,6 +427,14 @@ function KomunikatyContent() {
 
 function getCaregiver(client: Client) {
   return Array.isArray(client.profiles) ? client.profiles[0] : client.profiles;
+}
+
+function normalizeFilterText(value: string | null | undefined) {
+  return (value || "").trim().toLocaleLowerCase("pl-PL");
+}
+
+function isSameOption(value: string | null | undefined, filterValue: string) {
+  return normalizeFilterText(value) === normalizeFilterText(filterValue);
 }
 
 function SummaryCard({ label, value }: { label: string; value: number }) {

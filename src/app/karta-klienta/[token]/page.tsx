@@ -168,6 +168,11 @@ export default function ClientCardPage() {
               {YES_NO_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
           </Field>
+          <Field label="Sprzedaż na rzecz osób prywatnych z innych krajów UE">
+            <select style={inputStyle} value={draft.sprzedazOsobyPrywatneUe} onChange={(event) => updateDraft("sprzedazOsobyPrywatneUe", event.target.value)}>
+              {YES_NO_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </select>
+          </Field>
         </Section>
 
         <Section title="VAT">
@@ -210,11 +215,6 @@ export default function ClientCardPage() {
         </Section>
 
         <Section title="ZUS">
-          <Field label="Sprzedaż na rzecz osób prywatnych z innych krajów UE">
-            <select style={inputStyle} value={draft.sprzedazOsobyPrywatneUe} onChange={(event) => updateDraft("sprzedazOsobyPrywatneUe", event.target.value)}>
-              {YES_NO_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select>
-          </Field>
           <Field label="Ulgi ZUS dotyczące składek społecznych">
             <select style={inputStyle} value={draft.zusUlga} onChange={(event) => updateDraft("zusUlga", event.target.value)}>
               {YES_NO_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}

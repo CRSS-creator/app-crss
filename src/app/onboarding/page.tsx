@@ -7,7 +7,7 @@ import AccessGuard from "@/components/AccessGuard";
 import AppSelect from "@/components/AppSelect";
 import { colors, radius, shadow } from "@/app/design";
 import { supabase } from "@/lib/supabaseClient";
-import { fetchClientCaregivers, fetchClients, updateClient } from "@/lib/clientService";
+import { fetchClientCaregivers, fetchClients } from "@/lib/clientService";
 import { fetchCrmContracts, type CrmContract } from "@/lib/crmContractService";
 import { fetchRodoProcessingContracts, type RodoProcessingContract } from "@/lib/rodoProcessingContractService";
 import {
@@ -230,11 +230,21 @@ function OnboardingContent() {
     }
 
     setSavingCaregiver(true);
-    const result = await updateClient(client.id, { opiekun_id: caregiverId || null });
+    const sessionResult = await supabase.auth.getSession();
+    const token = sessionResult.data.session?.access_token;
+    const response = await fetch("/api/onboarding/caregiver-assignment", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ clientId: client.id, caregiverId: caregiverId || null }),
+    });
     setSavingCaregiver(false);
 
-    if (result.error) {
-      alert("Nie udało się zapisać opiekuna księgowego.");
+    if (!response.ok) {
+      const data = await response.json().catch(() => null);
+      alert(data?.error || "Nie udało się zapisać opiekuna księgowego.");
       return;
     }
 

@@ -1095,9 +1095,8 @@ function StageProcessRow({
   const checklistGroups = groupChecklist(stage.checklist || []);
   const hasChecklist = Boolean(stage.checklist?.length);
   const primaryAction = stage.key === "client_card" || stage.key === "powers" || stage.key === "wfirma_account" || stage.key === "documents_takeover";
-  const documentsTakeoverSkipped = stage.key === "documents_takeover" && stage.state === "done" && !stage.actionDone;
-  const actionDisabled = saving || actionSending || Boolean(stage.actionDone) || documentsTakeoverSkipped;
-  const actionButtonLabel = documentsTakeoverSkipped ? "Nie dotyczy" : stage.actionDone ? "Wys\u0142ano" : actionSending && primaryAction ? "Wysy\u0142anie..." : stage.actionLabel;
+  const actionDisabled = saving || actionSending || Boolean(stage.actionDone);
+  const actionButtonLabel = stage.actionDone ? "Wys\u0142ano" : actionSending && primaryAction ? "Wysy\u0142anie..." : stage.actionLabel;
 
   return (
     <>
@@ -1132,7 +1131,7 @@ function StageProcessRow({
             )}
             {stage.editable && stage.record && (
               <>
-                {stage.key === "documents_takeover" && stage.state !== "done" && (
+                {stage.key === "documents_takeover" && stage.state !== "done" && !stage.actionDone && (
                   <button style={smallButtonStyle} disabled={saving} onClick={() => onStatusChange("gotowe")}>Nowy podmiot</button>
                 )}
                 <button style={smallButtonStyle} disabled={saving} onClick={() => onStatusChange("w_toku")}>W toku</button>
@@ -1243,7 +1242,7 @@ function StageCard({
           <button
             type="button"
             style={stage.key === "client_card" || stage.key === "powers" || stage.key === "wfirma_account" || stage.key === "documents_takeover" ? primaryActionButtonStyle : secondaryButtonStyle}
-            disabled={saving}
+            disabled={saving || Boolean(stage.actionDone)}
             onClick={onAction}
           >
             {saving && (stage.key === "client_card" || stage.key === "powers" || stage.key === "wfirma_account" || stage.key === "documents_takeover") ? "Wysyłanie..." : stage.actionLabel}
@@ -1251,6 +1250,9 @@ function StageCard({
         )}
         {stage.editable && stage.record && (
           <>
+            {stage.key === "documents_takeover" && stage.state !== "done" && !stage.actionDone && (
+              <button style={smallButtonStyle} disabled={saving} onClick={() => onStatusChange("gotowe")}>Nowy podmiot</button>
+            )}
             <button style={smallButtonStyle} disabled={saving} onClick={() => onStatusChange("w_toku")}>W toku</button>
             <button style={smallButtonStyle} disabled={saving} onClick={() => onStatusChange("gotowe")}>Gotowe</button>
           </>

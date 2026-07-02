@@ -248,7 +248,7 @@ export async function POST(request: NextRequest) {
       .eq("etap", "documents_takeover")
       .maybeSingle();
 
-    if (stage?.id && stage.status !== "gotowe") {
+    if (stage?.id) {
       await auth.admin
         .from("onboarding_etapy")
         .update({
@@ -264,7 +264,7 @@ export async function POST(request: NextRequest) {
       etap: "documents_takeover",
       akcja: "wysylka_listy_dokumentow",
       old_status: stage?.status || null,
-      new_status: stage?.status === "gotowe" ? "gotowe" : "w_toku",
+      new_status: "w_toku",
       opis: `Wysłano listę dokumentów do rozpoczęcia współpracy do klienta ${clientRecord.nazwa || "bez nazwy"}.`,
       created_by: auth.requesterId,
     });

@@ -516,7 +516,10 @@ function Th({ children, width }: { children: ReactNode; width?: string }) { retu
 function Td({ children, strong }: { children: ReactNode; strong?: boolean }) { return <td style={{ ...tdStyle, fontWeight: strong ? 800 : 500 }}>{children}</td>; }
 
 function getClient(value: MonthlySettlement["klienci"]) { return Array.isArray(value) ? value[0] : value; }
-function getCaregiverName(client: ReturnType<typeof getClient>) { return client?.profiles?.[0]?.full_name || client?.profiles?.[0]?.email || "Brak opiekuna"; }
+function getCaregiverName(client: ReturnType<typeof getClient>) {
+  const profile = Array.isArray(client?.profiles) ? client?.profiles[0] : client?.profiles;
+  return profile?.full_name || profile?.email || "Brak opiekuna";
+}
 function sortSettlementsByClientName(first: MonthlySettlement, second: MonthlySettlement) {
   const firstClient = getClient(first.klienci);
   const secondClient = getClient(second.klienci);

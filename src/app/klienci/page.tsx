@@ -34,6 +34,12 @@ type Profile = {
   role: UserRole | null;
 };
 
+type ClientCaregiver = {
+  full_name: string | null;
+  email: string | null;
+  role: string | null;
+};
+
 type Client = {
   id: string;
   nazwa: string | null;
@@ -59,11 +65,7 @@ type Client = {
   dodatkowe_uslugi: string | null;
   notatki: string | null;
   opiekun_id: string | null;
-  profiles?: {
-    full_name: string | null;
-    email: string | null;
-    role: string | null;
-  }[] | null;
+  profiles?: ClientCaregiver | ClientCaregiver[] | null;
 };
 
 type ClientDraft = {
@@ -162,6 +164,15 @@ function sortClientsByName(first: Client, second: Client) {
   });
 }
 
+function getClientCaregiver(client: Client) {
+  return Array.isArray(client.profiles) ? client.profiles[0] : client.profiles;
+}
+
+function getClientCaregiverName(client: Client) {
+  const caregiver = getClientCaregiver(client);
+  return caregiver?.full_name || caregiver?.email || "Brak opiekuna";
+}
+
 export default function ClientsPage() {
   return (
     <AppLayout activePage="klienci">
@@ -195,10 +206,7 @@ function ClientsContent({ currentRole }: { currentRole: UserRole | null }) {
     kadryFilter !== EMPTY_FILTER;
 
 const filteredClients = [...clients].filter((client) => {
-  const opiekunName =
-    client.profiles?.[0]?.full_name ||
-    client.profiles?.[0]?.email ||
-    "Brak opiekuna";
+  const opiekunName = getClientCaregiverName(client);
 
   const matchesStatus =
     statusFilter === EMPTY_FILTER || client.status_klienta === statusFilter;
@@ -416,9 +424,7 @@ return (
                     <Td>{client.forma_prawna || "—"}</Td>
                     <Td>{client.forma_opodatkowania || "—"}</Td>
                     <Td>
-                      {client.profiles?.[0]?.full_name ||
-                        client.profiles?.[0]?.email ||
-                        "Brak opiekuna"}
+                      {getClientCaregiverName(client)}
                     </Td>
                     <Td>
                       <Badge variant={client.obsluga_kadrowa ? "yes" : "no"}>
@@ -767,11 +773,7 @@ function ClientDrawer({
               <>
                 <InfoRow
                   label="Opiekun"
-                  value={
-                    client.profiles?.[0]?.full_name ||
-                    client.profiles?.[0]?.email ||
-                    "Brak opiekuna"
-                  }
+                  value={getClientCaregiverName(client)}
                 />
                 <InfoRow label="Status" value={client.status_klienta} />
               </>

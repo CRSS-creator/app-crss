@@ -8,6 +8,11 @@ export type SettlementStatus =
   | "sprawdzone_zatwierdzone"
   | "podatki_wyslane";
 
+type SettlementClientProfile = {
+  full_name: string | null;
+  email: string | null;
+};
+
 type SettlementClient = {
   id?: string;
   nazwa: string | null;
@@ -19,10 +24,7 @@ type SettlementClient = {
   czynny_vat: boolean | null;
   vat_ue: boolean | null;
   obsluga_kadrowa: boolean | null;
-  profiles?: {
-    full_name: string | null;
-    email: string | null;
-  }[] | null;
+  profiles?: SettlementClientProfile | SettlementClientProfile[] | null;
 };
 
 export type MonthlySettlement = {

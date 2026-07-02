@@ -67,6 +67,12 @@ function buildTemporaryPasswordEmail(profile: Profile, temporaryPassword: string
         Po zalogowaniu system poprosi o ustawienie własnego hasła.
       </p>
 
+      <p style="margin:0 0 24px 0;">
+        <a href="${APP_URL}" style="display:inline-block;background:#f52f57;color:#ffffff;text-decoration:none;border-radius:12px;padding:13px 22px;font-size:15px;font-weight:bold;">
+          Przejdź do aplikacji CRSS
+        </a>
+      </p>
+
       <p style="margin:0 0 6px 0;font-size:16px;line-height:1.55;color:#173b73;">Pozdrawiamy serdecznie,</p>
       <p style="margin:0;font-size:16px;font-weight:bold;color:#173b73;">Zespół CRSS</p>
     </div>

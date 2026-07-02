@@ -89,10 +89,7 @@ function TasksContent({ currentRole }: { currentRole: UserRole | null }) {
   const [clientFilter, setClientFilter] = useState(EMPTY_FILTER);
   const [searchQuery, setSearchQuery] = useState("");
 
-  const visibleAssignees = useMemo(
-    () => filterAssignableProfiles(assignees, currentRole, currentUserId),
-    [assignees, currentRole, currentUserId]
-  );
+  const visibleAssignees = useMemo(() => filterAssignableProfiles(assignees), [assignees]);
 
   const filteredTasks = tasks
     .filter((task) => {
@@ -571,10 +568,8 @@ function priorityWeight(priority: TaskPriority) {
   if (priority === "normalny") return 2;
   return 1;
 }
-function filterAssignableProfiles(profiles: Profile[], role: UserRole | null, userId: string | null) {
-  if (role === "owner") return profiles;
-  if (role === "manager") return profiles.filter((profile) => profile.role !== "owner");
-  return profiles.filter((profile) => profile.id === userId);
+function filterAssignableProfiles(profiles: Profile[]) {
+  return profiles;
 }
 function getProfile(profile: ProfileSummary | ProfileSummary[] | null | undefined) { return Array.isArray(profile) ? profile[0] : profile; }
 function getClient(client: ClientSummary | ClientSummary[] | null | undefined) { return Array.isArray(client) ? client[0] : client; }

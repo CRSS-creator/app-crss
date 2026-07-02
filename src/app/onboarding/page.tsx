@@ -701,7 +701,7 @@ function buildStages(
     buildManualStage("aml", "Do obsługi w module AML. Onboarding pokazuje status wykonania etapu.", recordByKey.aml, "/aml", "Przejdź do AML", undefined, undefined, adminResponsible),
   ];
 
-  if (isJdg(client.forma_prawna)) {
+  if (shouldShowClientCard(client, accountingContract)) {
     stages.push(buildManualStage("client_card", "Dane organizacyjne klienta potrzebne do rozpoczęcia obsługi w biurze.", recordByKey.client_card, undefined, undefined, "Wyślij e-mail", undefined, adminResponsible));
   }
 
@@ -937,6 +937,10 @@ function caregiverLabel(client: Client) {
 
 function isJdg(legalForm: string | null | undefined) {
   return (legalForm || "").trim().toLowerCase() === "jdg";
+}
+
+function shouldShowClientCard(client: Client, accountingContract: CrmContract | null) {
+  return isJdg(client.forma_prawna) || accountingContract?.typ_umowy === "KU";
 }
 
 function responsibleLabelForStage(stage: OnboardingStageKey) {

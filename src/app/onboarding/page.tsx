@@ -524,7 +524,7 @@ function OnboardingContent() {
             <section style={drawerSummaryStyle}>
               <Summary label="Status" value={selectedRow.status} />
               <Summary label="Postęp" value={`${selectedRow.progress}%`} />
-              <Summary label="Pierwszy okres" value={selectedRow.client.pierwszy_okres_rozliczeniowy || "Brak"} />
+              <Summary label="Pierwszy okres" value={formatMonthLabel(selectedRow.client.pierwszy_okres_rozliczeniowy)} />
             </section>
 
             <section style={drawerSectionStyle}>
@@ -1020,6 +1020,20 @@ function rodoStatusLabel(status: string | null) {
 function formatDateTime(value: string | null) {
   if (!value) return "Brak daty";
   return new Intl.DateTimeFormat("pl-PL", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
+}
+
+function formatMonthLabel(value: string | null) {
+  if (!value) return "Brak";
+
+  const normalized = value.length === 7 ? `${value}-01` : value;
+  const date = new Date(`${normalized}T00:00:00`);
+
+  if (Number.isNaN(date.getTime())) return value;
+
+  return new Intl.DateTimeFormat("pl-PL", {
+    month: "long",
+    year: "numeric",
+  }).format(date);
 }
 
 function Summary({ label, value }: { label: string; value: string | number }) {

@@ -38,7 +38,7 @@ const moduleAccess: Record<AppModule, string[]> = {
   cfo: ["owner"],
   aml: ["owner", "manager"],
   rodo: ["owner", "manager"],
-  uzytkownicy: ["owner", "admin"],
+  uzytkownicy: ["owner", "manager", "admin", "accountant"],
 };
 
 export function canAccessModule(role: UserRole | null, moduleName: AppModule) {

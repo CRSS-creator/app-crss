@@ -165,7 +165,7 @@ export default function AppLayout({ children, activePage }: AppLayoutProps) {
         {activePage === "crm" && <CrmDetailsLayoutFixWidget />}
         {activePage === "umowy" && <ContractRegisterSplitWidget />}
         {activePage === "rodo" && <RodoRegisterPrintWidget />}
-        {activePage === "uzytkownicy" && <UserAccessPanel />}
+        {activePage === "uzytkownicy" && (role === "owner" || role === "admin") && <UserAccessPanel />}
       </section>
     </main>
   );

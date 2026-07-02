@@ -20,6 +20,7 @@ import {
   type RecurringTask,
 } from "@/lib/recurringTasksService";
 import type { ProfileSummary } from "@/lib/taskService";
+import type { UserRole } from "@/lib/permissions";
 
 const ROLE_OPTIONS = [
   { value: "owner", label: "Owner" },
@@ -148,13 +149,13 @@ export default function SettingsPage() {
   return (
     <AppLayout activePage="uzytkownicy">
       <AccessGuard moduleName="uzytkownicy">
-        <SettingsContent />
+        {(role) => <SettingsContent role={role} />}
       </AccessGuard>
     </AppLayout>
   );
 }
 
-function SettingsContent() {
+function SettingsContent({ role }: { role: UserRole | null }) {
   const [activeTab, setActiveTab] = useState<SettingsTab>("templates");
   const [templates, setTemplates] = useState<RecurringTask[]>([]);
   const [clients, setClients] = useState<ClientRow[]>([]);
@@ -163,10 +164,27 @@ function SettingsContent() {
   const [draft, setDraft] = useState<TemplateDraft>(emptyDraft);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const canManageUsers = role === "owner" || role === "admin";
+  const canManageFees = role === "owner" || role === "manager" || role === "admin";
+  const visibleTabs = useMemo(
+    () => [
+      "templates" as const,
+      ...(canManageFees ? (["fees"] as const) : []),
+      ...(canManageUsers ? (["users"] as const) : []),
+      "taxHistory" as const,
+    ],
+    [canManageFees, canManageUsers]
+  );
 
   useEffect(() => {
     loadSettings();
   }, []);
+
+  useEffect(() => {
+    if (!visibleTabs.some((tab) => tab === activeTab)) {
+      setActiveTab("templates");
+    }
+  }, [activeTab, visibleTabs]);
 
   async function loadSettings() {
     setLoading(true);
@@ -288,14 +306,14 @@ function SettingsContent() {
         <div style={summaryGridStyle}>
           <Summary label="Szablony" value={templates.length} />
           <Summary label="Aktywne" value={activeTemplates} />
-          <Summary label="Użytkownicy" value={users.length} />
+          {canManageUsers ? <Summary label="Użytkownicy" value={users.length} /> : null}
         </div>
       </section>
 
       <div style={tabsStyle}>
         <button style={activeTab === "templates" ? activeTabStyle : tabStyle} onClick={() => setActiveTab("templates")}>Szablony cykliczne</button>
-        <button style={activeTab === "fees" ? activeTabStyle : tabStyle} onClick={() => setActiveTab("fees")}>Opłaty dodatkowe</button>
-        <button style={activeTab === "users" ? activeTabStyle : tabStyle} onClick={() => setActiveTab("users")}>Użytkownicy</button>
+        {canManageFees ? <button style={activeTab === "fees" ? activeTabStyle : tabStyle} onClick={() => setActiveTab("fees")}>Opłaty dodatkowe</button> : null}
+        {canManageUsers ? <button style={activeTab === "users" ? activeTabStyle : tabStyle} onClick={() => setActiveTab("users")}>Użytkownicy</button> : null}
         <button style={activeTab === "taxHistory" ? activeTabStyle : tabStyle} onClick={() => setActiveTab("taxHistory")}>Historia podatków</button>
       </div>
 
@@ -313,12 +331,26 @@ function SettingsContent() {
           onToggle={toggleTemplate}
           onRemove={removeTemplate}
         />
-      ) : activeTab === "fees" ? (
+      ) : activeTab === "fees" && canManageFees ? (
         <AdditionalFeesSettingsPanel />
       ) : activeTab === "taxHistory" ? (
         <TaxHistoryTab entries={taxHistory} loading={loading} />
-      ) : (
+      ) : canManageUsers ? (
         <UsersTab users={users} loading={loading} onRoleChange={updateUserRole} onUserCreated={(user) => setUsers((current) => [user, ...current])} />
+      ) : (
+        <TemplatesTab
+          templates={templates}
+          clients={clients}
+          users={users}
+          draft={draft}
+          loading={loading}
+          saving={saving}
+          setDraft={setDraft}
+          onSave={saveTemplate}
+          onEdit={editTemplate}
+          onToggle={toggleTemplate}
+          onRemove={removeTemplate}
+        />
       )}
     </>
   );

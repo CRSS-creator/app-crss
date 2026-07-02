@@ -98,6 +98,8 @@ type OnboardingRow = {
   accountingContract: CrmContract | null;
   rodoContract: RodoProcessingContract | null;
   stages: OnboardingStage[];
+  notesStage: OnboardingStageRecord | null;
+  onboardingNotes: string;
   progress: number;
   nextStep: string;
   status: string;
@@ -132,6 +134,8 @@ function OnboardingContent() {
   const [sendingWfirmaAccountNotification, setSendingWfirmaAccountNotification] = useState(false);
   const [sendingDocumentsNotification, setSendingDocumentsNotification] = useState(false);
   const [savingChecklistId, setSavingChecklistId] = useState<string | null>(null);
+  const [savingNotes, setSavingNotes] = useState(false);
+  const [notesDraft, setNotesDraft] = useState("");
   const [statusFilter, setStatusFilter] = useState("Wszystkie");
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -199,6 +203,10 @@ function OnboardingContent() {
   const doneCount = rows.filter((row) => row.status === "Zakończony").length;
   const currentRole = (currentUserRole || "").toLowerCase();
   const canAssignCaregiver = currentRole === "manager" || currentRole === "owner";
+
+  useEffect(() => {
+    setNotesDraft(selectedRow?.onboardingNotes || "");
+  }, [selectedRow?.client.id, selectedRow?.onboardingNotes]);
 
   async function handleStageStatusChange(stage: OnboardingStage, status: OnboardingStageStatus) {
     if (!stage.record) return;
@@ -375,6 +383,30 @@ function OnboardingContent() {
     await loadData();
   }
 
+  async function handleOnboardingNotesSave(row: OnboardingRow) {
+    if (!row.notesStage || notesDraft === row.onboardingNotes) return;
+
+    const nextState = {
+      ...parseStageNotes(row.notesStage.uwagi),
+      onboardingNotes: notesDraft.trim(),
+    };
+
+    setSavingNotes(true);
+    const result = await updateOnboardingStageNotes(
+      row.notesStage,
+      JSON.stringify(nextState),
+      "Zaktualizowano notatki onboardingu."
+    );
+    setSavingNotes(false);
+
+    if (result.error) {
+      alert("Nie udało się zapisać notatek onboardingu.");
+      return;
+    }
+
+    await loadData();
+  }
+
   function openHistory() {
     setHistoryOpen(true);
     window.setTimeout(() => {
@@ -539,6 +571,20 @@ function OnboardingContent() {
               </div>
             </section>
 
+            <section style={drawerSectionStyle}>
+              <div style={sectionHeaderInlineStyle}>
+                <h3 style={drawerSectionTitleStyle}>Notatki onboardingu</h3>
+                {savingNotes && <small style={stageActionInfoStyle}>Zapisywanie...</small>}
+              </div>
+              <textarea
+                style={onboardingNotesTextareaStyle}
+                value={notesDraft}
+                onChange={(event) => setNotesDraft(event.target.value)}
+                onBlur={() => handleOnboardingNotesSave(selectedRow)}
+                placeholder="Dodaj ustalenia, ryzyka lub informacje ważne dla startu współpracy."
+              />
+            </section>
+
             {historyOpen && (
               <section ref={historySectionRef} style={drawerSectionStyle}>
                 <h3 style={drawerSectionTitleStyle}>Historia modyfikacji</h3>
@@ -592,6 +638,8 @@ function buildRows(
     const clientStages = onboardingStages.filter((stage) => stage.klient_id === client.id);
     const clientHistory = onboardingHistory.filter((entry) => entry.klient_id === client.id);
     const stages = buildStages(client, accountingContract, rodoContract, clientStages, clientHistory, profilesById);
+    const notesStage = clientStages.find((stage) => stage.etap === "contract") || clientStages[0] || null;
+    const onboardingNotes = parseStageNotes(notesStage?.uwagi).onboardingNotes;
     const done = stages.filter((stage) => stage.state === "done").length;
     const progress = Math.round((done / stages.length) * 100);
     const nextStep = stages.find((stage) => stage.state !== "done")?.title || "Gotowy do obsługi";
@@ -602,6 +650,8 @@ function buildRows(
       accountingContract,
       rodoContract,
       stages,
+      notesStage,
+      onboardingNotes,
       progress,
       nextStep,
       status,
@@ -636,6 +686,7 @@ function buildStages(
       moduleLabel: "Przejdź do umów",
       href: "/crm/umowy",
       responsibleLabel: ownerResponsible,
+      record: recordByKey.contract,
     },
     {
       key: "rodo",
@@ -645,6 +696,7 @@ function buildStages(
       moduleLabel: "Przejdź do RODO",
       href: "/rodo",
       responsibleLabel: ownerResponsible,
+      record: recordByKey.rodo,
     },
     buildManualStage("aml", "Do obsługi w module AML. Onboarding pokazuje status wykonania etapu.", recordByKey.aml, "/aml", "Przejdź do AML", undefined, undefined, adminResponsible),
   ];
@@ -715,14 +767,17 @@ function buildWfirmaChecklist(legalForm: string | null | undefined, record?: Onb
   }));
 }
 
-function parseStageNotes(value: string | null | undefined): { wfirmaChecklist: Record<string, boolean> } {
-  if (!value) return { wfirmaChecklist: {} };
+function parseStageNotes(value: string | null | undefined): { wfirmaChecklist: Record<string, boolean>; onboardingNotes: string } {
+  if (!value) return { wfirmaChecklist: {}, onboardingNotes: "" };
 
   try {
-    const parsed = JSON.parse(value) as { wfirmaChecklist?: Record<string, boolean> };
-    return { wfirmaChecklist: parsed.wfirmaChecklist || {} };
+    const parsed = JSON.parse(value) as { wfirmaChecklist?: Record<string, boolean>; onboardingNotes?: string };
+    return {
+      wfirmaChecklist: parsed.wfirmaChecklist || {},
+      onboardingNotes: parsed.onboardingNotes || "",
+    };
   } catch {
-    return { wfirmaChecklist: {} };
+    return { wfirmaChecklist: {}, onboardingNotes: value };
   }
 }
 
@@ -1181,6 +1236,19 @@ const caregiverSendStackStyle: CSSProperties = { display: "grid", justifyItems: 
 const caregiverInfoStyle: CSSProperties = { color: colors.muted, fontSize: "12px", fontWeight: 650, textAlign: "right", lineHeight: 1.35 };
 const sectionHeaderInlineStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", marginBottom: "14px" };
 const drawerSectionTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "22px" };
+const onboardingNotesTextareaStyle: CSSProperties = {
+  width: "100%",
+  minHeight: "160px",
+  border: `1px solid ${colors.border}`,
+  borderRadius: radius.input,
+  background: colors.white,
+  color: colors.text,
+  padding: "14px 16px",
+  fontWeight: 700,
+  lineHeight: 1.6,
+  resize: "vertical",
+  outline: "none",
+};
 const processTableWrapperStyle: CSSProperties = { overflowX: "auto", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white };
 const processTableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse", minWidth: "980px" };
 const processThStyle: CSSProperties = { ...thStyle, background: colors.white };

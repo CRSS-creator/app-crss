@@ -18,6 +18,8 @@ import {
   type ClientDocument,
   uploadClientDocument,
 } from "@/lib/clientDocumentsService";
+import { createCrmContractSignedUrl } from "@/lib/crmContractService";
+import { supabase } from "@/lib/supabaseClient";
 import { colors, radius, shadow } from "@/app/design";
 import {
   canEditClientAdministrative,
@@ -92,6 +94,23 @@ type ClientDraft = {
   koszt_obslugi_zleceniobiorcy: string;
   dodatkowe_uslugi: string;
   notatki: string;
+};
+
+type ClientDocumentListItem = ClientDocument & {
+  source: "client" | "contract";
+  canDelete: boolean;
+  opis: string | null;
+};
+
+type ClientContractDocumentRow = {
+  id: string;
+  created_at: string;
+  numer_umowy: string | null;
+  typ_umowy: string | null;
+  wygenerowany_pdf_path: string | null;
+  wygenerowany_pdf_name: string | null;
+  podpisany_pdf_path: string | null;
+  podpisany_pdf_name: string | null;
 };
 
 const CLIENT_STATUSES = [
@@ -489,7 +508,7 @@ function ClientDrawer({
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [documents, setDocuments] = useState<ClientDocument[]>([]);
+  const [documents, setDocuments] = useState<ClientDocumentListItem[]>([]);
   const [documentsLoading, setDocumentsLoading] = useState(true);
   const [uploadingDocument, setUploadingDocument] = useState(false);
   const [draft, setDraft] = useState<ClientDraft>(() => createDraft(client));
@@ -517,15 +536,40 @@ function ClientDrawer({
   async function loadDocuments() {
     setDocumentsLoading(true);
 
-    const { data, error } = await fetchClientDocuments(client.id);
+    const [documentsResult, contractsResult] = await Promise.all([
+      fetchClientDocuments(client.id),
+      supabase
+        .from("crm_umowy")
+        .select(
+          "id, created_at, numer_umowy, typ_umowy, wygenerowany_pdf_path, wygenerowany_pdf_name, podpisany_pdf_path, podpisany_pdf_name"
+        )
+        .eq("klient_id", client.id)
+        .order("created_at", { ascending: false }),
+    ]);
 
-    if (error) {
-      console.error("Błąd pobierania dokumentów klienta:", error);
+    if (documentsResult.error || contractsResult.error) {
+      console.error(
+        "Blad pobierania dokumentow klienta:",
+        documentsResult.error || contractsResult.error
+      );
       setDocumentsLoading(false);
       return;
     }
 
-    setDocuments(data || []);
+    const manualDocuments = ((documentsResult.data || []) as ClientDocument[]).map(
+      (document) => ({
+        ...document,
+        source: "client" as const,
+        canDelete: true,
+        opis: "Dokument klienta",
+      })
+    );
+    const contractDocuments = buildContractDocuments(
+      (contractsResult.data || []) as ClientContractDocumentRow[],
+      client.id
+    );
+
+    setDocuments([...contractDocuments, ...manualDocuments].sort(sortDocumentsByDate));
     setDocumentsLoading(false);
   }
 
@@ -544,15 +588,25 @@ function ClientDrawer({
       }
 
       if (data) {
-        setDocuments((current) => [data, ...current]);
+        setDocuments((current) => [
+          {
+            ...data,
+            source: "client",
+            canDelete: true,
+            opis: "Dokument klienta",
+          },
+          ...current,
+        ]);
       }
     }
 
     setUploadingDocument(false);
   }
 
-  async function openDocument(document: ClientDocument) {
-    const { data, error } = await createClientDocumentSignedUrl(document.sciezka);
+  async function openDocument(document: ClientDocumentListItem) {
+    const { data, error } = document.source === "contract"
+      ? await createCrmContractSignedUrl(document.sciezka)
+      : await createClientDocumentSignedUrl(document.sciezka);
 
     if (error || !data?.signedUrl) {
       console.error("Błąd otwierania dokumentu klienta:", error);
@@ -563,7 +617,9 @@ function ClientDrawer({
     window.open(data.signedUrl, "_blank", "noopener,noreferrer");
   }
 
-  async function removeDocument(document: ClientDocument) {
+  async function removeDocument(document: ClientDocumentListItem) {
+    if (!document.canDelete) return;
+
     const confirmed = window.confirm(`Usunąć dokument "${document.nazwa}"?`);
     if (!confirmed) return;
 
@@ -1051,6 +1107,7 @@ function ClientDrawer({
                     <div>
                       <div style={documentsNameStyle}>{document.nazwa}</div>
                       <div style={documentsMetaStyle}>
+                        {document.opis ? `${document.opis} • ` : ""}
                         {formatDocumentSize(document.rozmiar)}
                       </div>
                     </div>
@@ -1063,13 +1120,15 @@ function ClientDrawer({
                       >
                         Otwórz
                       </button>
-                      <button
-                        type="button"
-                        style={documentDeleteButtonStyle}
-                        onClick={() => removeDocument(document)}
-                      >
-                        Usuń
-                      </button>
+                      {document.canDelete ? (
+                        <button
+                          type="button"
+                          style={documentDeleteButtonStyle}
+                          onClick={() => removeDocument(document)}
+                        >
+                          Usuń
+                        </button>
+                      ) : null}
                     </div>
                   </div>
                 ))}
@@ -1437,6 +1496,64 @@ function CreateClientDrawer({
       </aside>
     </div>
   );
+}
+
+function buildContractDocuments(
+  contracts: ClientContractDocumentRow[],
+  clientId: string
+): ClientDocumentListItem[] {
+  return contracts.flatMap((contract) => {
+    const contractTypeLabel = contract.typ_umowy
+      ? `Umowa księgowa ${contract.typ_umowy}`
+      : "Umowa księgowa";
+    const contractNumber = contract.numer_umowy ? ` • ${contract.numer_umowy}` : "";
+    const documents: ClientDocumentListItem[] = [];
+
+    if (contract.podpisany_pdf_path) {
+      documents.push({
+        id: `${contract.id}-signed`,
+        klient_id: clientId,
+        nazwa:
+          contract.podpisany_pdf_name ||
+          `Podpisana umowa ${contract.numer_umowy || ""}`.trim() ||
+          "Podpisana umowa.pdf",
+        sciezka: contract.podpisany_pdf_path,
+        rozmiar: null,
+        typ: "application/pdf",
+        created_at: contract.created_at,
+        source: "contract",
+        canDelete: false,
+        opis: `${contractTypeLabel}${contractNumber} • podpisany PDF`,
+      });
+    }
+
+    if (contract.wygenerowany_pdf_path) {
+      documents.push({
+        id: `${contract.id}-generated`,
+        klient_id: clientId,
+        nazwa:
+          contract.wygenerowany_pdf_name ||
+          `Wygenerowana umowa ${contract.numer_umowy || ""}`.trim() ||
+          "Wygenerowana umowa.pdf",
+        sciezka: contract.wygenerowany_pdf_path,
+        rozmiar: null,
+        typ: "application/pdf",
+        created_at: contract.created_at,
+        source: "contract",
+        canDelete: false,
+        opis: `${contractTypeLabel}${contractNumber} • wygenerowany PDF`,
+      });
+    }
+
+    return documents;
+  });
+}
+
+function sortDocumentsByDate(
+  first: ClientDocumentListItem,
+  second: ClientDocumentListItem
+) {
+  return new Date(second.created_at).getTime() - new Date(first.created_at).getTime();
 }
 
 function createDraft(client: Client): ClientDraft {

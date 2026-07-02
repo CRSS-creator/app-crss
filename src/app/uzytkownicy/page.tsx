@@ -73,7 +73,6 @@ type PayrollMode = typeof PAYROLL_OPTIONS[number]["value"];
 type FrequencyMode = typeof FREQUENCY_OPTIONS[number]["value"];
 type UserProfile = ProfileSummary & { id: string; role: string | null };
 type NewUserDraft = { fullName: string; email: string; role: string; password: string };
-type PasswordResetResult = { user: UserProfile; temporaryPassword: string } | null;
 type ClientRow = {
   id: string;
   nazwa: string | null;
@@ -558,7 +557,6 @@ function UsersTab({ users, loading, onRoleChange, onUserCreated }: { users: User
   const [newUser, setNewUser] = useState<NewUserDraft>(emptyNewUserDraft);
   const [creatingUser, setCreatingUser] = useState(false);
   const [resettingUserId, setResettingUserId] = useState<string | null>(null);
-  const [resetResult, setResetResult] = useState<PasswordResetResult>(null);
 
   async function createUser() {
     if (!newUser.fullName.trim()) return alert("Wpisz imię i nazwisko użytkownika.");
@@ -587,7 +585,6 @@ function UsersTab({ users, loading, onRoleChange, onUserCreated }: { users: User
     }
 
     onUserCreated(result.user as UserProfile);
-    setResetResult({ user: result.user as UserProfile, temporaryPassword: newUser.password });
     setNewUser(emptyNewUserDraft);
   }
 
@@ -611,56 +608,15 @@ function UsersTab({ users, loading, onRoleChange, onUserCreated }: { users: User
     const result = await response.json().catch(() => null);
     setResettingUserId(null);
 
-    if (!response.ok || !result?.temporaryPassword) {
+    if (!response.ok) {
       alert(result?.error || "Nie udało się zresetować hasła.");
       return;
     }
-
-    setResetResult({ user, temporaryPassword: result.temporaryPassword });
-  }
-
-  function openPasswordEmail() {
-    if (!resetResult?.user.email) return;
-    const subject = "Dostęp do aplikacji CRSS";
-    const body = [
-      "Dzień dobry,",
-      "",
-      "poniżej przesyłam hasło tymczasowe do aplikacji CRSS:",
-      "",
-      `Login: ${resetResult.user.email}`,
-      `Hasło tymczasowe: ${resetResult.temporaryPassword}`,
-      "",
-      "Po pierwszym logowaniu system poprosi o ustawienie własnego hasła.",
-      "",
-      "Adres aplikacji: https://app.crss.com.pl",
-    ].join("\n");
-
-    window.location.href = `mailto:${encodeURIComponent(resetResult.user.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-  }
-
-  async function copyTemporaryPassword() {
-    if (!resetResult) return;
-    await navigator.clipboard.writeText(resetResult.temporaryPassword);
-    alert("Hasło tymczasowe skopiowane.");
   }
 
   return (
     <section style={panelStyle}>
       <div style={panelHeaderStyle}><div><h2 style={sectionTitleStyle}>Użytkownicy</h2><p style={hintStyle}>Lista osób z dostępem do aplikacji oraz ich role.</p></div></div>
-      {resetResult && (
-        <div style={temporaryPasswordBoxStyle}>
-          <div>
-            <strong>Hasło tymczasowe dla: {profileName(resetResult.user)}</strong>
-            <span style={temporaryPasswordStyle}>{resetResult.temporaryPassword}</span>
-            <small style={smallTextStyle}>Po zalogowaniu użytkownik będzie musiał ustawić własne hasło.</small>
-          </div>
-          <div style={actionsStyle}>
-            <button style={secondaryButtonStyle} type="button" onClick={copyTemporaryPassword}>Kopiuj hasło</button>
-            <button style={primaryButtonStyle} type="button" onClick={openPasswordEmail}>Wyślij maila</button>
-            <button style={secondaryButtonStyle} type="button" onClick={() => setResetResult(null)}>Zamknij</button>
-          </div>
-        </div>
-      )}
       <div style={userCreateFormStyle}>
         <Field label="Imię i nazwisko"><input style={inputStyle} value={newUser.fullName} onChange={(event) => setNewUser((current) => ({ ...current, fullName: event.target.value }))} placeholder="np. Anna Kowalska" /></Field>
         <Field label="Email"><input style={inputStyle} type="email" value={newUser.email} onChange={(event) => setNewUser((current) => ({ ...current, email: event.target.value }))} placeholder="adres@email.pl" /></Field>
@@ -768,8 +724,6 @@ const templateFilterStyle: CSSProperties = { marginBottom: "12px" };
 const historyFiltersStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(260px, 1fr) 180px 220px", gap: "12px", marginBottom: "14px", alignItems: "center" };
 const tableShellStyle: CSSProperties = { overflowX: "auto", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white };
 const userCreateFormStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(4, minmax(160px, 1fr)) auto auto", gap: "12px", alignItems: "end", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "14px", marginBottom: "18px" };
-const temporaryPasswordBoxStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "14px", alignItems: "center", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "14px", marginBottom: "18px", flexWrap: "wrap" };
-const temporaryPasswordStyle: CSSProperties = { display: "block", marginTop: "8px", color: colors.navy, fontSize: "20px", fontWeight: 900, letterSpacing: "0.04em" };
 const tableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse" };
 const thStyle: CSSProperties = { textAlign: "left", padding: "13px 14px", color: colors.muted, fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: `1px solid ${colors.border}`, whiteSpace: "nowrap" };
 const tdStyle: CSSProperties = { padding: "14px", borderBottom: `1px solid ${colors.border}`, color: colors.text, verticalAlign: "middle" };

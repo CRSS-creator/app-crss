@@ -579,15 +579,24 @@ function fetchRodoProfiles() {
 }
 
 function compareContractNumbersDesc(a: RodoProcessingContract, b: RodoProcessingContract) {
-  const aNumber = extractLeadingNumber(a.numer_umowy);
-  const bNumber = extractLeadingNumber(b.numer_umowy);
-  if (aNumber !== bNumber) return bNumber - aNumber;
+  const aParts = extractContractNumberParts(a.numer_umowy);
+  const bParts = extractContractNumberParts(b.numer_umowy);
+
+  if (aParts.year !== bParts.year) return bParts.year - aParts.year;
+  if (aParts.month !== bParts.month) return bParts.month - aParts.month;
+  if (aParts.number !== bParts.number) return bParts.number - aParts.number;
+
   return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
 }
 
-function extractLeadingNumber(value: string | null) {
-  const match = value?.match(/^(\d+)/);
-  return match ? Number(match[1]) : 0;
+function extractContractNumberParts(value: string | null) {
+  const match = value?.match(/^(\d+)\/RODO\/(\d{1,2})\/(\d{4})$/i);
+
+  return {
+    number: match ? Number(match[1]) : 0,
+    month: match ? Number(match[2]) : 0,
+    year: match ? Number(match[3]) : 0,
+  };
 }
 
 function emptyToNull(value: string) {

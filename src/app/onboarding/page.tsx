@@ -7,7 +7,7 @@ import AccessGuard from "@/components/AccessGuard";
 import AppSelect from "@/components/AppSelect";
 import { colors, radius, shadow } from "@/app/design";
 import { supabase } from "@/lib/supabaseClient";
-import { fetchClientCaregivers, fetchClients } from "@/lib/clientService";
+import { fetchClients } from "@/lib/clientService";
 import { fetchCrmContracts, type CrmContract } from "@/lib/crmContractService";
 import { fetchRodoProcessingContracts, type RodoProcessingContract } from "@/lib/rodoProcessingContractService";
 import {
@@ -150,13 +150,13 @@ function OnboardingContent() {
 
   async function loadData() {
     setLoading(true);
-    const [clientsResult, contractsResult, rodoResult, profilesResult, caregiversResult, userResult] = await Promise.all([
+    const [clientsResult, contractsResult, rodoResult, profilesResult, userResult, sessionResult] = await Promise.all([
       fetchClients(),
       fetchCrmContracts(),
       fetchRodoProcessingContracts(),
       supabase.from("profiles").select("id, full_name, email, role, aktywne"),
-      fetchClientCaregivers(),
       supabase.auth.getUser(),
+      supabase.auth.getSession(),
     ]);
 
     const nextClients = clientsResult.error ? [] : ((clientsResult.data || []) as unknown as Client[]);
@@ -167,8 +167,6 @@ function OnboardingContent() {
     if (contractsResult.error) console.error("Błąd pobierania umów do onboardingu:", contractsResult.error);
     if (rodoResult.error) console.error("Błąd pobierania umów RODO do onboardingu:", rodoResult.error);
     if (profilesResult.error) console.error("Błąd pobierania użytkowników do historii onboardingu:", profilesResult.error);
-
-    if (caregiversResult.error) console.error("Nie udało się pobrać opiekunów do onboardingu:", caregiversResult.error);
 
     const onboardingClientIds = findOnboardingClientIds(nextClients, nextContracts);
     if (onboardingClientIds.length > 0) {
@@ -189,7 +187,7 @@ function OnboardingContent() {
     const nextProfilesById = profilesResult.error ? {} : indexProfiles((profilesResult.data || []) as Profile[]);
     setProfilesById(nextProfilesById);
     setCurrentUserRole(nextProfilesById[userResult.data.user?.id || ""]?.role || null);
-    setCaregivers(caregiversResult.error ? [] : ((caregiversResult.data || []) as Profile[]));
+    setCaregivers(await fetchAssignableCaregivers(sessionResult.data.session?.access_token));
     setOnboardingStages(stagesResult.error ? [] : ((stagesResult.data || []) as OnboardingStageRecord[]));
     setOnboardingHistory(historyResult.error ? [] : ((historyResult.data || []) as OnboardingHistoryRecord[]));
     setLoading(false);
@@ -645,6 +643,24 @@ function OnboardingContent() {
       )}
     </>
   );
+}
+
+async function fetchAssignableCaregivers(token: string | undefined): Promise<Profile[]> {
+  if (!token) return [];
+
+  const response = await fetch("/api/onboarding/caregivers", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    console.error("Nie udało się pobrać listy opiekunów do onboardingu.");
+    return [];
+  }
+
+  const data = await response.json() as { caregivers?: Profile[] };
+  return data.caregivers || [];
 }
 
 function findOnboardingClientIds(clients: Client[], contracts: CrmContract[]) {
@@ -1358,3 +1374,4 @@ const smallButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, 
 const dangerSmallButtonStyle: CSSProperties = { ...smallButtonStyle, background: "#fff1f2", color: colors.danger };
 const historyListStyle: CSSProperties = { display: "grid", gap: "10px" };
 const historyItemStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, padding: "12px", display: "grid", gap: "4px", color: colors.text };
+

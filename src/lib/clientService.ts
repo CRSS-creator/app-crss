@@ -33,13 +33,43 @@ const CLIENT_SELECT = `
       )
     `;
 
-export async function fetchClientCaregivers() {
-  return supabase
-    .from("profiles")
-    .select("id, full_name, email, role, aktywne")
-    .in("role", ["owner", "manager", "admin", "accountant"])
-    .neq("aktywne", false)
-    .order("full_name", { ascending: true });
+type ClientCaregiver = {
+  id: string;
+  full_name: string | null;
+  email: string | null;
+  role: string | null;
+  aktywne?: boolean | null;
+};
+
+type ClientCaregiversResult = {
+  data: ClientCaregiver[];
+  error: Error | null;
+};
+
+export async function fetchClientCaregivers(): Promise<ClientCaregiversResult> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
+
+  if (!token) {
+    return { data: [], error: new Error("Brak aktywnej sesji użytkownika.") };
+  }
+
+  const response = await fetch("/api/onboarding/caregivers", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    return {
+      data: [],
+      error: new Error(body?.error || "Nie udało się pobrać listy opiekunów."),
+    };
+  }
+
+  const body = (await response.json()) as { caregivers?: ClientCaregiver[] };
+  return { data: body.caregivers || [], error: null };
 }
 
 export async function fetchClients() {

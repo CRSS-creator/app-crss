@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-const ALLOWED_ROLES = new Set(["owner", "manager"]);
+const ALLOWED_ROLES = new Set(["owner", "manager", "admin"]);
 const CAREGIVER_ROLES = ["owner", "manager", "admin", "accountant"];
 
 export async function GET(request: NextRequest) {

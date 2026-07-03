@@ -148,15 +148,43 @@ export async function updateRecurringTask(taskId: string, payload: Partial<Recur
 }
 
 export async function updateRecurringTaskRealizationStatus(realizationId: string, status: RecurringTaskRealization["status"]) {
-  return supabase
-    .from("zadania_cykliczne_realizacje")
-    .update({
-      status,
-      completed_at: status === "zrobione" ? new Date().toISOString() : null,
-    })
-    .eq("id", realizationId)
-    .select("*")
-    .single<RecurringTaskRealization>();
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+
+  if (sessionError || !sessionData.session?.access_token) {
+    return {
+      data: null,
+      error: sessionError?.message || "Brak aktywnej sesji użytkownika.",
+    };
+  }
+
+  try {
+    const response = await fetch("/api/rozliczenia/recurring-task-realizations/status", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${sessionData.session.access_token}`,
+      },
+      body: JSON.stringify({ realizationId, status }),
+    });
+    const payload = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      return {
+        data: null,
+        error: payload.error || "Nie udało się zapisać statusu zadania.",
+      };
+    }
+
+    return {
+      data: payload.data as RecurringTaskRealization,
+      error: null,
+    };
+  } catch (error) {
+    return {
+      data: null,
+      error: error instanceof Error ? error.message : "Nie udało się zapisać statusu zadania.",
+    };
+  }
 }
 
 export async function deleteRecurringTask(taskId: string) {

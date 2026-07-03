@@ -349,7 +349,7 @@ function SettlementDrawer({ settlement, progress, recurringTasks, taxObligations
     if (!selectedObligations.every((obligation) => obligation.status_sms === "wyslane")) channels.push("sms");
 
     if (channels.length === 0) {
-      alert("Zaznaczone zobowi\u0105zania zosta\u0142y ju\u017c wys\u0142ane e-mailem i SMS-em.");
+      alert("Zaznaczone zobowiązania zostały już wysłane e-mailem i SMS-em.");
       return;
     }
 
@@ -361,7 +361,7 @@ function SettlementDrawer({ settlement, progress, recurringTasks, taxObligations
       const response = await sendTaxObligations(settlement.id, channel, selectedTaxObligationIds);
       const result = await response.json().catch(() => ({}));
       if (!response.ok) {
-        errors.push(result.error || (channel === "email" ? "Nie uda\u0142o si\u0119 wys\u0142a\u0107 e-maila." : "Nie uda\u0142o si\u0119 wys\u0142a\u0107 SMS-a."));
+        errors.push(result.error || (channel === "email" ? "Nie udało się wysłać e-maila." : "Nie udało się wysłać SMS-a."));
         continue;
       }
       if (Array.isArray(result.obligations)) {
@@ -375,7 +375,7 @@ function SettlementDrawer({ settlement, progress, recurringTasks, taxObligations
       setSelectedTaxObligationIds([]);
     }
     if (errors.length > 0) {
-      alert(errors.join("\n"));
+      alert(Array.from(new Set(errors)).join("\n"));
     }
   }
 
@@ -467,7 +467,7 @@ function SettlementDrawer({ settlement, progress, recurringTasks, taxObligations
                       disabled={selectedTaxObligationIds.length === 0 || sendingTaxObligations}
                       onClick={requestTaxObligationSend}
                     >
-                      {sendingTaxObligations ? "Wysy\u0142anie..." : `Wy\u015blij informacje (${selectedTaxObligationIds.length})`}
+                      {sendingTaxObligations ? "Wysyłanie..." : `Wyślij informacje (${selectedTaxObligationIds.length})`}
                     </button>
                   </div>
                 </div>
@@ -509,7 +509,10 @@ function AmountInput({ value, onChange }: { value: number | null; onChange: (val
   return <input style={taxFieldInputStyle} type="number" min={0} step="0.01" value={localValue} onChange={(event) => setLocalValue(event.target.value)} onBlur={() => onChange(parseOptionalAmount(localValue))} />;
 }
 
-function ProgressBadge({ progress, done, total, large }: { progress: number; done: number; total: number; large?: boolean }) { return <div style={large ? progressLargeStyle : progressStyle}><span>{progress}%</span><span>{done}/{total} zadań</span></div>; }
+function ProgressBadge({ progress, done, total, large }: { progress: number; done: number; total: number; large?: boolean }) {
+  const isComplete = total > 0 && done === total;
+  return <div style={{ ...(large ? progressLargeStyle : progressStyle), ...(isComplete ? progressCompleteStyle : {}) }}><span>{progress}%</span><span>{done}/{total} zadań</span></div>;
+}
 function SummaryCard({ label, value }: { label: string; value: string | number }) { return <div style={summaryCardStyle}><span>{label}</span><strong>{value}</strong></div>; }
 function Field({ label, children }: { label: string; children: ReactNode }) { return <label style={fieldStyle}><span style={labelStyle}>{label}</span>{children}</label>; }
 function Th({ children, width }: { children: ReactNode; width?: string }) { return <th style={{ ...thStyle, width }}>{children}</th>; }
@@ -602,6 +605,7 @@ const clientCellStyle: CSSProperties = { display: "flex", flexDirection: "column
 const clientNameStyle: CSSProperties = { fontWeight: 800 };
 const progressStyle: CSSProperties = { display: "inline-flex", flexDirection: "column", gap: "4px", borderRadius: radius.input, background: "#e8eef8", color: colors.navy, padding: "8px 10px", fontWeight: 500, minWidth: "86px", fontSize: "14px" };
 const progressLargeStyle: CSSProperties = { ...progressStyle, width: "100%", padding: "18px", fontSize: "20px" };
+const progressCompleteStyle: CSSProperties = { background: "#dcfce7", color: "#166534" };
 const detailsButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "9px 12px", background: colors.card, color: colors.navy, fontWeight: 800, cursor: "pointer" };
 const reminderButtonStyle: CSSProperties = { border: "none", borderRadius: radius.button, padding: "12px 16px", background: colors.red, color: colors.white, fontWeight: 850, cursor: "pointer", margin: "0 14px 16px 0", minHeight: "44px" };
 const disabledReminderButtonStyle: CSSProperties = { ...reminderButtonStyle, background: "#e8eef8", color: colors.muted, cursor: "not-allowed" };

@@ -31,18 +31,19 @@ const moduleAccess: Record<AppModule, string[]> = {
   limity: ["owner", "manager", "admin"],
   onboarding: ["owner", "manager", "admin", "accountant"],
   "zamykanie-roku": ["owner", "manager", "admin"],
-  crm: ["owner"],
-  umowy: ["owner"],
-  faktury: ["owner"],
-  cso: ["owner"],
-  cfo: ["owner"],
-  aml: ["owner", "manager"],
-  rodo: ["owner", "manager"],
+  crm: ["owner", "admin"],
+  umowy: ["owner", "admin"],
+  faktury: ["owner", "admin"],
+  cso: ["owner", "admin"],
+  cfo: ["owner", "admin"],
+  aml: ["owner", "manager", "admin"],
+  rodo: ["owner", "manager", "admin"],
   uzytkownicy: ["owner", "manager", "admin", "accountant"],
 };
 
 export function canAccessModule(role: UserRole | null, moduleName: AppModule) {
   if (!role) return false;
+  if (role === "admin") return true;
   return moduleAccess[moduleName]?.includes(role) ?? false;
 }
 

@@ -41,10 +41,48 @@ type ClientCaregiver = {
   aktywne?: boolean | null;
 };
 
+type ClientProfile = Omit<ClientCaregiver, "id">;
+
 type ClientCaregiversResult = {
   data: ClientCaregiver[];
   error: Error | null;
 };
+
+type ClientRow = {
+  opiekun_id?: string | null;
+  profiles?: ClientProfile | ClientProfile[] | null;
+  [key: string]: unknown;
+};
+
+async function hydrateClientsWithCaregivers<T extends ClientRow>(
+  clients: T[] | null
+): Promise<T[] | null> {
+  if (!clients?.length) return clients;
+
+  const { data: caregivers, error } = await fetchClientCaregivers();
+  if (error || !caregivers.length) return clients;
+
+  return clients.map((client) => {
+    const profile = Array.isArray(client.profiles)
+      ? client.profiles[0]
+      : client.profiles;
+
+    if (profile || !client.opiekun_id) return client;
+
+    const caregiver = caregivers.find((item) => item.id === client.opiekun_id);
+    if (!caregiver) return client;
+
+    return {
+      ...client,
+      profiles: {
+        full_name: caregiver.full_name,
+        email: caregiver.email,
+        role: caregiver.role,
+        aktywne: caregiver.aktywne,
+      },
+    };
+  });
+}
 
 export async function fetchClientCaregivers(): Promise<ClientCaregiversResult> {
   const { data: sessionData } = await supabase.auth.getSession();
@@ -73,19 +111,39 @@ export async function fetchClientCaregivers(): Promise<ClientCaregiversResult> {
 }
 
 export async function fetchClients() {
-  return supabase
+  const result = await supabase
     .from("klienci")
     .select(CLIENT_SELECT)
     .order("nazwa", { ascending: true });
+
+  if (result.error) return result;
+
+  return {
+    ...result,
+    data: (await hydrateClientsWithCaregivers(
+      result.data as unknown as ClientRow[] | null
+    )) as unknown as typeof result.data,
+  };
 }
 
 export async function updateClient(clientId: string, payload: Record<string, unknown>) {
-  return supabase
+  const result = await supabase
     .from("klienci")
     .update(payload)
     .eq("id", clientId)
     .select(CLIENT_SELECT)
     .single();
+
+  if (result.error) return result;
+
+  const hydrated = await hydrateClientsWithCaregivers(
+    result.data ? ([result.data] as unknown as ClientRow[]) : null
+  );
+
+  return {
+    ...result,
+    data: (hydrated?.[0] || result.data) as typeof result.data,
+  };
 }
 
 export async function createClient(payload: Record<string, unknown>) {

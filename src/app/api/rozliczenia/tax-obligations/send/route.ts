@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 const ALLOWED_ROLES = new Set(["owner", "manager", "admin", "accountant"]);
@@ -12,7 +12,7 @@ type SendPayload = {
 };
 
 type AuthorizedResult =
-  | { admin: SupabaseClient; requesterId: string; requesterName: string; role: string; error: null }
+  | { admin: SupabaseClient; requesterId: string; requesterName: string; requesterEmail: string | null; role: string; error: null }
   | { admin: null; requesterId: null; requesterName?: null; role: null; error: NextResponse };
 
 function getWebhookUrl() {
@@ -22,7 +22,7 @@ function getWebhookUrl() {
     return {
       webhookUrl: null,
       error: NextResponse.json(
-        { error: "Brak konfiguracji wysyĹ‚ki zobowiÄ…zaĹ„. UzupeĹ‚nij N8N_TAX_OBLIGATIONS_WEBHOOK_URL." },
+        { error: "Brak konfiguracji wysyłki zobowiązań. Uzupełnij N8N_TAX_OBLIGATIONS_WEBHOOK_URL." },
         { status: 500 }
       ),
     };
@@ -32,7 +32,7 @@ function getWebhookUrl() {
     return {
       webhookUrl: null,
       error: NextResponse.json(
-        { error: "W aplikacji ustawiony jest testowy webhook n8n. UĹĽyj produkcyjnego adresu /webhook/... i aktywuj workflow w n8n." },
+        { error: "W aplikacji ustawiony jest testowy webhook n8n. Użyj produkcyjnego adresu /webhook/... i aktywuj workflow w n8n." },
         { status: 500 }
       ),
     };
@@ -51,7 +51,7 @@ async function getAuthorizedUser(request: NextRequest): Promise<AuthorizedResult
 
   const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
   if (!token) {
-    return { admin: null, requesterId: null, role: null, error: NextResponse.json({ error: "Brak aktywnej sesji uĹĽytkownika." }, { status: 401 }) };
+    return { admin: null, requesterId: null, role: null, error: NextResponse.json({ error: "Brak aktywnej sesji użytkownika." }, { status: 401 }) };
   }
 
   const admin = createClient(supabaseUrl, serviceRoleKey, {
@@ -64,7 +64,7 @@ async function getAuthorizedUser(request: NextRequest): Promise<AuthorizedResult
   const { data: requesterData, error: requesterError } = await admin.auth.getUser(token);
   const requesterId = requesterData.user?.id;
   if (requesterError || !requesterId) {
-    return { admin: null, requesterId: null, role: null, error: NextResponse.json({ error: "Nie udaĹ‚o siÄ™ potwierdziÄ‡ sesji uĹĽytkownika." }, { status: 401 }) };
+    return { admin: null, requesterId: null, role: null, error: NextResponse.json({ error: "Nie udało się potwierdzić sesji użytkownika." }, { status: 401 }) };
   }
 
   const { data: profile } = await admin
@@ -74,15 +74,50 @@ async function getAuthorizedUser(request: NextRequest): Promise<AuthorizedResult
     .single();
 
   if (profile?.aktywne === false) {
-    return { admin: null, requesterId: null, role: null, error: NextResponse.json({ error: "Konto uĹĽytkownika jest nieaktywne." }, { status: 403 }) };
+    return { admin: null, requesterId: null, role: null, error: NextResponse.json({ error: "Konto użytkownika jest nieaktywne." }, { status: 403 }) };
   }
 
   const role = profile?.role || "";
   if (!ALLOWED_ROLES.has(role)) {
-    return { admin: null, requesterId: null, role: null, error: NextResponse.json({ error: "Brak uprawnieĹ„ do wysyĹ‚ki zobowiÄ…zaĹ„." }, { status: 403 }) };
+    return { admin: null, requesterId: null, role: null, error: NextResponse.json({ error: "Brak uprawnień do wysyłki zobowiązań." }, { status: 403 }) };
   }
 
-  return { admin, requesterId, requesterName: profile?.full_name || profile?.email || "Nieustalony uĹĽytkownik", role, error: null };
+  return {
+    admin,
+    requesterId,
+    requesterName: profile?.full_name || profile?.email || "Nieustalony użytkownik",
+    requesterEmail: profile?.email || requesterData.user?.email || null,
+    role,
+    error: null,
+  };
+}
+
+type RelatedProfile = {
+  full_name?: string | null;
+  email?: string | null;
+} | null;
+
+function firstRelatedProfile(value: unknown): RelatedProfile {
+  if (Array.isArray(value)) return (value[0] as RelatedProfile) || null;
+  return (value as RelatedProfile) || null;
+}
+
+function normalizeIdentity(value: string | null | undefined) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function accountantOwnsClient(auth: Extract<AuthorizedResult, { error: null }>, client: { opiekun_id?: string | null; profiles?: unknown }) {
+  if (auth.role !== "accountant") return true;
+  if (client.opiekun_id === auth.requesterId) return true;
+
+  const caregiver = firstRelatedProfile(client.profiles);
+  const requesterEmail = normalizeIdentity(auth.requesterEmail);
+  const requesterName = normalizeIdentity(auth.requesterName);
+
+  return Boolean(
+    (requesterEmail && normalizeIdentity(caregiver?.email) === requesterEmail) ||
+    (requesterName && normalizeIdentity(caregiver?.full_name) === requesterName)
+  );
 }
 
 function formatPeriod(period: string) {
@@ -199,7 +234,7 @@ export async function POST(request: NextRequest) {
   try {
     payload = await request.json();
   } catch {
-    return NextResponse.json({ error: "NieprawidĹ‚owe dane wysyĹ‚ki." }, { status: 400 });
+    return NextResponse.json({ error: "Nieprawidłowe dane wysyłki." }, { status: 400 });
   }
 
   if (!payload.settlementId) {
@@ -207,7 +242,7 @@ export async function POST(request: NextRequest) {
   }
 
   if (payload.channel !== "email" && payload.channel !== "sms") {
-    return NextResponse.json({ error: "Wybierz kanaĹ‚ wysyĹ‚ki: email albo sms." }, { status: 400 });
+    return NextResponse.json({ error: "Wybierz kanał wysyłki: email albo sms." }, { status: 400 });
   }
 
   const { data: settlement, error: settlementError } = await auth.admin
@@ -237,19 +272,19 @@ export async function POST(request: NextRequest) {
 
   const client = Array.isArray(settlement.klienci) ? settlement.klienci[0] : settlement.klienci;
   if (!client) {
-    return NextResponse.json({ error: "Rozliczenie nie ma powiÄ…zanego klienta." }, { status: 400 });
+    return NextResponse.json({ error: "Rozliczenie nie ma powiązanego klienta." }, { status: 400 });
   }
 
-  if (auth.role === "accountant" && client.opiekun_id !== auth.requesterId) {
-    return NextResponse.json({ error: "MoĹĽesz wysĹ‚aÄ‡ zobowiÄ…zania tylko dla swoich klientĂłw." }, { status: 403 });
+  if (!accountantOwnsClient(auth, client)) {
+    return NextResponse.json({ error: "Możesz wysłać zobowiązania tylko dla swoich klientów." }, { status: 403 });
   }
 
   if (payload.channel === "email" && !client.email) {
-    return NextResponse.json({ error: "Klient nie ma uzupeĹ‚nionego adresu e-mail." }, { status: 400 });
+    return NextResponse.json({ error: "Klient nie ma uzupełnionego adresu e-mail." }, { status: 400 });
   }
 
   if (payload.channel === "sms" && !client.telefon) {
-    return NextResponse.json({ error: "Klient nie ma uzupeĹ‚nionego numeru telefonu." }, { status: 400 });
+    return NextResponse.json({ error: "Klient nie ma uzupełnionego numeru telefonu." }, { status: 400 });
   }
 
   let obligationsQuery = auth.admin
@@ -267,7 +302,7 @@ export async function POST(request: NextRequest) {
   const { data: obligations, error: obligationsError } = await obligationsQuery;
 
   if (obligationsError) {
-    return NextResponse.json({ error: "Nie udaĹ‚o siÄ™ pobraÄ‡ zobowiÄ…zaĹ„." }, { status: 500 });
+    return NextResponse.json({ error: "Nie udało się pobrać zobowiązań." }, { status: 500 });
   }
 
   const sendStatusColumn = payload.channel === "email" ? "status_email" : "status_sms";
@@ -277,7 +312,7 @@ export async function POST(request: NextRequest) {
     obligation[sendStatusColumn] !== "wyslane"
   );
   if (readyObligations.length === 0) {
-    return NextResponse.json({ error: "Brak nowych zobowiÄ…zaĹ„ do wysĹ‚ania tym kanaĹ‚em." }, { status: 400 });
+    return NextResponse.json({ error: "Brak nowych zobowiązań do wysłania tym kanałem." }, { status: 400 });
   }
 
   const caregiver = Array.isArray(client.profiles) ? client.profiles[0] : client.profiles;
@@ -335,7 +370,7 @@ export async function POST(request: NextRequest) {
 
     if (!response.ok) {
       const details = await response.text().catch(() => "");
-      const message = details ? `Automatyzacja zwrĂłciĹ‚a status ${response.status}: ${details}` : `Automatyzacja zwrĂłciĹ‚a status ${response.status}.`;
+      const message = details ? `Automatyzacja zwróciła status ${response.status}: ${details}` : `Automatyzacja zwróciła status ${response.status}.`;
       return NextResponse.json({ error: message }, { status: 502 });
     }
 
@@ -351,7 +386,7 @@ export async function POST(request: NextRequest) {
       .select("*");
 
     if (updateError) {
-      return NextResponse.json({ error: `${channelLabel} wysĹ‚ano, ale nie udaĹ‚o siÄ™ zapisaÄ‡ statusu wysyĹ‚ki.` }, { status: 502 });
+      return NextResponse.json({ error: `${channelLabel} wysłano, ale nie udało się zapisać statusu wysyłki.` }, { status: 502 });
     }
 
     await auth.admin
@@ -387,7 +422,7 @@ export async function POST(request: NextRequest) {
       obligations: obligationsWithSender,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Nie udaĹ‚o siÄ™ poĹ‚Ä…czyÄ‡ z n8n.";
-    return NextResponse.json({ error: `Nie udaĹ‚o siÄ™ poĹ‚Ä…czyÄ‡ z automatyzacjÄ… n8n: ${message}` }, { status: 502 });
+    const message = error instanceof Error ? error.message : "Nie udało się połączyć z n8n.";
+    return NextResponse.json({ error: `Nie udało się połączyć z automatyzacją n8n: ${message}` }, { status: 502 });
   }
 }

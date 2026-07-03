@@ -252,7 +252,7 @@ function SettlementsContent() {
                   const progress = progressBySettlement[settlement.id] || { progress: 0, total_tasks: 0, done_tasks: 0 };
                   return (
                     <tr key={settlement.id} style={rowStyle}>
-                      <Td><div style={clientCellStyle}><span>{client?.nazwa || "Klient"}</span><small>{client?.nip || "Brak NIP"} · {getCaregiverName(client)}</small></div></Td>
+                      <Td><div style={clientCellStyle}><span style={clientNameStyle}>{client?.nazwa || "Klient"}</span><small>{client?.nip || "Brak NIP"} · {getCaregiverName(client)}</small></div></Td>
                       <Td><AppSelect style={{ ...statusInputStyle, ...statusSelectStyle(settlement.status_ksiegowosci) }} value={settlement.status_ksiegowosci} disabled={savingId === settlement.id} options={STATUS_OPTIONS} onChange={(value) => patchSettlement(settlement, { status_ksiegowosci: value as SettlementStatus })} /></Td>
                       <Td><NumberInput value={settlement.liczba_dokumentow} disabled={false} onChange={(value) => patchSettlement(settlement, { liczba_dokumentow: value })} /></Td>
                       <Td>{client?.obsluga_kadrowa ? <NumberInput value={settlement.liczba_pracownikow} disabled={false} onChange={(value) => patchSettlement(settlement, { liczba_pracownikow: value })} /> : <span style={emptyCellStyle}>-</span>}</Td>
@@ -598,7 +598,8 @@ const inputStyle: CSSProperties = { width: "100%", border: `1px solid ${colors.b
 const statusInputStyle: CSSProperties = { ...inputStyle, minWidth: 0, maxWidth: "100%", height: "42px", padding: "8px 28px 8px 10px", fontSize: "12px", lineHeight: 1.1, whiteSpace: "normal", fontWeight: 500 };
 const smallInputStyle: CSSProperties = { ...inputStyle, width: "100%", maxWidth: "150px", minWidth: "94px", background: colors.inputBackground, textAlign: "center", fontWeight: 500 };
 const textareaStyle: CSSProperties = { ...inputStyle, minHeight: "96px", resize: "vertical", background: colors.inputBackground };
-const clientCellStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "5px", minWidth: 0, fontWeight: 500 };
+const clientCellStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "5px", minWidth: 0, fontWeight: 400 };
+const clientNameStyle: CSSProperties = { fontWeight: 800 };
 const progressStyle: CSSProperties = { display: "inline-flex", flexDirection: "column", gap: "4px", borderRadius: radius.input, background: "#e8eef8", color: colors.navy, padding: "8px 10px", fontWeight: 500, minWidth: "86px", fontSize: "14px" };
 const progressLargeStyle: CSSProperties = { ...progressStyle, width: "100%", padding: "18px", fontSize: "20px" };
 const detailsButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "9px 12px", background: colors.card, color: colors.navy, fontWeight: 800, cursor: "pointer" };

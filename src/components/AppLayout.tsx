@@ -108,9 +108,7 @@ export default function AppLayout({ children, activePage }: AppLayoutProps) {
   const visibleMenu = menu
     .map((section) => ({
       ...section,
-      items: roleLoading
-        ? section.items
-        : section.items.filter((item) => canAccessModule(role, item.page)),
+      items: roleLoading ? [] : section.items.filter((item) => canAccessModule(role, item.page)),
     }))
     .filter((section) => section.items.length > 0);
 

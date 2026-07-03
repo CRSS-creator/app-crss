@@ -38,10 +38,23 @@ export async function fetchTaxObligations(period: string) {
     .order("typ", { ascending: true });
 }
 
-export async function updateTaxObligation(id: string, payload: Partial<Pick<TaxObligation, "typ" | "nazwa" | "kwota" | "termin_platnosci">>) {
+export async function updateTaxObligation(id: string, payload: Partial<Pick<TaxObligation, "typ" | "nazwa" | "kwota" | "termin_platnosci" | "status_email" | "status_sms" | "email_sent_at" | "email_sent_by" | "sms_sent_at" | "sms_sent_by">>) {
+  const shouldResetSendStatus = Object.prototype.hasOwnProperty.call(payload, "kwota");
+  const updatePayload = shouldResetSendStatus
+    ? {
+        ...payload,
+        status_email: "niewyslane" as TaxSendStatus,
+        status_sms: "niewyslane" as TaxSendStatus,
+        email_sent_at: null,
+        email_sent_by: null,
+        sms_sent_at: null,
+        sms_sent_by: null,
+      }
+    : payload;
+
   return supabase
     .from("zobowiazania_podatkowe")
-    .update({ ...payload, zrodlo: "recznie" })
+    .update({ ...updatePayload, zrodlo: "recznie" })
     .eq("id", id)
     .select("*")
     .single();

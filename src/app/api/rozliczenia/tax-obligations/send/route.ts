@@ -129,7 +129,17 @@ function formatDate(date: string | null) {
 }
 
 function formatCurrency(value: number | null) {
-  return value === null || value === undefined ? null : new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN" }).format(value);
+  if (value === null || value === undefined || !Number.isFinite(value)) return null;
+
+  const amount = new Intl.NumberFormat("pl-PL", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+    useGrouping: true,
+  })
+    .format(value)
+    .replace(/\u00a0|\u202f/g, " ");
+
+  return `${amount} zł`;
 }
 
 function escapeHtml(value: string | null | undefined) {
@@ -180,8 +190,8 @@ function buildEmailHtml(input: {
     </div>
   `).join("");
 
-  const caregiver = input.caregiverName || input.caregiverEmail
-    ? `<p style="margin:18px 0 0;color:#43516a;font-size:14px;line-height:1.6;">W razie pytań prosimy o kontakt z opiekunem: <strong>${escapeHtml(input.caregiverName || input.caregiverEmail)}</strong>${input.caregiverEmail ? `, ${escapeHtml(input.caregiverEmail)}` : ""}.</p>`
+  const caregiverContact = input.caregiverName || input.caregiverEmail
+    ? `: <strong>${escapeHtml(input.caregiverName || input.caregiverEmail)}</strong>${input.caregiverEmail ? `, <a href="mailto:${escapeHtml(input.caregiverEmail)}" style="color:#173B73;">${escapeHtml(input.caregiverEmail)}</a>` : ""}`
     : "";
 
   return `
@@ -200,9 +210,8 @@ function buildEmailHtml(input: {
             ${obligationCards}
           </div>
           <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#26364f;">
-            Jeżeli masz jakieś wątpliwości, skontaktuj się ze swoim opiekunem. Wszystkie deklaracje znajdziesz na swoim koncie w systemie wFirma.
+            Jeżeli masz jakieś wątpliwości, skontaktuj się ze swoim opiekunem${caregiverContact}. Wszystkie deklaracje znajdziesz na swoim koncie w systemie wFirma.
           </p>
-          ${caregiver}
           <p style="margin:24px 0 0;font-size:16px;line-height:1.7;">Pozdrawiamy serdecznie,<br><strong>Zespół CRSS</strong></p>
         </div>
         <p style="margin:18px 4px 0;color:#8b96a8;font-size:13px;line-height:1.5;">Wiadomość wysłana automatycznie, prosimy na nią nie odpowiadać.</p>

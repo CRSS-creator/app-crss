@@ -524,6 +524,7 @@ function OnboardingContent() {
 
             <section style={drawerSummaryStyle}>
               <Summary label="Status" value={selectedRow.status} />
+              <Summary label="Kontakt" value={formatClientContact(selectedRow.client)} />
               <Summary label="Postęp" value={`${selectedRow.progress}%`} />
               <Summary label="Pierwszy okres" value={formatMonthLabel(selectedRow.client.pierwszy_okres_rozliczeniowy)} />
             </section>
@@ -1059,8 +1060,13 @@ function formatMonthLabel(value: string | null) {
   }).format(date);
 }
 
-function Summary({ label, value }: { label: string; value: string | number }) {
-  return <div style={summaryStyle}><span>{label}</span><strong>{value}</strong></div>;
+function Summary({ label, value }: { label: string; value: ReactNode }) {
+  return <div style={summaryStyle}><span>{label}</span><strong style={summaryValueStyle}>{value}</strong></div>;
+}
+
+function formatClientContact(client: Client) {
+  const parts = [client.telefon, client.email].filter(Boolean);
+  return parts.length ? parts.join(" · ") : "Brak danych kontaktowych";
 }
 
 function Th({ children }: { children: ReactNode }) {
@@ -1297,6 +1303,7 @@ const titleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "42
 const subtitleStyle: CSSProperties = { margin: "12px 0 0", color: colors.muted, fontSize: "17px", lineHeight: 1.65, maxWidth: "900px" };
 const summaryGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "16px", marginBottom: "22px" };
 const summaryStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.card, padding: "18px", boxShadow: shadow.soft, display: "flex", flexDirection: "column", gap: "8px", color: colors.muted, fontWeight: 800 };
+const summaryValueStyle: CSSProperties = { color: colors.text, overflowWrap: "anywhere", lineHeight: 1.35 };
 const cardStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.card, padding: "26px", boxShadow: shadow.soft };
 const tableHeaderStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "flex-start", marginBottom: "18px" };
 const sectionTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "24px" };
@@ -1325,7 +1332,7 @@ const drawerTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSiz
 const drawerSubtitleStyle: CSSProperties = { margin: "8px 0 0", color: colors.muted, fontWeight: 700 };
 const drawerContactStyle: CSSProperties = { margin: "6px 0 0", color: colors.text, fontWeight: 650, fontSize: "14px" };
 const closeButtonStyle: CSSProperties = { width: "46px", height: "46px", borderRadius: "999px", border: `1px solid ${colors.border}`, background: colors.white, color: colors.navy, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" };
-const drawerSummaryStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "12px", marginBottom: "18px" };
+const drawerSummaryStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "12px", marginBottom: "18px" };
 const drawerSectionStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.inputBackground, padding: "18px", marginBottom: "16px" };
 const caregiverSectionStyle: CSSProperties = { display: "grid", gridTemplateColumns: "1fr minmax(260px, 360px)", gap: "18px", alignItems: "center" };
 const caregiverSelectStyle: CSSProperties = { width: "100%", background: colors.white, backgroundColor: colors.white };

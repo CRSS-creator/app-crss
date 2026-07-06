@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabaseClient";
+import { adjustToNextPolishBusinessDay } from "@/lib/businessDays";
 
 export type TaxObligationType = "VAT" | "VAT-UE" | "VAT-9M" | "PIT" | "CIT" | "ZUS" | "PIT-4";
 export type TaxFetchStatus = "do_pobrania" | "pobrane" | "blad";
@@ -39,10 +40,13 @@ export async function fetchTaxObligations(period: string) {
 }
 
 export async function updateTaxObligation(id: string, payload: Partial<Pick<TaxObligation, "typ" | "nazwa" | "kwota" | "termin_platnosci" | "status_email" | "status_sms" | "email_sent_at" | "email_sent_by" | "sms_sent_at" | "sms_sent_by">>) {
+  const normalizedPayload = Object.prototype.hasOwnProperty.call(payload, "termin_platnosci")
+    ? { ...payload, termin_platnosci: adjustToNextPolishBusinessDay(payload.termin_platnosci) }
+    : payload;
   const shouldResetSendStatus = Object.prototype.hasOwnProperty.call(payload, "kwota");
   const updatePayload = shouldResetSendStatus
     ? {
-        ...payload,
+        ...normalizedPayload,
         status_email: "niewyslane" as TaxSendStatus,
         status_sms: "niewyslane" as TaxSendStatus,
         email_sent_at: null,
@@ -50,7 +54,7 @@ export async function updateTaxObligation(id: string, payload: Partial<Pick<TaxO
         sms_sent_at: null,
         sms_sent_by: null,
       }
-    : payload;
+    : normalizedPayload;
 
   return supabase
     .from("zobowiazania_podatkowe")

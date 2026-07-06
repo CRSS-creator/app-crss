@@ -292,7 +292,7 @@ function buildDashboardView(data: DashboardState, role: UserRole) {
 
   const onboardingProgressByClient = visibleOnboardingStages.reduce<Record<string, number>>((acc, stage) => {
     const stages = visibleOnboardingStages.filter((entry) => entry.klient_id === stage.klient_id);
-    const done = stages.filter((entry) => entry.status === "gotowe").length;
+    const done = stages.filter((entry) => ["gotowe", "papierowo", "nowy_podmiot"].includes(entry.status)).length;
     acc[stage.klient_id] = stages.length ? Math.round((done / stages.length) * 100) : 0;
     return acc;
   }, {});

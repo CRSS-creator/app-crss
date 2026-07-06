@@ -1,7 +1,7 @@
 import { supabase } from "@/lib/supabaseClient";
 
 export type OnboardingStageKey = "contract" | "rodo" | "aml" | "client_card" | "powers" | "wfirma_account" | "wfirma" | "documents_takeover" | "drive" | "recurring";
-export type OnboardingStageStatus = "do_wykonania" | "w_toku" | "gotowe" | "zablokowane";
+export type OnboardingStageStatus = "do_wykonania" | "w_toku" | "gotowe" | "zablokowane" | "papierowo" | "nowy_podmiot";
 
 export type OnboardingStageRecord = {
   id: string;
@@ -75,7 +75,7 @@ export async function updateOnboardingStageStatus(
 ) {
   const { data: userData } = await supabase.auth.getUser();
   const userId = userData.user?.id || null;
-  const isDone = status === "gotowe";
+  const isDone = status === "gotowe" || status === "papierowo" || status === "nowy_podmiot";
 
   const updateResult = await supabase
     .from("onboarding_etapy")
@@ -154,6 +154,8 @@ export function stageLabel(stage: OnboardingStageKey) {
 
 export function statusLabel(status: OnboardingStageStatus) {
   if (status === "gotowe") return "Gotowe";
+  if (status === "papierowo") return "Papierowo";
+  if (status === "nowy_podmiot") return "Nowy podmiot";
   if (status === "w_toku") return "W toku";
   if (status === "zablokowane") return "Zablokowane";
   return "Do wykonania";

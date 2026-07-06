@@ -975,7 +975,7 @@ function resolveOnboardingStatus(stages: OnboardingStage[], progress: number) {
 }
 
 function stageStateFromStatus(status: OnboardingStageStatus | null | undefined): StageState {
-  if (status === "gotowe") return "done";
+  if (status === "gotowe" || status === "papierowo" || status === "nowy_podmiot") return "done";
   if (status === "w_toku") return "progress";
   if (status === "zablokowane") return "blocked";
   return "todo";
@@ -1092,7 +1092,8 @@ function StatusPill({ status }: { status: string }) {
 
 function StagePill({ stage }: { stage: OnboardingStage }) {
   const style = stage.state === "done" ? successPillStyle : stage.state === "blocked" ? dangerPillStyle : stage.state === "progress" ? warningPillStyle : neutralPillStyle;
-  return <span style={style}>{stage.state === "done" ? "Gotowe" : stage.state === "blocked" ? "Brak" : stage.state === "progress" ? "W toku" : "Do wykonania"}</span>;
+  const label = stage.record?.status ? statusLabel(stage.record.status) : stage.state === "done" ? "Gotowe" : stage.state === "blocked" ? "Brak" : stage.state === "progress" ? "W toku" : "Do wykonania";
+  return <span style={style}>{label}</span>;
 }
 
 function StageProcessRow({
@@ -1156,7 +1157,10 @@ function StageProcessRow({
             {stage.editable && stage.record && (
               <>
                 {stage.key === "documents_takeover" && stage.state !== "done" && !stage.actionDone && (
-                  <button style={smallButtonStyle} disabled={saving} onClick={() => onStatusChange("gotowe")}>Nowy podmiot</button>
+                  <button style={smallButtonStyle} disabled={saving} onClick={() => onStatusChange("nowy_podmiot")}>Nowy podmiot</button>
+                )}
+                {stage.key === "powers" && stage.state !== "done" && (
+                  <button style={smallButtonStyle} disabled={saving} onClick={() => onStatusChange("papierowo")}>Papierowo</button>
                 )}
                 <button style={smallButtonStyle} disabled={saving} onClick={() => onStatusChange("w_toku")}>W toku</button>
                 <button style={smallButtonStyle} disabled={saving} onClick={() => onStatusChange("gotowe")}>Gotowe</button>
@@ -1275,7 +1279,10 @@ function StageCard({
         {stage.editable && stage.record && (
           <>
             {stage.key === "documents_takeover" && stage.state !== "done" && !stage.actionDone && (
-              <button style={smallButtonStyle} disabled={saving} onClick={() => onStatusChange("gotowe")}>Nowy podmiot</button>
+              <button style={smallButtonStyle} disabled={saving} onClick={() => onStatusChange("nowy_podmiot")}>Nowy podmiot</button>
+            )}
+            {stage.key === "powers" && stage.state !== "done" && (
+              <button style={smallButtonStyle} disabled={saving} onClick={() => onStatusChange("papierowo")}>Papierowo</button>
             )}
             <button style={smallButtonStyle} disabled={saving} onClick={() => onStatusChange("w_toku")}>W toku</button>
             <button style={smallButtonStyle} disabled={saving} onClick={() => onStatusChange("gotowe")}>Gotowe</button>

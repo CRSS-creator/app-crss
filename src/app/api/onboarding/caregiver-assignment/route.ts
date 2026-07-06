@@ -4,7 +4,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 const ALLOWED_ROLES = new Set(["owner", "manager"]);
 
 type AuthorizedResult =
-  | { admin: SupabaseClient; requesterId: string; requesterName: string; role: string; error: null }
+  | { admin: SupabaseClient; userClient: SupabaseClient; requesterId: string; requesterName: string; role: string; error: null }
   | { admin: null; requesterId: null; requesterName?: null; role: null; error: NextResponse };
 
 type AssignmentPayload = {
@@ -14,9 +14,10 @@ type AssignmentPayload = {
 
 async function getAuthorizedUser(request: NextRequest): Promise<AuthorizedResult> {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!supabaseUrl || !serviceRoleKey) {
+  if (!supabaseUrl || !anonKey || !serviceRoleKey) {
     return { admin: null, requesterId: null, role: null, error: NextResponse.json({ error: "Brak konfiguracji Supabase." }, { status: 500 }) };
   }
 
@@ -27,6 +28,14 @@ async function getAuthorizedUser(request: NextRequest): Promise<AuthorizedResult
 
   const admin = createClient(supabaseUrl, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
+  });
+  const userClient = createClient(supabaseUrl, anonKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+    global: {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
   });
 
   const { data: requesterData, error: requesterError } = await admin.auth.getUser(token);
@@ -50,7 +59,7 @@ async function getAuthorizedUser(request: NextRequest): Promise<AuthorizedResult
     return { admin: null, requesterId: null, role: null, error: NextResponse.json({ error: "Opiekuna księgowego może ustawić tylko owner albo manager." }, { status: 403 }) };
   }
 
-  return { admin, requesterId, requesterName: profile?.full_name || profile?.email || "Nieustalony użytkownik", role, error: null };
+  return { admin, userClient, requesterId, requesterName: profile?.full_name || profile?.email || "Nieustalony użytkownik", role, error: null };
 }
 
 export async function POST(request: NextRequest) {
@@ -96,7 +105,7 @@ export async function POST(request: NextRequest) {
   }
 
   const previousCaregiverId = client.opiekun_id;
-  const { error: updateError } = await auth.admin
+  const { error: updateError } = await auth.userClient
     .from("klienci")
     .update({ opiekun_id: caregiverId })
     .eq("id", client.id);

@@ -463,7 +463,7 @@ function SettlementDrawer({ settlement, progress, recurringTasks, recurringTimeE
             <section style={drawerSectionStyle}>
               <h3 style={drawerSectionTitleStyle}>Status miesiąca</h3>
               <Field label="Status księgowości"><AppSelect style={{ ...inputStyle, ...statusSelectStyle(settlement.status_ksiegowosci) }} value={settlement.status_ksiegowosci} disabled={saving} options={STATUS_OPTIONS} onChange={(value) => onSave(settlement, { status_ksiegowosci: value as SettlementStatus })} /></Field>
-              <Field label="Data dostarczenia dokumentów"><input style={inputStyle} type="date" value={formatDateForInput(settlement.data_dostarczenia_dokumentow)} disabled={saving} onChange={(event) => onSave(settlement, { data_dostarczenia_dokumentow: event.target.value || null })} /></Field>
+              <Field label="Data dostarczenia dokumentów"><PolishDateInput value={settlement.data_dostarczenia_dokumentow} disabled={saving} onChange={(value) => onSave(settlement, { data_dostarczenia_dokumentow: value })} /></Field>
               <button type="button" style={sendingReminder || Boolean(settlement.data_dostarczenia_dokumentow) ? disabledReminderButtonStyle : reminderButtonStyle} disabled={sendingReminder || Boolean(settlement.data_dostarczenia_dokumentow)} onClick={requestDocumentsReminder}>
                 {sendingReminder ? "Wysyłanie..." : "Przypomnij o dokumentach"}
               </button>
@@ -607,6 +607,40 @@ function NumberInput({ value, disabled, onChange }: { value: number; disabled: b
   return <input style={smallInputStyle} type="number" min={0} value={localValue} disabled={disabled} onChange={(event) => setLocalValue(event.target.value)} onBlur={() => onChange(Math.max(0, Number(localValue || 0)))} />;
 }
 
+function PolishDateInput({ value, disabled, onChange }: { value: string | null; disabled: boolean; onChange: (value: string | null) => void }) {
+  const [localValue, setLocalValue] = useState(formatDateForDisplayInput(value));
+  useEffect(() => setLocalValue(formatDateForDisplayInput(value)), [value]);
+
+  const save = () => {
+    const parsedValue = parsePolishDateInput(localValue);
+    if (localValue.trim() === "") {
+      onChange(null);
+      return;
+    }
+    if (parsedValue) {
+      onChange(parsedValue);
+      return;
+    }
+    setLocalValue(formatDateForDisplayInput(value));
+  };
+
+  return (
+    <input
+      style={inputStyle}
+      type="text"
+      inputMode="numeric"
+      placeholder="dd.mm.rrrr"
+      value={localValue}
+      disabled={disabled}
+      onChange={(event) => setLocalValue(maskPolishDateInput(event.target.value))}
+      onBlur={save}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") event.currentTarget.blur();
+      }}
+    />
+  );
+}
+
 function AmountInput({ value, onChange }: { value: number | null; onChange: (value: number | null) => void }) {
   const [localValue, setLocalValue] = useState(value === null || value === undefined ? "" : String(value));
   useEffect(() => setLocalValue(value === null || value === undefined ? "" : String(value)), [value]);
@@ -698,6 +732,28 @@ function formatReminderTimestamp(value: string) {
   }).format(new Date(value));
 }
 function formatDateForInput(value: string | null) { return value ? value.slice(0, 10) : ""; }
+function formatDateForDisplayInput(value: string | null) {
+  const normalized = formatDateForInput(value);
+  if (!normalized) return "";
+  const [year, month, day] = normalized.split("-");
+  return `${day}.${month}.${year}`;
+}
+function maskPolishDateInput(value: string) {
+  const digits = value.replace(/\D/g, "").slice(0, 8);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0, 2)}.${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}.${digits.slice(2, 4)}.${digits.slice(4)}`;
+}
+function parsePolishDateInput(value: string) {
+  const match = value.trim().match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  if (!match) return null;
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const year = Number(match[3]);
+  const date = new Date(year, month - 1, day);
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null;
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
 function formatCurrency(value: number | null) { return value === null || value === undefined ? "Do uzupełnienia" : new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN" }).format(value); }
 function sendStatusLabel(status: TaxSendStatus) { if (status === "wyslane") return "wysłane"; if (status === "blad") return "błąd"; return "niewysłane"; }
 function sendStatusStyle(status: TaxSendStatus): CSSProperties {

@@ -148,7 +148,24 @@ function SettlementsContent() {
   }
 
   async function patchTaxObligation(id: string, payload: Partial<Pick<TaxObligation, "kwota" | "termin_platnosci">>) {
-    const result = await updateTaxObligation(id, payload);
+    const existing = taxObligations.find((obligation) => obligation.id === id);
+    const previousAmount = existing?.kwota ?? null;
+    const nextAmount = payload.kwota ?? null;
+    const amountChanged =
+      Object.prototype.hasOwnProperty.call(payload, "kwota") &&
+      previousAmount !== nextAmount;
+    const updatePayload = amountChanged
+      ? {
+          ...payload,
+          status_email: "niewyslane" as TaxSendStatus,
+          status_sms: "niewyslane" as TaxSendStatus,
+          email_sent_at: null,
+          email_sent_by: null,
+          sms_sent_at: null,
+          sms_sent_by: null,
+        }
+      : payload;
+    const result = await updateTaxObligation(id, updatePayload);
     if (result.error) {
       console.error("Błąd zapisu zobowiązania:", result.error);
       alert("Nie udało się zapisać zobowiązania.");

@@ -36,6 +36,7 @@ type Client = {
   id: string;
   nazwa: string | null;
   nip: string | null;
+  telefon: string | null;
   email: string | null;
   forma_prawna: string | null;
   forma_opodatkowania: string | null;
@@ -516,6 +517,7 @@ function OnboardingContent() {
                 <p style={eyebrowStyle}>Onboarding klienta</p>
                 <h2 style={drawerTitleStyle}>{selectedRow.client.nazwa || "Klient"}</h2>
                 <p style={drawerSubtitleStyle}>{selectedRow.client.nip || "Brak NIP"} · {selectedRow.client.forma_prawna || "Brak formy prawnej"} · {selectedRow.client.forma_opodatkowania || "Brak opodatkowania"}</p>
+                <p style={drawerContactStyle}>{selectedRow.client.telefon || "Brak telefonu"} · {selectedRow.client.email || "Brak e-mail"}</p>
               </div>
               <button style={closeButtonStyle} onClick={() => setSelectedClientId(null)}><X size={22} /></button>
             </div>
@@ -1321,6 +1323,7 @@ const drawerStyle: CSSProperties = { width: "min(1480px, 100%)", height: "calc(1
 const drawerHeaderStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "flex-start", marginBottom: "18px" };
 const drawerTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "30px" };
 const drawerSubtitleStyle: CSSProperties = { margin: "8px 0 0", color: colors.muted, fontWeight: 700 };
+const drawerContactStyle: CSSProperties = { margin: "6px 0 0", color: colors.text, fontWeight: 650, fontSize: "14px" };
 const closeButtonStyle: CSSProperties = { width: "46px", height: "46px", borderRadius: "999px", border: `1px solid ${colors.border}`, background: colors.white, color: colors.navy, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" };
 const drawerSummaryStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "12px", marginBottom: "18px" };
 const drawerSectionStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.inputBackground, padding: "18px", marginBottom: "16px" };

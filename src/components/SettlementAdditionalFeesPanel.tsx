@@ -18,6 +18,7 @@ export default function SettlementAdditionalFeesPanel({ settlementId }: { settle
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [notesDraft, setNotesDraft] = useState<Record<string, string>>({});
 
   useEffect(() => {
     loadFees();
@@ -31,8 +32,10 @@ export default function SettlementAdditionalFeesPanel({ settlementId }: { settle
     ]);
     if (definitionsResult.error) console.error("Błąd pobierania słownika opłat:", definitionsResult.error);
     if (feesResult.error) console.error("Błąd pobierania opłat rozliczenia:", feesResult.error);
+    const loadedFees = (feesResult.data || []) as SettlementAdditionalFee[];
     setDefinitions((definitionsResult.data || []) as AdditionalFeeDefinition[]);
-    setFees((feesResult.data || []) as SettlementAdditionalFee[]);
+    setFees(loadedFees);
+    setNotesDraft(Object.fromEntries(loadedFees.map((fee) => [fee.id, fee.uwagi || ""])));
     setLoading(false);
   }
 
@@ -53,7 +56,9 @@ export default function SettlementAdditionalFeesPanel({ settlementId }: { settle
       alert("Nie udało się dodać opłaty do rozliczenia.");
       return;
     }
-    setFees((current) => [...current, result.data as SettlementAdditionalFee]);
+    const created = result.data as SettlementAdditionalFee;
+    setFees((current) => [...current, created]);
+    setNotesDraft((current) => ({ ...current, [created.id]: created.uwagi || "" }));
     setSearch("");
   }
 
@@ -68,6 +73,15 @@ export default function SettlementAdditionalFeesPanel({ settlementId }: { settle
     }
     const updated = result.data as SettlementAdditionalFee;
     setFees((current) => current.map((item) => item.id === updated.id ? updated : item));
+    if ("uwagi" in payload) {
+      setNotesDraft((current) => ({ ...current, [updated.id]: updated.uwagi || "" }));
+    }
+  }
+
+  async function saveNotes(fee: SettlementAdditionalFee) {
+    const nextNotes = notesDraft[fee.id] || "";
+    if (nextNotes === (fee.uwagi || "")) return;
+    await updateFee(fee, { uwagi: nextNotes });
   }
 
   async function removeFee(fee: SettlementAdditionalFee) {
@@ -127,7 +141,16 @@ export default function SettlementAdditionalFeesPanel({ settlementId }: { settle
                 <label style={fieldStyle}><span>Ilość</span><input style={financialInputStyle} type="number" min={0} step="0.01" value={fee.ilosc} onChange={(event) => updateFee(fee, { ilosc: Number(event.target.value || 0) })} /></label>
                 <label style={fieldStyle}><span>Razem</span><input style={financialInputStyle} value={formatMoney(Number(fee.kwota_netto || 0) * Number(fee.ilosc || 0))} readOnly /></label>
               </div>
-              <label style={fieldStyle}><span>Uwagi</span><input style={inputStyle} value={fee.uwagi || ""} onChange={(event) => updateFee(fee, { uwagi: event.target.value })} placeholder="Opcjonalna informacja do rozliczenia" /></label>
+              <label style={fieldStyle}>
+                <span>Uwagi</span>
+                <textarea
+                  style={notesTextareaStyle}
+                  value={notesDraft[fee.id] ?? fee.uwagi ?? ""}
+                  onChange={(event) => setNotesDraft((current) => ({ ...current, [fee.id]: event.target.value }))}
+                  onBlur={() => saveNotes(fee)}
+                  placeholder="Opcjonalna informacja do rozliczenia"
+                />
+              </label>
             </article>
           ))}
         </div>
@@ -147,6 +170,7 @@ const totalStyle: CSSProperties = { display: "inline-flex", borderRadius: radius
 const searchBoxStyle: CSSProperties = { position: "relative", marginBottom: "14px" };
 const inputStyle: CSSProperties = { width: "100%", border: `1px solid ${colors.border}`, borderRadius: radius.input, color: colors.text, background: colors.inputBackground, padding: "10px 12px", fontWeight: 700, fontSize: "14px", minHeight: "42px" };
 const financialInputStyle: CSSProperties = { ...inputStyle, background: colors.white };
+const notesTextareaStyle: CSSProperties = { ...inputStyle, background: colors.white, minHeight: "52px", resize: "vertical", lineHeight: 1.45 };
 const suggestionsStyle: CSSProperties = { position: "absolute", zIndex: 4, inset: "calc(100% + 6px) 0 auto 0", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, boxShadow: "0 18px 44px rgba(23, 59, 115, 0.16)", padding: "8px", display: "grid", gap: "6px" };
 const suggestionButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, color: colors.text, padding: "9px 10px", textAlign: "left", cursor: "pointer", display: "flex", justifyContent: "space-between", gap: "10px", fontWeight: 800 };
 const emptyStateStyle: CSSProperties = { padding: "16px", borderRadius: radius.input, background: colors.inputBackground, border: `1px dashed ${colors.border}`, color: colors.muted, textAlign: "center", fontWeight: 800 };

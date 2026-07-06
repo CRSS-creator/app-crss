@@ -14,6 +14,7 @@ type ClientRecord = {
   nazwa: string | null;
   nip: string | null;
   email: string | null;
+  opiekun_id: string | null;
   telefon: string | null;
   forma_opodatkowania: string | null;
   czynny_vat: boolean | null;
@@ -60,6 +61,7 @@ async function getForm(token: string) {
         nazwa,
         nip,
         email,
+        opiekun_id,
         telefon,
         forma_opodatkowania,
         czynny_vat,
@@ -211,6 +213,27 @@ export async function POST(request: NextRequest, context: RouteContext) {
     opis: `Karta klienta została wypełniona przez ${data.osobaKontaktowa.trim()}.`,
     created_by: null,
   });
+
+  if (client.opiekun_id) {
+    await admin.from("powiadomienia").insert({
+      type: "client_card_completed",
+      title: "Karta klienta została wypełniona",
+      body: `Klient ${client.nazwa || "bez nazwy"} wypełnił kartę klienta. Sprawdź dane w systemie z danymi z formularza PDF.`,
+      priority: "high",
+      related_table: "klient_karty_formularze",
+      related_id: form.id,
+      recipient_id: client.opiekun_id,
+      metadata: {
+        client_id: client.id,
+        client_name: client.nazwa,
+        client_nip: client.nip,
+        client_card_form_id: form.id,
+        document_id: documentRecord.id,
+        completed_by_name: data.osobaKontaktowa.trim(),
+        notification_kind: "client_card_completed",
+      },
+    });
+  }
 
   return NextResponse.json({ ok: true });
 }

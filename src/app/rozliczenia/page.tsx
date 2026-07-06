@@ -21,6 +21,8 @@ import {
 import {
   fetchActiveRecurringTaskTimers,
   fetchRecurringTaskRealizations,
+  fetchRecurringTaskTimeEntries,
+  setRecurringTaskManualTime,
   startRecurringTaskTimer,
   stopRecurringTaskTimer,
   updateRecurringTaskRealizationStatus,
@@ -62,6 +64,7 @@ function SettlementsContent() {
   const [settlements, setSettlements] = useState<MonthlySettlement[]>([]);
   const [progressRows, setProgressRows] = useState<SettlementProgress[]>([]);
   const [recurringRealizations, setRecurringRealizations] = useState<RecurringTaskRealization[]>([]);
+  const [recurringTimeEntries, setRecurringTimeEntries] = useState<TimeEntry[]>([]);
   const [taxObligations, setTaxObligations] = useState<TaxObligation[]>([]);
   const [activeTimers, setActiveTimers] = useState<TimeEntry[]>([]);
   const [selected, setSelected] = useState<MonthlySettlement | null>(null);
@@ -101,10 +104,11 @@ function SettlementsContent() {
     const userId = userResult.data.user?.id || null;
     setCurrentUserId(userId);
 
-    const [settlementsResult, progressResult, recurringResult, taxResult, timersResult] = await Promise.all([
+    const [settlementsResult, progressResult, recurringResult, recurringTimeResult, taxResult, timersResult] = await Promise.all([
       fetchMonthlySettlements(normalizedPeriod),
       fetchSettlementTaskProgress(normalizedPeriod),
       fetchRecurringTaskRealizations(normalizedPeriod),
+      fetchRecurringTaskTimeEntries(normalizedPeriod),
       fetchTaxObligations(normalizedPeriod),
       userId ? fetchActiveRecurringTaskTimers(userId) : Promise.resolve({ data: [], error: null }),
     ]);
@@ -118,6 +122,7 @@ function SettlementsContent() {
     setSettlements((settlementsResult.data || []) as MonthlySettlement[]);
     setProgressRows((progressResult.data || []) as SettlementProgress[]);
     setRecurringRealizations((recurringResult.data || []) as RecurringTaskRealization[]);
+    setRecurringTimeEntries((recurringTimeResult.data || []) as TimeEntry[]);
     setTaxObligations((taxResult.data || []) as TaxObligation[]);
     setActiveTimers((timersResult.data || []) as TimeEntry[]);
     setLoading(false);
@@ -211,6 +216,41 @@ function SettlementsContent() {
       return;
     }
     setActiveTimers((current) => activeTimer ? current.filter((entry) => entry.id !== activeTimer.id) : [result.data as TimeEntry, ...current]);
+    if (activeTimer) {
+      const entriesResult = await fetchRecurringTaskTimeEntries(settlement.okres);
+      if (!entriesResult.error) setRecurringTimeEntries((entriesResult.data || []) as TimeEntry[]);
+    }
+  }
+
+  async function saveRecurringManualTime(settlement: MonthlySettlement, task: RecurringTaskRealization, totalSeconds: number) {
+    if (!currentUserId) {
+      alert("Nie udało się rozpoznać użytkownika. Zaloguj się ponownie.");
+      return;
+    }
+    const client = getClient(settlement.klienci);
+    const activeTimer = activeTimers.find((entry) =>
+      entry.zadanie_cykliczne_id === task.zadanie_cykliczne_id &&
+      entry.klient_id === client?.id &&
+      entry.miesiac_rozliczeniowy === settlement.okres
+    );
+    if (activeTimer) {
+      alert("Najpierw zatrzymaj aktywne liczenie czasu dla tego zadania.");
+      return;
+    }
+    const result = await setRecurringTaskManualTime({
+      taskId: task.zadanie_cykliczne_id,
+      clientId: client?.id || null,
+      userId: currentUserId,
+      settlementMonth: settlement.okres,
+      totalSeconds,
+    });
+    if (result.error) {
+      console.error("Błąd ręcznej edycji czasu zadania cyklicznego:", result.error);
+      alert("Nie udało się zapisać czasu pracy.");
+      return;
+    }
+    const entriesResult = await fetchRecurringTaskTimeEntries(settlement.okres);
+    if (!entriesResult.error) setRecurringTimeEntries((entriesResult.data || []) as TimeEntry[]);
   }
 
   async function toggleRecurringDone(task: RecurringTaskRealization) {
@@ -290,12 +330,14 @@ function SettlementsContent() {
           settlement={selected}
           progress={progressBySettlement[selected.id] || { progress: 0, total_tasks: 0, done_tasks: 0, rozliczenie_id: selected.id }}
           recurringTasks={recurringRealizations.filter((task) => task.rozliczenie_id === selected.id).sort(sortRecurringRealizations)}
+          recurringTimeEntries={recurringTimeEntries}
           taxObligations={taxObligations.filter((obligation) => obligation.rozliczenie_id === selected.id)}
           activeTimers={activeTimers}
           onClose={() => setSelected(null)}
           onSave={patchSettlement}
           onToggleRecurringTimer={toggleRecurringTimer}
           onToggleRecurringDone={toggleRecurringDone}
+          onSaveRecurringManualTime={saveRecurringManualTime}
           onReminderSent={markDocumentsReminderSent}
           onTaxObligationUpdate={patchTaxObligation}
           onTaxObligationDelete={removeTaxObligation}
@@ -307,16 +349,18 @@ function SettlementsContent() {
   );
 }
 
-function SettlementDrawer({ settlement, progress, recurringTasks, taxObligations, activeTimers, onClose, onSave, onToggleRecurringTimer, onToggleRecurringDone, onReminderSent, onTaxObligationUpdate, onTaxObligationDelete, onTaxObligationsSent, saving }: {
+function SettlementDrawer({ settlement, progress, recurringTasks, recurringTimeEntries, taxObligations, activeTimers, onClose, onSave, onToggleRecurringTimer, onToggleRecurringDone, onSaveRecurringManualTime, onReminderSent, onTaxObligationUpdate, onTaxObligationDelete, onTaxObligationsSent, saving }: {
   settlement: MonthlySettlement;
   progress: SettlementProgress;
   recurringTasks: RecurringTaskRealization[];
+  recurringTimeEntries: TimeEntry[];
   taxObligations: TaxObligation[];
   activeTimers: TimeEntry[];
   onClose: () => void;
   onSave: (settlement: MonthlySettlement, payload: Partial<MonthlySettlement>) => void;
   onToggleRecurringTimer: (settlement: MonthlySettlement, task: RecurringTaskRealization) => void;
   onToggleRecurringDone: (task: RecurringTaskRealization) => void;
+  onSaveRecurringManualTime: (settlement: MonthlySettlement, task: RecurringTaskRealization, totalSeconds: number) => void;
   onReminderSent: (settlementId: string, reminder: { sentAt: string; sentById: string; sentByName: string }) => void;
   onTaxObligationUpdate: (id: string, payload: Partial<Pick<TaxObligation, "kwota" | "termin_platnosci">>) => void;
   onTaxObligationDelete: (id: string) => void;
@@ -328,6 +372,17 @@ function SettlementDrawer({ settlement, progress, recurringTasks, taxObligations
   const [sendingReminder, setSendingReminder] = useState(false);
   const [sendingTaxObligations, setSendingTaxObligations] = useState(false);
   const [selectedTaxObligationIds, setSelectedTaxObligationIds] = useState<string[]>([]);
+  const [editingRecurringTimeId, setEditingRecurringTimeId] = useState<string | null>(null);
+
+  const recurringTimeByTask = useMemo(() => {
+    return recurringTimeEntries.reduce<Record<string, number>>((totals, entry) => {
+      if (!entry.zadanie_cykliczne_id || entry.klient_id !== client?.id || entry.miesiac_rozliczeniowy !== settlement.okres || !entry.ended_at) {
+        return totals;
+      }
+      totals[entry.zadanie_cykliczne_id] = (totals[entry.zadanie_cykliczne_id] || 0) + getTimeEntrySeconds(entry);
+      return totals;
+    }, {});
+  }, [client?.id, recurringTimeEntries, settlement.okres]);
 
   useEffect(() => {
     setSelectedTaxObligationIds((current) =>
@@ -503,7 +558,39 @@ function SettlementDrawer({ settlement, progress, recurringTasks, taxObligations
                 {recurringTasks.length === 0 ? <div style={emptyStateStyle}>Brak zadań cyklicznych dla tego klienta.</div> : recurringTasks.map((task) => {
                   const activeTimer = activeTimers.find((entry) => entry.zadanie_cykliczne_id === task.zadanie_cykliczne_id && entry.klient_id === client?.id && entry.miesiac_rozliczeniowy === settlement.okres);
                   const done = task.status === "zrobione";
-                  return <article key={task.id} style={done ? recurringDoneItemStyle : recurringItemStyle}><div style={recurringTitleRowStyle}><input type="checkbox" checked={done} onChange={() => onToggleRecurringDone(task)} style={checkboxStyle} /><div><strong>{task.tytul}</strong><p style={recurringMetaStyle}>{requiredDayLabel(task.termin)}</p></div></div><div style={recurringActionsStyle}><button style={activeTimer ? timerActiveButtonStyle : timerButtonStyle} onClick={() => onToggleRecurringTimer(settlement, task)} title={activeTimer ? "Zatrzymaj liczenie czasu" : "Rozpocznij liczenie czasu"}>{activeTimer ? <Square size={16} /> : <Play size={16} />}{activeTimer ? "Stop" : "Start"}</button></div></article>;
+                  const totalSeconds = recurringTimeByTask[task.zadanie_cykliczne_id] || 0;
+                  const isEditingTime = editingRecurringTimeId === task.id;
+
+                  return (
+                    <article key={task.id} style={done ? recurringDoneItemStyle : recurringItemStyle}>
+                      <div style={recurringTitleRowStyle}>
+                        <input type="checkbox" checked={done} onChange={() => onToggleRecurringDone(task)} style={checkboxStyle} />
+                        <div style={recurringTextStyle}>
+                          <strong>{task.tytul}</strong>
+                          <p style={recurringMetaStyle}>{requiredDayLabel(task.termin)}</p>
+                          <p style={recurringTimeSummaryStyle}>Czas pracy: {formatDuration(totalSeconds)}</p>
+                          {isEditingTime ? (
+                            <RecurringTimeEditor
+                              totalSeconds={totalSeconds}
+                              onCancel={() => setEditingRecurringTimeId(null)}
+                              onSave={(seconds) => {
+                                onSaveRecurringManualTime(settlement, task, seconds);
+                                setEditingRecurringTimeId(null);
+                              }}
+                            />
+                          ) : null}
+                        </div>
+                      </div>
+                      <div style={recurringActionsStyle}>
+                        <button type="button" style={secondarySmallButtonStyle} onClick={() => setEditingRecurringTimeId(isEditingTime ? null : task.id)}>
+                          {isEditingTime ? "Ukryj edycję" : "Edytuj czas"}
+                        </button>
+                        <button style={activeTimer ? timerActiveButtonStyle : timerButtonStyle} onClick={() => onToggleRecurringTimer(settlement, task)} title={activeTimer ? "Zatrzymaj liczenie czasu" : "Rozpocznij liczenie czasu"}>
+                          {activeTimer ? <Square size={16} /> : <Play size={16} />}{activeTimer ? "Stop" : "Start"}
+                        </button>
+                      </div>
+                    </article>
+                  );
                 })}
               </div>
             </section>
@@ -524,6 +611,39 @@ function AmountInput({ value, onChange }: { value: number | null; onChange: (val
   const [localValue, setLocalValue] = useState(value === null || value === undefined ? "" : String(value));
   useEffect(() => setLocalValue(value === null || value === undefined ? "" : String(value)), [value]);
   return <input style={taxFieldInputStyle} type="number" min={0} step="0.01" value={localValue} onChange={(event) => setLocalValue(event.target.value)} onBlur={() => onChange(parseOptionalAmount(localValue))} />;
+}
+
+function RecurringTimeEditor({ totalSeconds, onCancel, onSave }: { totalSeconds: number; onCancel: () => void; onSave: (seconds: number) => void }) {
+  const initialHours = Math.floor(totalSeconds / 3600);
+  const initialMinutes = Math.floor((totalSeconds % 3600) / 60);
+  const [hours, setHours] = useState(String(initialHours));
+  const [minutes, setMinutes] = useState(String(initialMinutes));
+
+  useEffect(() => {
+    setHours(String(initialHours));
+    setMinutes(String(initialMinutes));
+  }, [initialHours, initialMinutes]);
+
+  const save = () => {
+    const parsedHours = Math.max(0, Math.floor(Number(hours || 0)));
+    const parsedMinutes = Math.max(0, Math.min(59, Math.floor(Number(minutes || 0))));
+    onSave(parsedHours * 3600 + parsedMinutes * 60);
+  };
+
+  return (
+    <div style={recurringTimeEditorStyle}>
+      <label style={recurringTimeFieldStyle}>
+        <span>Godz.</span>
+        <input style={recurringTimeInputStyle} type="number" min={0} value={hours} onChange={(event) => setHours(event.target.value)} />
+      </label>
+      <label style={recurringTimeFieldStyle}>
+        <span>Min.</span>
+        <input style={recurringTimeInputStyle} type="number" min={0} max={59} value={minutes} onChange={(event) => setMinutes(event.target.value)} />
+      </label>
+      <button type="button" style={secondarySmallButtonStyle} onClick={save}>Zapisz</button>
+      <button type="button" style={secondarySmallButtonStyle} onClick={onCancel}>Anuluj</button>
+    </div>
+  );
 }
 
 function ProgressBadge({ progress, done, total, large }: { progress: number; done: number; total: number; large?: boolean }) {
@@ -557,6 +677,17 @@ function currentMonthInput() {
 }
 function formatMonth(value: string) { return new Intl.DateTimeFormat("pl-PL", { month: "long", year: "numeric" }).format(new Date(`${value}-01T12:00:00`)); }
 function formatDate(value: string | null) { return value ? new Intl.DateTimeFormat("pl-PL").format(new Date(`${value}T12:00:00`)) : "Do ustalenia"; }
+function formatDuration(totalSeconds: number) {
+  const safeSeconds = Math.max(0, Math.floor(totalSeconds));
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  return `${hours}h ${String(minutes).padStart(2, "0")}m`;
+}
+function getTimeEntrySeconds(entry: TimeEntry) {
+  if (entry.duration_seconds !== null && entry.duration_seconds !== undefined) return Math.max(0, entry.duration_seconds);
+  if (!entry.ended_at) return 0;
+  return Math.max(0, Math.round((new Date(entry.ended_at).getTime() - new Date(entry.started_at).getTime()) / 1000));
+}
 function formatReminderTimestamp(value: string) {
   return new Intl.DateTimeFormat("pl-PL", {
     day: "2-digit",
@@ -624,6 +755,7 @@ const progressStyle: CSSProperties = { display: "inline-flex", flexDirection: "c
 const progressLargeStyle: CSSProperties = { ...progressStyle, width: "100%", padding: "18px", fontSize: "20px" };
 const progressCompleteStyle: CSSProperties = { background: "#dcfce7", color: "#166534" };
 const detailsButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "9px 12px", background: colors.card, color: colors.navy, fontWeight: 800, cursor: "pointer" };
+const secondarySmallButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.navy, padding: "8px 10px", fontSize: "12px", fontWeight: 850, cursor: "pointer", whiteSpace: "nowrap" };
 const reminderButtonStyle: CSSProperties = { border: "none", borderRadius: radius.button, padding: "12px 16px", background: colors.red, color: colors.white, fontWeight: 850, cursor: "pointer", margin: "0 14px 16px 0", minHeight: "44px" };
 const disabledReminderButtonStyle: CSSProperties = { ...reminderButtonStyle, background: "#e8eef8", color: colors.muted, cursor: "not-allowed" };
 const reminderMetaStyle: CSSProperties = { display: "inline-block", maxWidth: "360px", margin: "0 0 16px", color: colors.muted, fontSize: "12px", lineHeight: 1.45, fontWeight: 700, verticalAlign: "middle" };
@@ -651,8 +783,13 @@ const recurringListStyle: CSSProperties = { display: "flex", flexDirection: "col
 const recurringItemStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "12px", background: colors.inputBackground };
 const recurringDoneItemStyle: CSSProperties = { ...recurringItemStyle, background: "#f8fafc", opacity: 0.72 };
 const recurringTitleRowStyle: CSSProperties = { display: "flex", alignItems: "flex-start", gap: "10px", minWidth: 0 };
+const recurringTextStyle: CSSProperties = { display: "flex", flexDirection: "column", minWidth: 0 };
 const checkboxStyle: CSSProperties = { width: "18px", minWidth: "18px", height: "18px", flex: "0 0 18px", marginTop: "2px", accentColor: colors.navy };
 const recurringMetaStyle: CSSProperties = { margin: "5px 0 0", color: colors.muted, fontWeight: 700, fontSize: "13px" };
+const recurringTimeSummaryStyle: CSSProperties = { margin: "3px 0 0", color: colors.navy, fontSize: "13px", fontWeight: 750 };
+const recurringTimeEditorStyle: CSSProperties = { display: "flex", alignItems: "flex-end", gap: "8px", flexWrap: "wrap", marginTop: "8px" };
+const recurringTimeFieldStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "4px", color: colors.muted, fontSize: "11px", fontWeight: 800 };
+const recurringTimeInputStyle: CSSProperties = { width: "72px", border: `1px solid ${colors.border}`, borderRadius: "12px", background: colors.white, color: colors.navy, padding: "8px 10px", fontWeight: 800 };
 const recurringActionsStyle: CSSProperties = { display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "8px", flexWrap: "wrap" };
 const taxObligationListStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "10px" };
 const taxObligationItemStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "13px", display: "flex", flexDirection: "column", gap: "9px" };

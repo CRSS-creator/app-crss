@@ -241,6 +241,15 @@ export async function fetchActiveRecurringTaskTimers(userId: string) {
     .order("started_at", { ascending: false });
 }
 
+export async function fetchRecurringTaskTimeEntries(period: string) {
+  return supabase
+    .from("czas_pracy")
+    .select(TIME_ENTRY_SELECT)
+    .eq("miesiac_rozliczeniowy", period)
+    .not("zadanie_cykliczne_id", "is", null)
+    .order("started_at", { ascending: false });
+}
+
 export async function startRecurringTaskTimer({
   taskId,
   clientId,
@@ -271,6 +280,60 @@ export async function stopRecurringTaskTimer(timeEntryId: string) {
     .from("czas_pracy")
     .update({ ended_at: new Date().toISOString() })
     .eq("id", timeEntryId)
+    .select(TIME_ENTRY_SELECT)
+    .single<TimeEntry>();
+}
+
+export async function setRecurringTaskManualTime({
+  taskId,
+  clientId,
+  userId,
+  settlementMonth,
+  totalSeconds,
+}: {
+  taskId: string;
+  clientId: string | null;
+  userId: string;
+  settlementMonth: string | null;
+  totalSeconds: number;
+}) {
+  let deleteQuery = supabase
+    .from("czas_pracy")
+    .delete()
+    .eq("zadanie_cykliczne_id", taskId)
+    .eq("osoba_id", userId)
+    .not("ended_at", "is", null);
+
+  deleteQuery = settlementMonth
+    ? deleteQuery.eq("miesiac_rozliczeniowy", settlementMonth)
+    : deleteQuery.is("miesiac_rozliczeniowy", null);
+
+  deleteQuery = clientId
+    ? deleteQuery.eq("klient_id", clientId)
+    : deleteQuery.is("klient_id", null);
+
+  const deleteResult = await deleteQuery;
+  if (deleteResult.error) return { data: null, error: deleteResult.error };
+
+  const safeSeconds = Math.max(0, Math.floor(totalSeconds));
+  if (safeSeconds === 0) return { data: null, error: null };
+
+  const endedAt = new Date();
+  const startedAt = new Date(endedAt.getTime() - safeSeconds * 1000);
+
+  return supabase
+    .from("czas_pracy")
+    .insert({
+      zadanie_cykliczne_id: taskId,
+      klient_id: clientId,
+      osoba_id: userId,
+      started_at: startedAt.toISOString(),
+      ended_at: endedAt.toISOString(),
+      duration_seconds: safeSeconds,
+      miesiac_rozliczeniowy: settlementMonth,
+      czy_wewnetrzne: !clientId,
+      opis: "Ręczna korekta czasu pracy",
+    })
     .select(TIME_ENTRY_SELECT)
     .single<TimeEntry>();
 }

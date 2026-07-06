@@ -102,7 +102,10 @@ export async function POST(request: NextRequest) {
     .eq("id", client.id);
 
   if (updateError) {
-    return NextResponse.json({ error: "Nie udało się zapisać opiekuna księgowego." }, { status: 500 });
+    return NextResponse.json(
+      { error: `Nie udało się zapisać opiekuna księgowego: ${updateError.message}` },
+      { status: 500 }
+    );
   }
 
   await auth.admin.from("onboarding_historia").insert({

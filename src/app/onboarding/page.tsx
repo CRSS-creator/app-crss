@@ -14,6 +14,7 @@ import {
   ensureClientOnboarding,
   fetchOnboardingHistory,
   fetchOnboardingStages,
+  finishClientOnboardingRpc,
   stageLabel,
   statusLabel,
   updateOnboardingStageNotes,
@@ -131,6 +132,7 @@ function OnboardingContent() {
   const [loading, setLoading] = useState(true);
   const [savingStageId, setSavingStageId] = useState<string | null>(null);
   const [savingCaregiver, setSavingCaregiver] = useState(false);
+  const [finishingOnboarding, setFinishingOnboarding] = useState(false);
   const [sendingCaregiverNotification, setSendingCaregiverNotification] = useState(false);
   const [sendingPowersInstructions, setSendingPowersInstructions] = useState(false);
   const [sendingWfirmaAccountNotification, setSendingWfirmaAccountNotification] = useState(false);
@@ -217,6 +219,19 @@ function OnboardingContent() {
 
     if (result.error) {
       alert("Nie udało się zapisać etapu onboardingu.");
+      return;
+    }
+
+    await loadData();
+  }
+
+  async function handleFinishOnboarding(row: OnboardingRow) {
+    setFinishingOnboarding(true);
+    const result = await finishClientOnboardingRpc(row.client.id);
+    setFinishingOnboarding(false);
+
+    if (result.error) {
+      alert("Nie udaĹ‚o siÄ™ zakoĹ„czyÄ‡ onboardingu.");
       return;
     }
 
@@ -567,7 +582,20 @@ function OnboardingContent() {
             <section style={drawerSectionStyle}>
               <div style={sectionHeaderInlineStyle}>
                 <h3 style={drawerSectionTitleStyle}>Proces rozpoczęcia współpracy</h3>
-                <button style={secondaryButtonStyle} onClick={openHistory}>Historia zmian</button>
+                <div style={sectionHeaderActionsStyle}>
+                  <button style={secondaryButtonStyle} onClick={openHistory}>Historia zmian</button>
+                  <button
+                    type="button"
+                    style={{
+                      ...primaryActionButtonStyle,
+                      ...(selectedRow.status === "ZakoĹ„czony" || finishingOnboarding ? disabledButtonStyle : {}),
+                    }}
+                    disabled={selectedRow.status === "ZakoĹ„czony" || finishingOnboarding}
+                    onClick={() => handleFinishOnboarding(selectedRow)}
+                  >
+                    {finishingOnboarding ? "Zamykanie..." : "ZakoĹ„cz onboarding"}
+                  </button>
+                </div>
               </div>
               <div style={processTableWrapperStyle}>
                 <table style={processTableStyle}>
@@ -1331,6 +1359,7 @@ const progressShellStyle: CSSProperties = { position: "relative", width: "110px"
 const progressBarStyle: CSSProperties = { position: "absolute", left: 0, top: 0, bottom: 0, background: "rgba(22, 163, 74, 0.18)" };
 const secondaryButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.navy, padding: "10px 13px", fontWeight: 850, cursor: "pointer", whiteSpace: "nowrap", textDecoration: "none", display: "inline-flex", alignItems: "center", justifyContent: "center" };
 const primaryActionButtonStyle: CSSProperties = { ...secondaryButtonStyle, borderColor: colors.red, background: colors.red, color: colors.white };
+const disabledButtonStyle: CSSProperties = { opacity: 0.55, cursor: "not-allowed" };
 const overlayStyle: CSSProperties = { position: "fixed", inset: 0, zIndex: 60, background: "rgba(15, 23, 42, 0.32)", display: "flex", justifyContent: "center", alignItems: "stretch", padding: "18px" };
 const drawerStyle: CSSProperties = { width: "min(1480px, 100%)", height: "calc(100vh - 36px)", background: colors.card, border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: "30px", overflowY: "auto", boxShadow: shadow.card };
 const drawerHeaderStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "flex-start", marginBottom: "18px" };
@@ -1345,6 +1374,7 @@ const caregiverActionsStyle: CSSProperties = { display: "flex", justifyContent: 
 const caregiverSendStackStyle: CSSProperties = { display: "grid", justifyItems: "end", gap: "6px" };
 const caregiverInfoStyle: CSSProperties = { color: colors.muted, fontSize: "12px", fontWeight: 650, textAlign: "right", lineHeight: 1.35 };
 const sectionHeaderInlineStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", marginBottom: "14px" };
+const sectionHeaderActionsStyle: CSSProperties = { display: "flex", justifyContent: "flex-end", alignItems: "center", flexWrap: "wrap", gap: "10px" };
 const drawerSectionTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "22px" };
 const onboardingNotesTextareaStyle: CSSProperties = {
   width: "100%",

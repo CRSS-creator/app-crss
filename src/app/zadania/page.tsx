@@ -14,6 +14,7 @@ import {
   fetchTaskClients,
   fetchTasks,
   fetchTaskTimeEntries,
+  setTaskManualTime,
   startTaskTimer,
   stopTaskTimer,
   updateTask,
@@ -283,6 +284,10 @@ function TaskDrawer({ mode, task, currentUserId, assignees, clients, onClose, on
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
   const [documents, setDocuments] = useState<TaskDocument[]>([]);
   const [timerNote, setTimerNote] = useState("");
+  const [manualHours, setManualHours] = useState("0");
+  const [manualMinutes, setManualMinutes] = useState("0");
+  const [manualTimeSaving, setManualTimeSaving] = useState(false);
+  const [manualTimeMessage, setManualTimeMessage] = useState("");
   const [uploading, setUploading] = useState(false);
   const [clientSearch, setClientSearch] = useState(() => getInitialClientSearch(task));
 
@@ -296,6 +301,7 @@ function TaskDrawer({ mode, task, currentUserId, assignees, clients, onClose, on
   useEffect(() => {
     setDraft(createDraft(task, currentUserId));
     setClientSearch(getInitialClientSearch(task));
+    setManualTimeMessage("");
   }, [task?.id, currentUserId]);
 
   useEffect(() => {
@@ -303,12 +309,22 @@ function TaskDrawer({ mode, task, currentUserId, assignees, clients, onClose, on
     loadDetails(task.id);
   }, [task?.id]);
 
+  useEffect(() => {
+    syncManualTimeInputs(totalSeconds);
+  }, [task?.id, totalSeconds]);
+
   async function loadDetails(taskId: string) {
     const [timeResult, documentsResult] = await Promise.all([fetchTaskTimeEntries(taskId), fetchTaskDocuments(taskId)]);
     if (timeResult.error) console.error("Błąd pobierania czasu pracy:", timeResult.error);
     if (documentsResult.error) console.error("Błąd pobierania dokumentów zadania:", documentsResult.error);
     setTimeEntries((timeResult.data || []) as TimeEntry[]);
     setDocuments((documentsResult.data || []) as TaskDocument[]);
+  }
+
+  function syncManualTimeInputs(seconds: number) {
+    const safeSeconds = Math.max(0, Number(seconds || 0));
+    setManualHours(String(Math.floor(safeSeconds / 3600)));
+    setManualMinutes(String(Math.floor((safeSeconds % 3600) / 60)));
   }
 
   function updateDraft<K extends keyof TaskDraft>(key: K, value: TaskDraft[K]) {
@@ -374,6 +390,30 @@ function TaskDrawer({ mode, task, currentUserId, assignees, clients, onClose, on
     }
     setTimeEntries((current) => current.map((entry) => (entry.id === activeTimeEntry.id ? (result.data as TimeEntry) : entry)));
     setTimerNote("");
+  }
+
+  async function saveManualTime() {
+    if (!task || !currentUserId || activeTimeEntry) return;
+    const hours = Math.max(0, Math.floor(Number(manualHours) || 0));
+    const minutes = Math.max(0, Math.floor(Number(manualMinutes) || 0));
+    const total = (hours * 60 + minutes) * 60;
+
+    setManualTimeSaving(true);
+    setManualTimeMessage("");
+    const result = await setTaskManualTime(task.id, currentUserId, total);
+    setManualTimeSaving(false);
+
+    if (result.error) {
+      console.error("Błąd ręcznej korekty czasu:", result.error);
+      alert("Nie udało się zapisać czasu pracy.");
+      return;
+    }
+
+    const nextEntries = (result.data || []) as TimeEntry[];
+    setTimeEntries(nextEntries);
+    const nextTotal = nextEntries.reduce((sum, entry) => sum + Number(entry.duration_seconds || 0), 0);
+    syncManualTimeInputs(nextTotal);
+    setManualTimeMessage("Czas pracy został zapisany.");
   }
 
   async function uploadDocument(file: File | null) {
@@ -488,13 +528,36 @@ function TaskDrawer({ mode, task, currentUserId, assignees, clients, onClose, on
                   </button>
                 </div>
                 {activeTimeEntry && <textarea style={textareaStyle} value={timerNote} onChange={(event) => setTimerNote(event.target.value)} placeholder="Krótki opis wykonanej pracy" />}
-                <div style={timeListStyle}>
-                  {timeEntries.length === 0 ? <div style={emptyTaskStyle}>Brak wpisów czasu</div> : timeEntries.map((entry) => (
-                    <div key={entry.id} style={timeItemStyle}>
-                      <div><strong>{formatDate(entry.started_at)}</strong><p style={taskMetaStyle}>{entry.opis || "Bez opisu"}</p></div>
-                      <span style={counterStyle}>{entry.ended_at ? formatDuration(entry.duration_seconds || 0) : "W toku"}</span>
-                    </div>
-                  ))}
+                <div style={manualTimeEditorStyle}>
+                  <div style={manualTimeGridStyle}>
+                    <label style={manualTimeFieldStyle}>
+                      <span style={infoLabelStyle}>Godziny</span>
+                      <input
+                        style={manualTimeInputStyle}
+                        type="number"
+                        min="0"
+                        value={manualHours}
+                        disabled={manualTimeSaving || Boolean(activeTimeEntry)}
+                        onChange={(event) => setManualHours(event.target.value)}
+                      />
+                    </label>
+                    <label style={manualTimeFieldStyle}>
+                      <span style={infoLabelStyle}>Minuty</span>
+                      <input
+                        style={manualTimeInputStyle}
+                        type="number"
+                        min="0"
+                        value={manualMinutes}
+                        disabled={manualTimeSaving || Boolean(activeTimeEntry)}
+                        onChange={(event) => setManualMinutes(event.target.value)}
+                      />
+                    </label>
+                  </div>
+                  <button style={manualTimeButtonStyle} onClick={saveManualTime} disabled={!canUseTimer || manualTimeSaving || Boolean(activeTimeEntry)}>
+                    {manualTimeSaving ? "Zapisywanie..." : "Zapisz czas"}
+                  </button>
+                  {activeTimeEntry && <p style={manualTimeHintStyle}>Zatrzymaj licznik, aby ręcznie zmienić czas pracy.</p>}
+                  {manualTimeMessage && <p style={manualTimeSuccessStyle}>{manualTimeMessage}</p>}
                 </div>
               </section>
 
@@ -664,8 +727,13 @@ const timerLabelStyle: React.CSSProperties = { margin: 0, color: colors.muted, f
 const timerValueStyle: React.CSSProperties = { display: "block", marginTop: "5px", color: colors.navy, fontSize: "24px" };
 const timerButtonStyle: React.CSSProperties = { ...primarySmallButtonStyle, background: colors.success };
 const stopButtonStyle: React.CSSProperties = { ...primarySmallButtonStyle, background: colors.red };
-const timeListStyle: React.CSSProperties = { display: "flex", flexDirection: "column", gap: "10px" };
-const timeItemStyle: React.CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", padding: "13px", borderRadius: radius.input, border: `1px solid ${colors.border}`, background: colors.inputBackground };
+const manualTimeEditorStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "1fr auto", alignItems: "end", gap: "14px", marginTop: "14px" };
+const manualTimeGridStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "12px" };
+const manualTimeFieldStyle: React.CSSProperties = { display: "flex", flexDirection: "column", gap: "7px" };
+const manualTimeInputStyle: React.CSSProperties = { ...inputStyle, padding: "12px 14px", background: colors.card, fontWeight: 800 };
+const manualTimeButtonStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "9px 12px", background: colors.card, color: colors.text, fontWeight: 800, cursor: "pointer", minHeight: "48px" };
+const manualTimeHintStyle: React.CSSProperties = { gridColumn: "1 / -1", margin: 0, color: colors.muted, fontSize: "13px", fontWeight: 700 };
+const manualTimeSuccessStyle: React.CSSProperties = { ...manualTimeHintStyle, color: colors.success };
 const taskMetaStyle: React.CSSProperties = { margin: "5px 0 0", color: colors.muted };
 const emptyTaskStyle: React.CSSProperties = { padding: "14px", borderRadius: radius.input, border: `1px dashed ${colors.border}`, color: colors.muted, textAlign: "center" };
 const documentsHeaderStyle: React.CSSProperties = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", marginBottom: "14px" };

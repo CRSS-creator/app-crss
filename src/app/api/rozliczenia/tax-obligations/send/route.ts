@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { adjustToNextPolishBusinessDay } from "@/lib/businessDays";
 
 const ALLOWED_ROLES = new Set(["owner", "manager", "admin", "accountant"]);
 const APP_URL = "https://app.crss.com.pl";
@@ -333,8 +334,8 @@ export async function POST(request: NextRequest) {
     name: obligation.nazwa,
     amount: Number(obligation.kwota),
     amountLabel: formatCurrency(Number(obligation.kwota)),
-    dueDate: obligation.termin_platnosci,
-    dueDateLabel: formatDate(obligation.termin_platnosci),
+    dueDate: adjustToNextPolishBusinessDay(obligation.termin_platnosci),
+    dueDateLabel: formatDate(adjustToNextPolishBusinessDay(obligation.termin_platnosci)),
   }));
   const subject = `Zobowiązania publicznoprawne za ${periodLabel}${client.nazwa ? ` - ${client.nazwa}` : ""}`;
   const messageHtml = buildEmailHtml({

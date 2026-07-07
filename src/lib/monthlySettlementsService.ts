@@ -19,6 +19,8 @@ type SettlementClient = {
   nip: string | null;
   email: string | null;
   opiekun_id: string | null;
+  abonament: number | null;
+  model_fakturowania: string | null;
   forma_prawna: string | null;
   forma_opodatkowania: string | null;
   czynny_vat: boolean | null;
@@ -68,6 +70,8 @@ const SETTLEMENT_SELECT = `
     nip,
     email,
     opiekun_id,
+    abonament,
+    model_fakturowania,
     forma_prawna,
     forma_opodatkowania,
     czynny_vat,

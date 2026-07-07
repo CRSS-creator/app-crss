@@ -546,7 +546,7 @@ function SettlementDrawer({ settlement, progress, recurringTasks, recurringTimeE
               )}
             </section>
 
-            <SettlementAdditionalFeesPanel settlementId={settlement.id} />
+            <SettlementAdditionalFeesPanel settlement={settlement} />
           </div>
 
           <div style={drawerColumnStyle}>

@@ -6,29 +6,45 @@ import {
   createSettlementAdditionalFee,
   deleteSettlementAdditionalFee,
   fetchAdditionalFeeDefinitions,
+  fetchLateDocumentsFeeSettlement,
   fetchSettlementAdditionalFees,
+  syncLateDocumentsAdditionalFee,
   updateSettlementAdditionalFee,
   type AdditionalFeeDefinition,
+  type LateDocumentsFeeSettlement,
   type SettlementAdditionalFee,
 } from "@/lib/settlementAdditionalFeesService";
 
-export default function SettlementAdditionalFeesPanel({ settlementId }: { settlementId: string }) {
+type SettlementAdditionalFeesPanelProps =
+  | { settlement: LateDocumentsFeeSettlement; settlementId?: never }
+  | { settlement?: never; settlementId: string };
+
+export default function SettlementAdditionalFeesPanel({ settlement, settlementId }: SettlementAdditionalFeesPanelProps) {
   const [definitions, setDefinitions] = useState<AdditionalFeeDefinition[]>([]);
   const [fees, setFees] = useState<SettlementAdditionalFee[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [notesDraft, setNotesDraft] = useState<Record<string, string>>({});
+  const effectiveSettlementId = (settlement?.id || settlementId) as string;
 
   useEffect(() => {
     loadFees();
-  }, [settlementId]);
+  }, [effectiveSettlementId, settlement?.data_dostarczenia_dokumentow, settlement?.klienci]);
 
   async function loadFees() {
     setLoading(true);
+    let syncSettlement: LateDocumentsFeeSettlement | null = settlement || null;
+    if (!syncSettlement) {
+      const settlementResult = await fetchLateDocumentsFeeSettlement(effectiveSettlementId);
+      if (settlementResult.error) console.error("Blad pobierania rozliczenia do oplaty za nieterminowe dokumenty:", settlementResult.error);
+      syncSettlement = (settlementResult.data || null) as LateDocumentsFeeSettlement | null;
+    }
+    const syncResult = syncSettlement ? await syncLateDocumentsAdditionalFee(syncSettlement) : { error: null };
+    if (syncResult.error) console.error("Błąd synchronizacji opłaty za nieterminowe dokumenty:", syncResult.error);
     const [definitionsResult, feesResult] = await Promise.all([
       fetchAdditionalFeeDefinitions(false),
-      fetchSettlementAdditionalFees(settlementId),
+      fetchSettlementAdditionalFees(effectiveSettlementId),
     ]);
     if (definitionsResult.error) console.error("Błąd pobierania słownika opłat:", definitionsResult.error);
     if (feesResult.error) console.error("Błąd pobierania opłat rozliczenia:", feesResult.error);
@@ -42,7 +58,7 @@ export default function SettlementAdditionalFeesPanel({ settlementId }: { settle
   async function addFee(definition: AdditionalFeeDefinition) {
     setSavingId(definition.id);
     const result = await createSettlementAdditionalFee({
-      rozliczenie_id: settlementId,
+      rozliczenie_id: effectiveSettlementId,
       oplata_id: definition.id,
       nazwa: definition.nazwa,
       kwota_netto: definition.domyslna_kwota_netto || 0,

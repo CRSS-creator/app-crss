@@ -231,7 +231,7 @@ function OnboardingContent() {
     setFinishingOnboarding(false);
 
     if (result.error) {
-      alert("Nie udaĹ‚o siÄ™ zakoĹ„czyÄ‡ onboardingu.");
+      alert("Nie udało się zakończyć onboardingu.");
       return;
     }
 
@@ -588,12 +588,12 @@ function OnboardingContent() {
                     type="button"
                     style={{
                       ...primaryActionButtonStyle,
-                      ...(selectedRow.status === "ZakoĹ„czony" || finishingOnboarding ? disabledButtonStyle : {}),
+                      ...(selectedRow.status === "Zakończony" || finishingOnboarding ? disabledButtonStyle : {}),
                     }}
-                    disabled={selectedRow.status === "ZakoĹ„czony" || finishingOnboarding}
+                    disabled={selectedRow.status === "Zakończony" || finishingOnboarding}
                     onClick={() => handleFinishOnboarding(selectedRow)}
                   >
-                    {finishingOnboarding ? "Zamykanie..." : "ZakoĹ„cz onboarding"}
+                    {finishingOnboarding ? "Zamykanie..." : "Zakończ onboarding"}
                   </button>
                 </div>
               </div>
@@ -742,7 +742,16 @@ function buildRows(
       history: buildHistory(accountingContract, rodoContract, clientHistory, profilesById),
       caregiverNotificationInfo: latestCaregiverNotificationInfo(clientHistory, profilesById),
     };
-  }).sort((a, b) => a.progress - b.progress || (a.client.nazwa || "").localeCompare(b.client.nazwa || "", "pl"));
+  }).sort((a, b) => {
+    const statusRank = (row: OnboardingRow) => {
+      if (row.status === "W trakcie") return 0;
+      if (row.status.includes("Czeka")) return 1;
+      if (row.status === "Zakończony") return 2;
+      return 3;
+    };
+
+    return statusRank(a) - statusRank(b) || a.progress - b.progress || (a.client.nazwa || "").localeCompare(b.client.nazwa || "", "pl");
+  });
 }
 
 function buildStages(

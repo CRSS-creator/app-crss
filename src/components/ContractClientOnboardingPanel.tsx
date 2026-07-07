@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import AppSelect from "@/components/AppSelect";
 import { colors, radius, shadow } from "@/app/design";
 import { LEGAL_FORM_OPTIONS, TAXATION_FORM_OPTIONS } from "@/lib/clientDictionaries";
-import { createClient as createClientRecord, fetchClientCaregivers } from "@/lib/clientService";
+import { createClient as createClientRecord, fetchClientCaregivers, findClientByNip } from "@/lib/clientService";
 import { updateCrmContract, type CrmContract } from "@/lib/crmContractService";
 
 type Caregiver = {
@@ -94,6 +94,21 @@ export default function ContractClientOnboardingPanel({ contract, onCreated }: P
     }
 
     setSaving(true);
+
+    const duplicateResult = await findClientByNip(contract.nip);
+
+    if (duplicateResult.error) {
+      setSaving(false);
+      console.error("BĹ‚Ä…d sprawdzania duplikatu klienta:", duplicateResult.error);
+      alert("Nie udaĹ‚o siÄ™ sprawdziÄ‡, czy klient juĹĽ istnieje.");
+      return;
+    }
+
+    if (duplicateResult.data) {
+      setSaving(false);
+      alert(`Klient o tym NIP juĹĽ istnieje: ${duplicateResult.data.nazwa}. Wybierz istniejÄ…cego klienta zamiast tworzyÄ‡ nowego.`);
+      return;
+    }
 
     const clientResult = await createClientRecord({
       nazwa: contract.nazwa_klienta.trim(),

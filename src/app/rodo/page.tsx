@@ -376,6 +376,34 @@ function RodoDrawer({ contract, clients, accountingContracts, profiles, onClose,
     window.open(result.data.signedUrl, "_blank", "noopener,noreferrer");
   }
 
+  async function downloadPdf(storagePath: string | null, fileName: string | null) {
+    if (!storagePath) return;
+    const result = await createRodoProcessingContractSignedUrl(storagePath);
+    if (result.error || !result.data?.signedUrl) {
+      console.error("Blad pobierania PDF RODO:", result.error);
+      alert("Nie udalo sie pobrac pliku PDF.");
+      return;
+    }
+
+    try {
+      const response = await fetch(result.data.signedUrl);
+      if (!response.ok) throw new Error("Nie udalo sie pobrac pliku.");
+
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = fileName || "umowa_powierzenia.pdf";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch (error) {
+      console.error("Blad pobierania PDF RODO:", error);
+      alert("Nie udalo sie pobrac pliku PDF.");
+    }
+  }
+
   async function deleteGeneratedPdf() {
     if (!contract?.wygenerowany_pdf_path) return;
     const confirmed = window.confirm("Czy na pewno usunąć wygenerowany PDF tej umowy?");
@@ -506,12 +534,18 @@ function RodoDrawer({ contract, clients, accountingContracts, profiles, onClose,
                 label="Wygenerowany PDF"
                 fileName={contract.wygenerowany_pdf_name || "Umowa powierzenia.pdf"}
                 onOpen={() => void openPdf(contract.wygenerowany_pdf_path)}
+                onDownload={() => void downloadPdf(contract.wygenerowany_pdf_path, contract.wygenerowany_pdf_name || "umowa_powierzenia.pdf")}
                 onDelete={() => void deleteGeneratedPdf()}
                 deleting={deletingPdf}
               />
             ) : <div style={emptyStyle}>Brak wygenerowanego PDF.</div>}
             {contract?.podpisany_pdf_path && (
-              <FileRow label="Podpisany PDF" fileName={contract.podpisany_pdf_name || "Podpisana umowa powierzenia.pdf"} onOpen={() => void openPdf(contract.podpisany_pdf_path)} />
+              <FileRow
+                label="Podpisany PDF"
+                fileName={contract.podpisany_pdf_name || "Podpisana umowa powierzenia.pdf"}
+                onOpen={() => void openPdf(contract.podpisany_pdf_path)}
+                onDownload={() => void downloadPdf(contract.podpisany_pdf_path, contract.podpisany_pdf_name || "podpisana_umowa_powierzenia.pdf")}
+              />
             )}
           </FormSection>
         </div>
@@ -675,7 +709,7 @@ function FormSection({ title, children }: { title: string; children: ReactNode }
   return <section style={drawerSectionStyle}><h3 style={formSectionTitleStyle}>{title}</h3>{children}</section>;
 }
 
-function FileRow({ label, fileName, onOpen, onDelete, deleting }: { label: string; fileName: string; onOpen: () => void; onDelete?: () => void; deleting?: boolean }) {
+function FileRow({ label, fileName, onOpen, onDownload, onDelete, deleting }: { label: string; fileName: string; onOpen: () => void; onDownload: () => void; onDelete?: () => void; deleting?: boolean }) {
   return (
     <div style={fileRowStyle}>
       <div style={fileInfoStyle}>
@@ -684,6 +718,7 @@ function FileRow({ label, fileName, onOpen, onDelete, deleting }: { label: strin
       </div>
       <div style={fileActionsStyle}>
         <button style={secondaryButtonStyle} type="button" onClick={onOpen}>Otwórz</button>
+        <button style={primarySmallButtonStyle} type="button" onClick={onDownload}>Pobierz</button>
         {onDelete && <button style={dangerButtonStyle} type="button" onClick={onDelete} disabled={deleting}>{deleting ? "Usuwanie..." : "Usuń"}</button>}
       </div>
     </div>

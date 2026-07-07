@@ -146,6 +146,29 @@ export async function updateClient(clientId: string, payload: Record<string, unk
   };
 }
 
+export function normalizeClientNip(value: unknown) {
+  return typeof value === "string" ? value.replace(/\D/g, "") : "";
+}
+
+export async function findClientByNip(nip: string | null | undefined) {
+  const normalizedNip = normalizeClientNip(nip);
+  if (!normalizedNip) return { data: null, error: null };
+
+  const result = await supabase
+    .from("klienci")
+    .select("id,nazwa,nip,opiekun_id,status_klienta")
+    .not("nip", "is", null);
+
+  if (result.error) return { data: null, error: result.error };
+
+  return {
+    data:
+      (result.data || []).find((client) => normalizeClientNip(client.nip) === normalizedNip) ||
+      null,
+    error: null,
+  };
+}
+
 export async function createClient(payload: Record<string, unknown>) {
   return supabase
     .from("klienci")

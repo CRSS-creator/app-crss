@@ -83,7 +83,25 @@ export default function AppLayout({ children, activePage }: AppLayoutProps) {
 
   useEffect(() => {
     if (roleLoading || !role || !canAccessModule(role, "powiadomienia")) return;
+
     loadUnreadCount();
+
+    const intervalId = window.setInterval(loadUnreadCount, 5 * 60 * 1000);
+
+    function refreshWhenVisible() {
+      if (document.visibilityState === "visible") {
+        loadUnreadCount();
+      }
+    }
+
+    window.addEventListener("focus", loadUnreadCount);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", loadUnreadCount);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
   }, [roleLoading, role]);
 
   useEffect(() => {

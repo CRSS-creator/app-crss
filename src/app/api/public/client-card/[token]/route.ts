@@ -218,7 +218,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     await admin.from("powiadomienia").insert({
       type: "client_card_completed",
       title: "Karta klienta została wypełniona",
-      body: `Klient ${client.nazwa || "bez nazwy"} wypełnił kartę klienta. Sprawdź dane w systemie z danymi z formularza PDF.`,
+      body: `Klient ${client.nazwa || "bez nazwy"} wypełnił kartę klienta. Zweryfikuj informacje z karty klienta i w razie potrzeby dokonaj zmian w module Klienci.`,
       priority: "high",
       related_table: "klient_karty_formularze",
       related_id: form.id,

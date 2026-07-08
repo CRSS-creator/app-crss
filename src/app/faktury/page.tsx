@@ -46,7 +46,6 @@ function InvoicesContent() {
   const [sourceFilter, setSourceFilter] = useState(EMPTY_FILTER);
   const [query, setQuery] = useState("");
   const [invoiceMonth, setInvoiceMonth] = useState(() => currentMonthInput());
-  const [lastGeneratedCount, setLastGeneratedCount] = useState<number | null>(null);
   const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<string[]>([]);
   const [detailsInvoice, setDetailsInvoice] = useState<Invoice | null>(null);
 
@@ -76,11 +75,8 @@ function InvoicesContent() {
     const activeInvoices = invoices.filter((invoice) => invoice.status !== "anulowana");
     return {
       count: invoices.length,
-      automatic: invoices.filter((invoice) => invoice.automatyczna).length,
-      unsynced: invoices.filter(
-        (invoice) => invoice.wfirma_sync_status === "nie_wyslano" || invoice.wfirma_sync_status === "blad"
-      ).length,
-      gross: activeInvoices.reduce((sum, invoice) => sum + Number(invoice.kwota_brutto || 0), 0),
+      sentToWfirma: invoices.filter((invoice) => invoice.wfirma_sync_status === "wyslano").length,
+      net: activeInvoices.reduce((sum, invoice) => sum + Number(invoice.kwota_netto || 0), 0),
     };
   }, [invoices]);
 
@@ -118,7 +114,6 @@ function InvoicesContent() {
       return;
     }
 
-    setLastGeneratedCount(Number(result.data || 0));
     if (!options?.silent) await loadData();
   }
 
@@ -168,23 +163,11 @@ function InvoicesContent() {
 
       <section style={summaryGridStyle}>
         <Summary label="Faktury" value={totals.count} />
-        <Summary label="Automatyczne" value={totals.automatic} />
-        <Summary label="Do wFirmy" value={totals.unsynced} />
-        <Summary label="Brutto" value={formatMoney(totals.gross)} />
+        <Summary label="Wysłane do wFirmy" value={totals.sentToWfirma} />
+        <Summary label="Netto" value={formatMoney(totals.net)} />
       </section>
 
       <section style={automationPanelStyle}>
-        <div>
-          <h2 style={sectionTitleStyle}>Faktury abonamentowe z góry</h2>
-          <p style={panelTextStyle}>
-            Dla klientów rozliczanych z góry aplikacja tworzy fakturę 1. dnia miesiąca za poprzedni miesiąc
-            rozliczeniowy. Dla klientów rozliczanych z dołu faktura powstaje po zmianie statusu rozliczenia na „Podatki
-            wysłane”, razem z opłatami dodatkowymi z tego rozliczenia.
-          </p>
-          {lastGeneratedCount !== null && (
-            <p style={resultTextStyle}>Ostatnio sprawdzono {lastGeneratedCount} klientów do fakturowania.</p>
-          )}
-        </div>
         <div style={automationControlsStyle}>
           <label style={fieldStyle}>
             <span>Miesiąc wystawienia</span>
@@ -453,14 +436,11 @@ function invoiceLines(invoice: Invoice) {
 const headerStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "flex-start", marginBottom: "24px" };
 const eyebrowStyle: CSSProperties = { color: colors.red, fontWeight: 850, margin: "0 0 8px" };
 const titleStyle: CSSProperties = { fontSize: "42px", lineHeight: 1.05, margin: 0, color: colors.navy };
-const summaryGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "16px", marginBottom: "20px" };
+const summaryGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "16px", marginBottom: "20px" };
 const summaryStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.card, padding: "16px", boxShadow: shadow.soft, display: "grid", gap: "8px", color: colors.muted, fontWeight: 800 };
-const automationPanelStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.card, padding: "20px", boxShadow: shadow.soft, display: "grid", gridTemplateColumns: "minmax(0, 1fr) 320px", gap: "18px", alignItems: "center", marginBottom: "18px" };
+const automationPanelStyle: CSSProperties = { display: "flex", justifyContent: "flex-end", marginBottom: "14px" };
 const listPanelStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.card, padding: "20px", boxShadow: shadow.soft, minWidth: 0 };
-const sectionTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "22px" };
-const panelTextStyle: CSSProperties = { margin: "10px 0 0", color: colors.muted, fontSize: "14px", lineHeight: 1.55, fontWeight: 700 };
-const resultTextStyle: CSSProperties = { margin: "10px 0 0", color: colors.success, fontSize: "13px", fontWeight: 850 };
-const automationControlsStyle: CSSProperties = { display: "grid", gap: "10px" };
+const automationControlsStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: "10px", alignItems: "end", width: "min(100%, 650px)" };
 const bulkActionsStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "16px", marginBottom: "14px" };
 const listTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "20px" };
 const bulkHelpStyle: CSSProperties = { margin: "6px 0 0", color: colors.muted, fontSize: "13px", fontWeight: 700 };

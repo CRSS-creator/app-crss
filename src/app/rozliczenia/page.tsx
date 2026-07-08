@@ -302,7 +302,7 @@ function SettlementsContent() {
         {loading ? <div style={emptyStateStyle}>Ładowanie rozliczeń...</div> : visibleSettlements.length === 0 ? <div style={emptyStateStyle}>Brak rozliczeń do wyświetlenia.</div> : (
           <div style={tableWrapperStyle}>
             <table style={tableStyle}>
-              <thead><tr><Th width="230px">Klient</Th><Th width="250px">Status</Th><Th width="160px">Liczba dokumentów</Th><Th width="160px">Liczba pracowników</Th><Th width="190px">Liczba zleceniobiorców</Th><Th width="170px">Zadania cykliczne</Th><Th width="120px">Akcje</Th></tr></thead>
+              <thead><tr><Th width="310px">Klient</Th><Th width="250px">Status</Th><Th width="160px">Liczba dokumentów</Th><Th width="160px">Liczba pracowników</Th><Th width="190px">Liczba zleceniobiorców</Th><Th width="170px">Zadania cykliczne</Th><Th width="120px">Akcje</Th></tr></thead>
               <tbody>
                 {visibleSettlements.map((settlement) => {
                   const client = getClient(settlement.klienci);
@@ -796,7 +796,7 @@ const filtersRowStyle: CSSProperties = { display: "flex", alignItems: "center", 
 const filtersLabelStyle: CSSProperties = { color: colors.muted, fontWeight: 800, fontSize: "14px" };
 const filterStyle: CSSProperties = { width: "190px", flex: "0 0 190px", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, color: colors.text, padding: "10px 38px 10px 14px", fontSize: "14px", fontWeight: 500 };
 const tableWrapperStyle: CSSProperties = { overflowX: "auto" };
-const tableStyle: CSSProperties = { width: "100%", minWidth: "1120px", borderCollapse: "collapse", tableLayout: "fixed" };
+const tableStyle: CSSProperties = { width: "100%", minWidth: "1200px", borderCollapse: "collapse", tableLayout: "fixed" };
 const thStyle: CSSProperties = { textAlign: "left", padding: "13px 10px", color: colors.muted, fontSize: "12px", borderBottom: `1px solid ${colors.border}`, lineHeight: 1.25, fontWeight: 600, whiteSpace: "nowrap" };
 const rowStyle: CSSProperties = { borderBottom: `1px solid ${colors.border}` };
 const tdStyle: CSSProperties = { padding: "15px 10px", color: colors.text, verticalAlign: "middle", fontSize: "15px" };

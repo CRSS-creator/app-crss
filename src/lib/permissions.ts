@@ -52,5 +52,5 @@ export function canManageClients(_role: UserRole | null) {
 }
 
 export function canEditClientAdministrative(role: UserRole | null) {
-  return role === "owner" || role === "manager" || role === "admin";
+  return role === "owner" || role === "admin";
 }

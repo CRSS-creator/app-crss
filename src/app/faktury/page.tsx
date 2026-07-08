@@ -273,7 +273,7 @@ function InvoicesContent() {
                       <Small>{invoice.kontrahent_nip || invoice.klienci?.nazwa || "Brak NIP"}</Small>
                     </Td>
                     <Td>{formatMonth(invoice.okres || invoice.data_wystawienia)}</Td>
-                    <Td strong>{formatMoney(invoice.kwota_brutto)}</Td>
+                    <Td strong>{formatMoney(invoice.kwota_netto)}</Td>
                     <Td>
                       <Badge
                         tone={

@@ -80,6 +80,7 @@ type OnboardingStage = {
   actionInfo?: string;
   actionDone?: boolean;
   descriptionNote?: string;
+  pillLabel?: string;
   checklist?: OnboardingChecklistItem[];
 };
 
@@ -781,7 +782,8 @@ function buildStages(
       key: "contract",
       title: "Umowa księgowa",
       description: accountingContract ? contractStatusLabel(accountingContract.status) : "Brak powiązanej umowy księgowej.",
-      state: accountingContract?.status === "podpisana" || accountingContract?.podpisany_pdf_path ? "done" : accountingContract ? "progress" : "blocked",
+      state: contractStageState(accountingContract),
+      pillLabel: contractStagePillLabel(accountingContract),
       moduleLabel: "Przejdź do umów",
       href: "/crm/umowy",
       responsibleLabel: ownerResponsible,
@@ -1029,6 +1031,16 @@ function stageStateFromStatus(status: OnboardingStageStatus | null | undefined):
   return "todo";
 }
 
+function contractStageState(contract: CrmContract | null): StageState {
+  if (!contract) return "blocked";
+  return contract.status === "podpisana" ? "done" : "progress";
+}
+
+function contractStagePillLabel(contract: CrmContract | null) {
+  if (!contract) return "Brak";
+  return contract.status === "podpisana" ? "Gotowe" : "W trakcie";
+}
+
 function indexProfiles(profiles: Profile[]) {
   return profiles.reduce<Record<string, Profile>>((acc, profile) => {
     acc[profile.id] = profile;
@@ -1146,7 +1158,7 @@ function StatusPill({ status }: { status: string }) {
 
 function StagePill({ stage }: { stage: OnboardingStage }) {
   const style = stage.state === "done" ? successPillStyle : stage.state === "blocked" ? dangerPillStyle : stage.state === "progress" ? warningPillStyle : neutralPillStyle;
-  const label = stage.record?.status ? statusLabel(stage.record.status) : stage.state === "done" ? "Gotowe" : stage.state === "blocked" ? "Brak" : stage.state === "progress" ? "W toku" : "Do wykonania";
+  const label = stage.pillLabel || (stage.record?.status ? statusLabel(stage.record.status) : stage.state === "done" ? "Gotowe" : stage.state === "blocked" ? "Brak" : stage.state === "progress" ? "W toku" : "Do wykonania");
   return <span style={style}>{label}</span>;
 }
 

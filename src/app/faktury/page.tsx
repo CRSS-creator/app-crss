@@ -142,9 +142,9 @@ function InvoicesContent() {
         <div>
           <h2 style={sectionTitleStyle}>Faktury abonamentowe z góry</h2>
           <p style={panelTextStyle}>
-            Dla klientów rozliczanych z góry aplikacja tworzy fakturę 1. dnia miesiąca po pierwszym okresie
-            rozliczeniowym. Opis pozycji to „abonament księgowy za miesiąc ...”, a niefakturowane opłaty dodatkowe z
-            poprzednich okresów trafiają do następnej faktury z góry.
+            Dla klientów rozliczanych z góry aplikacja tworzy fakturę 1. dnia miesiąca za poprzedni miesiąc
+            rozliczeniowy. Dla klientów rozliczanych z dołu faktura powstaje po zmianie statusu rozliczenia na „Podatki
+            wysłane”, razem z opłatami dodatkowymi z tego rozliczenia.
           </p>
           {lastGeneratedCount !== null && (
             <p style={resultTextStyle}>Ostatnio sprawdzono {lastGeneratedCount} klientów do fakturowania.</p>
@@ -152,7 +152,7 @@ function InvoicesContent() {
         </div>
         <div style={automationControlsStyle}>
           <label style={fieldStyle}>
-            <span>Miesiąc faktury</span>
+            <span>Miesiąc wystawienia</span>
             <input
               style={inputStyle}
               type="month"

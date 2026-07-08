@@ -80,9 +80,9 @@ export function buildClientCardPdf(input: ClientCardPdfInput): Buffer {
   field("Czy wykonuje lub wykonywal/a uslugi na rzecz bylego pracodawcy", input.data.uslugiBylyPracodawca);
 
   section("VAT");
-  field("Czynny podatnik VAT", input.data.czynnyVat);
+  field("Czy jest czynnym podatnikiem VAT", input.data.czynnyVat);
   field("Forma rozliczenia VAT", input.data.vatFormaRozliczenia);
-  field("Podstawa zwolnienia VAT", input.data.vatZwolnieniePodstawy.join(", "));
+  field("Podstawa zwolnienia z VAT", input.data.vatZwolnieniePodstawy.join(", "));
   field("VAT-UE", input.data.vatUe);
   field("Powod VAT-UE", input.data.vatUePowody.join(", "));
   field("Czy prowadzi sprzedaz na rzecz osob fizycznych z innych krajow UE", input.data.sprzedazOsobyPrywatneUe);

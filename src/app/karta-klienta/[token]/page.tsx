@@ -176,7 +176,7 @@ export default function ClientCardPage() {
         </Section>
 
         <Section title="VAT">
-          <Field label="Czy firma jest czynnym podatnikiem VAT">
+          <Field label="Czy jest Pan/Pani czynnym podatnikiem VAT?">
             <select style={inputStyle} value={draft.czynnyVat} onChange={(event) => updateDraft("czynnyVat", event.target.value)}>
               {YES_NO_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
@@ -195,7 +195,7 @@ export default function ClientCardPage() {
             <CheckboxGroup
               label="Podstawa zwolnienia z VAT"
               values={draft.vatZwolnieniePodstawy}
-              options={["Zwolnienie podmiotowe do 240 tys.", "Zwolnienie przedmiotowe"]}
+              options={["Zwolnienie podmiotowe do 240 tys.", "Zwolnienie przedmiotowe ze względu na rodzaj prowadzonej sprzedaży"]}
               onToggle={(value) => toggleListValue("vatZwolnieniePodstawy", value)}
             />
           )}

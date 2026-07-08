@@ -79,6 +79,7 @@ type OnboardingStage = {
   fullWidth?: boolean;
   actionInfo?: string;
   actionDone?: boolean;
+  descriptionNote?: string;
   checklist?: OnboardingChecklistItem[];
 };
 
@@ -805,17 +806,20 @@ function buildStages(
 
   stages.push(
     buildManualStage("powers", "Instrukcje i pełnomocnictwa dotyczące ZUS oraz US.", recordByKey.powers, undefined, undefined, "Wyślij instrukcje e-mailem", undefined, adminResponsible, latestInstructionInfo(onboardingHistory, profilesById)),
-    buildManualStage(
-      "wfirma_account",
-      "Utworzenie konta klienta w systemie wFirma.",
-      recordByKey.wfirma_account,
-      undefined,
-      undefined,
-      "Wyślij powiadomienie",
-      undefined,
-      adminResponsible,
-      latestWfirmaAccountNotificationInfo(onboardingHistory, profilesById) || "Wraz z powiadomieniem o utworzeniu konta wysyłana jest instrukcja integracji KSeF z wFirmą. W razie pytań prosimy o kontakt z opiekunem księgowym."
-    ),
+    {
+      ...buildManualStage(
+        "wfirma_account",
+        "Utworzenie konta klienta w systemie wFirma.",
+        recordByKey.wfirma_account,
+        undefined,
+        undefined,
+        "Wyślij powiadomienie",
+        undefined,
+        adminResponsible,
+        latestWfirmaAccountNotificationInfo(onboardingHistory, profilesById)
+      ),
+      descriptionNote: "Wraz z powiadomieniem o utworzeniu konta wysyłana jest instrukcja integracji KSeF z wFirmą.",
+    },
     {
       ...buildManualStage("wfirma", "Konfiguracja konta klienta i ustawień operacyjnych w systemie wFirma.", recordByKey.wfirma, undefined, undefined, undefined, undefined, caregiverResponsible),
       checklist: buildWfirmaChecklist(client.forma_prawna, recordByKey.wfirma),
@@ -837,7 +841,7 @@ function buildStages(
 }
 
 function buildManualStage(key: OnboardingStageKey, description: string, record?: OnboardingStageRecord, href?: string, moduleLabel?: string, actionLabel?: string, fullWidth?: boolean, responsibleLabel?: string, actionInfo?: string): OnboardingStage {
-  const actionDone = Boolean(actionInfo) && !(key === "wfirma_account" && actionInfo?.startsWith("Wraz z powiadomieniem")) && !(key === "documents_takeover" && actionInfo?.startsWith("Dokumenty klient"));
+  const actionDone = Boolean(actionInfo) && !(key === "documents_takeover" && actionInfo?.startsWith("Dokumenty klient"));
 
   return {
     key,
@@ -1107,7 +1111,13 @@ function Summary({ label, value }: { label: string; value: ReactNode }) {
 
 function formatClientContact(client: Client) {
   const parts = [client.telefon, client.email].filter(Boolean);
-  return parts.length ? parts.join(" · ") : "Brak danych kontaktowych";
+  return parts.length ? (
+    <>
+      {parts.map((part) => (
+        <span key={part} style={{ display: "block" }}>{part}</span>
+      ))}
+    </>
+  ) : "Brak danych kontaktowych";
 }
 
 function Th({ children }: { children: ReactNode }) {
@@ -1170,6 +1180,7 @@ function StageProcessRow({
         <td style={processTdStyle}>
           <strong style={processStageTitleStyle}>{stage.title}</strong>
           <span style={processDescriptionStyle}>{stage.description}</span>
+          {stage.descriptionNote && <span style={processDescriptionNoteStyle}>{stage.descriptionNote}</span>}
         </td>
         <td style={processTdStyle}>
           <span style={responsibleStyle}>{stage.responsibleLabel}</span>
@@ -1274,6 +1285,7 @@ function StageCard({
       </div>
       <span style={responsibleStyle}>Odpowiedzialny: {stage.responsibleLabel}</span>
       <p style={stageDescriptionStyle}>{stage.description}</p>
+      {stage.descriptionNote && <p style={stageDescriptionStyle}>{stage.descriptionNote}</p>}
       {stage.checklist && stage.checklist.length > 0 && (
         <button type="button" style={checklistToggleStyle} onClick={onToggleChecklist}>
           {checklistExpanded ? "Ukryj zadania" : "Pokaż zadania"}
@@ -1411,6 +1423,7 @@ const processTdStyle: CSSProperties = { ...tdStyle, verticalAlign: "top" };
 const processActionsTdStyle: CSSProperties = { ...tdStyle, verticalAlign: "top", width: "420px" };
 const processStageTitleStyle: CSSProperties = { display: "block", color: colors.navy, fontSize: "16px", marginBottom: "5px" };
 const processDescriptionStyle: CSSProperties = { display: "block", color: colors.muted, fontSize: "13px", lineHeight: 1.45, fontWeight: 650 };
+const processDescriptionNoteStyle: CSSProperties = { ...processDescriptionStyle, marginTop: "6px", maxWidth: "420px" };
 const processActionsStyle: CSSProperties = { display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" };
 const processChecklistTdStyle: CSSProperties = { padding: "0 14px 14px", borderBottom: `1px solid ${colors.border}`, background: colors.white };
 const stageGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "12px" };

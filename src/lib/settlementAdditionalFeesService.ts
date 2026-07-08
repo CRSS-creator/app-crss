@@ -38,6 +38,7 @@ export type SettlementAdditionalFeePayload = {
 };
 
 type LateDocumentsFeeClient = {
+  nazwa?: string | null;
   abonament?: number | string | null;
   model_fakturowania?: string | null;
 };
@@ -50,7 +51,7 @@ export type LateDocumentsFeeSettlement = {
 };
 
 const LATE_DOCUMENTS_FEE_NAME = "Opłata za nieterminowe dostarczenie dokumentów";
-const LATE_DOCUMENTS_FEE_NOTE = "Automatyczna opłata: dokumenty dostarczone po 7. dniu miesiąca.";
+const LATE_DOCUMENTS_FEE_NOTE = "Automatyczna opłata: dokumenty dostarczone po 7. dniu miesiąca następującego po miesiącu rozliczeniowym.";
 
 export async function fetchAdditionalFeeDefinitions(includeInactive = false) {
   let query = supabase
@@ -98,7 +99,7 @@ export async function fetchSettlementAdditionalFees(settlementId: string) {
 export async function fetchLateDocumentsFeeSettlement(settlementId: string) {
   return supabase
     .from("rozliczenia_miesieczne")
-    .select("id, okres, data_dostarczenia_dokumentow, klienci(abonament, model_fakturowania)")
+    .select("id, okres, data_dostarczenia_dokumentow, klienci(nazwa, abonament, model_fakturowania)")
     .eq("id", settlementId)
     .single<LateDocumentsFeeSettlement>();
 }
@@ -171,6 +172,7 @@ export async function syncLateDocumentsAdditionalFee(settlement: LateDocumentsFe
 
 function shouldApplyLateDocumentsFee(settlement: LateDocumentsFeeSettlement, client: LateDocumentsFeeClient | null) {
   if (!client || client.model_fakturowania !== "z_gory") return false;
+  if (isLateDocumentsFeeExcludedClient(client.nazwa)) return false;
   const deliveredAt = toDate(settlement.data_dostarczenia_dokumentow);
   const dueAt = documentsDueDate(settlement.okres);
   if (!deliveredAt || !dueAt) return false;
@@ -191,6 +193,11 @@ function documentsDueDate(period: string) {
   const [year, month] = period.split("-").map(Number);
   if (!year || !month) return null;
   return new Date(year, month, 7, 12, 0, 0, 0);
+}
+
+function isLateDocumentsFeeExcludedClient(clientName: string | null | undefined) {
+  const normalized = (clientName || "").toLowerCase();
+  return normalized.includes("śremski klub sportowy warta") || normalized.includes("adalbertus");
 }
 
 function toDate(value: string | null | undefined) {

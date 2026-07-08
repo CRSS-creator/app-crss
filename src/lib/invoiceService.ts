@@ -17,6 +17,8 @@ export type Invoice = {
   data_wystawienia: string | null;
   data_sprzedazy: string | null;
   termin_platnosci: string | null;
+  okres: string | null;
+  automatyczna: boolean;
   kontrahent_nazwa: string;
   kontrahent_nip: string | null;
   kontrahent_email: string | null;
@@ -46,6 +48,8 @@ export type InvoicePayload = {
   data_wystawienia?: string | null;
   data_sprzedazy?: string | null;
   termin_platnosci?: string | null;
+  okres?: string | null;
+  automatyczna?: boolean;
   kontrahent_nazwa: string;
   kontrahent_nip?: string | null;
   kontrahent_email?: string | null;
@@ -92,6 +96,12 @@ export async function updateInvoice(invoiceId: string, payload: Partial<InvoiceP
     .eq("id", invoiceId)
     .select(INVOICE_SELECT)
     .single<Invoice>();
+}
+
+export async function ensureSubscriptionInvoices(invoiceMonth?: string) {
+  return supabase.rpc("ensure_subscription_invoices", {
+    public_invoice_month: invoiceMonth || undefined,
+  });
 }
 
 function normalizeInvoicePayload<T extends Partial<InvoicePayload>>(payload: T) {

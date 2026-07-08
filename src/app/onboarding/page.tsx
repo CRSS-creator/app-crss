@@ -138,6 +138,7 @@ function OnboardingContent() {
   const [sendingWfirmaAccountNotification, setSendingWfirmaAccountNotification] = useState(false);
   const [sendingDocumentsNotification, setSendingDocumentsNotification] = useState(false);
   const [sendingClientCardRequest, setSendingClientCardRequest] = useState(false);
+  const [openingClientCardPreview, setOpeningClientCardPreview] = useState(false);
   const [savingChecklistId, setSavingChecklistId] = useState<string | null>(null);
   const [savingNotes, setSavingNotes] = useState(false);
   const [notesDraft, setNotesDraft] = useState("");
@@ -302,6 +303,43 @@ function OnboardingContent() {
     }
 
     await loadData();
+  }
+
+  async function handleClientCardPreview(row: OnboardingRow) {
+    const previewWindow = window.open("", "_blank", "noopener,noreferrer");
+
+    setOpeningClientCardPreview(true);
+    const sessionResult = await supabase.auth.getSession();
+    const token = sessionResult.data.session?.access_token;
+    const response = await fetch("/api/onboarding/client-card-request", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ clientId: row.client.id, previewOnly: true }),
+    });
+    setOpeningClientCardPreview(false);
+
+    if (!response.ok) {
+      previewWindow?.close();
+      const data = await response.json().catch(() => null);
+      alert(data?.error || "Nie udało się przygotować podglądu karty klienta.");
+      return;
+    }
+
+    const data = await response.json() as { formUrl?: string };
+    if (!data.formUrl) {
+      previewWindow?.close();
+      alert("Nie udało się pobrać linku do podglądu karty klienta.");
+      return;
+    }
+
+    if (previewWindow) {
+      previewWindow.location.href = data.formUrl;
+    } else {
+      window.open(data.formUrl, "_blank", "noopener,noreferrer");
+    }
   }
 
   async function handleStageAction(stage: OnboardingStage, row: OnboardingRow) {
@@ -623,11 +661,13 @@ function OnboardingContent() {
                           stage={stage}
                           saving={stageSaving}
                           actionSending={actionSending}
+                          previewActionSending={stage.key === "client_card" && openingClientCardPreview}
                           savingChecklistId={savingChecklistId}
                           checklistExpanded={Boolean(expandedChecklistStages[checklistKey])}
                           onToggleChecklist={() => setExpandedChecklistStages((current) => ({ ...current, [checklistKey]: !current[checklistKey] }))}
                           onStatusChange={(status) => handleStageStatusChange(stage, status)}
                           onAction={() => handleStageAction(stage, selectedRow)}
+                          onPreview={stage.key === "client_card" ? () => handleClientCardPreview(selectedRow) : undefined}
                           onChecklistChange={(item, checked) => handleChecklistChange(stage, item, checked)}
                         />
                       );
@@ -1136,21 +1176,25 @@ function StageProcessRow({
   stage,
   saving,
   actionSending,
+  previewActionSending,
   savingChecklistId,
   checklistExpanded,
   onToggleChecklist,
   onStatusChange,
   onAction,
+  onPreview,
   onChecklistChange,
 }: {
   stage: OnboardingStage;
   saving: boolean;
   actionSending: boolean;
+  previewActionSending?: boolean;
   savingChecklistId: string | null;
   checklistExpanded: boolean;
   onToggleChecklist: () => void;
   onStatusChange: (status: OnboardingStageStatus) => void;
   onAction: () => void;
+  onPreview?: () => void;
   onChecklistChange: (item: OnboardingChecklistItem, checked: boolean) => void;
 }) {
   const checklistGroups = groupChecklist(stage.checklist || []);
@@ -1188,6 +1232,11 @@ function StageProcessRow({
                 onClick={onAction}
               >
                 {actionButtonLabel}
+              </button>
+            )}
+            {onPreview && (
+              <button type="button" style={secondaryButtonStyle} disabled={saving || Boolean(previewActionSending)} onClick={onPreview}>
+                {previewActionSending ? "Otwieranie..." : "Podgląd"}
               </button>
             )}
             {stage.editable && stage.record && (

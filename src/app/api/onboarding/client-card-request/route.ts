@@ -10,6 +10,7 @@ type AuthorizedResult =
 
 type ClientCardPayload = {
   clientId?: string;
+  previewOnly?: boolean;
 };
 
 type ClientWithCaregiver = {
@@ -125,9 +126,6 @@ export async function POST(request: NextRequest) {
   const auth = await getAuthorizedUser(request);
   if (auth.error) return auth.error;
 
-  const webhookConfig = getWebhookUrl();
-  if (webhookConfig.error) return webhookConfig.error;
-
   let payload: ClientCardPayload;
   try {
     payload = await request.json();
@@ -162,11 +160,12 @@ export async function POST(request: NextRequest) {
   }
 
   const clientRecord = client as ClientWithCaregiver;
+  const previewOnly = payload.previewOnly === true;
   if (auth.role === "accountant" && clientRecord.opiekun_id !== auth.requesterId) {
     return NextResponse.json({ error: "Możesz wysyłać kartę tylko dla swoich klientów." }, { status: 403 });
   }
 
-  if (!clientRecord.email) {
+  if (!previewOnly && !clientRecord.email) {
     return NextResponse.json({ error: "Klient nie ma uzupełnionego adresu e-mail." }, { status: 400 });
   }
 
@@ -200,6 +199,13 @@ export async function POST(request: NextRequest) {
   }
 
   const formUrl = `${APP_URL}/karta-klienta/${formRecord.public_token}`;
+  if (previewOnly) {
+    return NextResponse.json({ ok: true, formUrl, preview: true });
+  }
+
+  const webhookConfig = getWebhookUrl();
+  if (webhookConfig.error) return webhookConfig.error;
+
   const caregiver = caregiverFromClient(clientRecord);
 
   try {

@@ -306,7 +306,12 @@ function OnboardingContent() {
   }
 
   async function handleClientCardPreview(row: OnboardingRow) {
-    const previewWindow = window.open("", "_blank", "noopener,noreferrer");
+    const previewWindow = window.open("", "_blank");
+    if (previewWindow) {
+      previewWindow.opener = null;
+      previewWindow.document.write("<!doctype html><title>Podglad karty klienta</title><p style=\"font-family:Arial,sans-serif;padding:24px;\">Otwieranie podgladu karty klienta...</p>");
+      previewWindow.document.close();
+    }
 
     setOpeningClientCardPreview(true);
     const sessionResult = await supabase.auth.getSession();
@@ -336,7 +341,7 @@ function OnboardingContent() {
     }
 
     if (previewWindow) {
-      previewWindow.location.href = data.formUrl;
+      previewWindow.location.assign(data.formUrl);
     } else {
       window.open(data.formUrl, "_blank", "noopener,noreferrer");
     }

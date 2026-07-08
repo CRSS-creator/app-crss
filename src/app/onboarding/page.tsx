@@ -895,6 +895,7 @@ const WFIRMA_COMMON_TASKS: Omit<OnboardingChecklistItem, "done">[] = [
   { id: "vat_scheme", label: "Ustaw schemat podatku VAT zgodnie ze statusem klienta.", group: "Wspólne" },
   { id: "tax_office_permissions", label: "Ustaw urząd skarbowy i uprawnienia użytkownika: księgowanie, plik JPK, wydatki.", group: "Wspólne" },
   { id: "bank_account", label: "Dodaj konto przedsiębiorcy i wyłącz możliwość księgowania.", group: "Wspólne" },
+  { id: "ksef_integration_check", label: "Sprawdź integrację wFirmy z KSeF, w razie problemów skontaktuj się z Klientem.", group: "Wspólne" },
 ];
 
 const WFIRMA_JDG_TASKS: Omit<OnboardingChecklistItem, "done">[] = [

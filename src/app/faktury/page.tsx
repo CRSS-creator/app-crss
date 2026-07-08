@@ -11,19 +11,10 @@ import {
   fetchInvoices,
   queueInvoicesForWfirma,
   type Invoice,
-  type InvoiceSource,
-  type InvoiceStatus,
   type InvoiceSyncStatus,
 } from "@/lib/invoiceService";
 
 const EMPTY_FILTER = "Wszystkie";
-const STATUS_OPTIONS = [
-  { value: "szkic", label: "Szkic" },
-  { value: "wystawiona", label: "Wystawiona" },
-  { value: "wyslana", label: "Wysłana" },
-  { value: "oplacona", label: "Opłacona" },
-  { value: "anulowana", label: "Anulowana" },
-] as const;
 const SOURCE_OPTIONS = [
   { value: "aplikacja", label: "Aplikacja" },
   { value: "wfirma", label: "wFirma" },
@@ -52,7 +43,6 @@ function InvoicesContent() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [queueing, setQueueing] = useState(false);
-  const [statusFilter, setStatusFilter] = useState(EMPTY_FILTER);
   const [sourceFilter, setSourceFilter] = useState(EMPTY_FILTER);
   const [query, setQuery] = useState("");
   const [invoiceMonth, setInvoiceMonth] = useState(() => currentMonthInput());
@@ -66,22 +56,20 @@ function InvoicesContent() {
   const filteredInvoices = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return invoices.filter((invoice) => {
-      const matchesStatus = statusFilter === EMPTY_FILTER || invoice.status === statusFilter;
       const matchesSource = sourceFilter === EMPTY_FILTER || invoice.zrodlo === sourceFilter;
       const haystack = [
         invoice.numer,
         invoice.kontrahent_nazwa,
         invoice.kontrahent_nip,
         invoice.klienci?.nazwa,
-        invoice.opis,
         invoice.wfirma_id,
       ]
         .filter(Boolean)
         .join(" ")
         .toLowerCase();
-      return matchesStatus && matchesSource && (!normalizedQuery || haystack.includes(normalizedQuery));
+      return matchesSource && (!normalizedQuery || haystack.includes(normalizedQuery));
     });
-  }, [invoices, query, sourceFilter, statusFilter]);
+  }, [invoices, query, sourceFilter]);
 
   const totals = useMemo(() => {
     const activeInvoices = invoices.filter((invoice) => invoice.status !== "anulowana");
@@ -240,13 +228,7 @@ function InvoicesContent() {
             style={searchStyle}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Szukaj po numerze, kontrahencie, NIP, opisie albo ID wFirma"
-          />
-          <AppSelect
-            style={filterSelectStyle}
-            value={statusFilter}
-            options={[{ value: EMPTY_FILTER, label: "Status" }, ...STATUS_OPTIONS]}
-            onChange={setStatusFilter}
+            placeholder="Szukaj po numerze z wFirmy, kontrahencie, NIP albo ID wFirma"
           />
           <AppSelect
             style={filterSelectStyle}
@@ -272,20 +254,18 @@ function InvoicesContent() {
                 <Th>Numer</Th>
                 <Th>Kontrahent</Th>
                 <Th>Okres</Th>
-                <Th>Opis</Th>
                 <Th>Kwota</Th>
-                <Th>Status</Th>
                 <Th>wFirma</Th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <Td colSpan={8}>Ładowanie faktur...</Td>
+                  <Td colSpan={6}>Ładowanie faktur...</Td>
                 </tr>
               ) : filteredInvoices.length === 0 ? (
                 <tr>
-                  <Td colSpan={8}>Brak faktur dla wybranych filtrów.</Td>
+                  <Td colSpan={6}>Brak faktur dla wybranych filtrów.</Td>
                 </tr>
               ) : (
                 filteredInvoices.map((invoice) => (
@@ -300,21 +280,15 @@ function InvoicesContent() {
                       />
                     </Td>
                     <Td strong>
-                      {invoice.numer || "Bez numeru"}
-                      <Small>{invoice.automatyczna ? "Automatyczna" : sourceLabel(invoice.zrodlo)}</Small>
+                      {invoiceNumberLabel(invoice)}
+                      <Small>{invoice.numer ? "Numer z wFirmy" : "Po wysłaniu do wFirmy"}</Small>
                     </Td>
                     <Td>
                       {invoice.kontrahent_nazwa}
                       <Small>{invoice.kontrahent_nip || invoice.klienci?.nazwa || "Brak NIP"}</Small>
                     </Td>
                     <Td>{formatMonth(invoice.okres || invoice.data_wystawienia)}</Td>
-                    <Td>{invoice.opis || "Brak opisu"}</Td>
                     <Td strong>{formatMoney(invoice.kwota_brutto)}</Td>
-                    <Td>
-                      <Badge tone={invoice.status === "oplacona" ? "success" : invoice.status === "anulowana" ? "danger" : "neutral"}>
-                        {statusLabel(invoice.status)}
-                      </Badge>
-                    </Td>
                     <Td>
                       <Badge
                         tone={
@@ -383,20 +357,16 @@ function formatMonth(value: string | null) {
   return new Intl.DateTimeFormat("pl-PL", { month: "long", year: "numeric" }).format(new Date(`${value}T00:00:00`));
 }
 
-function statusLabel(status: InvoiceStatus) {
-  return STATUS_OPTIONS.find((item) => item.value === status)?.label || status;
-}
-
-function sourceLabel(source: InvoiceSource) {
-  return SOURCE_OPTIONS.find((item) => item.value === source)?.label || source;
-}
-
 function syncLabel(status: InvoiceSyncStatus) {
   return SYNC_OPTIONS.find((item) => item.value === status)?.label || status;
 }
 
 function canQueueForWfirma(invoice: Invoice) {
   return invoice.status !== "anulowana" && ["nie_wyslano", "blad"].includes(invoice.wfirma_sync_status);
+}
+
+function invoiceNumberLabel(invoice: Invoice) {
+  return invoice.numer || "Czeka na numer";
 }
 
 const headerStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "flex-start", marginBottom: "24px" };
@@ -417,11 +387,11 @@ const fieldStyle: CSSProperties = { display: "grid", gap: "7px", color: colors.m
 const inputStyle: CSSProperties = { width: "100%", minHeight: "42px", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, padding: "10px 12px", fontWeight: 750, boxSizing: "border-box" };
 const primaryButtonStyle: CSSProperties = { border: `1px solid ${colors.red}`, borderRadius: radius.button, background: colors.red, color: colors.white, minHeight: "44px", padding: "11px 15px", fontWeight: 900, cursor: "pointer", display: "inline-flex", justifyContent: "center", alignItems: "center", gap: "8px" };
 const secondaryButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.navy, minHeight: "42px", padding: "10px 14px", fontWeight: 850, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "8px" };
-const filtersStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(220px, 1fr) 170px 170px", gap: "10px", marginBottom: "14px" };
+const filtersStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(220px, 1fr) 170px", gap: "10px", marginBottom: "14px" };
 const searchStyle: CSSProperties = { ...inputStyle };
 const filterSelectStyle: CSSProperties = { background: colors.white };
 const tableWrapperStyle: CSSProperties = { overflowX: "auto" };
-const tableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse", minWidth: "980px" };
+const tableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse", minWidth: "780px" };
 const thStyle: CSSProperties = { textAlign: "left", padding: "12px 10px", borderBottom: `1px solid ${colors.border}`, color: colors.muted, fontSize: "12px", textTransform: "uppercase", letterSpacing: 0 };
 const tdStyle: CSSProperties = { padding: "13px 10px", borderBottom: `1px solid ${colors.border}`, color: colors.text, verticalAlign: "middle" };
 const rowStyle: CSSProperties = { background: colors.white };

@@ -104,6 +104,23 @@ export async function ensureSubscriptionInvoices(invoiceMonth?: string) {
   });
 }
 
+export async function queueInvoicesForWfirma(invoiceIds: string[]) {
+  if (invoiceIds.length === 0) {
+    return { data: [] as Invoice[], error: null };
+  }
+
+  return supabase
+    .from("faktury")
+    .update({
+      wfirma_sync_status: "w_kolejce" as InvoiceSyncStatus,
+      wfirma_sync_error: null,
+    })
+    .in("id", invoiceIds)
+    .in("wfirma_sync_status", ["nie_wyslano", "blad"])
+    .neq("status", "anulowana")
+    .select(INVOICE_SELECT);
+}
+
 function normalizeInvoicePayload<T extends Partial<InvoicePayload>>(payload: T) {
   return {
     ...payload,

@@ -9,6 +9,7 @@ import { colors, radius, shadow } from "@/app/design";
 import {
   ensureSubscriptionInvoices,
   fetchInvoices,
+  queueInvoicesForWfirma,
   type Invoice,
   type InvoiceSource,
   type InvoiceStatus,
@@ -50,11 +51,13 @@ function InvoicesContent() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [queueing, setQueueing] = useState(false);
   const [statusFilter, setStatusFilter] = useState(EMPTY_FILTER);
   const [sourceFilter, setSourceFilter] = useState(EMPTY_FILTER);
   const [query, setQuery] = useState("");
   const [invoiceMonth, setInvoiceMonth] = useState(() => currentMonthInput());
   const [lastGeneratedCount, setLastGeneratedCount] = useState<number | null>(null);
+  const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<string[]>([]);
 
   useEffect(() => {
     void loadData({ generateCurrentMonth: true });
@@ -92,6 +95,15 @@ function InvoicesContent() {
     };
   }, [invoices]);
 
+  const selectableInvoices = useMemo(
+    () => filteredInvoices.filter((invoice) => canQueueForWfirma(invoice)),
+    [filteredInvoices]
+  );
+
+  const selectedCount = selectedInvoiceIds.length;
+  const allSelectableChecked =
+    selectableInvoices.length > 0 && selectableInvoices.every((invoice) => selectedInvoiceIds.includes(invoice.id));
+
   async function loadData(options?: { generateCurrentMonth?: boolean }) {
     setLoading(true);
     if (options?.generateCurrentMonth) {
@@ -100,6 +112,9 @@ function InvoicesContent() {
     const result = await fetchInvoices();
     if (result.error) console.error("Błąd pobierania faktur:", result.error);
     setInvoices((result.data || []) as Invoice[]);
+    setSelectedInvoiceIds((current) =>
+      current.filter((invoiceId) => (result.data || []).some((invoice) => invoice.id === invoiceId && canQueueForWfirma(invoice as Invoice)))
+    );
     setLoading(false);
   }
 
@@ -116,6 +131,37 @@ function InvoicesContent() {
 
     setLastGeneratedCount(Number(result.data || 0));
     if (!options?.silent) await loadData();
+  }
+
+  function toggleInvoiceSelection(invoiceId: string, checked: boolean) {
+    setSelectedInvoiceIds((current) =>
+      checked ? Array.from(new Set([...current, invoiceId])) : current.filter((id) => id !== invoiceId)
+    );
+  }
+
+  function toggleAllVisible(checked: boolean) {
+    setSelectedInvoiceIds((current) => {
+      const visibleIds = selectableInvoices.map((invoice) => invoice.id);
+      if (!checked) return current.filter((id) => !visibleIds.includes(id));
+      return Array.from(new Set([...current, ...visibleIds]));
+    });
+  }
+
+  async function queueSelectedForWfirma() {
+    if (selectedInvoiceIds.length === 0) return;
+
+    setQueueing(true);
+    const result = await queueInvoicesForWfirma(selectedInvoiceIds);
+    setQueueing(false);
+
+    if (result.error) {
+      console.error("Błąd przekazania faktur do wFirmy:", result.error);
+      alert("Nie udało się przekazać zaznaczonych faktur do wFirmy.");
+      return;
+    }
+
+    setSelectedInvoiceIds([]);
+    await loadData();
   }
 
   return (
@@ -173,6 +219,22 @@ function InvoicesContent() {
       </section>
 
       <section style={listPanelStyle}>
+        <div style={bulkActionsStyle}>
+          <div>
+            <h2 style={listTitleStyle}>Lista faktur</h2>
+            <p style={bulkHelpStyle}>
+              Zaznacz faktury, które nie były jeszcze wysłane do wFirmy, a potem wyślij je zbiorczo.
+            </p>
+          </div>
+          <button
+            type="button"
+            style={primaryButtonStyle}
+            disabled={selectedCount === 0 || queueing}
+            onClick={queueSelectedForWfirma}
+          >
+            {queueing ? "Przekazywanie..." : `Wyślij do wFirmy (${selectedCount})`}
+          </button>
+        </div>
         <div style={filtersStyle}>
           <input
             style={searchStyle}
@@ -198,6 +260,15 @@ function InvoicesContent() {
           <table style={tableStyle}>
             <thead>
               <tr>
+                <Th>
+                  <input
+                    type="checkbox"
+                    checked={allSelectableChecked}
+                    disabled={selectableInvoices.length === 0}
+                    onChange={(event) => toggleAllVisible(event.target.checked)}
+                    aria-label="Zaznacz widoczne faktury do wFirmy"
+                  />
+                </Th>
                 <Th>Numer</Th>
                 <Th>Kontrahent</Th>
                 <Th>Okres</Th>
@@ -210,15 +281,24 @@ function InvoicesContent() {
             <tbody>
               {loading ? (
                 <tr>
-                  <Td colSpan={7}>Ładowanie faktur...</Td>
+                  <Td colSpan={8}>Ładowanie faktur...</Td>
                 </tr>
               ) : filteredInvoices.length === 0 ? (
                 <tr>
-                  <Td colSpan={7}>Brak faktur dla wybranych filtrów.</Td>
+                  <Td colSpan={8}>Brak faktur dla wybranych filtrów.</Td>
                 </tr>
               ) : (
                 filteredInvoices.map((invoice) => (
                   <tr key={invoice.id} style={rowStyle}>
+                    <Td>
+                      <input
+                        type="checkbox"
+                        checked={selectedInvoiceIds.includes(invoice.id)}
+                        disabled={!canQueueForWfirma(invoice)}
+                        onChange={(event) => toggleInvoiceSelection(invoice.id, event.target.checked)}
+                        aria-label={`Zaznacz fakturę ${invoice.numer || invoice.kontrahent_nazwa}`}
+                      />
+                    </Td>
                     <Td strong>
                       {invoice.numer || "Bez numeru"}
                       <Small>{invoice.automatyczna ? "Automatyczna" : sourceLabel(invoice.zrodlo)}</Small>
@@ -315,6 +395,10 @@ function syncLabel(status: InvoiceSyncStatus) {
   return SYNC_OPTIONS.find((item) => item.value === status)?.label || status;
 }
 
+function canQueueForWfirma(invoice: Invoice) {
+  return invoice.status !== "anulowana" && ["nie_wyslano", "blad"].includes(invoice.wfirma_sync_status);
+}
+
 const headerStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "flex-start", marginBottom: "24px" };
 const eyebrowStyle: CSSProperties = { color: colors.red, fontWeight: 850, margin: "0 0 8px" };
 const titleStyle: CSSProperties = { fontSize: "42px", lineHeight: 1.05, margin: 0, color: colors.navy };
@@ -326,6 +410,9 @@ const sectionTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSi
 const panelTextStyle: CSSProperties = { margin: "10px 0 0", color: colors.muted, fontSize: "14px", lineHeight: 1.55, fontWeight: 700 };
 const resultTextStyle: CSSProperties = { margin: "10px 0 0", color: colors.success, fontSize: "13px", fontWeight: 850 };
 const automationControlsStyle: CSSProperties = { display: "grid", gap: "10px" };
+const bulkActionsStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "16px", marginBottom: "14px" };
+const listTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "20px" };
+const bulkHelpStyle: CSSProperties = { margin: "6px 0 0", color: colors.muted, fontSize: "13px", fontWeight: 700 };
 const fieldStyle: CSSProperties = { display: "grid", gap: "7px", color: colors.muted, fontSize: "12px", fontWeight: 850 };
 const inputStyle: CSSProperties = { width: "100%", minHeight: "42px", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, padding: "10px 12px", fontWeight: 750, boxSizing: "border-box" };
 const primaryButtonStyle: CSSProperties = { border: `1px solid ${colors.red}`, borderRadius: radius.button, background: colors.red, color: colors.white, minHeight: "44px", padding: "11px 15px", fontWeight: 900, cursor: "pointer", display: "inline-flex", justifyContent: "center", alignItems: "center", gap: "8px" };

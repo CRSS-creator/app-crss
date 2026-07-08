@@ -37,6 +37,22 @@ export type Invoice = {
     nip: string | null;
     email: string | null;
   } | null;
+  faktury_pozycje?: InvoiceLine[] | null;
+};
+
+export type InvoiceLine = {
+  id: string;
+  faktura_id: string;
+  source_key: string | null;
+  nazwa: string;
+  ilosc: number;
+  jednostka: string;
+  cena_netto: number;
+  stawka_vat: string;
+  kwota_netto: number;
+  kwota_vat: number;
+  kwota_brutto: number;
+  sort_order: number;
 };
 
 export type InvoicePayload = {
@@ -70,6 +86,20 @@ const INVOICE_SELECT = `
     nazwa,
     nip,
     email
+  ),
+  faktury_pozycje (
+    id,
+    faktura_id,
+    source_key,
+    nazwa,
+    ilosc,
+    jednostka,
+    cena_netto,
+    stawka_vat,
+    kwota_netto,
+    kwota_vat,
+    kwota_brutto,
+    sort_order
   )
 `;
 

@@ -48,6 +48,7 @@ function InvoicesContent() {
   const [invoiceMonth, setInvoiceMonth] = useState(() => currentMonthInput());
   const [lastGeneratedCount, setLastGeneratedCount] = useState<number | null>(null);
   const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<string[]>([]);
+  const [detailsInvoice, setDetailsInvoice] = useState<Invoice | null>(null);
 
   useEffect(() => {
     void loadData({ generateCurrentMonth: true });
@@ -256,16 +257,17 @@ function InvoicesContent() {
                 <Th>Okres</Th>
                 <Th>Kwota</Th>
                 <Th>wFirma</Th>
+                <Th>Szczegóły</Th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <Td colSpan={6}>Ładowanie faktur...</Td>
+                  <Td colSpan={7}>Ładowanie faktur...</Td>
                 </tr>
               ) : filteredInvoices.length === 0 ? (
                 <tr>
-                  <Td colSpan={6}>Brak faktur dla wybranych filtrów.</Td>
+                  <Td colSpan={7}>Brak faktur dla wybranych filtrów.</Td>
                 </tr>
               ) : (
                 filteredInvoices.map((invoice) => (
@@ -303,6 +305,11 @@ function InvoicesContent() {
                         {syncLabel(invoice.wfirma_sync_status)}
                       </Badge>
                     </Td>
+                    <Td>
+                      <button type="button" style={smallButtonStyle} onClick={() => setDetailsInvoice(invoice)}>
+                        Szczegóły
+                      </button>
+                    </Td>
                   </tr>
                 ))
               )}
@@ -310,6 +317,68 @@ function InvoicesContent() {
           </table>
         </div>
       </section>
+
+      {detailsInvoice && (
+        <div style={overlayStyle} onClick={() => setDetailsInvoice(null)}>
+          <aside style={detailsPanelStyle} onClick={(event) => event.stopPropagation()}>
+            <div style={detailsHeaderStyle}>
+              <div>
+                <p style={eyebrowStyle}>Podgląd PDF</p>
+                <h2 style={detailsTitleStyle}>{invoiceNumberLabel(detailsInvoice)}</h2>
+              </div>
+              <button type="button" style={secondaryButtonStyle} onClick={() => setDetailsInvoice(null)}>
+                Zamknij
+              </button>
+            </div>
+
+            <div style={detailsMetaStyle}>
+              <span>{detailsInvoice.kontrahent_nazwa}</span>
+              <span>{formatMonth(detailsInvoice.okres || detailsInvoice.data_wystawienia)}</span>
+              <strong>{formatMoney(detailsInvoice.kwota_brutto)}</strong>
+            </div>
+
+            <div style={lineTableWrapperStyle}>
+              <table style={lineTableStyle}>
+                <thead>
+                  <tr>
+                    <Th>Nazwa</Th>
+                    <Th>Ilość</Th>
+                    <Th>Jedn</Th>
+                    <Th>Cena netto</Th>
+                    <Th>VAT</Th>
+                    <Th>Netto</Th>
+                    <Th>Brutto</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {invoiceLines(detailsInvoice).length === 0 ? (
+                    <tr>
+                      <Td colSpan={7}>Brak pozycji faktury.</Td>
+                    </tr>
+                  ) : (
+                    invoiceLines(detailsInvoice).map((line) => (
+                      <tr key={line.id}>
+                        <Td strong>{line.nazwa}</Td>
+                        <Td>{formatQuantity(line.ilosc)}</Td>
+                        <Td>{line.jednostka}</Td>
+                        <Td>{formatMoney(line.cena_netto)}</Td>
+                        <Td>{line.stawka_vat}</Td>
+                        <Td>{formatMoney(line.kwota_netto)}</Td>
+                        <Td strong>{formatMoney(line.kwota_brutto)}</Td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <section style={invoiceDescriptionStyle}>
+              <h3 style={descriptionTitleStyle}>Opis faktury</h3>
+              <p style={descriptionTextStyle}>{detailsInvoice.opis || "Brak opisu."}</p>
+            </section>
+          </aside>
+        </div>
+      )}
     </>
   );
 }
@@ -357,6 +426,10 @@ function formatMonth(value: string | null) {
   return new Intl.DateTimeFormat("pl-PL", { month: "long", year: "numeric" }).format(new Date(`${value}T00:00:00`));
 }
 
+function formatQuantity(value: number | string | null | undefined) {
+  return Number(value || 0).toLocaleString("pl-PL", { maximumFractionDigits: 2 });
+}
+
 function syncLabel(status: InvoiceSyncStatus) {
   return SYNC_OPTIONS.find((item) => item.value === status)?.label || status;
 }
@@ -367,6 +440,14 @@ function canQueueForWfirma(invoice: Invoice) {
 
 function invoiceNumberLabel(invoice: Invoice) {
   return invoice.numer || "Czeka na numer";
+}
+
+function invoiceLines(invoice: Invoice) {
+  return [...(invoice.faktury_pozycje || [])].sort((first, second) => {
+    const sortOrder = Number(first.sort_order || 0) - Number(second.sort_order || 0);
+    if (sortOrder !== 0) return sortOrder;
+    return first.nazwa.localeCompare(second.nazwa, "pl", { sensitivity: "base" });
+  });
 }
 
 const headerStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "flex-start", marginBottom: "24px" };
@@ -387,11 +468,12 @@ const fieldStyle: CSSProperties = { display: "grid", gap: "7px", color: colors.m
 const inputStyle: CSSProperties = { width: "100%", minHeight: "42px", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, padding: "10px 12px", fontWeight: 750, boxSizing: "border-box" };
 const primaryButtonStyle: CSSProperties = { border: `1px solid ${colors.red}`, borderRadius: radius.button, background: colors.red, color: colors.white, minHeight: "44px", padding: "11px 15px", fontWeight: 900, cursor: "pointer", display: "inline-flex", justifyContent: "center", alignItems: "center", gap: "8px" };
 const secondaryButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.navy, minHeight: "42px", padding: "10px 14px", fontWeight: 850, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "8px" };
+const smallButtonStyle: CSSProperties = { ...secondaryButtonStyle, minHeight: "34px", padding: "7px 10px" };
 const filtersStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(220px, 1fr) 170px", gap: "10px", marginBottom: "14px" };
 const searchStyle: CSSProperties = { ...inputStyle };
 const filterSelectStyle: CSSProperties = { background: colors.white };
 const tableWrapperStyle: CSSProperties = { overflowX: "auto" };
-const tableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse", minWidth: "780px" };
+const tableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse", minWidth: "900px" };
 const thStyle: CSSProperties = { textAlign: "left", padding: "12px 10px", borderBottom: `1px solid ${colors.border}`, color: colors.muted, fontSize: "12px", textTransform: "uppercase", letterSpacing: 0 };
 const tdStyle: CSSProperties = { padding: "13px 10px", borderBottom: `1px solid ${colors.border}`, color: colors.text, verticalAlign: "middle" };
 const rowStyle: CSSProperties = { background: colors.white };
@@ -400,3 +482,13 @@ const badgeBaseStyle: CSSProperties = { display: "inline-flex", borderRadius: ra
 const successBadgeStyle: CSSProperties = { ...badgeBaseStyle, background: "#dcfce7", color: colors.success };
 const dangerBadgeStyle: CSSProperties = { ...badgeBaseStyle, background: "#fee2e2", color: colors.danger };
 const neutralBadgeStyle: CSSProperties = { ...badgeBaseStyle, background: "rgba(23, 59, 115, 0.10)", color: colors.navy };
+const overlayStyle: CSSProperties = { position: "fixed", inset: 0, background: "rgba(7, 15, 31, 0.42)", zIndex: 50, display: "flex", justifyContent: "flex-end" };
+const detailsPanelStyle: CSSProperties = { width: "min(920px, 92vw)", height: "100%", background: colors.white, boxShadow: shadow.card, padding: "24px", overflowY: "auto", boxSizing: "border-box" };
+const detailsHeaderStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "flex-start", marginBottom: "18px" };
+const detailsTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "28px" };
+const detailsMetaStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) 170px 140px", gap: "12px", border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "12px", color: colors.text, fontWeight: 800, marginBottom: "16px" };
+const lineTableWrapperStyle: CSSProperties = { overflowX: "auto", border: `1px solid ${colors.border}`, borderRadius: radius.input };
+const lineTableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse", minWidth: "760px" };
+const invoiceDescriptionStyle: CSSProperties = { marginTop: "18px", border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "14px", background: colors.card };
+const descriptionTitleStyle: CSSProperties = { margin: "0 0 8px", color: colors.navy, fontSize: "16px" };
+const descriptionTextStyle: CSSProperties = { margin: 0, color: colors.text, fontWeight: 700, lineHeight: 1.55, whiteSpace: "pre-line" };

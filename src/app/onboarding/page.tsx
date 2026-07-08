@@ -898,6 +898,9 @@ const WFIRMA_COMMON_TASKS: Omit<OnboardingChecklistItem, "done">[] = [
 const WFIRMA_JDG_TASKS: Omit<OnboardingChecklistItem, "done">[] = [
   { id: "zus_owner_scheme", label: "Ustaw schemat składek ZUS przedsiębiorcy.", group: "JDG" },
   { id: "owner_basic_data", label: "Uzupełnij dane właściciela w Dane podstawowe -> Rodzaj firmy i właściciele.", group: "JDG" },
+  { id: "taxation_form", label: "Ustaw formę opodatkowania.", group: "JDG" },
+  { id: "company_address", label: "Zweryfikuj adres firmy.", group: "JDG" },
+  { id: "jdg_bank_account", label: "Dodaj rachunek bankowy.", group: "JDG" },
 ];
 
 const WFIRMA_FULL_BOOKS_TASKS: Omit<OnboardingChecklistItem, "done">[] = [

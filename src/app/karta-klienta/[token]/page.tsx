@@ -163,12 +163,12 @@ export default function ClientCardPage() {
           <Field label="Właściwy Urząd Skarbowy">
             <input style={inputStyle} value={draft.urzadSkarbowy} onChange={(event) => updateDraft("urzadSkarbowy", event.target.value)} />
           </Field>
-          <Field label="Usługi na rzecz byłego pracodawcy w bieżącym lub poprzednim roku">
+          <Field label="Czy wykonuje Pan/Pani lub wykonywał Pan/Pani usługi na rzecz byłego pracodawcy?">
             <select style={inputStyle} value={draft.uslugiBylyPracodawca} onChange={(event) => updateDraft("uslugiBylyPracodawca", event.target.value)}>
               {YES_NO_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
           </Field>
-          <Field label="Sprzedaż na rzecz osób prywatnych z innych krajów UE">
+          <Field label="Czy prowadzi Pan/Pani sprzedaż na rzecz osób fizycznych z innych krajów UE?">
             <select style={inputStyle} value={draft.sprzedazOsobyPrywatneUe} onChange={(event) => updateDraft("sprzedazOsobyPrywatneUe", event.target.value)}>
               {YES_NO_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
@@ -215,13 +215,13 @@ export default function ClientCardPage() {
         </Section>
 
         <Section title="ZUS">
-          <Field label="Ulgi ZUS dotyczące składek społecznych">
+          <Field label="Czy korzysta Pan/Pani obecnie z ulg dotyczących opłacania składek ZUS?">
             <select style={inputStyle} value={draft.zusUlga} onChange={(event) => updateDraft("zusUlga", event.target.value)}>
               {YES_NO_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
           </Field>
           {draft.zusUlga === "tak" && (
-            <Field label="Tytuł ulgi ZUS">
+            <Field label="Z jakiej ulgi Pan/Pani obecnie korzysta?">
               <select style={inputStyle} value={draft.zusUlgaTytul} onChange={(event) => updateDraft("zusUlgaTytul", event.target.value)}>
                 <option value="">Wybierz</option>
                 <option value="ulga na start">Ulga na start</option>
@@ -230,18 +230,18 @@ export default function ClientCardPage() {
               </select>
             </Field>
           )}
-          <Field label="Tylko składka zdrowotna z działalności">
+          <Field label="Czy opłaca Pan/Pani tylko składkę zdrowotną ZUS z działalności?">
             <select style={inputStyle} value={draft.tylkoZdrowotne} onChange={(event) => updateDraft("tylkoZdrowotne", event.target.value)}>
               {YES_NO_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
           </Field>
-          {draft.tylkoZdrowotne === "tak" && <Field label="Tytuł do składek z innego źródła"><input style={inputStyle} value={draft.tylkoZdrowotneTytul} onChange={(event) => updateDraft("tylkoZdrowotneTytul", event.target.value)} /></Field>}
-          <Field label="Dobrowolne chorobowe">
+          {draft.tylkoZdrowotne === "tak" && <Field label="Jaki Pan/Pani posiada inny tytuł do składek społecznych zwalniający z opłacania tych składek z działalności?"><input style={inputStyle} value={draft.tylkoZdrowotneTytul} onChange={(event) => updateDraft("tylkoZdrowotneTytul", event.target.value)} /></Field>}
+          <Field label="Czy jest Pan/Pani objęty dobrowolnym ubezpieczeniem chorobowym lub wnosi Pan/Pani o objęcie tym ubezpieczeniem w przyszłości?">
             <select style={inputStyle} value={draft.chorobowe} onChange={(event) => updateDraft("chorobowe", event.target.value)}>
               {YES_NO_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
           </Field>
-          <Field label="Orzeczenie o niepełnosprawności">
+          <Field label="Czy posiada Pan/Pani orzeczenie o niepełnosprawności?">
             <select style={inputStyle} value={draft.niepelnosprawnosc} onChange={(event) => updateDraft("niepelnosprawnosc", event.target.value)}>
               {YES_NO_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
@@ -255,13 +255,13 @@ export default function ClientCardPage() {
         </Section>
 
         <Section title="Kasa fiskalna">
-          <Field label="Czy firma posiada kasę fiskalną">
+          <Field label="Czy posiada Pan/Pani kasę fiskalną?">
             <select style={inputStyle} value={draft.kasaFiskalna} onChange={(event) => updateDraft("kasaFiskalna", event.target.value)}>
               {YES_NO_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
           </Field>
           {draft.kasaFiskalna === "nie" && (
-            <Field label="Powód zwolnienia z kasy fiskalnej">
+            <Field label="Jaki jest powód zwolnienia z kasy fiskalnej?">
               <select style={inputStyle} value={draft.kasaFiskalnaZwolnienie} onChange={(event) => updateDraft("kasaFiskalnaZwolnienie", event.target.value)}>
                 <option value="">Wybierz</option>
                 <option value="brak transakcji z osobami fizycznymi">Brak transakcji z osobami fizycznymi</option>
@@ -274,7 +274,7 @@ export default function ClientCardPage() {
 
         <label style={confirmationStyle}>
           <input type="checkbox" checked={draft.potwierdzenie} onChange={(event) => updateDraft("potwierdzenie", event.target.checked)} />
-          <span>Potwierdzam, że podane dane są zgodne z prawdą, a zmiany zostaną przekazane do CRSS w terminie 7 dni.</span>
+          <span>Ja {draft.osobaKontaktowa.trim() || "(imię i nazwisko)"} potwierdzam, że wypełniłem powyższą ankietę, podane przeze mnie dane są zgodne z prawdą oraz poinformuję CRSS niezwłocznie, najpóźniej w terminie 7 dni, o zaistnieniu ewentualnych zmian.</span>
         </label>
 
         <button type="submit" style={saving ? disabledButtonStyle : primaryButtonStyle} disabled={saving}>

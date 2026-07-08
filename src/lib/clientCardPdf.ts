@@ -77,7 +77,7 @@ export function buildClientCardPdf(input: ClientCardPdfInput): Buffer {
   field("Adres zamieszkania", input.data.adresZamieszkania);
   field("Forma opodatkowania", input.data.formaOpodatkowania);
   field("Wlasciwy Urzad Skarbowy", input.data.urzadSkarbowy);
-  field("Uslugi na rzecz bylego pracodawcy", input.data.uslugiBylyPracodawca);
+  field("Czy wykonuje lub wykonywal/a uslugi na rzecz bylego pracodawcy", input.data.uslugiBylyPracodawca);
 
   section("VAT");
   field("Czynny podatnik VAT", input.data.czynnyVat);
@@ -85,26 +85,28 @@ export function buildClientCardPdf(input: ClientCardPdfInput): Buffer {
   field("Podstawa zwolnienia VAT", input.data.vatZwolnieniePodstawy.join(", "));
   field("VAT-UE", input.data.vatUe);
   field("Powod VAT-UE", input.data.vatUePowody.join(", "));
-  field("Sprzedaz dla osob prywatnych z innych krajow UE", input.data.sprzedazOsobyPrywatneUe);
+  field("Czy prowadzi sprzedaz na rzecz osob fizycznych z innych krajow UE", input.data.sprzedazOsobyPrywatneUe);
 
   section("ZUS");
-  field("Ulga ZUS", input.data.zusUlga);
-  field("Rodzaj ulgi", input.data.zusUlgaTytul);
-  field("Tylko skladka zdrowotna", input.data.tylkoZdrowotne);
-  field("Tytul do skladek z innego zrodla", input.data.tylkoZdrowotneTytul);
-  field("Dobrowolne chorobowe", input.data.chorobowe);
-  field("Orzeczenie o niepelnosprawnosci", input.data.niepelnosprawnosc);
+  field("Czy korzysta obecnie z ulg dotyczacych oplacania skladek ZUS", input.data.zusUlga);
+  field("Z jakiej ulgi obecnie korzysta", input.data.zusUlgaTytul);
+  field("Czy oplaca tylko skladke zdrowotna ZUS z dzialalnosci", input.data.tylkoZdrowotne);
+  field("Inny tytul do skladek spolecznych", input.data.tylkoZdrowotneTytul);
+  field("Dobrowolne ubezpieczenie chorobowe obecnie lub w przyszlosci", input.data.chorobowe);
+  field("Czy posiada orzeczenie o niepelnosprawnosci", input.data.niepelnosprawnosc);
   field("Stopien niepelnosprawnosci", input.data.stopienNiepelnosprawnosci);
   field("Prawo do emerytury lub renty", input.data.emeryturaRenta);
 
   section("Kasa fiskalna i oswiadczenie");
-  field("Kasa fiskalna", input.data.kasaFiskalna);
-  field("Powod zwolnienia z kasy", input.data.kasaFiskalnaZwolnienie);
-  field("Potwierdzenie zgodnosci danych", input.data.potwierdzenie ? "Tak" : "Nie");
+  field("Czy posiada kase fiskalna", input.data.kasaFiskalna);
+  field("Jaki jest powod zwolnienia z kasy fiskalnej", input.data.kasaFiskalnaZwolnienie);
+  field("Potwierdzenie ankiety i zgodnosci danych", input.data.potwierdzenie ? "Tak" : "Nie");
 
   section("Podpis formularza");
   const date = input.completedAt.toLocaleDateString("pl-PL");
   const time = input.completedAt.toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" });
+  wrapped(`Ja ${input.completedBy} potwierdzam, ze wypelnilem powyzsza ankiete, podane przeze mnie dane sa zgodne z prawda oraz poinformuje CRSS niezwlocznie, najpozniej w terminie 7 dni, o zaistnieniu ewentualnych zmian.`, MARGIN, PAGE_WIDTH - MARGIN * 2, 10, true);
+  y -= 8;
   wrapped(`Formularz wypelniony przez ${input.completedBy} w dniu ${date} o godzinie ${time}.`, MARGIN, PAGE_WIDTH - MARGIN * 2, 10, true);
 
   return createPdf(pages);

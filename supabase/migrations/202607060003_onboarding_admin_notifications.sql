@@ -147,7 +147,7 @@ begin
         'admin_responsibilities', jsonb_build_array(
           'AML',
           'Pełnomocnictwa',
-          'Utworzenie konta wFirma',
+          'Utworzenie konta wFirma i dodanie konta przedsiębiorcy',
           'Karta klienta biura rachunkowego, jeżeli dotyczy'
         ),
         'notification_kind', 'onboarding_admin_tasks'

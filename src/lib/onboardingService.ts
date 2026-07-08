@@ -149,7 +149,7 @@ export function stageLabel(stage: OnboardingStageKey) {
   if (stage === "aml") return "AML";
   if (stage === "client_card") return "Karta klienta biura rachunkowego";
   if (stage === "powers") return "Pełnomocnictwa";
-  if (stage === "wfirma_account") return "Utworzenie konta wFirma";
+  if (stage === "wfirma_account") return "Utworzenie konta wFirma i dodanie konta przedsiębiorcy";
   if (stage === "wfirma") return "Konfiguracja wFirma";
   if (stage === "documents_takeover") return "Dokumenty do przejęcia";
   if (stage === "drive") return "Dysk i komunikacja";

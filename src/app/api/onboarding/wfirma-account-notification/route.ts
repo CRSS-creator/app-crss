@@ -210,7 +210,9 @@ export async function POST(request: NextRequest) {
       await auth.admin
         .from("onboarding_etapy")
         .update({
-          status: "w_toku",
+          status: "gotowe",
+          completed_at: new Date().toISOString(),
+          completed_by: auth.requesterId,
           updated_by: auth.requesterId,
         })
         .eq("id", stage.id);
@@ -222,7 +224,7 @@ export async function POST(request: NextRequest) {
       etap: "wfirma_account",
       akcja: "wysylka_powiadomienia_wfirma",
       old_status: stage?.status || null,
-      new_status: stage?.status === "gotowe" ? "gotowe" : "w_toku",
+      new_status: "gotowe",
       opis: `Wysłano powiadomienie o utworzeniu konta wFirma do klienta ${clientRecord.nazwa || "bez nazwy"}.`,
       created_by: auth.requesterId,
     });

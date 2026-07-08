@@ -184,6 +184,16 @@ export async function fetchTaskTimeEntries(taskId: string) {
     .order("started_at", { ascending: false });
 }
 
+export async function fetchUserTimeEntriesForDay(userId: string, dayStartIso: string, dayEndIso: string) {
+  return supabase
+    .from("czas_pracy")
+    .select(TIME_ENTRY_SELECT)
+    .eq("osoba_id", userId)
+    .lt("started_at", dayEndIso)
+    .or(`ended_at.gte.${dayStartIso},ended_at.is.null`)
+    .order("started_at", { ascending: false });
+}
+
 export async function setTaskManualTime(taskId: string, userId: string, totalSeconds: number) {
   const taskResult = await supabase
     .from("zadania")

@@ -18,7 +18,7 @@ import {
   type SettlementProgress,
 } from "@/lib/monthlySettlementsService";
 import { fetchTaxObligations, type TaxObligation } from "@/lib/taxObligationService";
-import { fetchTasks, type Task } from "@/lib/taskService";
+import { fetchTasks, fetchUserTimeEntriesForDay, type Task, type TimeEntry } from "@/lib/taskService";
 import { fetchCrmLeads } from "@/lib/crmService";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -58,6 +58,7 @@ type DashboardState = {
   taxObligations: TaxObligation[];
   onboardingStages: OnboardingStageRecord[];
   crmLeads: CrmLead[];
+  todayTimeEntries: TimeEntry[];
 };
 
 export default function DashboardPage() {
@@ -82,8 +83,10 @@ function DashboardContent({ role }: { role: UserRole }) {
     taxObligations: [],
     onboardingStages: [],
     crmLeads: [],
+    todayTimeEntries: [],
   }));
   const [loading, setLoading] = useState(true);
+  const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
     let ignore = false;
@@ -93,6 +96,7 @@ function DashboardContent({ role }: { role: UserRole }) {
       const period = currentSettlementPeriod();
       const { data: userData } = await supabase.auth.getUser();
       const userId = userData.user?.id || null;
+      const { start, end } = getTodayBounds();
 
       await createDueNotifications();
       await ensureCurrentMonthSettlements(period);
@@ -110,6 +114,7 @@ function DashboardContent({ role }: { role: UserRole }) {
         taxResult,
         onboardingResult,
         crmResult,
+        timeResult,
       ] = await Promise.all([
         fetchClients(),
         fetchTasks(),
@@ -119,6 +124,7 @@ function DashboardContent({ role }: { role: UserRole }) {
         fetchTaxObligations(period),
         fetchOnboardingStages(),
         crmPromise,
+        userId ? fetchUserTimeEntriesForDay(userId, start.toISOString(), end.toISOString()) : Promise.resolve({ data: [] as TimeEntry[], error: null }),
       ]);
 
       if (clientsResult.error) console.error("Błąd pobierania klientów do dashboardu:", clientsResult.error);
@@ -129,6 +135,8 @@ function DashboardContent({ role }: { role: UserRole }) {
       if (taxResult.error) console.error("Błąd pobierania zobowiązań do dashboardu:", taxResult.error);
       if (onboardingResult.error) console.error("Błąd pobierania onboardingu do dashboardu:", onboardingResult.error);
       if (crmResult.error) console.error("Błąd pobierania CRM do dashboardu:", crmResult.error);
+
+      if (timeResult.error) console.error("Blad pobierania czasu pracy do dashboardu:", timeResult.error);
 
       if (!ignore) {
         setData({
@@ -142,6 +150,7 @@ function DashboardContent({ role }: { role: UserRole }) {
           taxObligations: (taxResult.data || []) as TaxObligation[],
           onboardingStages: (onboardingResult.data || []) as OnboardingStageRecord[],
           crmLeads: (crmResult.data || []) as CrmLead[],
+          todayTimeEntries: (timeResult.data || []) as TimeEntry[],
         });
         setLoading(false);
       }
@@ -154,7 +163,12 @@ function DashboardContent({ role }: { role: UserRole }) {
     };
   }, [role]);
 
-  const view = useMemo(() => buildDashboardView(data, role), [data, role]);
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 60000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const view = useMemo(() => buildDashboardView(data, role, now), [data, role, now]);
 
   return (
     <section style={contentStyle}>
@@ -165,6 +179,16 @@ function DashboardContent({ role }: { role: UserRole }) {
         </div>
         <div style={scopeBadgeStyle}>{role === "accountant" ? "Twoi klienci" : "Pełny widok"}</div>
       </header>
+
+      <section style={todayWorkStyle}>
+        <div>
+          <span style={todayWorkLabelStyle}>Mój czas pracy dzisiaj</span>
+          <strong style={todayWorkValueStyle}>{formatDuration(view.todayWorkSeconds)}</strong>
+        </div>
+        <div style={todayWorkMetaStyle}>
+          {view.activeTimeEntriesCount > 0 ? `Aktywny licznik: ${view.activeTimeEntriesCount}` : "Brak aktywnego licznika"}
+        </div>
+      </section>
 
       <section style={cardsGridStyle}>
         <MetricCard title="Klienci aktywni" value={view.activeClientsCount} href="/klienci" />
@@ -259,7 +283,7 @@ function DashboardContent({ role }: { role: UserRole }) {
   );
 }
 
-function buildDashboardView(data: DashboardState, role: UserRole) {
+function buildDashboardView(data: DashboardState, role: UserRole, now: Date) {
   const visibleClients = getVisibleClients(data.clients, role, data.userId);
   const visibleClientIds = new Set(visibleClients.map((client) => client.id));
   const visibleSettlements = data.settlements.filter((settlement) => visibleClientIds.has(settlement.klient_id));
@@ -274,6 +298,8 @@ function buildDashboardView(data: DashboardState, role: UserRole) {
   const onboardingClients = visibleClients.filter((client) => {
     return normalize(client.status_klienta) === "onboarding" || onboardingClientIds.has(client.id);
   });
+  const todayWorkSeconds = calculateTodayWorkSeconds(data.todayTimeEntries, now);
+  const activeTimeEntriesCount = data.todayTimeEntries.filter((entry) => !entry.ended_at).length;
 
   const unreadNotifications = visibleNotifications.filter((notification) => notification.status === "unread");
   const openTasks = visibleTasks.filter((task) => !["zrobione", "anulowane"].includes(task.status));
@@ -331,6 +357,8 @@ function buildDashboardView(data: DashboardState, role: UserRole) {
     openSettlementsCount: visibleSettlements.filter((settlement) => !["sprawdzone_zatwierdzone", "podatki_wyslane"].includes(settlement.status_ksiegowosci)).length,
     openTasksCount: openTasks.length,
     unreadNotificationsCount: unreadNotifications.length,
+    todayWorkSeconds,
+    activeTimeEntriesCount,
     settlementsWaitingForDocs: visibleSettlements.filter((settlement) => settlement.status_ksiegowosci === "czeka_na_dokumenty").length,
     settlementsInProgress: visibleSettlements.filter((settlement) => settlement.status_ksiegowosci === "w_trakcie_ksiegowania").length,
     settlementsToReview: visibleSettlements.filter((settlement) => settlement.status_ksiegowosci === "do_sprawdzenia").length,
@@ -422,6 +450,33 @@ function currentSettlementPeriod() {
   return `${year}-${String(month).padStart(2, "0")}-01`;
 }
 
+function getTodayBounds(reference = new Date()) {
+  const start = new Date(reference);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  return { start, end };
+}
+
+function calculateTodayWorkSeconds(entries: TimeEntry[], now: Date) {
+  const { start, end } = getTodayBounds(now);
+  return entries.reduce((sum, entry) => {
+    const entryStart = new Date(entry.started_at);
+    const entryEnd = entry.ended_at ? new Date(entry.ended_at) : now;
+    const overlapStart = Math.max(entryStart.getTime(), start.getTime());
+    const overlapEnd = Math.min(entryEnd.getTime(), end.getTime());
+    if (overlapEnd <= overlapStart) return sum;
+    return sum + Math.floor((overlapEnd - overlapStart) / 1000);
+  }, 0);
+}
+
+function formatDuration(totalSeconds: number) {
+  const safeSeconds = Math.max(0, Math.floor(totalSeconds));
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  return `${hours} h ${String(minutes).padStart(2, "0")} min`;
+}
+
 function normalize(value: string | null | undefined) {
   return (value || "").toLowerCase().trim();
 }
@@ -504,6 +559,41 @@ const scopeBadgeStyle: CSSProperties = {
   color: colors.navy,
   fontWeight: 800,
   padding: "12px 18px",
+};
+
+const todayWorkStyle: CSSProperties = {
+  alignItems: "center",
+  background: colors.card,
+  border: `1px solid ${colors.border}`,
+  borderRadius: radius.card,
+  boxShadow: shadow.soft,
+  color: colors.text,
+  display: "flex",
+  justifyContent: "space-between",
+  marginBottom: "22px",
+  padding: "20px 24px",
+};
+
+const todayWorkLabelStyle: CSSProperties = {
+  color: colors.muted,
+  display: "block",
+  fontWeight: 800,
+  marginBottom: "8px",
+};
+
+const todayWorkValueStyle: CSSProperties = {
+  color: colors.navy,
+  display: "block",
+  fontSize: "34px",
+  lineHeight: 1,
+};
+
+const todayWorkMetaStyle: CSSProperties = {
+  background: "#e9eef7",
+  borderRadius: radius.button,
+  color: colors.navy,
+  fontWeight: 800,
+  padding: "12px 16px",
 };
 
 const cardsGridStyle: CSSProperties = {

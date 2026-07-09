@@ -835,7 +835,7 @@ function buildStages(
       "Wyślij listę dokumentów",
       undefined,
       caregiverResponsible,
-      latestDocumentsNotificationInfo(onboardingHistory, profilesById) || "Dokumenty klient powinien przesłać bezpośrednio do opiekuna księgowego."
+      latestDocumentsNotificationInfo(onboardingHistory, profilesById)
     ),
   );
 
@@ -1224,7 +1224,7 @@ function StageProcessRow({
             )}
             {stage.editable && stage.record && (
               <>
-                {stage.key === "documents_takeover" && stage.state !== "done" && !stage.actionDone && (
+                {stage.key === "documents_takeover" && (
                   <button style={smallButtonStyle} disabled={saving} onClick={() => onStatusChange("nowy_podmiot")}>Nowy podmiot</button>
                 )}
                 {stage.key === "powers" && stage.state !== "done" && (
@@ -1347,7 +1347,7 @@ function StageCard({
         )}
         {stage.editable && stage.record && (
           <>
-            {stage.key === "documents_takeover" && stage.state !== "done" && !stage.actionDone && (
+            {stage.key === "documents_takeover" && (
               <button style={smallButtonStyle} disabled={saving} onClick={() => onStatusChange("nowy_podmiot")}>Nowy podmiot</button>
             )}
             {stage.key === "powers" && stage.state !== "done" && (

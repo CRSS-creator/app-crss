@@ -25,6 +25,16 @@ type ClientMatch = {
   nip: string | null;
 };
 
+type ContractorInfo = {
+  name: string;
+  nip: string;
+  email: string;
+};
+
+type ScoredContractorInfo = ContractorInfo & {
+  score: number;
+};
+
 export async function POST(request: NextRequest) {
   const auth = await getAuthorizedServerUser(request, ALLOWED_ROLES, "Brak uprawnień do integracji z wFirmą.");
   if (auth.error) return auth.error;
@@ -138,10 +148,8 @@ async function saveImportedInvoice(
   const wfirmaId = stringify(invoice.id);
   if (!wfirmaId) return null;
 
-  const contractor = invoice.contractor || {};
-  const contractorNip = stringify(
-    contractor.nip || contractor.tax_id || invoice.contractor_nip || invoice.contractor_tax_id
-  );
+  const contractorInfo = resolveContractorInfo(invoice, clients);
+  const contractorNip = contractorInfo.nip;
   const client = clients.find((item) => normalizeNip(item.nip) === normalizeNip(contractorNip));
   const paymentState = stringify(invoice.paymentstate);
   const gross = numberValue(invoice.total_composed ?? invoice.total);
@@ -158,12 +166,9 @@ async function saveImportedInvoice(
     data_wystawienia: dateOnly(invoice.date),
     data_sprzedazy: dateOnly(invoice.disposaldate || invoice.date),
     termin_platnosci: dateOnly(invoice.payment_date),
-    kontrahent_nazwa:
-      stringify(contractor.name || contractor.company_name || invoice.contractor_name || invoice.contractor_company_name) ||
-      stringify(client?.nazwa) ||
-      "Kontrahent wFirma",
+    kontrahent_nazwa: contractorInfo.name || stringify(client?.nazwa) || "Kontrahent wFirma",
     kontrahent_nip: contractorNip || null,
-    kontrahent_email: stringify(contractor.email || invoice.contractor_email) || null,
+    kontrahent_email: contractorInfo.email || null,
     waluta: stringify(invoice.currency) || "PLN",
     kwota_netto: net,
     kwota_vat: tax,
@@ -192,6 +197,66 @@ async function saveImportedInvoice(
 
   await replaceInvoiceLines(admin, result.data.id, extractWfirmaInvoiceLines(invoice));
   return result.data.id as string;
+}
+
+function resolveContractorInfo(invoice: WfirmaInvoice, clients: ClientMatch[]): ContractorInfo {
+  const candidates = contractorCandidates(invoice);
+  const matchingClient = candidates.find((candidate) =>
+    clients.some((client) => normalizeNip(client.nip) === normalizeNip(candidate.nip))
+  );
+  const best = matchingClient || candidates[0] || { name: "", nip: "", email: "" };
+  return best;
+}
+
+function contractorCandidates(value: unknown, path: string[] = []): ContractorInfo[] {
+  return scoredContractorCandidates(value, path).map(({ score: _score, ...candidate }) => candidate);
+}
+
+function scoredContractorCandidates(value: unknown, path: string[] = []): ScoredContractorInfo[] {
+  if (!value || typeof value !== "object") return [];
+
+  const record = value as Record<string, unknown>;
+  const ownCandidate = contractorFromRecord(record);
+  const nested = Object.entries(record).flatMap(([key, child]) => scoredContractorCandidates(child, [...path, key]));
+  if (!ownCandidate) return nested;
+
+  const pathScore = path.some((key) => /contract|kontr|buyer|recipient|client/i.test(key)) ? 2 : 0;
+  const dataScore = (ownCandidate.nip ? 2 : 0) + (ownCandidate.name ? 1 : 0) + (ownCandidate.email ? 1 : 0);
+  return [{ ...ownCandidate, score: pathScore + dataScore }, ...nested].sort(
+    (first, second) => second.score - first.score
+  );
+}
+
+function contractorFromRecord(record: Record<string, unknown>) {
+  const name = firstText(record, [
+    "name",
+    "company_name",
+    "contractor_name",
+    "contractor_company_name",
+    "buyer_name",
+    "recipient_name",
+    "full_name",
+  ]);
+  const nip = firstText(record, [
+    "nip",
+    "tax_id",
+    "contractor_nip",
+    "contractor_tax_id",
+    "tax_number",
+    "vat_id",
+    "vat_number",
+  ]);
+  const email = firstText(record, ["email", "contractor_email", "buyer_email", "recipient_email"]);
+  if (!name && !nip && !email) return null;
+  return { name, nip, email, score: 0 };
+}
+
+function firstText(record: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = stringify(record[key]);
+    if (value) return value;
+  }
+  return "";
 }
 
 async function replaceInvoiceLines(

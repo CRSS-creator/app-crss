@@ -5,7 +5,9 @@ import {
   extractWfirmaInvoiceLines,
   extractWfirmaInvoices,
   findWfirmaInvoices,
+  firstWfirmaInvoice,
   getWfirmaConfig,
+  getWfirmaInvoice,
   type WfirmaInvoice,
   type WfirmaInvoiceLine,
 } from "@/lib/wfirmaClient";
@@ -62,7 +64,9 @@ export async function POST(request: NextRequest) {
 
     for (const invoice of invoices) {
       try {
-        const savedId = await saveImportedInvoice(auth.admin, invoice, clients);
+        if (!isInvoiceDateInRange(invoice, `${year}-01-01`, `${year}-12-31`)) continue;
+        const detailedInvoice = await loadDetailedInvoice(wfirma.config, invoice);
+        const savedId = await saveImportedInvoice(auth.admin, detailedInvoice, clients);
         if (savedId) imported.push(savedId);
       } catch (error) {
         failed.push({
@@ -83,6 +87,18 @@ export async function POST(request: NextRequest) {
   });
 }
 
+async function loadDetailedInvoice(config: NonNullable<ReturnType<typeof getWfirmaConfig>["config"]>, invoice: WfirmaInvoice) {
+  const wfirmaId = stringify(invoice.id);
+  if (!wfirmaId) return invoice;
+
+  try {
+    const response = await getWfirmaInvoice(config, wfirmaId);
+    return firstWfirmaInvoice(response) || invoice;
+  } catch {
+    return invoice;
+  }
+}
+
 async function loadClientMatches(admin: SupabaseClient) {
   const { data, error } = await admin.from("klienci").select("id,nazwa,nip").not("nip", "is", null);
   if (error) throw new Error("Nie udało się pobrać klientów do dopasowania po NIP.");
@@ -98,7 +114,9 @@ async function saveImportedInvoice(
   if (!wfirmaId) return null;
 
   const contractor = invoice.contractor || {};
-  const contractorNip = stringify(contractor.nip || contractor.tax_id);
+  const contractorNip = stringify(
+    contractor.nip || contractor.tax_id || invoice.contractor_nip || invoice.contractor_tax_id
+  );
   const client = clients.find((item) => normalizeNip(item.nip) === normalizeNip(contractorNip));
   const paymentState = stringify(invoice.paymentstate);
   const gross = numberValue(invoice.total_composed ?? invoice.total);
@@ -115,9 +133,12 @@ async function saveImportedInvoice(
     data_wystawienia: dateOnly(invoice.date),
     data_sprzedazy: dateOnly(invoice.disposaldate || invoice.date),
     termin_platnosci: dateOnly(invoice.payment_date),
-    kontrahent_nazwa: stringify(contractor.name || contractor.company_name) || stringify(client?.nazwa) || "Kontrahent wFirma",
+    kontrahent_nazwa:
+      stringify(contractor.name || contractor.company_name || invoice.contractor_name || invoice.contractor_company_name) ||
+      stringify(client?.nazwa) ||
+      "Kontrahent wFirma",
     kontrahent_nip: contractorNip || null,
-    kontrahent_email: stringify(contractor.email) || null,
+    kontrahent_email: stringify(contractor.email || invoice.contractor_email) || null,
     waluta: stringify(invoice.currency) || "PLN",
     kwota_netto: net,
     kwota_vat: tax,
@@ -191,6 +212,11 @@ function stringify(value: unknown) {
 function dateOnly(value: unknown) {
   const text = stringify(value);
   return /^\d{4}-\d{2}-\d{2}/.test(text) ? text.slice(0, 10) : null;
+}
+
+function isInvoiceDateInRange(invoice: WfirmaInvoice, dateFrom: string, dateTo: string) {
+  const invoiceDate = dateOnly(invoice.date);
+  return Boolean(invoiceDate && invoiceDate >= dateFrom && invoiceDate <= dateTo);
 }
 
 function numberValue(value: unknown) {

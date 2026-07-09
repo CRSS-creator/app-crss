@@ -35,6 +35,11 @@ export type WfirmaInvoice = {
   total_composed?: string | number | null;
   description?: string | null;
   hash?: string | null;
+  contractor_name?: string | null;
+  contractor_company_name?: string | null;
+  contractor_nip?: string | null;
+  contractor_tax_id?: string | null;
+  contractor_email?: string | null;
   contractor?: {
     id?: string | number | null;
     name?: string | null;
@@ -130,6 +135,14 @@ export async function addWfirmaInvoice(config: WfirmaConfig, invoice: unknown) {
   return wfirmaRequest<{ invoices?: unknown; status?: { code?: string } }>("invoices/add", {
     method: "POST",
     body: { invoices: { invoice } },
+    config,
+  });
+}
+
+export async function getWfirmaInvoice(config: WfirmaConfig, id: string | number) {
+  return wfirmaRequest<{ invoices?: unknown; status?: { code?: string } }>("invoices/get", {
+    method: "POST",
+    body: { invoices: { invoice: { id } } },
     config,
   });
 }

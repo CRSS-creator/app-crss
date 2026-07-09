@@ -67,6 +67,7 @@ function InvoicesContent() {
     const normalizedQuery = query.trim().toLowerCase();
     return invoices.filter((invoice) => {
       const matchesSource = sourceFilter === EMPTY_FILTER || invoice.zrodlo === sourceFilter;
+      const matchesIssueMonth = Boolean(invoice.data_wystawienia && toMonthInput(invoice.data_wystawienia) === invoiceMonth);
       const haystack = [
         invoice.numer,
         invoice.kontrahent_nazwa,
@@ -81,9 +82,9 @@ function InvoicesContent() {
         .filter(Boolean)
         .join(" ")
         .toLowerCase();
-      return matchesSource && (!normalizedQuery || haystack.includes(normalizedQuery));
+      return matchesSource && matchesIssueMonth && (!normalizedQuery || haystack.includes(normalizedQuery));
     });
-  }, [invoices, query, sourceFilter]);
+  }, [invoices, invoiceMonth, query, sourceFilter]);
 
   const totals = useMemo(() => {
     const activeInvoices = invoices.filter((invoice) => invoice.status !== "anulowana");

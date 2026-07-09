@@ -96,6 +96,7 @@ export async function POST(request: NextRequest) {
       const response = await addWfirmaInvoice(wfirma.config, buildWfirmaInvoicePayload(invoice, issueDate, defaultPaymentDate));
       const wfirmaInvoice = firstWfirmaInvoice(response);
       const wfirmaIssueDate = dateOnly(wfirmaInvoice?.date) || issueDate;
+      const paymentDate = addDays(wfirmaIssueDate, 7);
       await auth.admin
         .from("faktury")
         .update({
@@ -104,7 +105,7 @@ export async function POST(request: NextRequest) {
           zrodlo: "wfirma",
           data_wystawienia: wfirmaIssueDate,
           data_sprzedazy: dateOnly(wfirmaInvoice?.disposaldate) || invoice.data_sprzedazy || wfirmaIssueDate,
-          termin_platnosci: dateOnly(wfirmaInvoice?.payment_date) || invoice.termin_platnosci || addDays(wfirmaIssueDate, 7),
+          termin_platnosci: paymentDate,
           wfirma_id: stringify(wfirmaInvoice?.id) || null,
           wfirma_url: wfirmaInvoice?.hash ? `https://wfirma.pl/faktury/podglad/${wfirmaInvoice.hash}` : null,
           wfirma_synced_at: new Date().toISOString(),
@@ -176,7 +177,7 @@ function buildWfirmaInvoicePayload(invoice: InvoiceRow, issueDate: string, defau
     type: "normal",
     date: issueDate,
     disposaldate: invoice.data_sprzedazy || issueDate,
-    payment_date: invoice.termin_platnosci || defaultPaymentDate,
+    payment_date: defaultPaymentDate,
     paymentmethod: "transfer",
     paymentstate: "unpaid",
     currency: invoice.waluta || "PLN",

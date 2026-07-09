@@ -447,7 +447,7 @@ function InvoicesContent() {
                 <ReadinessItem ok={invoiceLines(detailsInvoice).length > 0} label="Pozycje" value={`${invoiceLines(detailsInvoice).length} pozycji`} />
                 <ReadinessItem ok={invoiceLines(detailsInvoice).every(lineReadyForWfirma)} label="Ceny i VAT" value={invoiceLines(detailsInvoice).every(lineReadyForWfirma) ? "Kompletne" : "Sprawdź pozycje"} />
                 <ReadinessItem ok label="Data wystawienia" value={detailsInvoice.data_wystawienia ? formatDate(detailsInvoice.data_wystawienia) : "Ustawiana przy wysyłce"} />
-                <ReadinessItem ok label="Termin płatności" value={formatDate(paymentDueDate(detailsInvoice))} />
+                <ReadinessItem ok label="Termin płatności" value={detailsInvoice.data_wystawienia ? formatDate(paymentDueDate(detailsInvoice)) : "Data wystawienia + 7 dni"} />
               </div>
             </section>
 
@@ -575,9 +575,8 @@ function formatDate(value: string | null) {
 }
 
 function paymentDueDate(invoice: Invoice) {
-  if (invoice.termin_platnosci) return invoice.termin_platnosci;
   if (invoice.data_wystawienia) return addDays(invoice.data_wystawienia, 7);
-  return addDays(new Date().toISOString().slice(0, 10), 7);
+  return invoice.termin_platnosci;
 }
 
 function paymentStatusLabel(invoice: Invoice) {

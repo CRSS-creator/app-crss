@@ -152,6 +152,7 @@ async function saveImportedInvoice(
   const gross = numberValue(invoice.total_composed ?? invoice.total);
   const net = numberValue(invoice.netto);
   const tax = numberValue(invoice.tax);
+  const issueDate = dateOnly(invoice.date);
 
   const payload = {
     klient_id: client?.id || null,
@@ -160,9 +161,9 @@ async function saveImportedInvoice(
     status: paymentState === "paid" ? "oplacona" : "wystawiona",
     kategoria: "standardowa",
     zrodlo: "wfirma",
-    data_wystawienia: dateOnly(invoice.date),
+    data_wystawienia: issueDate,
     data_sprzedazy: dateOnly(invoice.disposaldate || invoice.date),
-    termin_platnosci: dateOnly(invoice.payment_date),
+    termin_platnosci: issueDate ? addDays(issueDate, 7) : null,
     kontrahent_nazwa: contractorInfo.name || stringify(client?.nazwa) || "Kontrahent wFirma",
     kontrahent_nip: contractorNip || null,
     kontrahent_email: contractorInfo.email || null,
@@ -306,6 +307,12 @@ function stringify(value: unknown) {
 function dateOnly(value: unknown) {
   const text = stringify(value);
   return /^\d{4}-\d{2}-\d{2}/.test(text) ? text.slice(0, 10) : null;
+}
+
+function addDays(value: string, days: number) {
+  const date = new Date(`${value}T00:00:00`);
+  date.setDate(date.getDate() + days);
+  return date.toISOString().slice(0, 10);
 }
 
 function isInvoiceDateInRange(invoice: WfirmaInvoice, dateFrom: string, dateTo: string) {

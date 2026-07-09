@@ -349,7 +349,7 @@ function InvoicesContent() {
                         aria-label={`Zaznacz fakturę ${invoice.numer || invoice.kontrahent_nazwa}`}
                       />
                     </Td>
-                    <Td strong>
+                    <Td strong style={invoiceNumberCellStyle}>
                       {invoiceNumberLabel(invoice)}
                       <Small>{invoice.numer ? "Numer z wFirmy" : "Po wysłaniu do wFirmy"}</Small>
                     </Td>
@@ -634,6 +634,7 @@ const tableWrapperStyle: CSSProperties = { overflowX: "auto" };
 const tableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse", minWidth: "1280px" };
 const thStyle: CSSProperties = { textAlign: "left", padding: "12px 10px", borderBottom: `1px solid ${colors.border}`, color: colors.muted, fontSize: "12px", textTransform: "uppercase", letterSpacing: 0 };
 const tdStyle: CSSProperties = { padding: "13px 10px", borderBottom: `1px solid ${colors.border}`, color: colors.text, verticalAlign: "middle" };
+const invoiceNumberCellStyle: CSSProperties = { minWidth: "128px", whiteSpace: "nowrap", fontSize: "15px", lineHeight: 1.2, fontVariantNumeric: "tabular-nums" };
 const amountCellStyle: CSSProperties = { whiteSpace: "nowrap", minWidth: "118px", fontSize: "15px", fontVariantNumeric: "tabular-nums" };
 const rowStyle: CSSProperties = { background: colors.white };
 const pendingInvoiceRowStyle: CSSProperties = { background: "#fff8e7" };

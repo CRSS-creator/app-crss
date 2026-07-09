@@ -519,9 +519,9 @@ function ReadinessItem({ ok, label, value }: { ok: boolean; label: string; value
   return (
     <div style={readinessItemStyle}>
       <span style={ok ? readinessDotOkStyle : readinessDotErrorStyle} />
-      <div>
-        <span>{label}</span>
-        <strong>{value}</strong>
+      <div style={readinessTextStyle}>
+        <span style={readinessLabelStyle}>{label}</span>
+        <strong style={readinessValueStyle}>{value}</strong>
       </div>
     </div>
   );
@@ -747,8 +747,11 @@ const detailsSummaryGridStyle: CSSProperties = { display: "grid", gridTemplateCo
 const detailStatStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "10px 12px", display: "grid", gap: "5px", minHeight: "64px", alignContent: "center", color: colors.text };
 const wfirmaReadinessStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "14px", marginBottom: "16px", background: colors.card };
 const sectionTitleRowStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", marginBottom: "12px" };
-const readinessGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "10px" };
-const readinessItemStyle: CSSProperties = { display: "grid", gridTemplateColumns: "10px minmax(0, 1fr)", gap: "9px", alignItems: "center", color: colors.text };
+const readinessGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "10px 14px" };
+const readinessItemStyle: CSSProperties = { display: "grid", gridTemplateColumns: "10px minmax(0, 1fr)", gap: "9px", alignItems: "start", color: colors.text, minWidth: 0 };
+const readinessTextStyle: CSSProperties = { display: "grid", gap: "3px", minWidth: 0 };
+const readinessLabelStyle: CSSProperties = { color: colors.muted, fontSize: "12px", fontWeight: 800, lineHeight: 1.2 };
+const readinessValueStyle: CSSProperties = { color: colors.text, fontSize: "14px", fontWeight: 850, lineHeight: 1.3, overflowWrap: "anywhere" };
 const readinessDotOkStyle: CSSProperties = { width: "9px", height: "9px", borderRadius: "999px", background: colors.success };
 const readinessDotErrorStyle: CSSProperties = { ...readinessDotOkStyle, background: colors.danger };
 const lineTableWrapperStyle: CSSProperties = { overflowX: "auto", border: `1px solid ${colors.border}`, borderRadius: radius.input };

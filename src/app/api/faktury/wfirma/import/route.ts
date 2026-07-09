@@ -11,6 +11,7 @@ import {
 } from "@/lib/wfirmaClient";
 
 const ALLOWED_ROLES = new Set(["owner", "admin"]);
+const OWN_COMPANY_NIPS = new Set(["7851814025"]);
 
 type ImportPayload = {
   month?: string;
@@ -196,7 +197,7 @@ async function saveImportedInvoice(
 }
 
 function resolveContractorInfo(invoice: WfirmaInvoice, clients: ClientMatch[]): ContractorInfo {
-  const candidates = contractorCandidates(invoice);
+  const candidates = contractorCandidates(invoice).filter((candidate) => !isOwnCompany(candidate));
   const matchingClient = candidates.find((candidate) =>
     clients.some((client) => normalizeNip(client.nip) === normalizeNip(candidate.nip))
   );
@@ -216,11 +217,18 @@ function scoredContractorCandidates(value: unknown, path: string[] = []): Scored
   const nested = Object.entries(record).flatMap(([key, child]) => scoredContractorCandidates(child, [...path, key]));
   if (!ownCandidate) return nested;
 
-  const pathScore = path.some((key) => /contract|kontr|buyer|recipient|client/i.test(key)) ? 2 : 0;
+  const sellerPenalty = path.some((key) => /seller|issuer|company|owner|sprzedaw|wystaw/i.test(key)) ? -5 : 0;
+  const pathScore = path.some((key) => /contract|kontr|buyer|recipient|client|nabyw|odbior/i.test(key)) ? 2 : 0;
   const dataScore = (ownCandidate.nip ? 2 : 0) + (ownCandidate.name ? 1 : 0) + (ownCandidate.email ? 1 : 0);
-  return [{ ...ownCandidate, score: pathScore + dataScore }, ...nested].sort(
+  return [{ ...ownCandidate, score: pathScore + dataScore + sellerPenalty }, ...nested].sort(
     (first, second) => second.score - first.score
   );
+}
+
+function isOwnCompany(candidate: ContractorInfo) {
+  const normalizedNip = normalizeNip(candidate.nip);
+  const normalizedName = candidate.name.toLowerCase();
+  return OWN_COMPANY_NIPS.has(normalizedNip) || normalizedName.includes("crss sp");
 }
 
 function contractorFromRecord(record: Record<string, unknown>) {

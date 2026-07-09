@@ -112,8 +112,9 @@ export async function fetchInvoices() {
   return supabase
     .from("faktury")
     .select(INVOICE_SELECT)
-    .order("data_wystawienia", { ascending: false, nullsFirst: false })
-    .order("created_at", { ascending: false });
+    .order("data_wystawienia", { ascending: false, nullsFirst: true })
+    .order("created_at", { ascending: false })
+    .range(0, 4999);
 }
 
 export async function createInvoice(payload: InvoicePayload) {

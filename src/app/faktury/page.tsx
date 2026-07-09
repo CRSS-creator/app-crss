@@ -87,13 +87,13 @@ function InvoicesContent() {
   }, [invoices, invoiceMonth, query, sourceFilter]);
 
   const totals = useMemo(() => {
-    const activeInvoices = invoices.filter((invoice) => invoice.status !== "anulowana");
+    const activeInvoices = filteredInvoices.filter((invoice) => invoice.status !== "anulowana");
     return {
-      count: invoices.length,
-      sentToWfirma: invoices.filter((invoice) => invoice.wfirma_sync_status === "wyslano").length,
+      count: filteredInvoices.length,
+      sentToWfirma: filteredInvoices.filter((invoice) => invoice.wfirma_sync_status === "wyslano").length,
       net: activeInvoices.reduce((sum, invoice) => sum + Number(invoice.kwota_netto || 0), 0),
     };
-  }, [invoices]);
+  }, [filteredInvoices]);
 
   const selectableInvoices = useMemo(
     () => filteredInvoices.filter((invoice) => canQueueForWfirma(invoice)),

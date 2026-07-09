@@ -379,7 +379,7 @@ function InvoicesContent() {
                         disabled={savingCategoryId === invoice.id}
                       />
                     </Td>
-                    <Td strong>{formatMoney(invoice.kwota_netto)}</Td>
+                    <Td strong style={amountCellStyle}>{formatMoney(invoice.kwota_netto)}</Td>
                     <Td>
                       <Badge
                         tone={
@@ -485,8 +485,8 @@ function Th({ children }: { children: React.ReactNode }) {
   return <th style={thStyle}>{children}</th>;
 }
 
-function Td({ children, strong, colSpan }: { children: React.ReactNode; strong?: boolean; colSpan?: number }) {
-  return <td colSpan={colSpan} style={{ ...tdStyle, fontWeight: strong ? 850 : 650 }}>{children}</td>;
+function Td({ children, strong, colSpan, style }: { children: React.ReactNode; strong?: boolean; colSpan?: number; style?: CSSProperties }) {
+  return <td colSpan={colSpan} style={{ ...tdStyle, fontWeight: strong ? 850 : 650, ...style }}>{children}</td>;
 }
 
 function Small({ children }: { children: React.ReactNode }) {
@@ -617,6 +617,7 @@ const tableWrapperStyle: CSSProperties = { overflowX: "auto" };
 const tableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse", minWidth: "1280px" };
 const thStyle: CSSProperties = { textAlign: "left", padding: "12px 10px", borderBottom: `1px solid ${colors.border}`, color: colors.muted, fontSize: "12px", textTransform: "uppercase", letterSpacing: 0 };
 const tdStyle: CSSProperties = { padding: "13px 10px", borderBottom: `1px solid ${colors.border}`, color: colors.text, verticalAlign: "middle" };
+const amountCellStyle: CSSProperties = { whiteSpace: "nowrap", minWidth: "118px", fontSize: "15px", fontVariantNumeric: "tabular-nums" };
 const rowStyle: CSSProperties = { background: colors.white };
 const smallStyle: CSSProperties = { display: "block", marginTop: "5px", color: colors.muted, fontSize: "12px", fontWeight: 650 };
 const badgeBaseStyle: CSSProperties = { display: "inline-flex", borderRadius: radius.badge, padding: "7px 10px", fontSize: "12px", fontWeight: 900, whiteSpace: "nowrap" };

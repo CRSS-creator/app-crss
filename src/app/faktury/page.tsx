@@ -55,6 +55,7 @@ function InvoicesContent() {
   const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<string[]>([]);
   const [detailsInvoice, setDetailsInvoice] = useState<Invoice | null>(null);
   const [savingCategoryId, setSavingCategoryId] = useState<string | null>(null);
+  const [savingPeriodId, setSavingPeriodId] = useState<string | null>(null);
 
   useEffect(() => {
     void loadData({ generateCurrentMonth: true });
@@ -71,6 +72,7 @@ function InvoicesContent() {
         invoice.klienci?.nazwa,
         invoice.wfirma_id,
         invoice.data_wystawienia,
+        invoice.okres,
         paymentStatusLabel(invoice),
         categoryLabel(invoice.kategoria),
       ]
@@ -171,10 +173,28 @@ function InvoicesContent() {
       return;
     }
 
-    setInvoices((current) =>
-      current.map((item) => (item.id === invoice.id ? ({ ...item, kategoria: category } as Invoice) : item))
-    );
-    setDetailsInvoice((current) => (current?.id === invoice.id ? ({ ...current, kategoria: category } as Invoice) : current));
+    const updatedInvoice = (result.data || { ...invoice, kategoria: category }) as Invoice;
+    setInvoices((current) => current.map((item) => (item.id === invoice.id ? updatedInvoice : item)));
+    setDetailsInvoice((current) => (current?.id === invoice.id ? updatedInvoice : current));
+  }
+
+  async function changeInvoicePeriod(invoice: Invoice, periodMonth: string) {
+    const okres = monthToDate(periodMonth);
+    if (invoice.okres === okres) return;
+
+    setSavingPeriodId(invoice.id);
+    const result = await updateInvoice(invoice.id, { okres });
+    setSavingPeriodId(null);
+
+    if (result.error) {
+      console.error("Błąd zapisu okresu faktury:", result.error);
+      alert("Nie udało się zapisać okresu faktury.");
+      return;
+    }
+
+    const updatedInvoice = (result.data || { ...invoice, okres }) as Invoice;
+    setInvoices((current) => current.map((item) => (item.id === invoice.id ? updatedInvoice : item)));
+    setDetailsInvoice((current) => (current?.id === invoice.id ? updatedInvoice : current));
   }
 
   return (
@@ -305,7 +325,16 @@ function InvoicesContent() {
                       <Small>{invoice.kontrahent_nip || invoice.klienci?.nazwa || "Brak NIP"}</Small>
                     </Td>
                     <Td>{formatDate(invoice.data_wystawienia)}</Td>
-                    <Td>{formatMonth(invoice.okres || invoice.data_wystawienia)}</Td>
+                    <Td>
+                      <input
+                        style={periodInputStyle}
+                        type="month"
+                        value={toMonthInput(invoice.okres || invoice.data_wystawienia)}
+                        disabled={savingPeriodId === invoice.id}
+                        onChange={(event) => changeInvoicePeriod(invoice, event.target.value)}
+                        aria-label={`Zmień okres faktury ${invoice.numer || invoice.kontrahent_nazwa}`}
+                      />
+                    </Td>
                     <Td>
                       <Badge tone={paymentStatusTone(invoice)}>{paymentStatusLabel(invoice)}</Badge>
                     </Td>
@@ -449,6 +478,10 @@ function monthToDate(value: string) {
   return `${value || currentMonthInput()}-01`;
 }
 
+function toMonthInput(value: string | null | undefined) {
+  return value ? value.slice(0, 7) : currentMonthInput();
+}
+
 function formatMoney(value: number | string | null | undefined) {
   return `${Number(value || 0).toLocaleString("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} zł`;
 }
@@ -519,8 +552,9 @@ const filtersStyle: CSSProperties = { display: "grid", gridTemplateColumns: "min
 const searchStyle: CSSProperties = { ...inputStyle };
 const filterSelectStyle: CSSProperties = { background: colors.white };
 const categorySelectStyle: CSSProperties = { width: "150px", background: colors.white, minHeight: "34px", padding: "7px 10px" };
+const periodInputStyle: CSSProperties = { ...inputStyle, width: "140px", minHeight: "34px", padding: "7px 10px" };
 const tableWrapperStyle: CSSProperties = { overflowX: "auto" };
-const tableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse", minWidth: "1220px" };
+const tableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse", minWidth: "1280px" };
 const thStyle: CSSProperties = { textAlign: "left", padding: "12px 10px", borderBottom: `1px solid ${colors.border}`, color: colors.muted, fontSize: "12px", textTransform: "uppercase", letterSpacing: 0 };
 const tdStyle: CSSProperties = { padding: "13px 10px", borderBottom: `1px solid ${colors.border}`, color: colors.text, verticalAlign: "middle" };
 const rowStyle: CSSProperties = { background: colors.white };

@@ -155,17 +155,19 @@ export async function queueInvoicesForWfirma(invoiceIds: string[]) {
 }
 
 function normalizeInvoicePayload<T extends Partial<InvoicePayload>>(payload: T) {
-  return {
-    ...payload,
-    numer: emptyToNull(payload.numer),
-    kontrahent_nip: emptyToNull(payload.kontrahent_nip),
-    kontrahent_email: emptyToNull(payload.kontrahent_email),
-    opis: emptyToNull(payload.opis),
-    wfirma_id: emptyToNull(payload.wfirma_id),
-    wfirma_url: emptyToNull(payload.wfirma_url),
-    wfirma_sync_error: emptyToNull(payload.wfirma_sync_error),
-    waluta: payload.waluta || "PLN",
-  };
+  const normalized: Partial<InvoicePayload> = { ...payload };
+
+  if ("numer" in payload) normalized.numer = emptyToNull(payload.numer);
+  if ("kontrahent_nip" in payload) normalized.kontrahent_nip = emptyToNull(payload.kontrahent_nip);
+  if ("kontrahent_email" in payload) normalized.kontrahent_email = emptyToNull(payload.kontrahent_email);
+  if ("opis" in payload) normalized.opis = emptyToNull(payload.opis);
+  if ("okres" in payload) normalized.okres = emptyToNull(payload.okres);
+  if ("wfirma_id" in payload) normalized.wfirma_id = emptyToNull(payload.wfirma_id);
+  if ("wfirma_url" in payload) normalized.wfirma_url = emptyToNull(payload.wfirma_url);
+  if ("wfirma_sync_error" in payload) normalized.wfirma_sync_error = emptyToNull(payload.wfirma_sync_error);
+  if ("waluta" in payload) normalized.waluta = payload.waluta || "PLN";
+
+  return normalized;
 }
 
 function emptyToNull(value: string | null | undefined) {

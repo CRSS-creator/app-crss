@@ -591,9 +591,11 @@ function invoiceListMonth(invoice: Invoice) {
 }
 
 function addMonths(value: string, months: number) {
-  const date = new Date(`${value}T00:00:00`);
-  date.setMonth(date.getMonth() + months);
-  return date.toISOString().slice(0, 10);
+  const [year = "0", month = "1"] = value.slice(0, 7).split("-");
+  const monthIndex = Number(year) * 12 + Number(month) - 1 + months;
+  const targetYear = Math.floor(monthIndex / 12);
+  const targetMonth = (monthIndex % 12) + 1;
+  return `${targetYear}-${String(targetMonth).padStart(2, "0")}-01`;
 }
 
 function invoiceNumberParts(value: string | null) {

@@ -11,6 +11,7 @@ import {
   fetchClients,
   updateClient,
 } from "@/lib/clientService";
+import { normalizeContactList } from "@/lib/contactFields";
 import {
   createClientDocumentSignedUrl,
   deleteClientDocument,
@@ -653,8 +654,8 @@ function ClientDrawer({
     setSaving(true);
 
     const operationalPayload = {
-      telefon: draft.telefon.trim() || null,
-      email: draft.email.trim() || null,
+      telefon: normalizeContactList(draft.telefon),
+      email: normalizeContactList(draft.email),
       osoba_kontaktowa: draft.osoba_kontaktowa.trim() || null,
       czynny_vat: draft.czynny_vat,
       vat_ue: draft.vat_ue,
@@ -783,7 +784,7 @@ function ClientDrawer({
                 />
                 <EditableInput
                   label="Email"
-                  type="email"
+                  placeholder="mail1@firma.pl; mail2@firma.pl"
                   value={draft.email}
                   onChange={(value) => updateDraft("email", value)}
                 />
@@ -1204,8 +1205,8 @@ function CreateClientDrawer({
     const payload = {
       nazwa: draft.nazwa.trim(),
       nip: draft.nip.trim(),
-      telefon: draft.telefon.trim() || null,
-      email: draft.email.trim() || null,
+      telefon: normalizeContactList(draft.telefon),
+      email: normalizeContactList(draft.email),
       osoba_kontaktowa: draft.osoba_kontaktowa.trim() || null,
       forma_prawna: draft.forma_prawna.trim() || null,
       forma_opodatkowania: draft.forma_opodatkowania.trim() || null,
@@ -1318,7 +1319,7 @@ function CreateClientDrawer({
 
             <EditableInput
               label="Email"
-              type="email"
+              placeholder="mail1@firma.pl; mail2@firma.pl"
               value={draft.email}
               onChange={(v) => updateDraft("email", v)}
             />
@@ -1649,11 +1650,13 @@ function EditableInput({
   value,
   onChange,
   type = "text",
+  placeholder,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   type?: "text" | "number" | "email" | "month";
+  placeholder?: string;
 }) {
   return (
     <div style={editableRowStyle}>
@@ -1661,6 +1664,7 @@ function EditableInput({
       <input
         type={type}
         value={value}
+        placeholder={placeholder}
         onChange={(event) => onChange(event.target.value)}
         style={inputStyle}
       />

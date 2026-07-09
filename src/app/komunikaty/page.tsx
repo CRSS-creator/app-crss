@@ -6,6 +6,7 @@ import AccessGuard from "@/components/AccessGuard";
 import AppSelect from "@/components/AppSelect";
 import { colors, radius, shadow } from "@/app/design";
 import { fetchClientCaregivers, fetchClients } from "@/lib/clientService";
+import { hasEmail } from "@/lib/contactFields";
 import { supabase } from "@/lib/supabaseClient";
 
 type Profile = {
@@ -170,8 +171,8 @@ function KomunikatyContent() {
 
   const filteredIds = filteredClients.map((client) => client.id);
   const selectedClients = clients.filter((client) => selectedIds.includes(client.id));
-  const selectedWithEmail = selectedClients.filter((client) => Boolean(client.email));
-  const filteredWithEmail = filteredClients.filter((client) => Boolean(client.email));
+  const selectedWithEmail = selectedClients.filter((client) => hasEmail(client.email));
+  const filteredWithEmail = filteredClients.filter((client) => hasEmail(client.email));
   const allFilteredSelected = filteredIds.length > 0 && filteredIds.every((id) => selectedIds.includes(id));
   const shouldShowList = showRecipientList || Boolean(searchQuery.trim()) || selectedIds.length > 0;
 

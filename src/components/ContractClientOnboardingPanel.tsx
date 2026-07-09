@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import AppSelect from "@/components/AppSelect";
 import { colors, radius, shadow } from "@/app/design";
 import { LEGAL_FORM_OPTIONS, TAXATION_FORM_OPTIONS } from "@/lib/clientDictionaries";
+import { normalizeContactList } from "@/lib/contactFields";
 import { createClient as createClientRecord, fetchClientCaregivers, findClientByNip } from "@/lib/clientService";
 import { updateCrmContract, type CrmContract } from "@/lib/crmContractService";
 
@@ -113,8 +114,8 @@ export default function ContractClientOnboardingPanel({ contract, onCreated }: P
     const clientResult = await createClientRecord({
       nazwa: contract.nazwa_klienta.trim(),
       nip: nullableToNull(contract.nip),
-      telefon: emptyToNull(draft.telefon),
-      email: nullableToNull(contract.email_klienta),
+      telefon: normalizeContactList(draft.telefon),
+      email: normalizeContactList(contract.email_klienta),
       osoba_kontaktowa: emptyToNull(draft.osoba_kontaktowa),
       forma_prawna: emptyToNull(draft.forma_prawna),
       forma_opodatkowania: emptyToNull(draft.forma_opodatkowania),

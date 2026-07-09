@@ -6,6 +6,7 @@ import AccessGuard from "@/components/AccessGuard";
 import AppSelect from "@/components/AppSelect";
 import ContractClientOnboardingPanel from "@/components/ContractClientOnboardingPanel";
 import { colors, radius, shadow } from "@/app/design";
+import { normalizeContactList } from "@/lib/contactFields";
 import { fetchCrmLeads } from "@/lib/crmService";
 import { fetchClients } from "@/lib/clientService";
 import {
@@ -352,7 +353,7 @@ function ContractDrawer({ contract, leads, clients, onClose, onSaved, onDeleted 
       krs: null,
       nip: emptyToNull(draft.nip),
       reprezentant: emptyToNull(draft.reprezentant),
-      email_klienta: emptyToNull(draft.email_klienta),
+      email_klienta: normalizeContactList(draft.email_klienta),
       abonament_netto: draft.abonament_netto ? Number(draft.abonament_netto) : null,
       limit_dokumentow: draft.limit_dokumentow ? Number(draft.limit_dokumentow) : null,
       obsluga_kadrowa: draft.obsluga_kadrowa,
@@ -466,7 +467,7 @@ function ContractDrawer({ contract, leads, clients, onClose, onSaved, onDeleted 
             <EditableInput label="Siedziba" value={draft.siedziba} onChange={(value) => updateDraft("siedziba", value)} />
             <EditableInput label="NIP" value={draft.nip} onChange={(value) => updateDraft("nip", value)} />
             <EditableInput label="Reprezentant" value={draft.reprezentant} onChange={(value) => updateDraft("reprezentant", value)} />
-            <EditableInput label="Email klienta" type="email" value={draft.email_klienta} onChange={(value) => updateDraft("email_klienta", value)} />
+            <EditableInput label="Email klienta" value={draft.email_klienta} placeholder="mail1@firma.pl; mail2@firma.pl" onChange={(value) => updateDraft("email_klienta", value)} />
           </FormSection>
 
           {shouldShowClientCreation && hasSavedSignedContract && contract && (
@@ -653,8 +654,8 @@ function FormSection({ title, children }: { title: string; children: React.React
   return <section style={drawerSectionStyle}><h3 style={formSectionTitleStyle}>{title}</h3>{children}</section>;
 }
 
-function EditableInput({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (value: string) => void; type?: "text" | "number" | "email" | "month" }) {
-  return <label style={editableRowStyle}><span>{label}</span><input type={type} value={value} onChange={(event) => onChange(event.target.value)} style={inputStyle} /></label>;
+function EditableInput({ label, value, onChange, type = "text", placeholder }: { label: string; value: string; onChange: (value: string) => void; type?: "text" | "number" | "email" | "month"; placeholder?: string }) {
+  return <label style={editableRowStyle}><span>{label}</span><input type={type} value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} style={inputStyle} /></label>;
 }
 
 function EditableSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: { value: string; label: string }[] }) {

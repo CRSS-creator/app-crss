@@ -6,6 +6,7 @@ import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
 import AppSelect from "@/components/AppSelect";
 import { colors, radius, shadow } from "@/app/design";
+import { normalizeContactList } from "@/lib/contactFields";
 import { supabase } from "@/lib/supabaseClient";
 import {
   deleteCrmLead,
@@ -416,7 +417,7 @@ function LeadDrawer({ mode, lead, tasks, onClose, onCreated, onSaved, onDeleted,
             <EditableInput label="Nazwa firmy" value={draft.nazwa} onChange={(value) => updateDraft("nazwa", value)} />
             <EditableInput label="Osoba kontaktowa" value={draft.osoba_kontaktowa} onChange={(value) => updateDraft("osoba_kontaktowa", value)} />
             <EditableInput label="Telefon" value={draft.telefon} onChange={(value) => updateDraft("telefon", value)} />
-            <EditableInput label="Email" type="email" value={draft.email} onChange={(value) => updateDraft("email", value)} />
+            <EditableInput label="Email" value={draft.email} placeholder="mail1@firma.pl; mail2@firma.pl" onChange={(value) => updateDraft("email", value)} />
             <EditableInput label="NIP" value={draft.nip} onChange={(value) => updateDraft("nip", value)} />
           </FormSection>
 
@@ -515,7 +516,7 @@ function createDraft(lead: Lead): LeadDraft {
 }
 
 function createLeadPayload(draft: LeadDraft) {
-  return { nazwa: draft.nazwa.trim(), osoba_kontaktowa: draft.osoba_kontaktowa.trim() || null, telefon: draft.telefon.trim() || null, email: draft.email.trim() || null, nip: draft.nip.trim() || null, forma_prawna: draft.forma_prawna.trim() || null, etap: draft.etap, status: draft.status, zrodlo_leada: draft.zrodlo_leada.trim() || null, szacowany_mrr: draft.szacowany_mrr ? Number(draft.szacowany_mrr) : null, data_telefonu: draft.data_telefonu || null, data_spotkania_online: draft.data_spotkania_online || null, data_wyslania_oferty: draft.data_wyslania_oferty || null, data_follow_up: draft.data_follow_up || null, powod_kontaktu: draft.powod_kontaktu.trim() || null, liczba_dokumentow: draft.liczba_dokumentow ? Number(draft.liczba_dokumentow) : null, liczba_transakcji: draft.liczba_transakcji ? Number(draft.liczba_transakcji) : null, czy_kadry: draft.czy_kadry, liczba_pracownikow: draft.liczba_pracownikow ? Number(draft.liczba_pracownikow) : null, liczba_zleceniobiorcow: draft.liczba_zleceniobiorcow ? Number(draft.liczba_zleceniobiorcow) : null, powod_przegranej: draft.powod_przegranej.trim() || null, notatki: draft.notatki.trim() || null };
+  return { nazwa: draft.nazwa.trim(), osoba_kontaktowa: draft.osoba_kontaktowa.trim() || null, telefon: normalizeContactList(draft.telefon), email: normalizeContactList(draft.email), nip: draft.nip.trim() || null, forma_prawna: draft.forma_prawna.trim() || null, etap: draft.etap, status: draft.status, zrodlo_leada: draft.zrodlo_leada.trim() || null, szacowany_mrr: draft.szacowany_mrr ? Number(draft.szacowany_mrr) : null, data_telefonu: draft.data_telefonu || null, data_spotkania_online: draft.data_spotkania_online || null, data_wyslania_oferty: draft.data_wyslania_oferty || null, data_follow_up: draft.data_follow_up || null, powod_kontaktu: draft.powod_kontaktu.trim() || null, liczba_dokumentow: draft.liczba_dokumentow ? Number(draft.liczba_dokumentow) : null, liczba_transakcji: draft.liczba_transakcji ? Number(draft.liczba_transakcji) : null, czy_kadry: draft.czy_kadry, liczba_pracownikow: draft.liczba_pracownikow ? Number(draft.liczba_pracownikow) : null, liczba_zleceniobiorcow: draft.liczba_zleceniobiorcow ? Number(draft.liczba_zleceniobiorcow) : null, powod_przegranej: draft.powod_przegranej.trim() || null, notatki: draft.notatki.trim() || null };
 }
 
 function formatDateForInput(value: string | null) { return value ? value.slice(0, 10) : ""; }
@@ -525,7 +526,7 @@ function statusLabel(status: string | null) { return STATUSES.find((item) => ite
 function SummaryCard({ label, value }: { label: string; value: string | number }) { return <div style={summaryCardStyle}><span>{label}</span><strong>{value}</strong></div>; }
 function FormSection({ title, children }: { title: string; children: React.ReactNode }) { return <section style={drawerSectionStyle}><h3>{title}</h3>{children}</section>; }
 function TermsAndNotesSection({ children }: { children: React.ReactNode }) { return <section style={termsSectionStyle}><h3>Terminy i notatki</h3><div style={termsGridStyle}>{children}</div></section>; }
-function EditableInput({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (value: string) => void; type?: "text" | "number" | "email" | "date" }) { return <label style={editableRowStyle}><span>{label}</span><input type={type} value={value} onClick={(event) => { if (type === "date") (event.currentTarget as HTMLInputElement & { showPicker?: () => void }).showPicker?.(); }} onChange={(event) => onChange(event.target.value)} style={inputStyle} /></label>; }
+function EditableInput({ label, value, onChange, type = "text", placeholder }: { label: string; value: string; onChange: (value: string) => void; type?: "text" | "number" | "email" | "date"; placeholder?: string }) { return <label style={editableRowStyle}><span>{label}</span><input type={type} value={value} placeholder={placeholder} onClick={(event) => { if (type === "date") (event.currentTarget as HTMLInputElement & { showPicker?: () => void }).showPicker?.(); }} onChange={(event) => onChange(event.target.value)} style={inputStyle} /></label>; }
 function EditableSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: { value: string; label: string }[] }) { return <label style={editableRowStyle}><span>{label}</span><AppSelect value={value} onChange={onChange} style={inputStyle} options={options} /></label>; }
 function EditableCheckbox({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) { return <label style={editableRowStyle}><span>{label}</span><input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} /></label>; }
 function EditableTextarea({ label, value, onChange, rows = 4 }: { label: string; value: string; onChange: (value: string) => void; rows?: number }) { return <label style={textareaRowStyle}><span>{label}</span><textarea value={value} onChange={(event) => onChange(event.target.value)} style={textareaStyle} rows={rows} /></label>; }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { adjustToNextPolishBusinessDay } from "@/lib/businessDays";
+import { hasEmail, hasPhone, splitEmails, splitPhones } from "@/lib/contactFields";
 
 const ALLOWED_ROLES = new Set(["owner", "manager", "admin", "accountant"]);
 const APP_URL = "https://app.crss.com.pl";
@@ -289,11 +290,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Możesz wysłać zobowiązania tylko dla swoich klientów." }, { status: 403 });
   }
 
-  if (payload.channel === "email" && !client.email) {
+  const recipientEmails = splitEmails(client.email);
+  const recipientPhones = splitPhones(client.telefon);
+
+  if (payload.channel === "email" && !hasEmail(client.email)) {
     return NextResponse.json({ error: "Klient nie ma uzupełnionego adresu e-mail." }, { status: 400 });
   }
 
-  if (payload.channel === "sms" && !client.telefon) {
+  if (payload.channel === "sms" && !hasPhone(client.telefon)) {
     return NextResponse.json({ error: "Klient nie ma uzupełnionego numeru telefonu." }, { status: 400 });
   }
 
@@ -362,8 +366,10 @@ export async function POST(request: NextRequest) {
         clientId: client.id,
         clientName: client.nazwa,
         clientNip: client.nip,
-        recipientEmail: client.email,
-        recipientPhone: client.telefon,
+        recipientEmail: payload.channel === "email" ? recipientEmails.join("; ") : null,
+        recipientEmails: payload.channel === "email" ? recipientEmails : [],
+        recipientPhone: payload.channel === "sms" ? recipientPhones.join("; ") : null,
+        recipientPhones: payload.channel === "sms" ? recipientPhones : [],
         period: settlement.okres,
         periodLabel,
         subject,
@@ -411,8 +417,8 @@ export async function POST(request: NextRequest) {
         period: settlement.okres,
         period_label: periodLabel,
         subject,
-        recipient_email: payload.channel === "email" ? client.email : null,
-        recipient_phone: payload.channel === "sms" ? client.telefon : null,
+        recipient_email: payload.channel === "email" ? recipientEmails.join("; ") : null,
+        recipient_phone: payload.channel === "sms" ? recipientPhones.join("; ") : null,
         obligations: preparedObligations,
         sent_by: auth.requesterId,
         sent_by_name: auth.requesterName,

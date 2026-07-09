@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { splitEmails } from "@/lib/contactFields";
 
 const ALLOWED_ROLES = new Set(["owner", "manager", "admin", "accountant"]);
 const APP_URL = "https://app.crss.com.pl";
@@ -163,7 +164,9 @@ export async function POST(request: NextRequest) {
   }
 
   const allowedClients = (clients || []).filter((client) => auth.role !== "accountant" || client.opiekun_id === auth.requesterId);
-  const recipients = allowedClients.filter((client) => Boolean(client.email));
+  const recipients = allowedClients.flatMap((client) =>
+    splitEmails(client.email).map((email) => ({ client, email }))
+  );
 
   if (recipients.length === 0) {
     return NextResponse.json({ error: "Wybrani klienci nie mają adresów e-mail albo nie masz uprawnień do ich wysyłki." }, { status: 400 });
@@ -172,7 +175,8 @@ export async function POST(request: NextRequest) {
   const html = buildHtmlMessage(message);
   const failed: string[] = [];
 
-  for (const client of recipients) {
+  for (const recipient of recipients) {
+    const client = recipient.client;
     const caregiver = Array.isArray(client.profiles) ? client.profiles[0] : client.profiles;
     const response = await fetch(webhookConfig.webhookUrl, {
       method: "POST",
@@ -182,7 +186,7 @@ export async function POST(request: NextRequest) {
         clientId: client.id,
         clientName: client.nazwa,
         clientNip: client.nip,
-        recipientEmail: client.email,
+        recipientEmail: recipient.email,
         subject,
         message,
         html,
@@ -194,7 +198,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (!response.ok) {
-      failed.push(client.nazwa || client.email || client.id);
+      failed.push(client.nazwa || recipient.email || client.id);
     }
   }
 
@@ -213,18 +217,19 @@ export async function POST(request: NextRequest) {
       subject,
       message,
       recipients_count: recipients.length,
-      recipients: recipients.map((client) => {
+      recipients: recipients.map((recipient) => {
+        const client = recipient.client;
         const caregiver = Array.isArray(client.profiles) ? client.profiles[0] : client.profiles;
         return {
           clientId: client.id,
           clientName: client.nazwa,
           clientNip: client.nip,
-          email: client.email,
+          email: recipient.email,
           caregiverName: caregiver?.full_name || null,
           caregiverEmail: caregiver?.email || null,
         };
       }),
-      skipped_count: allowedClients.length - recipients.length,
+      skipped_count: allowedClients.filter((client) => splitEmails(client.email).length === 0).length,
       failed_count: 0,
       filter_snapshot: payload.filterSnapshot || {},
     });

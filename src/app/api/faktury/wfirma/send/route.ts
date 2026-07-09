@@ -96,6 +96,9 @@ export async function POST(request: NextRequest) {
           numer: stringify(wfirmaInvoice?.fullnumber || wfirmaInvoice?.number) || invoice.numer,
           status: "wystawiona",
           zrodlo: "wfirma",
+          data_wystawienia: dateOnly(wfirmaInvoice?.date) || new Date().toISOString().slice(0, 10),
+          data_sprzedazy: dateOnly(wfirmaInvoice?.disposaldate) || invoice.data_sprzedazy || dateOnly(wfirmaInvoice?.date) || new Date().toISOString().slice(0, 10),
+          termin_platnosci: dateOnly(wfirmaInvoice?.payment_date) || invoice.termin_platnosci,
           wfirma_id: stringify(wfirmaInvoice?.id) || null,
           wfirma_url: wfirmaInvoice?.hash ? `https://wfirma.pl/faktury/podglad/${wfirmaInvoice.hash}` : null,
           wfirma_synced_at: new Date().toISOString(),
@@ -172,4 +175,9 @@ function decimal(value: number | string, precision: number) {
 function stringify(value: unknown) {
   if (value === null || value === undefined) return "";
   return String(value).trim();
+}
+
+function dateOnly(value: unknown) {
+  const text = stringify(value);
+  return /^\d{4}-\d{2}-\d{2}/.test(text) ? text.slice(0, 10) : null;
 }

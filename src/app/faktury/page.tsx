@@ -14,6 +14,7 @@ import {
   updateInvoice,
   type Invoice,
   type InvoiceCategory,
+  type InvoiceLine,
   type InvoiceSyncStatus,
 } from "@/lib/invoiceService";
 
@@ -68,7 +69,7 @@ function InvoicesContent() {
     return invoices
       .filter((invoice) => {
         const matchesSource = sourceFilter === EMPTY_FILTER || invoice.zrodlo === sourceFilter;
-        const matchesIssueMonth = Boolean(invoice.data_wystawienia && toMonthInput(invoice.data_wystawienia) === invoiceMonth);
+        const matchesIssueMonth = invoiceListMonth(invoice) === invoiceMonth;
         const haystack = [
           invoice.numer,
           invoice.kontrahent_nazwa,
@@ -356,7 +357,7 @@ function InvoicesContent() {
                       {invoice.kontrahent_nazwa}
                       <Small>{invoice.kontrahent_nip || invoice.klienci?.nazwa || "Brak NIP"}</Small>
                     </Td>
-                    <Td>{formatDate(invoice.data_wystawienia)}</Td>
+                    <Td>{invoice.data_wystawienia ? formatDate(invoice.data_wystawienia) : "Po wysłaniu"}</Td>
                     <Td>
                       <input
                         style={periodInputStyle}
@@ -453,7 +454,7 @@ function InvoicesContent() {
                         <Td>{formatMoney(line.cena_netto)}</Td>
                         <Td>{line.stawka_vat}</Td>
                         <Td>{formatMoney(line.kwota_netto)}</Td>
-                        <Td strong>{formatMoney(line.kwota_brutto)}</Td>
+                        <Td strong>{formatMoney(lineGross(line))}</Td>
                       </tr>
                     ))
                   )}
@@ -567,12 +568,17 @@ function compareInvoicesByNumber(first: Invoice, second: Invoice) {
   for (let index = 0; index < maxLength; index += 1) {
     const firstValue = firstParts[index] ?? Number.MAX_SAFE_INTEGER;
     const secondValue = secondParts[index] ?? Number.MAX_SAFE_INTEGER;
-    if (firstValue !== secondValue) return firstValue - secondValue;
+    if (firstValue !== secondValue) return secondValue - firstValue;
   }
 
-  const dateCompare = String(first.data_wystawienia || "").localeCompare(String(second.data_wystawienia || ""));
+  const dateCompare = String(second.data_wystawienia || "").localeCompare(String(first.data_wystawienia || ""));
   if (dateCompare !== 0) return dateCompare;
   return invoiceNumberLabel(first).localeCompare(invoiceNumberLabel(second), "pl", { numeric: true, sensitivity: "base" });
+}
+
+function invoiceListMonth(invoice: Invoice) {
+  if (invoice.data_wystawienia) return toMonthInput(invoice.data_wystawienia);
+  return toMonthInput(invoice.created_at);
 }
 
 function invoiceNumberParts(value: string | null) {
@@ -585,6 +591,14 @@ function invoiceLines(invoice: Invoice) {
     if (sortOrder !== 0) return sortOrder;
     return first.nazwa.localeCompare(second.nazwa, "pl", { sensitivity: "base" });
   });
+}
+
+function lineGross(line: InvoiceLine) {
+  const net = Number(line.kwota_netto || 0);
+  const savedGross = Number(line.kwota_brutto || 0);
+  const vatRate = Number(String(line.stawka_vat || "").match(/\d+/)?.[0] || 0);
+  if (vatRate > 0 && savedGross <= net) return net + Number((net * vatRate / 100).toFixed(2));
+  return savedGross;
 }
 
 const headerStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "flex-start", marginBottom: "24px" };
@@ -600,8 +614,8 @@ const listTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize:
 const bulkHelpStyle: CSSProperties = { margin: "6px 0 0", color: colors.muted, fontSize: "13px", fontWeight: 700 };
 const fieldStyle: CSSProperties = { display: "grid", gap: "7px", color: colors.muted, fontSize: "12px", fontWeight: 850 };
 const inputStyle: CSSProperties = { width: "100%", minHeight: "42px", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, padding: "10px 12px", fontWeight: 750, boxSizing: "border-box" };
-const primaryButtonStyle: CSSProperties = { border: `1px solid ${colors.red}`, borderRadius: radius.button, background: colors.red, color: colors.white, minHeight: "44px", padding: "11px 15px", fontWeight: 900, cursor: "pointer", display: "inline-flex", justifyContent: "center", alignItems: "center", gap: "8px" };
-const secondaryButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.navy, minHeight: "42px", padding: "10px 14px", fontWeight: 850, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "8px" };
+const primaryButtonStyle: CSSProperties = { border: `1px solid ${colors.red}`, borderRadius: radius.input, background: colors.red, color: colors.white, minHeight: "38px", padding: "8px 14px", fontWeight: 850, cursor: "pointer", display: "inline-flex", justifyContent: "center", alignItems: "center", gap: "8px" };
+const secondaryButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.navy, minHeight: "38px", padding: "8px 13px", fontWeight: 800, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "8px" };
 const smallButtonStyle: CSSProperties = { ...secondaryButtonStyle, minHeight: "34px", padding: "7px 10px" };
 const filtersStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(220px, 1fr) 170px", gap: "10px", marginBottom: "14px" };
 const searchStyle: CSSProperties = { ...inputStyle };

@@ -578,7 +578,14 @@ function compareInvoicesByNumber(first: Invoice, second: Invoice) {
 
 function invoiceListMonth(invoice: Invoice) {
   if (invoice.data_wystawienia) return toMonthInput(invoice.data_wystawienia);
+  if (invoice.okres) return toMonthInput(addMonths(invoice.okres, 1));
   return toMonthInput(invoice.created_at);
+}
+
+function addMonths(value: string, months: number) {
+  const date = new Date(`${value}T00:00:00`);
+  date.setMonth(date.getMonth() + months);
+  return date.toISOString().slice(0, 10);
 }
 
 function invoiceNumberParts(value: string | null) {

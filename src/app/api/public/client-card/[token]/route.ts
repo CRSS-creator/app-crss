@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { buildClientCardPdf } from "@/lib/clientCardPdf";
-import type { ClientCardFormData } from "@/lib/clientCardTypes";
+import { validateClientCardFormData, type ClientCardFormData } from "@/lib/clientCardTypes";
 
 const CLIENT_DOCUMENTS_BUCKET = "klienci-dokumenty";
 
@@ -43,6 +43,10 @@ function adminClient() {
 
 function getClient(form: FormRecord) {
   return Array.isArray(form.klienci) ? form.klienci[0] : form.klienci;
+}
+
+function fileSafeName(value: string | null | undefined) {
+  return (value?.trim() || "klient").replace(/[<>:"/\\|?*\u0000-\u001F]/g, " ").replace(/\s+/g, " ");
 }
 
 async function getForm(token: string) {
@@ -131,12 +135,13 @@ export async function POST(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "Nieprawidłowe dane formularza." }, { status: 400 });
   }
 
-  if (!data.osobaKontaktowa?.trim() || !data.potwierdzenie) {
-    return NextResponse.json({ error: "Uzupełnij osobę kontaktową i potwierdź prawdziwość danych." }, { status: 400 });
+  const missing = validateClientCardFormData(data);
+  if (missing.length > 0) {
+    return NextResponse.json({ error: `Uzupełnij wszystkie wymagane pola: ${missing.join(", ")}.` }, { status: 400 });
   }
 
   const completedAt = new Date();
-  const pdf = buildClientCardPdf({
+  const pdf = await buildClientCardPdf({
     clientName: client.nazwa || "Klient",
     clientNip: client.nip,
     completedBy: data.osobaKontaktowa.trim(),
@@ -144,7 +149,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     data,
   });
 
-  const fileName = `Karta klienta biura rachunkowego - ${client.nazwa || "klient"}.pdf`;
+  const fileName = `Karta klienta - ${fileSafeName(client.nazwa)}.pdf`;
   const storagePath = `${client.id}/karta-klienta-${Date.now()}.pdf`;
 
   const uploadResult = await admin.storage

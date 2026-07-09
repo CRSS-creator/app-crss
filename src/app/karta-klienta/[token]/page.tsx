@@ -3,7 +3,12 @@
 import { useEffect, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import { useParams } from "next/navigation";
 import { colors, radius, shadow } from "@/app/design";
-import { emptyClientCardFormData, type ClientCardFormData, type PublicClientCardResponse } from "@/lib/clientCardTypes";
+import {
+  emptyClientCardFormData,
+  validateClientCardFormData,
+  type ClientCardFormData,
+  type PublicClientCardResponse,
+} from "@/lib/clientCardTypes";
 
 const YES_NO_OPTIONS = [
   { value: "", label: "Wybierz" },
@@ -80,8 +85,9 @@ export default function ClientCardPage() {
     event.preventDefault();
     if (!token) return;
 
-    if (!draft.osobaKontaktowa.trim() || !draft.potwierdzenie) {
-      alert("Uzupełnij osobę kontaktową i potwierdź prawdziwość danych.");
+    const missing = validateClientCardFormData(draft);
+    if (missing.length > 0) {
+      alert(`Uzupełnij wszystkie wymagane pola:\n\n${missing.join("\n")}`);
       return;
     }
 

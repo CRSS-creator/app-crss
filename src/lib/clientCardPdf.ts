@@ -1,3 +1,7 @@
+import { readFileSync } from "fs";
+import { join } from "path";
+import { PDFDocument, PDFFont, PDFPage, rgb } from "pdf-lib";
+import fontkit from "@pdf-lib/fontkit";
 import type { ClientCardFormData } from "@/lib/clientCardTypes";
 
 type ClientCardPdfInput = {
@@ -8,175 +12,183 @@ type ClientCardPdfInput = {
   data: ClientCardFormData;
 };
 
+type PdfContext = {
+  doc: PDFDocument;
+  page: PDFPage;
+  font: PDFFont;
+  y: number;
+};
+
 const PAGE_WIDTH = 595;
 const PAGE_HEIGHT = 842;
-const MARGIN = 48;
-const LINE_HEIGHT = 17;
+const MARGIN = 44;
+const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2;
+const LABEL_WIDTH = 165;
+const VALUE_X = MARGIN + LABEL_WIDTH + 16;
+const VALUE_WIDTH = CONTENT_WIDTH - LABEL_WIDTH - 16;
+const LINE_HEIGHT = 13.5;
+const FIELD_GAP = 10;
 
-export function buildClientCardPdf(input: ClientCardPdfInput): Buffer {
-  const pages: string[] = [""];
-  let pageIndex = 0;
-  let y = PAGE_HEIGHT - MARGIN;
+export async function buildClientCardPdf(input: ClientCardPdfInput): Promise<Buffer> {
+  const doc = await PDFDocument.create();
+  doc.registerFontkit(fontkit);
+  const fontBytes = readFileSync(join(process.cwd(), "src/assets/fonts/NotoSans-Regular.ttf"));
+  const font = await doc.embedFont(fontBytes, { subset: true });
+  const context: PdfContext = { doc, page: doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]), font, y: PAGE_HEIGHT - MARGIN };
 
-  function add(operation: string) {
-    pages[pageIndex] += `${operation}\n`;
-  }
+  drawPageBackground(context.page);
+  drawText(context, "Karta klienta biura rachunkowego", MARGIN, 20, colors.navy);
+  context.y -= 29;
+  field(context, "Nazwa firmy", input.clientName);
+  field(context, "NIP", input.clientNip);
 
-  function newPage() {
-    pageIndex += 1;
-    pages[pageIndex] = "";
-    y = PAGE_HEIGHT - MARGIN;
-  }
+  section(context, "Dane podstawowe");
+  field(context, "Osoba kontaktowa", input.data.osobaKontaktowa);
+  field(context, "Telefon", input.data.telefon);
+  field(context, "Adres działalności", input.data.adresDzialalnosci);
+  field(context, "Adres zamieszkania", input.data.adresZamieszkaniaJakDzialalnosci ? "Taki sam jak adres działalności" : input.data.adresZamieszkania);
+  field(context, "Forma opodatkowania", input.data.formaOpodatkowania);
+  field(context, "Właściwy Urząd Skarbowy", input.data.urzadSkarbowy);
+  field(context, "Czy wykonuje lub wykonywał/a usługi na rzecz byłego pracodawcy", input.data.uslugiBylyPracodawca);
 
-  function ensureSpace(height: number) {
-    if (y - height < MARGIN) newPage();
-  }
+  section(context, "VAT");
+  field(context, "Czy jest czynnym podatnikiem VAT", input.data.czynnyVat);
+  field(context, "Forma rozliczenia VAT", input.data.vatFormaRozliczenia);
+  field(context, "Podstawa zwolnienia z VAT", input.data.vatZwolnieniePodstawy.join(", "));
+  field(context, "VAT-UE", input.data.vatUe);
+  field(context, "Powód VAT-UE", input.data.vatUePowody.join(", "));
+  field(context, "Czy prowadzi sprzedaż na rzecz osób fizycznych z innych krajów UE", input.data.sprzedazOsobyPrywatneUe);
 
-  function text(value: string, x: number, size = 10, bold = false) {
-    const safe = escapePdfText(toAscii(value));
-    add(`BT /${bold ? "F2" : "F1"} ${size} Tf ${x} ${y} Td (${safe}) Tj ET`);
-  }
+  section(context, "ZUS");
+  field(context, "Czy korzysta obecnie z ulg dotyczących opłacania składek ZUS", input.data.zusUlga);
+  field(context, "Z jakiej ulgi obecnie korzysta", input.data.zusUlgaTytul);
+  field(context, "Czy opłaca tylko składkę zdrowotną ZUS z działalności", input.data.tylkoZdrowotne);
+  field(context, "Inny tytuł do składek społecznych", input.data.tylkoZdrowotneTytul);
+  field(context, "Dobrowolne ubezpieczenie chorobowe obecnie lub w przyszłości", input.data.chorobowe);
+  field(context, "Czy posiada orzeczenie o niepełnosprawności", input.data.niepelnosprawnosc);
+  field(context, "Stopień niepełnosprawności", input.data.stopienNiepelnosprawnosci);
+  field(context, "Prawo do emerytury lub renty", input.data.emeryturaRenta);
 
-  function wrapped(value: string, x: number, width: number, size = 10, bold = false) {
-    const lines = wrapText(toAscii(value), width, size);
-    ensureSpace(lines.length * LINE_HEIGHT);
-    lines.forEach((line) => {
-      text(line, x, size, bold);
-      y -= LINE_HEIGHT;
-    });
-  }
+  section(context, "Kasa fiskalna i oświadczenie");
+  field(context, "Czy posiada kasę fiskalną", input.data.kasaFiskalna);
+  field(context, "Jaki jest powód zwolnienia z kasy fiskalnej", input.data.kasaFiskalnaZwolnienie);
+  field(context, "Potwierdzenie ankiety i zgodności danych", input.data.potwierdzenie ? "Tak" : "Nie");
 
-  function section(title: string) {
-    ensureSpace(34);
-    y -= 10;
-    text(title, MARGIN, 13, true);
-    y -= 16;
-    add(`${MARGIN} ${y - 5} ${PAGE_WIDTH - MARGIN * 2} 1 re f`);
-    y -= 18;
-  }
-
-  function field(label: string, value: string | null | undefined) {
-    ensureSpace(26);
-    text(`${label}:`, MARGIN, 9, true);
-    wrapped(value?.trim() || "-", MARGIN + 160, PAGE_WIDTH - MARGIN * 2 - 160, 10);
-    y -= 4;
-  }
-
-  add("0.93 0.96 1 rg");
-  add(`0 0 ${PAGE_WIDTH} ${PAGE_HEIGHT} re f`);
-  add("0 0 0 rg");
-  text("Karta klienta biura rachunkowego", MARGIN, 18, true);
-  y -= 28;
-  field("Nazwa firmy", input.clientName);
-  field("NIP", input.clientNip);
-
-  section("Dane podstawowe");
-  field("Osoba kontaktowa", input.data.osobaKontaktowa);
-  field("Telefon", input.data.telefon);
-  field("Adres dzialalnosci", input.data.adresDzialalnosci);
-  field("Adres zamieszkania", input.data.adresZamieszkania);
-  field("Forma opodatkowania", input.data.formaOpodatkowania);
-  field("Wlasciwy Urzad Skarbowy", input.data.urzadSkarbowy);
-  field("Czy wykonuje lub wykonywal/a uslugi na rzecz bylego pracodawcy", input.data.uslugiBylyPracodawca);
-
-  section("VAT");
-  field("Czy jest czynnym podatnikiem VAT", input.data.czynnyVat);
-  field("Forma rozliczenia VAT", input.data.vatFormaRozliczenia);
-  field("Podstawa zwolnienia z VAT", input.data.vatZwolnieniePodstawy.join(", "));
-  field("VAT-UE", input.data.vatUe);
-  field("Powod VAT-UE", input.data.vatUePowody.join(", "));
-  field("Czy prowadzi sprzedaz na rzecz osob fizycznych z innych krajow UE", input.data.sprzedazOsobyPrywatneUe);
-
-  section("ZUS");
-  field("Czy korzysta obecnie z ulg dotyczacych oplacania skladek ZUS", input.data.zusUlga);
-  field("Z jakiej ulgi obecnie korzysta", input.data.zusUlgaTytul);
-  field("Czy oplaca tylko skladke zdrowotna ZUS z dzialalnosci", input.data.tylkoZdrowotne);
-  field("Inny tytul do skladek spolecznych", input.data.tylkoZdrowotneTytul);
-  field("Dobrowolne ubezpieczenie chorobowe obecnie lub w przyszlosci", input.data.chorobowe);
-  field("Czy posiada orzeczenie o niepelnosprawnosci", input.data.niepelnosprawnosc);
-  field("Stopien niepelnosprawnosci", input.data.stopienNiepelnosprawnosci);
-  field("Prawo do emerytury lub renty", input.data.emeryturaRenta);
-
-  section("Kasa fiskalna i oswiadczenie");
-  field("Czy posiada kase fiskalna", input.data.kasaFiskalna);
-  field("Jaki jest powod zwolnienia z kasy fiskalnej", input.data.kasaFiskalnaZwolnienie);
-  field("Potwierdzenie ankiety i zgodnosci danych", input.data.potwierdzenie ? "Tak" : "Nie");
-
-  section("Podpis formularza");
+  section(context, "Podpis formularza");
   const date = input.completedAt.toLocaleDateString("pl-PL");
   const time = input.completedAt.toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" });
-  wrapped(`Ja ${input.completedBy} potwierdzam, ze wypelnilem powyzsza ankiete, podane przeze mnie dane sa zgodne z prawda oraz poinformuje CRSS niezwlocznie, najpozniej w terminie 7 dni, o zaistnieniu ewentualnych zmian.`, MARGIN, PAGE_WIDTH - MARGIN * 2, 10, true);
-  y -= 8;
-  wrapped(`Formularz wypelniony przez ${input.completedBy} w dniu ${date} o godzinie ${time}.`, MARGIN, PAGE_WIDTH - MARGIN * 2, 10, true);
+  paragraph(
+    context,
+    `Ja ${input.completedBy} potwierdzam, że wypełniłem powyższą ankietę, podane przeze mnie dane są zgodne z prawdą oraz poinformuję CRSS niezwłocznie, najpóźniej w terminie 7 dni, o zaistnieniu ewentualnych zmian.`,
+    10,
+    colors.text
+  );
+  context.y -= 4;
+  paragraph(context, `Formularz wypełniony przez ${input.completedBy} w dniu ${date} o godzinie ${time}.`, 10, colors.text);
 
-  return createPdf(pages);
+  const bytes = await doc.save();
+  return Buffer.from(bytes);
 }
 
-function createPdf(pageContents: string[]) {
-  const objects: string[] = [];
-  objects.push("<< /Type /Catalog /Pages 2 0 R >>");
-  objects.push("");
-  objects.push("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>");
-  objects.push("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>");
+const colors = {
+  navy: rgb(0.09, 0.23, 0.45),
+  text: rgb(0.04, 0.12, 0.25),
+  muted: rgb(0.31, 0.38, 0.5),
+  border: rgb(0.78, 0.84, 0.91),
+  panel: rgb(0.97, 0.98, 1),
+  background: rgb(0.94, 0.96, 1),
+};
 
-  const pageRefs: string[] = [];
-  pageContents.forEach((content) => {
-    const pageObjectNumber = objects.length + 1;
-    const contentObjectNumber = objects.length + 2;
-    pageRefs.push(`${pageObjectNumber} 0 R`);
-    objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PAGE_WIDTH} ${PAGE_HEIGHT}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${contentObjectNumber} 0 R >>`);
-    objects.push(`<< /Length ${Buffer.byteLength(content, "latin1")} >>\nstream\n${content}\nendstream`);
-  });
-
-  objects[1] = `<< /Type /Pages /Kids [${pageRefs.join(" ")}] /Count ${pageRefs.length} >>`;
-
-  let pdf = "%PDF-1.4\n";
-  const offsets = [0];
-  objects.forEach((object, index) => {
-    offsets.push(Buffer.byteLength(pdf, "latin1"));
-    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
-  });
-
-  const xrefOffset = Buffer.byteLength(pdf, "latin1");
-  pdf += `xref\n0 ${objects.length + 1}\n`;
-  pdf += "0000000000 65535 f \n";
-  offsets.slice(1).forEach((offset) => {
-    pdf += `${String(offset).padStart(10, "0")} 00000 n \n`;
-  });
-  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
-
-  return Buffer.from(pdf, "latin1");
+function drawPageBackground(page: PDFPage) {
+  page.drawRectangle({ x: 0, y: 0, width: PAGE_WIDTH, height: PAGE_HEIGHT, color: colors.background });
 }
 
-function wrapText(value: string, width: number, size: number) {
-  const maxChars = Math.max(18, Math.floor(width / (size * 0.52)));
+function ensureSpace(context: PdfContext, height: number) {
+  if (context.y - height >= MARGIN) return;
+  context.page = context.doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+  drawPageBackground(context.page);
+  context.y = PAGE_HEIGHT - MARGIN;
+}
+
+function drawText(context: PdfContext, text: string, x: number, size: number, color = colors.text) {
+  context.page.drawText(text, { x, y: context.y, size, font: context.font, color });
+}
+
+function section(context: PdfContext, title: string) {
+  ensureSpace(context, 42);
+  context.y -= 8;
+  drawText(context, title, MARGIN, 13, colors.navy);
+  context.y -= 15;
+  context.page.drawRectangle({ x: MARGIN, y: context.y, width: CONTENT_WIDTH, height: 1, color: colors.border });
+  context.y -= 17;
+}
+
+function field(context: PdfContext, label: string, value: string | null | undefined) {
+  const labelLines = wrapText(`${label}:`, LABEL_WIDTH, 8.5, context.font);
+  const valueLines = wrapText(displayValue(value), VALUE_WIDTH, 9.5, context.font);
+  const lineCount = Math.max(labelLines.length, valueLines.length);
+  const height = lineCount * LINE_HEIGHT + FIELD_GAP;
+  ensureSpace(context, height);
+
+  const startY = context.y;
+  labelLines.forEach((line, index) => {
+    context.page.drawText(line, {
+      x: MARGIN,
+      y: startY - index * LINE_HEIGHT,
+      size: 8.5,
+      font: context.font,
+      color: colors.muted,
+    });
+  });
+  valueLines.forEach((line, index) => {
+    context.page.drawText(line, {
+      x: VALUE_X,
+      y: startY - index * LINE_HEIGHT,
+      size: 9.5,
+      font: context.font,
+      color: colors.text,
+    });
+  });
+
+  context.y -= height;
+}
+
+function paragraph(context: PdfContext, value: string, size: number, color = colors.text) {
+  const lines = wrapText(value, CONTENT_WIDTH, size, context.font);
+  ensureSpace(context, lines.length * LINE_HEIGHT + FIELD_GAP);
+  lines.forEach((line) => {
+    drawText(context, line, MARGIN, size, color);
+    context.y -= LINE_HEIGHT;
+  });
+}
+
+function displayValue(value: string | null | undefined) {
+  const trimmed = value?.trim();
+  return trimmed || "-";
+}
+
+function wrapText(value: string, width: number, size: number, font: PDFFont) {
   const words = value.split(/\s+/).filter(Boolean);
   const lines: string[] = [];
   let current = "";
 
   words.forEach((word) => {
     const candidate = current ? `${current} ${word}` : word;
-    if (candidate.length > maxChars && current) {
-      lines.push(current);
-      current = word;
-    } else {
+    if (font.widthOfTextAtSize(candidate, size) <= width) {
       current = candidate;
+      return;
+    }
+    if (current) lines.push(current);
+    current = word;
+
+    while (font.widthOfTextAtSize(current, size) > width && current.length > 1) {
+      let splitAt = current.length - 1;
+      while (splitAt > 1 && font.widthOfTextAtSize(`${current.slice(0, splitAt)}-`, size) > width) splitAt -= 1;
+      lines.push(`${current.slice(0, splitAt)}-`);
+      current = current.slice(splitAt);
     }
   });
 
   if (current) lines.push(current);
   return lines.length ? lines : ["-"];
-}
-
-function escapePdfText(value: string) {
-  return value.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
-}
-
-function toAscii(value: string) {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/ł/g, "l")
-    .replace(/Ł/g, "L")
-    .replace(/[^\x20-\x7E]/g, "");
 }

@@ -5,9 +5,7 @@ import {
   extractWfirmaInvoiceLines,
   extractWfirmaInvoices,
   findWfirmaInvoices,
-  firstWfirmaInvoice,
   getWfirmaConfig,
-  getWfirmaInvoice,
   type WfirmaInvoice,
   type WfirmaInvoiceLine,
 } from "@/lib/wfirmaClient";
@@ -78,8 +76,7 @@ export async function POST(request: NextRequest) {
         if (Date.now() - startedAt > 20000) break;
         try {
           if (!isInvoiceDateInRange(invoice, range.dateFrom, range.dateTo)) continue;
-          const detailedInvoice = await loadDetailedInvoice(wfirma.config, invoice);
-          const savedId = await saveImportedInvoice(auth.admin, detailedInvoice, clients);
+          const savedId = await saveImportedInvoice(auth.admin, invoice, clients);
           if (savedId) imported.push(savedId);
         } catch (error) {
           failed.push({
@@ -93,8 +90,19 @@ export async function POST(request: NextRequest) {
       page += 1;
     }
   } catch (error) {
+    const message = error instanceof Error ? error.message : "Nie udało się pobrać faktur z wFirmy.";
+    if (message.includes("TOTAL REQUESTS LIMIT EXCEEDED")) {
+      return NextResponse.json(
+        {
+          error:
+            "wFirma odrzuciła import, bo został przekroczony limit zapytań API. Poczekaj na odnowienie limitu po stronie wFirmy i uruchom import ponownie.",
+        },
+        { status: 429 }
+      );
+    }
+
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Nie udało się pobrać faktur z wFirmy." },
+      { error: message },
       { status: 502 }
     );
   }
@@ -120,18 +128,6 @@ function importRange(payload: ImportPayload) {
   const year = Number(payload.year || new Date().getFullYear());
   if (!Number.isInteger(year) || year < 2000 || year > 2100) return null;
   return { dateFrom: `${year}-01-01`, dateTo: `${year}-12-31` };
-}
-
-async function loadDetailedInvoice(config: NonNullable<ReturnType<typeof getWfirmaConfig>["config"]>, invoice: WfirmaInvoice) {
-  const wfirmaId = stringify(invoice.id);
-  if (!wfirmaId) return invoice;
-
-  try {
-    const response = await getWfirmaInvoice(config, wfirmaId);
-    return firstWfirmaInvoice(response) || invoice;
-  } catch {
-    return invoice;
-  }
 }
 
 async function loadClientMatches(admin: SupabaseClient) {

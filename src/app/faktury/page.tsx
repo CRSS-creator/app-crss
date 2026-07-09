@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { CalendarClock, RotateCw } from "lucide-react";
+import { CalendarClock, DownloadCloud, RotateCw } from "lucide-react";
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
 import AppSelect from "@/components/AppSelect";
@@ -9,7 +9,8 @@ import { colors, radius, shadow } from "@/app/design";
 import {
   ensureSubscriptionInvoices,
   fetchInvoices,
-  queueInvoicesForWfirma,
+  importWfirmaInvoices,
+  sendInvoicesToWfirma,
   updateInvoice,
   type Invoice,
   type InvoiceCategory,
@@ -48,6 +49,7 @@ function InvoicesContent() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [importingWfirma, setImportingWfirma] = useState(false);
   const [queueing, setQueueing] = useState(false);
   const [sourceFilter, setSourceFilter] = useState(EMPTY_FILTER);
   const [query, setQuery] = useState("");
@@ -147,7 +149,7 @@ function InvoicesContent() {
     if (selectedInvoiceIds.length === 0) return;
 
     setQueueing(true);
-    const result = await queueInvoicesForWfirma(selectedInvoiceIds);
+    const result = await sendInvoicesToWfirma(selectedInvoiceIds);
     setQueueing(false);
 
     if (result.error) {
@@ -158,6 +160,25 @@ function InvoicesContent() {
 
     setSelectedInvoiceIds([]);
     await loadData();
+    if (result.data?.failed.length) {
+      alert(`Wysłano: ${result.data.sent}. Błędy: ${result.data.failed.length}. Szczegóły są w statusach faktur.`);
+    }
+  }
+
+  async function importInvoicesFromWfirma() {
+    const year = Number(invoiceMonth.slice(0, 4)) || new Date().getFullYear();
+    setImportingWfirma(true);
+    const result = await importWfirmaInvoices(year);
+    setImportingWfirma(false);
+
+    if (result.error) {
+      console.error("Błąd importu faktur z wFirmy:", result.error);
+      alert("Nie udało się zaimportować faktur z wFirmy.");
+      return;
+    }
+
+    await loadData();
+    alert(`Zaimportowano lub zaktualizowano faktury z ${year}: ${result.data?.imported || 0}.`);
   }
 
   async function changeInvoiceCategory(invoice: Invoice, category: InvoiceCategory) {
@@ -235,6 +256,15 @@ function InvoicesContent() {
           >
             <CalendarClock size={18} />
             {generating ? "Generowanie..." : "Wygeneruj miesiąc"}
+          </button>
+          <button
+            type="button"
+            style={secondaryButtonStyle}
+            disabled={importingWfirma}
+            onClick={importInvoicesFromWfirma}
+          >
+            <DownloadCloud size={18} />
+            {importingWfirma ? "Importowanie..." : "Importuj z wFirmy"}
           </button>
         </div>
       </section>

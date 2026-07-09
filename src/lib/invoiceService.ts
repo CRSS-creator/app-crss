@@ -154,6 +154,46 @@ export async function queueInvoicesForWfirma(invoiceIds: string[]) {
     .select(INVOICE_SELECT);
 }
 
+export async function importWfirmaInvoices(year: number) {
+  return callWfirmaEndpoint<{ imported: number; failed: { wfirmaId: string | null; error: string }[]; year: number }>(
+    "/api/faktury/wfirma/import",
+    { year }
+  );
+}
+
+export async function sendInvoicesToWfirma(invoiceIds: string[]) {
+  return callWfirmaEndpoint<{ sent: number; failed: { invoiceId: string; error: string }[] }>(
+    "/api/faktury/wfirma/send",
+    { invoiceIds }
+  );
+}
+
+async function callWfirmaEndpoint<T>(url: string, payload: unknown): Promise<{ data: T | null; error: Error | null }> {
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
+  if (sessionError || !token) {
+    return { data: null, error: new Error("Brak aktywnej sesji użytkownika.") };
+  }
+
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json().catch(() => null);
+    if (!response.ok) {
+      return { data: null, error: new Error(data?.error || "Operacja wFirmy nie powiodła się.") };
+    }
+    return { data: data as T, error: null };
+  } catch (error) {
+    return { data: null, error: error instanceof Error ? error : new Error("Operacja wFirmy nie powiodła się.") };
+  }
+}
+
 function normalizeInvoicePayload<T extends Partial<InvoicePayload>>(payload: T) {
   const normalized: Partial<InvoicePayload> = { ...payload };
 

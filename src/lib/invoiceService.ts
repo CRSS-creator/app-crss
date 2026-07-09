@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/supabaseClient";
 
-export type InvoiceStatus = "szkic" | "wystawiona" | "wyslana" | "oplacona" | "anulowana";
+export type InvoiceStatus = "szkic" | "wystawiona" | "wyslana" | "oplacona" | "przeterminowana" | "anulowana";
 export type InvoiceSource = "aplikacja" | "wfirma" | "import";
 export type InvoiceSyncStatus = "nie_wyslano" | "w_kolejce" | "wyslano" | "blad" | "zaimportowano";
 export type InvoiceType = "sprzedaz" | "korekta" | "proforma";
@@ -107,6 +107,8 @@ const INVOICE_SELECT = `
 `;
 
 export async function fetchInvoices() {
+  await supabase.rpc("mark_overdue_invoices");
+
   return supabase
     .from("faktury")
     .select(INVOICE_SELECT)

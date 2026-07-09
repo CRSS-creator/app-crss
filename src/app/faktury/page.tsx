@@ -424,6 +424,8 @@ function InvoicesContent() {
             <div style={detailsMetaStyle}>
               <span>{detailsInvoice.kontrahent_nazwa}</span>
               <span>{formatMonth(detailsInvoice.okres || detailsInvoice.data_wystawienia)}</span>
+              <span>Termin {formatDate(detailsInvoice.termin_platnosci)}</span>
+              <Badge tone={paymentStatusTone(detailsInvoice)}>{paymentStatusLabel(detailsInvoice)}</Badge>
               <strong>Netto {formatMoney(detailsInvoice.kwota_netto)}</strong>
             </div>
 
@@ -532,13 +534,19 @@ function formatDate(value: string | null) {
 function paymentStatusLabel(invoice: Invoice) {
   if (invoice.status === "oplacona") return "Zapłacona";
   if (invoice.status === "anulowana") return "Anulowana";
+  if (invoice.status === "przeterminowana" || isInvoiceOverdue(invoice)) return "Przeterminowana";
   return "Niezapłacona";
 }
 
 function paymentStatusTone(invoice: Invoice): "success" | "danger" | "neutral" {
   if (invoice.status === "oplacona") return "success";
-  if (invoice.status === "anulowana") return "danger";
+  if (invoice.status === "anulowana" || invoice.status === "przeterminowana" || isInvoiceOverdue(invoice)) return "danger";
   return "neutral";
+}
+
+function isInvoiceOverdue(invoice: Invoice) {
+  if (!invoice.termin_platnosci || ["oplacona", "anulowana"].includes(invoice.status)) return false;
+  return invoice.termin_platnosci < new Date().toISOString().slice(0, 10);
 }
 
 function formatQuantity(value: number | string | null | undefined) {
@@ -654,7 +662,7 @@ const overlayStyle: CSSProperties = { position: "fixed", inset: 0, background: "
 const detailsPanelStyle: CSSProperties = { width: "min(920px, 92vw)", height: "100%", background: colors.white, boxShadow: shadow.card, padding: "24px", overflowY: "auto", boxSizing: "border-box" };
 const detailsHeaderStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "flex-start", marginBottom: "18px" };
 const detailsTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "28px" };
-const detailsMetaStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) 170px 140px", gap: "12px", border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "12px", color: colors.text, fontWeight: 800, marginBottom: "16px" };
+const detailsMetaStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) repeat(4, auto)", alignItems: "center", gap: "12px", border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "12px", color: colors.text, fontWeight: 800, marginBottom: "16px" };
 const lineTableWrapperStyle: CSSProperties = { overflowX: "auto", border: `1px solid ${colors.border}`, borderRadius: radius.input };
 const lineTableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse", minWidth: "760px" };
 const invoiceDescriptionStyle: CSSProperties = { marginTop: "18px", border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "14px", background: colors.card };

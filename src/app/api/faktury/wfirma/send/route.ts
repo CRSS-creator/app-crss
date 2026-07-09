@@ -88,17 +88,20 @@ export async function POST(request: NextRequest) {
 
   for (const invoice of (invoices || []) as InvoiceRow[]) {
     try {
-      const response = await addWfirmaInvoice(wfirma.config, buildWfirmaInvoicePayload(invoice));
+      const issueDate = invoice.data_wystawienia || new Date().toISOString().slice(0, 10);
+      const defaultPaymentDate = addDays(issueDate, 7);
+      const response = await addWfirmaInvoice(wfirma.config, buildWfirmaInvoicePayload(invoice, issueDate, defaultPaymentDate));
       const wfirmaInvoice = firstWfirmaInvoice(response);
+      const wfirmaIssueDate = dateOnly(wfirmaInvoice?.date) || issueDate;
       await auth.admin
         .from("faktury")
         .update({
           numer: stringify(wfirmaInvoice?.fullnumber || wfirmaInvoice?.number) || invoice.numer,
           status: "wystawiona",
           zrodlo: "wfirma",
-          data_wystawienia: dateOnly(wfirmaInvoice?.date) || new Date().toISOString().slice(0, 10),
-          data_sprzedazy: dateOnly(wfirmaInvoice?.disposaldate) || invoice.data_sprzedazy || dateOnly(wfirmaInvoice?.date) || new Date().toISOString().slice(0, 10),
-          termin_platnosci: dateOnly(wfirmaInvoice?.payment_date) || invoice.termin_platnosci,
+          data_wystawienia: wfirmaIssueDate,
+          data_sprzedazy: dateOnly(wfirmaInvoice?.disposaldate) || invoice.data_sprzedazy || wfirmaIssueDate,
+          termin_platnosci: dateOnly(wfirmaInvoice?.payment_date) || invoice.termin_platnosci || addDays(wfirmaIssueDate, 7),
           wfirma_id: stringify(wfirmaInvoice?.id) || null,
           wfirma_url: wfirmaInvoice?.hash ? `https://wfirma.pl/faktury/podglad/${wfirmaInvoice.hash}` : null,
           wfirma_synced_at: new Date().toISOString(),
@@ -123,7 +126,7 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({ sent: sent.length, failed });
 }
 
-function buildWfirmaInvoicePayload(invoice: InvoiceRow) {
+function buildWfirmaInvoicePayload(invoice: InvoiceRow, issueDate: string, defaultPaymentDate: string) {
   const lines = [...(invoice.faktury_pozycje || [])].sort(
     (first, second) => Number(first.sort_order || 0) - Number(second.sort_order || 0)
   );
@@ -148,9 +151,9 @@ function buildWfirmaInvoicePayload(invoice: InvoiceRow) {
       email: invoice.kontrahent_email || undefined,
     },
     type: "normal",
-    date: invoice.data_wystawienia || new Date().toISOString().slice(0, 10),
-    disposaldate: invoice.data_sprzedazy || invoice.data_wystawienia || new Date().toISOString().slice(0, 10),
-    payment_date: invoice.termin_platnosci || undefined,
+    date: issueDate,
+    disposaldate: invoice.data_sprzedazy || issueDate,
+    payment_date: invoice.termin_platnosci || defaultPaymentDate,
     paymentmethod: "transfer",
     paymentstate: "unpaid",
     currency: invoice.waluta || "PLN",
@@ -180,4 +183,10 @@ function stringify(value: unknown) {
 function dateOnly(value: unknown) {
   const text = stringify(value);
   return /^\d{4}-\d{2}-\d{2}/.test(text) ? text.slice(0, 10) : null;
+}
+
+function addDays(value: string, days: number) {
+  const date = new Date(`${value}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
 }

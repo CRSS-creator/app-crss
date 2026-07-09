@@ -1,4 +1,4 @@
-import { readFileSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { PDFDocument, PDFFont, PDFPage, rgb } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
@@ -32,7 +32,7 @@ const FIELD_GAP = 10;
 export async function buildClientCardPdf(input: ClientCardPdfInput): Promise<Buffer> {
   const doc = await PDFDocument.create();
   doc.registerFontkit(fontkit);
-  const fontBytes = readFileSync(join(process.cwd(), "src/assets/fonts/NotoSans-Regular.ttf"));
+  const fontBytes = readClientCardFont();
   const font = await doc.embedFont(fontBytes, { subset: true });
   const context: PdfContext = { doc, page: doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]), font, y: PAGE_HEIGHT - MARGIN };
 
@@ -88,6 +88,16 @@ export async function buildClientCardPdf(input: ClientCardPdfInput): Promise<Buf
 
   const bytes = await doc.save();
   return Buffer.from(bytes);
+}
+
+function readClientCardFont() {
+  const paths = [
+    join(process.cwd(), "public/fonts/NotoSans-Regular.ttf"),
+    join(process.cwd(), "src/assets/fonts/NotoSans-Regular.ttf"),
+  ];
+  const fontPath = paths.find((path) => existsSync(path));
+  if (!fontPath) throw new Error("Brak fontu NotoSans-Regular.ttf do wygenerowania karty klienta.");
+  return readFileSync(fontPath);
 }
 
 const colors = {

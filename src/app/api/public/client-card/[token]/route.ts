@@ -5,6 +5,8 @@ import { validateClientCardFormData, type ClientCardFormData } from "@/lib/clien
 
 const CLIENT_DOCUMENTS_BUCKET = "klienci-dokumenty";
 
+export const runtime = "nodejs";
+
 type RouteContext = {
   params: Promise<{ token: string }>;
 };
@@ -111,6 +113,15 @@ export async function GET(_request: NextRequest, context: RouteContext) {
 }
 
 export async function POST(request: NextRequest, context: RouteContext) {
+  try {
+    return await saveClientCard(request, context);
+  } catch (error) {
+    console.error("Nieobsłużony błąd zapisu karty klienta:", error);
+    return NextResponse.json({ error: "Nie udało się zapisać formularza. Spróbuj ponownie za chwilę albo skontaktuj się z opiekunem." }, { status: 500 });
+  }
+}
+
+async function saveClientCard(request: NextRequest, context: RouteContext) {
   const { token } = await context.params;
   const result = await getForm(token);
   if (result.error) return result.error;

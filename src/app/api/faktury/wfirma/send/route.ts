@@ -88,6 +88,9 @@ export async function POST(request: NextRequest) {
 
   for (const invoice of (invoices || []) as InvoiceRow[]) {
     try {
+      const validationErrors = validateWfirmaInvoice(invoice);
+      if (validationErrors.length > 0) throw new Error(`Brakuje danych do wFirmy: ${validationErrors.join(", ")}.`);
+
       const issueDate = invoice.data_wystawienia || new Date().toISOString().slice(0, 10);
       const defaultPaymentDate = addDays(issueDate, 7);
       const response = await addWfirmaInvoice(wfirma.config, buildWfirmaInvoicePayload(invoice, issueDate, defaultPaymentDate));
@@ -124,6 +127,26 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json({ sent: sent.length, failed });
+}
+
+function validateWfirmaInvoice(invoice: InvoiceRow) {
+  const errors: string[] = [];
+  const lines = invoice.faktury_pozycje || [];
+
+  if (!invoice.kontrahent_nazwa?.trim()) errors.push("nazwa kontrahenta");
+  if (!invoice.kontrahent_nip?.trim()) errors.push("NIP kontrahenta");
+  if (lines.length === 0) errors.push("pozycje faktury");
+
+  lines.forEach((line, index) => {
+    const label = `pozycja ${index + 1}`;
+    if (!line.nazwa?.trim()) errors.push(`${label}: nazwa`);
+    if (!line.jednostka?.trim()) errors.push(`${label}: jednostka`);
+    if (!Number.isFinite(parseNumber(line.ilosc)) || parseNumber(line.ilosc) <= 0) errors.push(`${label}: ilość`);
+    if (!Number.isFinite(parseNumber(line.cena_netto)) || parseNumber(line.cena_netto) <= 0) errors.push(`${label}: cena netto`);
+    if (!normalizeVat(line.stawka_vat)) errors.push(`${label}: VAT`);
+  });
+
+  return errors;
 }
 
 function buildWfirmaInvoicePayload(invoice: InvoiceRow, issueDate: string, defaultPaymentDate: string) {
@@ -171,8 +194,12 @@ function normalizeVat(value: string | null) {
 }
 
 function decimal(value: number | string, precision: number) {
-  const parsed = Number(String(value).replace(",", "."));
+  const parsed = parseNumber(value);
   return (Number.isFinite(parsed) ? parsed : 0).toFixed(precision);
+}
+
+function parseNumber(value: number | string | null | undefined) {
+  return Number(String(value ?? "").replace(",", "."));
 }
 
 function stringify(value: unknown) {

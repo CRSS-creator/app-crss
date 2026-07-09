@@ -221,6 +221,8 @@ function InvoicesContent() {
     setDetailsInvoice((current) => (current?.id === invoice.id ? updatedInvoice : current));
   }
 
+  const detailsReadinessIssues = detailsInvoice ? wfirmaReadinessIssues(detailsInvoice) : [];
+
   return (
     <>
       <section style={headerStyle}>
@@ -421,13 +423,33 @@ function InvoicesContent() {
               </button>
             </div>
 
-            <div style={detailsMetaStyle}>
-              <span>{detailsInvoice.kontrahent_nazwa}</span>
-              <span>{formatMonth(detailsInvoice.okres || detailsInvoice.data_wystawienia)}</span>
-              <span>Termin {formatDate(detailsInvoice.termin_platnosci)}</span>
-              <Badge tone={paymentStatusTone(detailsInvoice)}>{paymentStatusLabel(detailsInvoice)}</Badge>
-              <strong>Netto {formatMoney(detailsInvoice.kwota_netto)}</strong>
+            <div style={detailsSummaryGridStyle}>
+              <DetailStat label="Kontrahent" value={detailsInvoice.kontrahent_nazwa} />
+              <DetailStat label="NIP" value={detailsInvoice.kontrahent_nip || "Brak NIP"} />
+              <DetailStat label="Okres" value={formatMonth(detailsInvoice.okres || detailsInvoice.data_wystawienia)} />
+              <DetailStat label="Data wystawienia" value={detailsInvoice.data_wystawienia ? formatDate(detailsInvoice.data_wystawienia) : "Po wysłaniu"} />
+              <DetailStat label="Termin płatności" value={formatDate(paymentDueDate(detailsInvoice))} />
+              <DetailStat label="Status" value={<Badge tone={paymentStatusTone(detailsInvoice)}>{paymentStatusLabel(detailsInvoice)}</Badge>} />
+              <DetailStat label="Netto" value={formatMoney(detailsInvoice.kwota_netto)} />
+              <DetailStat label="Brutto" value={formatMoney(detailsInvoice.kwota_brutto)} />
             </div>
+
+            <section style={wfirmaReadinessStyle}>
+              <div style={sectionTitleRowStyle}>
+                <h3 style={descriptionTitleStyle}>Dane do wFirmy</h3>
+                <Badge tone={detailsReadinessIssues.length === 0 ? "success" : "danger"}>
+                  {detailsReadinessIssues.length === 0 ? "Gotowe do wysłania" : "Do uzupełnienia"}
+                </Badge>
+              </div>
+              <div style={readinessGridStyle}>
+                <ReadinessItem ok={Boolean(detailsInvoice.kontrahent_nazwa?.trim())} label="Kontrahent" value={detailsInvoice.kontrahent_nazwa || "Brak"} />
+                <ReadinessItem ok={Boolean(detailsInvoice.kontrahent_nip?.trim())} label="NIP" value={detailsInvoice.kontrahent_nip || "Brak"} />
+                <ReadinessItem ok={invoiceLines(detailsInvoice).length > 0} label="Pozycje" value={`${invoiceLines(detailsInvoice).length} pozycji`} />
+                <ReadinessItem ok={invoiceLines(detailsInvoice).every(lineReadyForWfirma)} label="Ceny i VAT" value={invoiceLines(detailsInvoice).every(lineReadyForWfirma) ? "Kompletne" : "Sprawdź pozycje"} />
+                <ReadinessItem ok label="Data wystawienia" value={detailsInvoice.data_wystawienia ? formatDate(detailsInvoice.data_wystawienia) : "Ustawiana przy wysyłce"} />
+                <ReadinessItem ok label="Termin płatności" value={formatDate(paymentDueDate(detailsInvoice))} />
+              </div>
+            </section>
 
             <div style={lineTableWrapperStyle}>
               <table style={lineTableStyle}>
@@ -484,6 +506,27 @@ function Summary({ label, value }: { label: string; value: string | number }) {
   );
 }
 
+function DetailStat({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div style={detailStatStyle}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function ReadinessItem({ ok, label, value }: { ok: boolean; label: string; value: string }) {
+  return (
+    <div style={readinessItemStyle}>
+      <span style={ok ? readinessDotOkStyle : readinessDotErrorStyle} />
+      <div>
+        <span>{label}</span>
+        <strong>{value}</strong>
+      </div>
+    </div>
+  );
+}
+
 function Th({ children }: { children: React.ReactNode }) {
   return <th style={thStyle}>{children}</th>;
 }
@@ -531,6 +574,12 @@ function formatDate(value: string | null) {
   return new Intl.DateTimeFormat("pl-PL", { dateStyle: "short" }).format(new Date(`${value}T00:00:00`));
 }
 
+function paymentDueDate(invoice: Invoice) {
+  if (invoice.termin_platnosci) return invoice.termin_platnosci;
+  if (invoice.data_wystawienia) return addDays(invoice.data_wystawienia, 7);
+  return addDays(new Date().toISOString().slice(0, 10), 7);
+}
+
 function paymentStatusLabel(invoice: Invoice) {
   if (invoice.status === "oplacona") return "Zapłacona";
   if (invoice.status === "anulowana") return "Anulowana";
@@ -551,6 +600,30 @@ function isInvoiceOverdue(invoice: Invoice) {
 
 function formatQuantity(value: number | string | null | undefined) {
   return Number(value || 0).toLocaleString("pl-PL", { maximumFractionDigits: 2 });
+}
+
+function wfirmaReadinessIssues(invoice: Invoice) {
+  const issues: string[] = [];
+  const lines = invoiceLines(invoice);
+
+  if (!invoice.kontrahent_nazwa?.trim()) issues.push("brak kontrahenta");
+  if (!invoice.kontrahent_nip?.trim()) issues.push("brak NIP");
+  if (lines.length === 0) issues.push("brak pozycji");
+  lines.forEach((line, index) => {
+    if (!lineReadyForWfirma(line)) issues.push(`pozycja ${index + 1}`);
+  });
+
+  return issues;
+}
+
+function lineReadyForWfirma(line: InvoiceLine) {
+  return Boolean(
+    line.nazwa?.trim() &&
+      line.jednostka?.trim() &&
+      Number(line.ilosc || 0) > 0 &&
+      Number(line.cena_netto || 0) > 0 &&
+      String(line.stawka_vat || "").trim()
+  );
 }
 
 function syncLabel(status: InvoiceSyncStatus) {
@@ -596,6 +669,12 @@ function addMonths(value: string, months: number) {
   const targetYear = Math.floor(monthIndex / 12);
   const targetMonth = (monthIndex % 12) + 1;
   return `${targetYear}-${String(targetMonth).padStart(2, "0")}-01`;
+}
+
+function addDays(value: string, days: number) {
+  const date = new Date(`${value}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
 }
 
 function invoiceNumberParts(value: string | null) {
@@ -664,7 +743,14 @@ const overlayStyle: CSSProperties = { position: "fixed", inset: 0, background: "
 const detailsPanelStyle: CSSProperties = { width: "min(920px, 92vw)", height: "100%", background: colors.white, boxShadow: shadow.card, padding: "24px", overflowY: "auto", boxSizing: "border-box" };
 const detailsHeaderStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "flex-start", marginBottom: "18px" };
 const detailsTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "28px" };
-const detailsMetaStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) repeat(4, auto)", alignItems: "center", gap: "12px", border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "12px", color: colors.text, fontWeight: 800, marginBottom: "16px" };
+const detailsSummaryGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(145px, 1fr))", gap: "10px", marginBottom: "16px" };
+const detailStatStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "10px 12px", display: "grid", gap: "5px", minHeight: "64px", alignContent: "center", color: colors.text };
+const wfirmaReadinessStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "14px", marginBottom: "16px", background: colors.card };
+const sectionTitleRowStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", marginBottom: "12px" };
+const readinessGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "10px" };
+const readinessItemStyle: CSSProperties = { display: "grid", gridTemplateColumns: "10px minmax(0, 1fr)", gap: "9px", alignItems: "center", color: colors.text };
+const readinessDotOkStyle: CSSProperties = { width: "9px", height: "9px", borderRadius: "999px", background: colors.success };
+const readinessDotErrorStyle: CSSProperties = { ...readinessDotOkStyle, background: colors.danger };
 const lineTableWrapperStyle: CSSProperties = { overflowX: "auto", border: `1px solid ${colors.border}`, borderRadius: radius.input };
 const lineTableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse", minWidth: "760px" };
 const invoiceDescriptionStyle: CSSProperties = { marginTop: "18px", border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "14px", background: colors.card };

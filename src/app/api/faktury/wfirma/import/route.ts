@@ -51,33 +51,40 @@ export async function POST(request: NextRequest) {
   let page = 1;
   const limit = 100;
 
-  while (page <= 100) {
-    const response = await findWfirmaInvoices({
-      config: wfirma.config,
-      dateFrom: `${year}-01-01`,
-      dateTo: `${year}-12-31`,
-      page,
-      limit,
-    });
-    const invoices = extractWfirmaInvoices(response);
-    if (invoices.length === 0) break;
+  try {
+    while (page <= 100) {
+      const response = await findWfirmaInvoices({
+        config: wfirma.config,
+        dateFrom: `${year}-01-01`,
+        dateTo: `${year}-12-31`,
+        page,
+        limit,
+      });
+      const invoices = extractWfirmaInvoices(response);
+      if (invoices.length === 0) break;
 
-    for (const invoice of invoices) {
-      try {
-        if (!isInvoiceDateInRange(invoice, `${year}-01-01`, `${year}-12-31`)) continue;
-        const detailedInvoice = await loadDetailedInvoice(wfirma.config, invoice);
-        const savedId = await saveImportedInvoice(auth.admin, detailedInvoice, clients);
-        if (savedId) imported.push(savedId);
-      } catch (error) {
-        failed.push({
-          wfirmaId: stringify(invoice.id),
-          error: error instanceof Error ? error.message : "Nieznany błąd importu.",
-        });
+      for (const invoice of invoices) {
+        try {
+          if (!isInvoiceDateInRange(invoice, `${year}-01-01`, `${year}-12-31`)) continue;
+          const detailedInvoice = await loadDetailedInvoice(wfirma.config, invoice);
+          const savedId = await saveImportedInvoice(auth.admin, detailedInvoice, clients);
+          if (savedId) imported.push(savedId);
+        } catch (error) {
+          failed.push({
+            wfirmaId: stringify(invoice.id),
+            error: error instanceof Error ? error.message : "Nieznany błąd importu.",
+          });
+        }
       }
-    }
 
-    if (invoices.length < limit) break;
-    page += 1;
+      if (invoices.length < limit) break;
+      page += 1;
+    }
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Nie udało się pobrać faktur z wFirmy." },
+      { status: 502 }
+    );
   }
 
   return NextResponse.json({

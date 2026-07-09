@@ -113,10 +113,10 @@ export async function findWfirmaInvoices(params: {
       parameters: {
         order: { desc: "Invoice.id" },
         conditions: {
-          condition: [
-            { field: "date", operator: "gte", value: params.dateFrom },
-            { field: "date", operator: "lte", value: params.dateTo },
-          ],
+          condition: {
+            0: { field: "date", operator: "gte", value: params.dateFrom },
+            1: { field: "date", operator: "lte", value: params.dateTo },
+          },
         },
         page: params.page || 1,
         limit: params.limit || 100,

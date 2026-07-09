@@ -184,13 +184,23 @@ async function callWfirmaEndpoint<T>(url: string, payload: unknown): Promise<{ d
       },
       body: JSON.stringify(payload),
     });
-    const data = await response.json().catch(() => null);
+    const text = await response.text();
+    const data = parseJson(text);
     if (!response.ok) {
-      return { data: null, error: new Error(data?.error || "Operacja wFirmy nie powiodła się.") };
+      const details = data?.error || text.slice(0, 500) || `HTTP ${response.status}`;
+      return { data: null, error: new Error(details) };
     }
     return { data: data as T, error: null };
   } catch (error) {
     return { data: null, error: error instanceof Error ? error : new Error("Operacja wFirmy nie powiodła się.") };
+  }
+}
+
+function parseJson(value: string) {
+  try {
+    return value ? JSON.parse(value) : null;
+  } catch {
+    return null;
   }
 }
 

@@ -582,7 +582,15 @@ const filtersStyle: CSSProperties = { display: "grid", gridTemplateColumns: "min
 const searchStyle: CSSProperties = { ...inputStyle };
 const filterSelectStyle: CSSProperties = { background: colors.white };
 const categorySelectStyle: CSSProperties = { width: "150px", background: colors.white, minHeight: "34px", padding: "7px 10px" };
-const periodInputStyle: CSSProperties = { ...inputStyle, width: "140px", minHeight: "34px", padding: "7px 10px" };
+const periodInputStyle: CSSProperties = {
+  ...inputStyle,
+  width: "176px",
+  minWidth: "176px",
+  minHeight: "38px",
+  padding: "7px 12px",
+  fontSize: "14px",
+  fontVariantNumeric: "tabular-nums",
+};
 const tableWrapperStyle: CSSProperties = { overflowX: "auto" };
 const tableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse", minWidth: "1280px" };
 const thStyle: CSSProperties = { textAlign: "left", padding: "12px 10px", borderBottom: `1px solid ${colors.border}`, color: colors.muted, fontSize: "12px", textTransform: "uppercase", letterSpacing: 0 };

@@ -317,7 +317,7 @@ function InvoicesContent() {
             <div style={detailsMetaStyle}>
               <span>{detailsInvoice.kontrahent_nazwa}</span>
               <span>{formatMonth(detailsInvoice.okres || detailsInvoice.data_wystawienia)}</span>
-              <strong>{formatMoney(detailsInvoice.kwota_brutto)}</strong>
+              <strong>Netto {formatMoney(detailsInvoice.kwota_netto)}</strong>
             </div>
 
             <div style={lineTableWrapperStyle}>

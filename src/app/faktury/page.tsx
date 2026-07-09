@@ -65,25 +65,27 @@ function InvoicesContent() {
 
   const filteredInvoices = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    return invoices.filter((invoice) => {
-      const matchesSource = sourceFilter === EMPTY_FILTER || invoice.zrodlo === sourceFilter;
-      const matchesIssueMonth = Boolean(invoice.data_wystawienia && toMonthInput(invoice.data_wystawienia) === invoiceMonth);
-      const haystack = [
-        invoice.numer,
-        invoice.kontrahent_nazwa,
-        invoice.kontrahent_nip,
-        invoice.klienci?.nazwa,
-        invoice.wfirma_id,
-        invoice.data_wystawienia,
-        invoice.okres,
-        paymentStatusLabel(invoice),
-        categoryLabel(invoice.kategoria),
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-      return matchesSource && matchesIssueMonth && (!normalizedQuery || haystack.includes(normalizedQuery));
-    });
+    return invoices
+      .filter((invoice) => {
+        const matchesSource = sourceFilter === EMPTY_FILTER || invoice.zrodlo === sourceFilter;
+        const matchesIssueMonth = Boolean(invoice.data_wystawienia && toMonthInput(invoice.data_wystawienia) === invoiceMonth);
+        const haystack = [
+          invoice.numer,
+          invoice.kontrahent_nazwa,
+          invoice.kontrahent_nip,
+          invoice.klienci?.nazwa,
+          invoice.wfirma_id,
+          invoice.data_wystawienia,
+          invoice.okres,
+          paymentStatusLabel(invoice),
+          categoryLabel(invoice.kategoria),
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return matchesSource && matchesIssueMonth && (!normalizedQuery || haystack.includes(normalizedQuery));
+      })
+      .sort(compareInvoicesByNumber);
   }, [invoices, invoiceMonth, query, sourceFilter]);
 
   const totals = useMemo(() => {
@@ -552,6 +554,26 @@ function canQueueForWfirma(invoice: Invoice) {
 
 function invoiceNumberLabel(invoice: Invoice) {
   return invoice.numer || "Czeka na numer";
+}
+
+function compareInvoicesByNumber(first: Invoice, second: Invoice) {
+  const firstParts = invoiceNumberParts(first.numer);
+  const secondParts = invoiceNumberParts(second.numer);
+  const maxLength = Math.max(firstParts.length, secondParts.length);
+
+  for (let index = 0; index < maxLength; index += 1) {
+    const firstValue = firstParts[index] ?? Number.MAX_SAFE_INTEGER;
+    const secondValue = secondParts[index] ?? Number.MAX_SAFE_INTEGER;
+    if (firstValue !== secondValue) return firstValue - secondValue;
+  }
+
+  const dateCompare = String(first.data_wystawienia || "").localeCompare(String(second.data_wystawienia || ""));
+  if (dateCompare !== 0) return dateCompare;
+  return invoiceNumberLabel(first).localeCompare(invoiceNumberLabel(second), "pl", { numeric: true, sensitivity: "base" });
+}
+
+function invoiceNumberParts(value: string | null) {
+  return (value?.match(/\d+/g) || []).map(Number);
 }
 
 function invoiceLines(invoice: Invoice) {

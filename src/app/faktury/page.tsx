@@ -338,7 +338,7 @@ function InvoicesContent() {
                 </tr>
               ) : (
                 filteredInvoices.map((invoice) => (
-                  <tr key={invoice.id} style={rowStyle}>
+                  <tr key={invoice.id} style={invoice.numer ? rowStyle : pendingInvoiceRowStyle}>
                     <Td>
                       <input
                         type="checkbox"
@@ -557,6 +557,9 @@ function invoiceNumberLabel(invoice: Invoice) {
 }
 
 function compareInvoicesByNumber(first: Invoice, second: Invoice) {
+  const pendingCompare = Number(Boolean(first.numer)) - Number(Boolean(second.numer));
+  if (pendingCompare !== 0) return pendingCompare;
+
   const firstParts = invoiceNumberParts(first.numer);
   const secondParts = invoiceNumberParts(second.numer);
   const maxLength = Math.max(firstParts.length, secondParts.length);
@@ -619,6 +622,7 @@ const thStyle: CSSProperties = { textAlign: "left", padding: "12px 10px", border
 const tdStyle: CSSProperties = { padding: "13px 10px", borderBottom: `1px solid ${colors.border}`, color: colors.text, verticalAlign: "middle" };
 const amountCellStyle: CSSProperties = { whiteSpace: "nowrap", minWidth: "118px", fontSize: "15px", fontVariantNumeric: "tabular-nums" };
 const rowStyle: CSSProperties = { background: colors.white };
+const pendingInvoiceRowStyle: CSSProperties = { background: "#fff8e7" };
 const smallStyle: CSSProperties = { display: "block", marginTop: "5px", color: colors.muted, fontSize: "12px", fontWeight: 650 };
 const badgeBaseStyle: CSSProperties = { display: "inline-flex", borderRadius: radius.badge, padding: "7px 10px", fontSize: "12px", fontWeight: 900, whiteSpace: "nowrap" };
 const successBadgeStyle: CSSProperties = { ...badgeBaseStyle, background: "#dcfce7", color: colors.success };

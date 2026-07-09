@@ -154,7 +154,7 @@ function InvoicesContent() {
 
     if (result.error) {
       console.error("Błąd przekazania faktur do wFirmy:", result.error);
-      alert("Nie udało się przekazać zaznaczonych faktur do wFirmy.");
+      alert(`Nie udało się przekazać zaznaczonych faktur do wFirmy.\n\n${result.error.message}`);
       return;
     }
 
@@ -173,7 +173,7 @@ function InvoicesContent() {
 
     if (result.error) {
       console.error("Błąd importu faktur z wFirmy:", result.error);
-      alert("Nie udało się zaimportować faktur z wFirmy.");
+      alert(`Nie udało się zaimportować faktur z wFirmy.\n\n${result.error.message}`);
       return;
     }
 

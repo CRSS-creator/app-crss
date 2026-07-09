@@ -10,7 +10,9 @@ import {
   ensureSubscriptionInvoices,
   fetchInvoices,
   queueInvoicesForWfirma,
+  updateInvoice,
   type Invoice,
+  type InvoiceCategory,
   type InvoiceSyncStatus,
 } from "@/lib/invoiceService";
 
@@ -26,6 +28,10 @@ const SYNC_OPTIONS = [
   { value: "wyslano", label: "Wysłano" },
   { value: "blad", label: "Błąd" },
   { value: "zaimportowano", label: "Zaimportowano" },
+] as const;
+const CATEGORY_OPTIONS = [
+  { value: "standardowa", label: "Standardowa" },
+  { value: "dodatkowa", label: "Dodatkowa" },
 ] as const;
 
 export default function InvoicesPage() {
@@ -48,6 +54,7 @@ function InvoicesContent() {
   const [invoiceMonth, setInvoiceMonth] = useState(() => currentMonthInput());
   const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<string[]>([]);
   const [detailsInvoice, setDetailsInvoice] = useState<Invoice | null>(null);
+  const [savingCategoryId, setSavingCategoryId] = useState<string | null>(null);
 
   useEffect(() => {
     void loadData({ generateCurrentMonth: true });
@@ -63,6 +70,9 @@ function InvoicesContent() {
         invoice.kontrahent_nip,
         invoice.klienci?.nazwa,
         invoice.wfirma_id,
+        invoice.data_wystawienia,
+        paymentStatusLabel(invoice),
+        categoryLabel(invoice.kategoria),
       ]
         .filter(Boolean)
         .join(" ")
@@ -146,6 +156,25 @@ function InvoicesContent() {
 
     setSelectedInvoiceIds([]);
     await loadData();
+  }
+
+  async function changeInvoiceCategory(invoice: Invoice, category: InvoiceCategory) {
+    if (invoice.kategoria === category) return;
+
+    setSavingCategoryId(invoice.id);
+    const result = await updateInvoice(invoice.id, { kategoria: category });
+    setSavingCategoryId(null);
+
+    if (result.error) {
+      console.error("Błąd zapisu kategorii faktury:", result.error);
+      alert("Nie udało się zapisać kategorii faktury.");
+      return;
+    }
+
+    setInvoices((current) =>
+      current.map((item) => (item.id === invoice.id ? ({ ...item, kategoria: category } as Invoice) : item))
+    );
+    setDetailsInvoice((current) => (current?.id === invoice.id ? ({ ...current, kategoria: category } as Invoice) : current));
   }
 
   return (
@@ -237,7 +266,10 @@ function InvoicesContent() {
                 </Th>
                 <Th>Numer</Th>
                 <Th>Kontrahent</Th>
+                <Th>Data wystawienia</Th>
                 <Th>Okres</Th>
+                <Th>Status</Th>
+                <Th>Kategoria</Th>
                 <Th>Kwota</Th>
                 <Th>wFirma</Th>
                 <Th>Szczegóły</Th>
@@ -246,11 +278,11 @@ function InvoicesContent() {
             <tbody>
               {loading ? (
                 <tr>
-                  <Td colSpan={7}>Ładowanie faktur...</Td>
+                  <Td colSpan={10}>Ładowanie faktur...</Td>
                 </tr>
               ) : filteredInvoices.length === 0 ? (
                 <tr>
-                  <Td colSpan={7}>Brak faktur dla wybranych filtrów.</Td>
+                  <Td colSpan={10}>Brak faktur dla wybranych filtrów.</Td>
                 </tr>
               ) : (
                 filteredInvoices.map((invoice) => (
@@ -272,7 +304,20 @@ function InvoicesContent() {
                       {invoice.kontrahent_nazwa}
                       <Small>{invoice.kontrahent_nip || invoice.klienci?.nazwa || "Brak NIP"}</Small>
                     </Td>
+                    <Td>{formatDate(invoice.data_wystawienia)}</Td>
                     <Td>{formatMonth(invoice.okres || invoice.data_wystawienia)}</Td>
+                    <Td>
+                      <Badge tone={paymentStatusTone(invoice)}>{paymentStatusLabel(invoice)}</Badge>
+                    </Td>
+                    <Td>
+                      <AppSelect
+                        style={categorySelectStyle}
+                        value={invoice.kategoria || "standardowa"}
+                        options={CATEGORY_OPTIONS}
+                        onChange={(value) => changeInvoiceCategory(invoice, value as InvoiceCategory)}
+                        disabled={savingCategoryId === invoice.id}
+                      />
+                    </Td>
                     <Td strong>{formatMoney(invoice.kwota_netto)}</Td>
                     <Td>
                       <Badge
@@ -392,6 +437,10 @@ function Badge({ children, tone }: { children: React.ReactNode; tone: "success" 
   return <span style={style}>{children}</span>;
 }
 
+function categoryLabel(category: InvoiceCategory | null | undefined) {
+  return CATEGORY_OPTIONS.find((item) => item.value === (category || "standardowa"))?.label || "Standardowa";
+}
+
 function currentMonthInput() {
   return new Date().toISOString().slice(0, 7);
 }
@@ -407,6 +456,23 @@ function formatMoney(value: number | string | null | undefined) {
 function formatMonth(value: string | null) {
   if (!value) return "Brak";
   return new Intl.DateTimeFormat("pl-PL", { month: "long", year: "numeric" }).format(new Date(`${value}T00:00:00`));
+}
+
+function formatDate(value: string | null) {
+  if (!value) return "Brak";
+  return new Intl.DateTimeFormat("pl-PL", { dateStyle: "short" }).format(new Date(`${value}T00:00:00`));
+}
+
+function paymentStatusLabel(invoice: Invoice) {
+  if (invoice.status === "oplacona") return "Zapłacona";
+  if (invoice.status === "anulowana") return "Anulowana";
+  return "Niezapłacona";
+}
+
+function paymentStatusTone(invoice: Invoice): "success" | "danger" | "neutral" {
+  if (invoice.status === "oplacona") return "success";
+  if (invoice.status === "anulowana") return "danger";
+  return "neutral";
 }
 
 function formatQuantity(value: number | string | null | undefined) {
@@ -452,8 +518,9 @@ const smallButtonStyle: CSSProperties = { ...secondaryButtonStyle, minHeight: "3
 const filtersStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(220px, 1fr) 170px", gap: "10px", marginBottom: "14px" };
 const searchStyle: CSSProperties = { ...inputStyle };
 const filterSelectStyle: CSSProperties = { background: colors.white };
+const categorySelectStyle: CSSProperties = { width: "150px", background: colors.white, minHeight: "34px", padding: "7px 10px" };
 const tableWrapperStyle: CSSProperties = { overflowX: "auto" };
-const tableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse", minWidth: "900px" };
+const tableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse", minWidth: "1220px" };
 const thStyle: CSSProperties = { textAlign: "left", padding: "12px 10px", borderBottom: `1px solid ${colors.border}`, color: colors.muted, fontSize: "12px", textTransform: "uppercase", letterSpacing: 0 };
 const tdStyle: CSSProperties = { padding: "13px 10px", borderBottom: `1px solid ${colors.border}`, color: colors.text, verticalAlign: "middle" };
 const rowStyle: CSSProperties = { background: colors.white };

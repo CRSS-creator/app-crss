@@ -4,6 +4,7 @@ export type InvoiceStatus = "szkic" | "wystawiona" | "wyslana" | "oplacona" | "a
 export type InvoiceSource = "aplikacja" | "wfirma" | "import";
 export type InvoiceSyncStatus = "nie_wyslano" | "w_kolejce" | "wyslano" | "blad" | "zaimportowano";
 export type InvoiceType = "sprzedaz" | "korekta" | "proforma";
+export type InvoiceCategory = "standardowa" | "dodatkowa";
 
 export type Invoice = {
   id: string;
@@ -13,6 +14,7 @@ export type Invoice = {
   numer: string | null;
   typ: InvoiceType;
   status: InvoiceStatus;
+  kategoria: InvoiceCategory;
   zrodlo: InvoiceSource;
   data_wystawienia: string | null;
   data_sprzedazy: string | null;
@@ -60,6 +62,7 @@ export type InvoicePayload = {
   numer?: string | null;
   typ?: InvoiceType;
   status?: InvoiceStatus;
+  kategoria?: InvoiceCategory;
   zrodlo?: InvoiceSource;
   data_wystawienia?: string | null;
   data_sprzedazy?: string | null;

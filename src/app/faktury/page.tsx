@@ -167,9 +167,8 @@ function InvoicesContent() {
   }
 
   async function importInvoicesFromWfirma() {
-    const year = Number(invoiceMonth.slice(0, 4)) || new Date().getFullYear();
     setImportingWfirma(true);
-    const result = await importWfirmaInvoices(year);
+    const result = await importWfirmaInvoices(invoiceMonth);
     setImportingWfirma(false);
 
     if (result.error) {
@@ -179,7 +178,7 @@ function InvoicesContent() {
     }
 
     await loadData();
-    alert(`Zaimportowano lub zaktualizowano faktury z ${year}: ${result.data?.imported || 0}.`);
+    alert(`Zaimportowano lub zaktualizowano faktury za ${formatMonth(monthToDate(invoiceMonth))}: ${result.data?.imported || 0}.`);
   }
 
   async function changeInvoiceCategory(invoice: Invoice, category: InvoiceCategory) {

@@ -154,10 +154,15 @@ export async function queueInvoicesForWfirma(invoiceIds: string[]) {
     .select(INVOICE_SELECT);
 }
 
-export async function importWfirmaInvoices(year: number) {
-  return callWfirmaEndpoint<{ imported: number; failed: { wfirmaId: string | null; error: string }[]; year: number }>(
+export async function importWfirmaInvoices(month: string) {
+  return callWfirmaEndpoint<{
+    imported: number;
+    failed: { wfirmaId: string | null; error: string }[];
+    dateFrom: string;
+    dateTo: string;
+  }>(
     "/api/faktury/wfirma/import",
-    { year }
+    { month }
   );
 }
 

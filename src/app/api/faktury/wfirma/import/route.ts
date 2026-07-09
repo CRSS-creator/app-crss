@@ -15,6 +15,7 @@ import {
 const ALLOWED_ROLES = new Set(["owner", "admin"]);
 
 type ImportPayload = {
+  month?: string;
   year?: number;
 };
 
@@ -40,23 +41,23 @@ export async function POST(request: NextRequest) {
     payload = {};
   }
 
-  const year = Number(payload.year || new Date().getFullYear());
-  if (!Number.isInteger(year) || year < 2000 || year > 2100) {
-    return NextResponse.json({ error: "Nieprawidłowy rok importu." }, { status: 400 });
-  }
+  const range = importRange(payload);
+  if (!range) return NextResponse.json({ error: "Nieprawidłowy miesiąc importu." }, { status: 400 });
 
   const clients = await loadClientMatches(auth.admin);
   const imported: string[] = [];
   const failed: { wfirmaId: string | null; error: string }[] = [];
   let page = 1;
-  const limit = 100;
+  const limit = 25;
+  const startedAt = Date.now();
 
   try {
-    while (page <= 100) {
+    while (page <= 20) {
+      if (Date.now() - startedAt > 20000) break;
       const response = await findWfirmaInvoices({
         config: wfirma.config,
-        dateFrom: `${year}-01-01`,
-        dateTo: `${year}-12-31`,
+        dateFrom: range.dateFrom,
+        dateTo: range.dateTo,
         page,
         limit,
       });
@@ -64,8 +65,9 @@ export async function POST(request: NextRequest) {
       if (invoices.length === 0) break;
 
       for (const invoice of invoices) {
+        if (Date.now() - startedAt > 20000) break;
         try {
-          if (!isInvoiceDateInRange(invoice, `${year}-01-01`, `${year}-12-31`)) continue;
+          if (!isInvoiceDateInRange(invoice, range.dateFrom, range.dateTo)) continue;
           const detailedInvoice = await loadDetailedInvoice(wfirma.config, invoice);
           const savedId = await saveImportedInvoice(auth.admin, detailedInvoice, clients);
           if (savedId) imported.push(savedId);
@@ -90,8 +92,24 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({
     imported: imported.length,
     failed,
-    year,
+    dateFrom: range.dateFrom,
+    dateTo: range.dateTo,
   });
+}
+
+function importRange(payload: ImportPayload) {
+  const month = stringify(payload.month);
+  if (/^\d{4}-\d{2}$/.test(month)) {
+    const dateFrom = `${month}-01`;
+    const nextMonth = new Date(`${dateFrom}T00:00:00.000Z`);
+    nextMonth.setUTCMonth(nextMonth.getUTCMonth() + 1);
+    const dateTo = new Date(nextMonth.getTime() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    return { dateFrom, dateTo };
+  }
+
+  const year = Number(payload.year || new Date().getFullYear());
+  if (!Number.isInteger(year) || year < 2000 || year > 2100) return null;
+  return { dateFrom: `${year}-01-01`, dateTo: `${year}-12-31` };
 }
 
 async function loadDetailedInvoice(config: NonNullable<ReturnType<typeof getWfirmaConfig>["config"]>, invoice: WfirmaInvoice) {

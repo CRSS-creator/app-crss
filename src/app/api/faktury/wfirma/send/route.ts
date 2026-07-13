@@ -290,7 +290,7 @@ function buildWfirmaInvoicePayload(
           city: contractorAddress?.city || undefined,
           street: contractorAddress?.street || undefined,
         },
-    type: "normal",
+    type: "normal_draft",
     date: issueDate,
     disposaldate: invoice.data_sprzedazy || issueDate,
     payment_date: defaultPaymentDate,

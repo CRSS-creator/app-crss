@@ -277,7 +277,7 @@ function buildWfirmaInvoicePayload(
           price: decimal(line.cena_netto || 0, 2),
           unit: line.jednostka || "szt.",
           vat: normalizeVat(line.stawka_vat),
-          gtu: "12",
+          gtu: 12,
         },
       },
     ])
@@ -306,6 +306,7 @@ function buildWfirmaInvoicePayload(
     paymentstate: "unpaid",
     currency: invoice.waluta || "PLN",
     price_type: "netto",
+    gtu: 12,
     description: invoice.opis || undefined,
     invoicecontents,
   };

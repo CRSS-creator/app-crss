@@ -3,18 +3,18 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 type WebhookPayload = Record<string, unknown>;
 
-export async function GET() {
-  return webhookKeyResponse();
+export async function GET(request: NextRequest) {
+  return webhookKeyResponse(request);
 }
 
 export async function POST(request: NextRequest) {
   const payload = await parseWebhookPayload(request);
-  if (Object.keys(payload).length === 0) return webhookKeyResponse();
+  if (Object.keys(payload).length === 0) return webhookKeyResponse(request);
 
   const identifiers = extractInvoiceIdentifiers(payload);
   const admin = createAdminClient();
   if (!admin) {
-    return NextResponse.json({ error: "Brak konfiguracji Supabase.", ...webhookKeyPayload() }, { status: 500 });
+    return NextResponse.json({ error: "Brak konfiguracji Supabase.", ...webhookKeyPayload(request) }, { status: 500 });
   }
 
   if (!identifiers.invoiceNumber && identifiers.wfirmaIds.length === 0) {
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
       ok: true,
       skipped: true,
       reason: "Webhook nie zawiera numeru faktury ani ID faktury z wFirmy.",
-      ...webhookKeyPayload(),
+      ...webhookKeyPayload(request),
     });
   }
 
@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json(
-      { error: "Nie udało się zaktualizować statusu faktury.", details: error.message, ...webhookKeyPayload() },
+      { error: "Nie udało się zaktualizować statusu faktury.", details: error.message, ...webhookKeyPayload(request) },
       { status: 500 }
     );
   }
@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
       reason: "Nie znaleziono faktury pasującej do webhooka.",
       invoiceNumber: identifiers.invoiceNumber,
       wfirmaIds: identifiers.wfirmaIds,
-      ...webhookKeyPayload(),
+      ...webhookKeyPayload(request),
     });
   }
 
@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
     invoiceId: data.id,
     invoiceNumber: identifiers.invoiceNumber,
     wfirmaIds: identifiers.wfirmaIds,
-    ...webhookKeyPayload(),
+    ...webhookKeyPayload(request),
   });
 }
 
@@ -104,11 +104,11 @@ async function logWebhookEvent(
   });
 }
 
-function webhookKeyResponse() {
-  const payload = webhookKeyPayload();
+function webhookKeyResponse(request: NextRequest) {
+  const payload = webhookKeyPayload(request);
   if (!payload.webhook_key) {
     return NextResponse.json(
-      { error: "Brak konfiguracji klucza webhooka. Uzupełnij WFIRMA_WEBHOOK_KEY." },
+      { error: `Brak konfiguracji klucza webhooka. Uzupełnij ${webhookKeyEnvName(request)}.` },
       { status: 500 }
     );
   }
@@ -116,9 +116,18 @@ function webhookKeyResponse() {
   return NextResponse.json(payload);
 }
 
-function webhookKeyPayload() {
-  const webhookKey = process.env.WFIRMA_WEBHOOK_KEY?.trim();
+function webhookKeyPayload(request: NextRequest) {
+  const webhookKey =
+    process.env[webhookKeyEnvName(request)]?.trim() ||
+    process.env.WFIRMA_WEBHOOK_KEY?.trim();
   return webhookKey ? { webhook_key: webhookKey } : {};
+}
+
+function webhookKeyEnvName(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+  if (pathname.includes("/dodanie-platnosci")) return "WFIRMA_WEBHOOK_KEY_DODANIE_PLATNOSCI";
+  if (pathname.includes("/modyfikacja-faktury")) return "WFIRMA_WEBHOOK_KEY_MODYFIKACJA_FAKTURY";
+  return "WFIRMA_WEBHOOK_KEY";
 }
 
 function createAdminClient() {

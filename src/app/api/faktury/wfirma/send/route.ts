@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
       const defaultPaymentDate = addDays(issueDate, 7);
       const contractorAddress = await getContractorAddress(auth.admin, invoice);
       if (!contractorAddress?.zip || !contractorAddress.city) {
-        throw new Error("Brakuje adresu kontrahenta do wFirmy. Uzupełnij w karcie klienta adres działalności w formacie np. ul. Przykładowa 1, 63-100 Śrem.");
+        throw new Error("Brakuje adresu kontrahenta do wFirmy. Uzupełnij w szczegółach klienta pole Adres działalności w formacie np. ul. Przykładowa 1, 63-100 Śrem.");
       }
       const response = await addWfirmaInvoice(wfirma.config, buildWfirmaInvoicePayload(invoice, issueDate, defaultPaymentDate, contractorAddress));
       const wfirmaInvoice = firstWfirmaInvoice(response);
@@ -222,6 +222,14 @@ function validateWfirmaInvoice(invoice: InvoiceRow) {
 
 async function getContractorAddress(admin: SupabaseClient, invoice: InvoiceRow) {
   if (!invoice.klient_id) return null;
+
+  const { data: client } = await admin
+    .from("klienci")
+    .select("adres_dzialalnosci")
+    .eq("id", invoice.klient_id)
+    .maybeSingle();
+  const clientAddress = parsePolishAddress(stringify(client?.adres_dzialalnosci));
+  if (clientAddress?.zip && clientAddress.city) return clientAddress;
 
   const { data } = await admin
     .from("klient_karty_formularze")

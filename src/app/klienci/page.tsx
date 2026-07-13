@@ -49,6 +49,7 @@ type Client = {
   nip: string | null;
   telefon: string | null;
   email: string | null;
+  adres_dzialalnosci: string | null;
   osoba_kontaktowa: string | null;
   forma_prawna: string | null;
   forma_opodatkowania: string | null;
@@ -76,6 +77,7 @@ type ClientDraft = {
   nip: string;
   telefon: string;
   email: string;
+  adres_dzialalnosci: string;
   osoba_kontaktowa: string;
   forma_prawna: string;
   forma_opodatkowania: string;
@@ -253,6 +255,7 @@ const filteredClients = [...clients].filter((client) => {
     client.nip,
     client.telefon,
     client.email,
+    client.adres_dzialalnosci,
     client.osoba_kontaktowa,
     client.forma_prawna,
     client.forma_opodatkowania,
@@ -656,6 +659,7 @@ function ClientDrawer({
     const operationalPayload = {
       telefon: normalizeContactList(draft.telefon),
       email: normalizeContactList(draft.email),
+      adres_dzialalnosci: draft.adres_dzialalnosci.trim() || null,
       osoba_kontaktowa: draft.osoba_kontaktowa.trim() || null,
       czynny_vat: draft.czynny_vat,
       vat_ue: draft.vat_ue,
@@ -789,6 +793,12 @@ function ClientDrawer({
                   onChange={(value) => updateDraft("email", value)}
                 />
                 <EditableInput
+                  label="Adres działalności"
+                  placeholder="ul. Przykładowa 1, 63-100 Śrem"
+                  value={draft.adres_dzialalnosci}
+                  onChange={(value) => updateDraft("adres_dzialalnosci", value)}
+                />
+                <EditableInput
                   label="Osoba kontaktowa"
                   value={draft.osoba_kontaktowa}
                   onChange={(value) => updateDraft("osoba_kontaktowa", value)}
@@ -798,6 +808,7 @@ function ClientDrawer({
               <>
                 <InfoRow label="Telefon" value={client.telefon} />
                 <InfoRow label="Email" value={client.email} />
+                <InfoRow label="Adres działalności" value={client.adres_dzialalnosci} />
                 <InfoRow label="Osoba kontaktowa" value={client.osoba_kontaktowa} />
               </>
             )}
@@ -1159,6 +1170,7 @@ function CreateClientDrawer({
     nip: "",
     telefon: "",
     email: "",
+    adres_dzialalnosci: "",
     osoba_kontaktowa: "",
     forma_prawna: "",
     forma_opodatkowania: "",
@@ -1207,6 +1219,7 @@ function CreateClientDrawer({
       nip: draft.nip.trim(),
       telefon: normalizeContactList(draft.telefon),
       email: normalizeContactList(draft.email),
+      adres_dzialalnosci: draft.adres_dzialalnosci.trim() || null,
       osoba_kontaktowa: draft.osoba_kontaktowa.trim() || null,
       forma_prawna: draft.forma_prawna.trim() || null,
       forma_opodatkowania: draft.forma_opodatkowania.trim() || null,
@@ -1322,6 +1335,13 @@ function CreateClientDrawer({
               placeholder="mail1@firma.pl; mail2@firma.pl"
               value={draft.email}
               onChange={(v) => updateDraft("email", v)}
+            />
+
+            <EditableInput
+              label="Adres działalności"
+              placeholder="ul. Przykładowa 1, 63-100 Śrem"
+              value={draft.adres_dzialalnosci}
+              onChange={(v) => updateDraft("adres_dzialalnosci", v)}
             />
 
             <EditableInput
@@ -1563,6 +1583,7 @@ function createDraft(client: Client): ClientDraft {
     nip: client.nip || "",
     telefon: client.telefon || "",
     email: client.email || "",
+    adres_dzialalnosci: client.adres_dzialalnosci || "",
     osoba_kontaktowa: client.osoba_kontaktowa || "",
     forma_prawna: client.forma_prawna || "",
     forma_opodatkowania: client.forma_opodatkowania || "",

@@ -277,6 +277,7 @@ function buildWfirmaInvoicePayload(
           price: decimal(line.cena_netto || 0, 2),
           unit: line.jednostka || "szt.",
           vat: normalizeVat(line.stawka_vat),
+          gtu: "12",
         },
       },
     ])

@@ -12,6 +12,7 @@ type SendPayload = {
 
 type InvoiceRow = {
   id: string;
+  klient_id: string | null;
   numer: string | null;
   data_wystawienia: string | null;
   data_sprzedazy: string | null;
@@ -59,6 +60,7 @@ export async function POST(request: NextRequest) {
     .from("faktury")
     .select(`
       id,
+      klient_id,
       numer,
       data_wystawienia,
       data_sprzedazy,
@@ -95,7 +97,11 @@ export async function POST(request: NextRequest) {
 
       const issueDate = invoice.data_wystawienia || new Date().toISOString().slice(0, 10);
       const defaultPaymentDate = addDays(issueDate, 7);
-      const response = await addWfirmaInvoice(wfirma.config, buildWfirmaInvoicePayload(invoice, issueDate, defaultPaymentDate));
+      const contractorAddress = await getContractorAddress(auth.admin, invoice);
+      if (!contractorAddress?.zip || !contractorAddress.city) {
+        throw new Error("Brakuje adresu kontrahenta do wFirmy. Uzupełnij w karcie klienta adres działalności w formacie np. ul. Przykładowa 1, 63-100 Śrem.");
+      }
+      const response = await addWfirmaInvoice(wfirma.config, buildWfirmaInvoicePayload(invoice, issueDate, defaultPaymentDate, contractorAddress));
       const wfirmaInvoice = firstWfirmaInvoice(response);
       const wfirmaIssueDate = dateOnly(wfirmaInvoice?.date) || issueDate;
       const paymentDate = addDays(wfirmaIssueDate, 7);
@@ -214,7 +220,29 @@ function validateWfirmaInvoice(invoice: InvoiceRow) {
   return errors;
 }
 
-function buildWfirmaInvoicePayload(invoice: InvoiceRow, issueDate: string, defaultPaymentDate: string) {
+async function getContractorAddress(admin: SupabaseClient, invoice: InvoiceRow) {
+  if (!invoice.klient_id) return null;
+
+  const { data } = await admin
+    .from("klient_karty_formularze")
+    .select("form_data")
+    .eq("klient_id", invoice.klient_id)
+    .eq("status", "completed")
+    .order("completed_at", { ascending: false, nullsFirst: false })
+    .limit(1)
+    .maybeSingle();
+
+  const formData = (data?.form_data || null) as Record<string, unknown> | null;
+  const address = stringify(formData?.adresDzialalnosci);
+  return parsePolishAddress(address);
+}
+
+function buildWfirmaInvoicePayload(
+  invoice: InvoiceRow,
+  issueDate: string,
+  defaultPaymentDate: string,
+  contractorAddress: ReturnType<typeof parsePolishAddress>
+) {
   const lines = [...(invoice.faktury_pozycje || [])].sort(
     (first, second) => Number(first.sort_order || 0) - Number(second.sort_order || 0)
   );
@@ -237,6 +265,9 @@ function buildWfirmaInvoicePayload(invoice: InvoiceRow, issueDate: string, defau
       name: invoice.kontrahent_nazwa,
       nip: invoice.kontrahent_nip || undefined,
       email: invoice.kontrahent_email || undefined,
+      zip: contractorAddress?.zip || undefined,
+      city: contractorAddress?.city || undefined,
+      street: contractorAddress?.street || undefined,
     },
     type: "normal",
     date: issueDate,
@@ -250,6 +281,24 @@ function buildWfirmaInvoicePayload(invoice: InvoiceRow, issueDate: string, defau
     invoicecontents: {
       invoicecontent,
     },
+  };
+}
+
+function parsePolishAddress(address: string) {
+  if (!address) return null;
+  const normalized = address.replace(/\s+/g, " ").trim();
+  const zipMatch = normalized.match(/\b\d{2}-\d{3}\b/);
+  if (!zipMatch) return null;
+
+  const zip = zipMatch[0];
+  const beforeZip = normalized.slice(0, zipMatch.index).replace(/[,\s]+$/g, "").trim();
+  const afterZip = normalized.slice((zipMatch.index || 0) + zip.length).replace(/^[,\s]+/g, "").trim();
+  const city = (afterZip.split(",")[0] || "").trim();
+
+  return {
+    zip,
+    city,
+    street: beforeZip || undefined,
   };
 }
 

@@ -8,9 +8,6 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const secretValidation = validateWebhookSecret(request);
-  if (secretValidation) return secretValidation;
-
   const payload = await parseWebhookPayload(request);
   if (Object.keys(payload).length === 0) return webhookKeyResponse();
 
@@ -66,28 +63,6 @@ function webhookKeyResponse() {
 function webhookKeyPayload() {
   const webhookKey = process.env.WFIRMA_WEBHOOK_KEY?.trim();
   return webhookKey ? { webhook_key: webhookKey } : {};
-}
-
-function validateWebhookSecret(request: NextRequest) {
-  const expectedSecret = process.env.WFIRMA_WEBHOOK_SECRET?.trim();
-  if (!expectedSecret) {
-    return NextResponse.json(
-      { error: "Brak konfiguracji webhooka. Uzupełnij WFIRMA_WEBHOOK_SECRET.", ...webhookKeyPayload() },
-      { status: 500 }
-    );
-  }
-
-  const providedSecret =
-    request.headers.get("x-wfirma-webhook-secret")?.trim() ||
-    request.headers.get("x-webhook-secret")?.trim() ||
-    request.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim() ||
-    request.nextUrl.searchParams.get("secret")?.trim();
-
-  if (providedSecret !== expectedSecret) {
-    return NextResponse.json({ error: "Nieprawidłowy sekret webhooka.", ...webhookKeyPayload() }, { status: 401 });
-  }
-
-  return null;
 }
 
 function createAdminClient() {

@@ -12,7 +12,19 @@ export async function POST(request: NextRequest) {
   if (Object.keys(payload).length === 0) return webhookKeyResponse();
 
   const identifiers = extractInvoiceIdentifiers(payload);
+  const admin = createAdminClient();
+  if (!admin) {
+    return NextResponse.json({ error: "Brak konfiguracji Supabase.", ...webhookKeyPayload() }, { status: 500 });
+  }
+
   if (!identifiers.invoiceNumber && identifiers.wfirmaIds.length === 0) {
+    await logWebhookEvent(admin, {
+      payload,
+      identifiers,
+      result: "skipped_no_identifier",
+      error: "Webhook nie zawiera numeru faktury ani ID faktury z wFirmy.",
+    });
+
     return NextResponse.json({
       ok: true,
       skipped: true,
@@ -21,14 +33,16 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  const admin = createAdminClient();
-  if (!admin) {
-    return NextResponse.json({ error: "Brak konfiguracji Supabase.", ...webhookKeyPayload() }, { status: 500 });
-  }
-
   const { data, error } = await markInvoicePaid(admin, identifiers);
 
   if (error) {
+    await logWebhookEvent(admin, {
+      payload,
+      identifiers,
+      result: "error",
+      error: error.message,
+    });
+
     return NextResponse.json(
       { error: "Nie udało się zaktualizować statusu faktury.", details: error.message, ...webhookKeyPayload() },
       { status: 500 }
@@ -36,6 +50,13 @@ export async function POST(request: NextRequest) {
   }
 
   if (!data) {
+    await logWebhookEvent(admin, {
+      payload,
+      identifiers,
+      result: "skipped_not_found",
+      error: "Nie znaleziono faktury pasującej do webhooka.",
+    });
+
     return NextResponse.json({
       ok: true,
       skipped: true,
@@ -46,12 +67,40 @@ export async function POST(request: NextRequest) {
     });
   }
 
+  await logWebhookEvent(admin, {
+    payload,
+    identifiers,
+    result: "paid",
+    invoiceId: data.id,
+  });
+
   return NextResponse.json({
     ok: true,
     invoiceId: data.id,
     invoiceNumber: identifiers.invoiceNumber,
     wfirmaIds: identifiers.wfirmaIds,
     ...webhookKeyPayload(),
+  });
+}
+
+async function logWebhookEvent(
+  admin: SupabaseClient,
+  event: {
+    payload: WebhookPayload;
+    identifiers: { invoiceNumber: string; wfirmaIds: string[] };
+    result: string;
+    invoiceId?: string;
+    error?: string;
+  }
+) {
+  await admin.from("wfirma_webhook_events").insert({
+    processed_at: new Date().toISOString(),
+    result: event.result,
+    wfirma_id: event.identifiers.wfirmaIds[0] || null,
+    invoice_number: event.identifiers.invoiceNumber || null,
+    invoice_id: event.invoiceId || null,
+    payload: jsonPayload(event.payload),
+    error: event.error || null,
   });
 }
 
@@ -233,4 +282,12 @@ function normalizeText(value: unknown) {
 function stringify(value: unknown) {
   if (value === null || value === undefined) return "";
   return String(value).trim();
+}
+
+function jsonPayload(payload: WebhookPayload) {
+  try {
+    return JSON.parse(JSON.stringify(payload)) as WebhookPayload;
+  } catch {
+    return {};
+  }
 }

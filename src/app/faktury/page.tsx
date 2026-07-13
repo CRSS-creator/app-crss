@@ -388,7 +388,15 @@ function InvoicesContent() {
                       />
                     </Td>
                     <Td strong style={invoiceNumberCellStyle}>
-                      {invoiceNumberLabel(invoice)}
+                      <span style={invoiceNumberRowStyle}>
+                        {invoiceNumberLabel(invoice)}
+                        {invoice.wfirma_pdf_path ? (
+                          <span style={pdfReadyIconStyle} title="PDF faktury jest gotowy">
+                            <FileText size={13} />
+                            PDF
+                          </span>
+                        ) : null}
+                      </span>
                       <Small>{invoice.numer ? "Numer z wFirmy" : "Po wysłaniu do wFirmy"}</Small>
                     </Td>
                     <Td>
@@ -794,6 +802,8 @@ const tableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse", m
 const thStyle: CSSProperties = { textAlign: "left", padding: "12px 10px", borderBottom: `1px solid ${colors.border}`, color: colors.muted, fontSize: "12px", textTransform: "uppercase", letterSpacing: 0 };
 const tdStyle: CSSProperties = { padding: "13px 10px", borderBottom: `1px solid ${colors.border}`, color: colors.text, verticalAlign: "middle" };
 const invoiceNumberCellStyle: CSSProperties = { minWidth: "128px", whiteSpace: "nowrap", fontSize: "15px", lineHeight: 1.2, fontVariantNumeric: "tabular-nums" };
+const invoiceNumberRowStyle: CSSProperties = { display: "inline-flex", alignItems: "center", gap: "7px", minWidth: 0 };
+const pdfReadyIconStyle: CSSProperties = { display: "inline-flex", alignItems: "center", gap: "3px", borderRadius: radius.badge, background: "#dcfce7", color: colors.success, padding: "3px 6px", fontSize: "10px", fontWeight: 900, lineHeight: 1 };
 const amountCellStyle: CSSProperties = { whiteSpace: "nowrap", minWidth: "118px", fontSize: "15px", fontVariantNumeric: "tabular-nums" };
 const rowStyle: CSSProperties = { background: colors.white };
 const pendingInvoiceRowStyle: CSSProperties = { background: "#fff8e7" };

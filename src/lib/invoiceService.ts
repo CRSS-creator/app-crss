@@ -90,6 +90,8 @@ export type WfirmaPaymentSyncResult = {
   failed: { invoiceId: string; number: string | null; wfirmaId: string; error: string }[];
 };
 
+const WFIRMA_PAYMENT_SYNC_MONTHS_2026 = Array.from({ length: 12 }, (_, index) => `2026-${String(index + 1).padStart(2, "0")}`);
+
 const INVOICE_SELECT = `
   *,
   klienci (
@@ -183,10 +185,32 @@ export async function sendInvoicesToWfirma(invoiceIds: string[]) {
   );
 }
 
-export async function syncWfirmaPayments() {
+export async function syncWfirmaPayments(month?: string): Promise<{ data: WfirmaPaymentSyncResult | null; error: Error | null }> {
+  if (!month) {
+    const combined: WfirmaPaymentSyncResult = {
+      checked: 0,
+      markedPaid: 0,
+      paid: [],
+      failed: [],
+    };
+
+    for (const syncMonth of WFIRMA_PAYMENT_SYNC_MONTHS_2026) {
+      const result = await syncWfirmaPayments(syncMonth);
+      if (result.error) return result;
+      if (!result.data) continue;
+
+      combined.checked += result.data.checked;
+      combined.markedPaid += result.data.markedPaid;
+      combined.paid.push(...result.data.paid);
+      combined.failed.push(...result.data.failed);
+    }
+
+    return { data: combined, error: null };
+  }
+
   return callWfirmaEndpoint<WfirmaPaymentSyncResult>(
     "/api/faktury/wfirma/sync-payments",
-    {}
+    { month }
   );
 }
 

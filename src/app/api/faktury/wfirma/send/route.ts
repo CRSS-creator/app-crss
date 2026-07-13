@@ -254,19 +254,18 @@ function buildWfirmaInvoicePayload(
   const lines = [...(invoice.faktury_pozycje || [])].sort(
     (first, second) => Number(first.sort_order || 0) - Number(second.sort_order || 0)
   );
-  const invoicecontent = Object.fromEntries(
-    lines.map((line, index) => [
-      String(index),
-      {
-        name: line.nazwa,
-        count: decimal(line.ilosc || 1, 4),
-        unit_count: decimal(line.ilosc || 1, 4),
-        price: decimal(line.cena_netto || 0, 2),
-        unit: line.jednostka || "szt.",
-        vat: normalizeVat(line.stawka_vat),
-      },
-    ])
-  );
+  const invoicecontent = lines.map((line) => ({
+    name: line.nazwa,
+    count: decimal(line.ilosc || 1, 4),
+    unit_count: decimal(line.ilosc || 1, 4),
+    price: decimal(line.cena_netto || 0, 2),
+    unit: line.jednostka || "szt.",
+    vat: normalizeVat(line.stawka_vat),
+  }));
+
+  if (invoicecontent.length === 0) {
+    throw new Error("Brakuje pozycji faktury do wysłania do wFirmy.");
+  }
 
   return {
     contractor: {

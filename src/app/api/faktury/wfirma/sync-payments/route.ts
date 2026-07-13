@@ -4,15 +4,13 @@ import { getAuthorizedServerUser } from "@/lib/serverAuth";
 import {
   extractWfirmaInvoices,
   findWfirmaInvoices,
-  firstWfirmaInvoice,
   getWfirmaConfig,
-  getWfirmaInvoice,
   type WfirmaInvoice,
 } from "@/lib/wfirmaClient";
 
 const ALLOWED_ROLES = new Set(["owner", "admin"]);
 const STATUSES_TO_CHECK = ["wystawiona", "wyslana", "przeterminowana"];
-const MAX_INVOICES_PER_RUN = 200;
+const MAX_INVOICES_PER_RUN = 80;
 const PAID_VALUES = new Set([
   "1",
   "true",
@@ -67,6 +65,10 @@ type FailedInvoice = PaidInvoice & {
   error: string;
 };
 
+type SyncPayload = {
+  month?: string;
+};
+
 export async function GET(request: NextRequest) {
   return syncPayments(request);
 }
@@ -89,20 +91,27 @@ async function syncPayments(request: NextRequest) {
     return NextResponse.json({ error: wfirma.error }, { status: 500 });
   }
 
-  const { data, error } = await admin
+  const requestedMonth = await syncMonth(request);
+  const requestedRange = requestedMonth ? monthRange(requestedMonth) : null;
+  let query = admin
     .from("faktury")
     .select("id,numer,data_wystawienia,wfirma_id,status")
     .in("status", STATUSES_TO_CHECK)
     .not("wfirma_id", "is", null)
-    .order("termin_platnosci", { ascending: true })
-    .limit(MAX_INVOICES_PER_RUN);
+    .order("termin_platnosci", { ascending: true });
+
+  if (requestedRange) {
+    query = query.gte("data_wystawienia", requestedRange.dateFrom).lte("data_wystawienia", requestedRange.dateTo);
+  }
+
+  const { data, error } = await query.limit(MAX_INVOICES_PER_RUN);
 
   if (error) {
     return NextResponse.json({ error: "Nie udało się pobrać faktur do sprawdzenia." }, { status: 500 });
   }
 
   const invoices = ((data || []) as InvoiceRow[]).filter((invoice) => stringify(invoice.wfirma_id));
-  const wfirmaInvoicesById = await loadWfirmaInvoicesById(wfirma.config, invoices);
+  const wfirmaInvoicesById = await loadWfirmaInvoicesById(wfirma.config, invoices, requestedMonth);
   const paid: PaidInvoice[] = [];
   const failed: FailedInvoice[] = [];
 
@@ -111,7 +120,7 @@ async function syncPayments(request: NextRequest) {
     const baseResult = { invoiceId: invoice.id, number: invoice.numer, wfirmaId };
 
     try {
-      const wfirmaInvoice = wfirmaInvoicesById.get(wfirmaId) || await getWfirmaInvoiceById(wfirma.config, wfirmaId);
+      const wfirmaInvoice = wfirmaInvoicesById.get(wfirmaId);
       if (!wfirmaInvoice) throw new Error("wFirma nie zwróciła danych tej faktury.");
 
       if (!isPaidInvoice(wfirmaInvoice)) continue;
@@ -155,16 +164,19 @@ async function syncPayments(request: NextRequest) {
 
 async function loadWfirmaInvoicesById(
   config: Parameters<typeof findWfirmaInvoices>[0]["config"],
-  invoices: InvoiceRow[]
+  invoices: InvoiceRow[],
+  requestedMonth: string | null
 ) {
-  const months = Array.from(
-    new Set(
-      invoices
-        .map((invoice) => dateOnly(invoice.data_wystawienia))
-        .filter(Boolean)
-        .map((date) => date!.slice(0, 7))
-    )
-  );
+  const months = requestedMonth
+    ? [requestedMonth]
+    : Array.from(
+        new Set(
+          invoices
+            .map((invoice) => dateOnly(invoice.data_wystawienia))
+            .filter(Boolean)
+            .map((date) => date!.slice(0, 7))
+        )
+      ).slice(0, 1);
   const invoicesById = new Map<string, WfirmaInvoice>();
 
   for (const month of months) {
@@ -193,11 +205,6 @@ async function loadWfirmaInvoicesById(
   return invoicesById;
 }
 
-async function getWfirmaInvoiceById(config: Parameters<typeof getWfirmaInvoice>[0], wfirmaId: string) {
-  const response = await getWfirmaInvoice(config, wfirmaId);
-  return firstWfirmaInvoice(response);
-}
-
 async function authorizeSync(request: NextRequest) {
   const secretResult = validateSyncSecret(request);
   if (secretResult === true) return null;
@@ -205,6 +212,19 @@ async function authorizeSync(request: NextRequest) {
 
   const auth = await getAuthorizedServerUser(request, ALLOWED_ROLES, "Brak uprawnień do sprawdzania płatności w wFirmie.");
   return auth.error;
+}
+
+async function syncMonth(request: NextRequest) {
+  const queryMonth = request.nextUrl.searchParams.get("month")?.trim();
+  if (/^2026-\d{2}$/.test(queryMonth || "")) return queryMonth || null;
+
+  try {
+    const payload = (await request.json()) as SyncPayload;
+    const bodyMonth = stringify(payload.month);
+    return /^2026-\d{2}$/.test(bodyMonth) ? bodyMonth : null;
+  } catch {
+    return null;
+  }
 }
 
 function validateSyncSecret(request: NextRequest) {

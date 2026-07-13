@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAuthorizedServerUser } from "@/lib/serverAuth";
-import { addWfirmaInvoice, firstWfirmaInvoice, getWfirmaConfig } from "@/lib/wfirmaClient";
+import { addWfirmaInvoice, downloadWfirmaInvoicePdf, firstWfirmaInvoice, getWfirmaConfig } from "@/lib/wfirmaClient";
 
 const ALLOWED_ROLES = new Set(["owner", "admin"]);
+const INVOICE_PDF_BUCKET = "faktury-pdf";
 
 type SendPayload = {
   invoiceIds?: string[];
@@ -97,20 +99,38 @@ export async function POST(request: NextRequest) {
       const wfirmaInvoice = firstWfirmaInvoice(response);
       const wfirmaIssueDate = dateOnly(wfirmaInvoice?.date) || issueDate;
       const paymentDate = addDays(wfirmaIssueDate, 7);
+      const wfirmaId = stringify(wfirmaInvoice?.id);
+      const wfirmaNumber = stringify(wfirmaInvoice?.fullnumber || wfirmaInvoice?.number) || invoice.numer;
+      const pdfResult = wfirmaId
+        ? await saveWfirmaInvoicePdf({
+            admin: auth.admin,
+            invoiceId: invoice.id,
+            invoiceNumber: wfirmaNumber,
+            wfirmaId,
+            config: wfirma.config,
+          })
+        : null;
+      const pdfError = pdfResult?.error
+        ? `Faktura wysłana, ale nie udało się pobrać PDF z wFirmy: ${pdfResult.error}`
+        : null;
+
       await auth.admin
         .from("faktury")
         .update({
-          numer: stringify(wfirmaInvoice?.fullnumber || wfirmaInvoice?.number) || invoice.numer,
+          numer: wfirmaNumber,
           status: "wystawiona",
           zrodlo: "wfirma",
           data_wystawienia: wfirmaIssueDate,
           data_sprzedazy: dateOnly(wfirmaInvoice?.disposaldate) || invoice.data_sprzedazy || wfirmaIssueDate,
           termin_platnosci: paymentDate,
-          wfirma_id: stringify(wfirmaInvoice?.id) || null,
+          wfirma_id: wfirmaId || null,
           wfirma_url: wfirmaInvoice?.hash ? `https://wfirma.pl/faktury/podglad/${wfirmaInvoice.hash}` : null,
+          wfirma_pdf_path: pdfResult?.path || null,
+          wfirma_pdf_name: pdfResult?.name || null,
+          wfirma_pdf_synced_at: pdfResult?.path ? new Date().toISOString() : null,
           wfirma_synced_at: new Date().toISOString(),
           wfirma_sync_status: "wyslano",
-          wfirma_sync_error: null,
+          wfirma_sync_error: pdfError,
         })
         .eq("id", invoice.id);
       sent.push(invoice.id);
@@ -128,6 +148,29 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json({ sent: sent.length, failed });
+}
+
+async function saveWfirmaInvoicePdf(params: {
+  admin: SupabaseClient;
+  invoiceId: string;
+  invoiceNumber: string | null;
+  wfirmaId: string;
+  config: Parameters<typeof downloadWfirmaInvoicePdf>[0];
+}) {
+  try {
+    const pdf = await downloadWfirmaInvoicePdf(params.config, params.wfirmaId);
+    const name = buildInvoicePdfName(params.invoiceNumber, params.wfirmaId);
+    const path = `${params.invoiceId}/${Date.now()}-${name}`;
+    const upload = await params.admin.storage.from(INVOICE_PDF_BUCKET).upload(path, pdf, {
+      contentType: "application/pdf",
+      upsert: true,
+    });
+
+    if (upload.error) throw upload.error;
+    return { path, name, error: null as string | null };
+  } catch (error) {
+    return { path: null, name: null, error: error instanceof Error ? error.message : "Nieznany błąd pobierania PDF." };
+  }
 }
 
 function validateWfirmaInvoice(invoice: InvoiceRow) {
@@ -217,4 +260,19 @@ function addDays(value: string, days: number) {
   const date = new Date(`${value}T00:00:00.000Z`);
   date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
+}
+
+function buildInvoicePdfName(invoiceNumber: string | null, wfirmaId: string) {
+  const base = sanitizeFileNamePart(invoiceNumber || `wfirma-${wfirmaId}`);
+  return `${base || "faktura"}.pdf`;
+}
+
+function sanitizeFileNamePart(value: string) {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80)
+    .toLowerCase();
 }

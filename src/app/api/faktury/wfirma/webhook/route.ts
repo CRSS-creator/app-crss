@@ -9,13 +9,25 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const payload = await parseWebhookPayload(request);
-  if (Object.keys(payload).length === 0) return webhookKeyResponse(request);
-
-  const identifiers = extractInvoiceIdentifiers(payload);
   const admin = createAdminClient();
   if (!admin) {
-    return NextResponse.json({ error: "Brak konfiguracji Supabase.", ...webhookKeyPayload(request) }, { status: 500 });
+    return Object.keys(payload).length === 0
+      ? webhookKeyResponse(request)
+      : NextResponse.json({ error: "Brak konfiguracji Supabase.", ...webhookKeyPayload(request) }, { status: 500 });
   }
+
+  if (Object.keys(payload).length === 0) {
+    await logWebhookEvent(admin, {
+      payload,
+      identifiers: { invoiceNumber: "", wfirmaIds: [] },
+      result: "received_empty_payload",
+      error: "Webhook POST przyszedł bez danych.",
+    });
+
+    return webhookKeyResponse(request);
+  }
+
+  const identifiers = extractInvoiceIdentifiers(payload);
 
   if (!identifiers.invoiceNumber && identifiers.wfirmaIds.length === 0) {
     await logWebhookEvent(admin, {

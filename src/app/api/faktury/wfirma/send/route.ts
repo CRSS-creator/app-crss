@@ -114,25 +114,39 @@ export async function POST(request: NextRequest) {
         ? `Faktura wysłana, ale nie udało się pobrać PDF z wFirmy: ${pdfResult.error}`
         : null;
 
-      await auth.admin
+      const updatePayload = {
+        numer: wfirmaNumber,
+        status: "wystawiona",
+        zrodlo: "wfirma",
+        data_wystawienia: wfirmaIssueDate,
+        data_sprzedazy: dateOnly(wfirmaInvoice?.disposaldate) || invoice.data_sprzedazy || wfirmaIssueDate,
+        termin_platnosci: paymentDate,
+        wfirma_id: wfirmaId || null,
+        wfirma_url: wfirmaInvoice?.hash ? `https://wfirma.pl/faktury/podglad/${wfirmaInvoice.hash}` : null,
+        wfirma_pdf_path: pdfResult?.path || null,
+        wfirma_pdf_name: pdfResult?.name || null,
+        wfirma_pdf_synced_at: pdfResult?.path ? new Date().toISOString() : null,
+        wfirma_synced_at: new Date().toISOString(),
+        wfirma_sync_status: "wyslano",
+        wfirma_sync_error: pdfError,
+      };
+      const updateResult = await auth.admin
         .from("faktury")
-        .update({
-          numer: wfirmaNumber,
-          status: "wystawiona",
-          zrodlo: "wfirma",
-          data_wystawienia: wfirmaIssueDate,
-          data_sprzedazy: dateOnly(wfirmaInvoice?.disposaldate) || invoice.data_sprzedazy || wfirmaIssueDate,
-          termin_platnosci: paymentDate,
-          wfirma_id: wfirmaId || null,
-          wfirma_url: wfirmaInvoice?.hash ? `https://wfirma.pl/faktury/podglad/${wfirmaInvoice.hash}` : null,
-          wfirma_pdf_path: pdfResult?.path || null,
-          wfirma_pdf_name: pdfResult?.name || null,
-          wfirma_pdf_synced_at: pdfResult?.path ? new Date().toISOString() : null,
-          wfirma_synced_at: new Date().toISOString(),
-          wfirma_sync_status: "wyslano",
-          wfirma_sync_error: pdfError,
-        })
+        .update(updatePayload)
         .eq("id", invoice.id);
+      if (updateResult.error && updateResult.error.message.includes("wfirma_pdf")) {
+        const { wfirma_pdf_path, wfirma_pdf_name, wfirma_pdf_synced_at, ...fallbackPayload } = updatePayload;
+        const fallbackResult = await auth.admin
+          .from("faktury")
+          .update({
+            ...fallbackPayload,
+            wfirma_sync_error: pdfError || "Faktura wysłana, ale na serwerze nie ma jeszcze migracji pól PDF.",
+          })
+          .eq("id", invoice.id);
+        if (fallbackResult.error) throw new Error(`Faktura została wysłana do wFirmy, ale nie udało się zapisać jej w aplikacji: ${fallbackResult.error.message}`);
+      } else if (updateResult.error) {
+        throw new Error(`Faktura została wysłana do wFirmy, ale nie udało się zapisać jej w aplikacji: ${updateResult.error.message}`);
+      }
       sent.push(invoice.id);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Nieznany błąd wysyłki.";
@@ -145,6 +159,13 @@ export async function POST(request: NextRequest) {
         .eq("id", invoice.id);
       failed.push({ invoiceId: invoice.id, error: message });
     }
+  }
+
+  if (sent.length === 0 && failed.length > 0) {
+    return NextResponse.json(
+      { error: failed.map((item) => item.error).join("\n"), sent: sent.length, failed },
+      { status: 400 }
+    );
   }
 
   return NextResponse.json({ sent: sent.length, failed });

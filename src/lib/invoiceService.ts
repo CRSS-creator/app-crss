@@ -83,6 +83,13 @@ export type InvoicePayload = {
   wfirma_sync_error?: string | null;
 };
 
+export type WfirmaPaymentSyncResult = {
+  checked: number;
+  markedPaid: number;
+  paid: { invoiceId: string; number: string | null; wfirmaId: string }[];
+  failed: { invoiceId: string; number: string | null; wfirmaId: string; error: string }[];
+};
+
 const INVOICE_SELECT = `
   *,
   klienci (
@@ -107,6 +114,7 @@ const INVOICE_SELECT = `
 `;
 
 export async function fetchInvoices() {
+  await syncWfirmaPayments();
   await supabase.rpc("mark_overdue_invoices");
 
   return supabase
@@ -173,6 +181,13 @@ export async function sendInvoicesToWfirma(invoiceIds: string[]) {
   return callWfirmaEndpoint<{ sent: number; failed: { invoiceId: string; error: string }[] }>(
     "/api/faktury/wfirma/send",
     { invoiceIds }
+  );
+}
+
+export async function syncWfirmaPayments() {
+  return callWfirmaEndpoint<WfirmaPaymentSyncResult>(
+    "/api/faktury/wfirma/sync-payments",
+    {}
   );
 }
 

@@ -631,7 +631,11 @@ function formatMonth(value: string | null) {
 
 function formatDate(value: string | null) {
   if (!value) return "Brak";
-  return new Intl.DateTimeFormat("pl-PL", { dateStyle: "short" }).format(new Date(`${value}T00:00:00`));
+  return new Intl.DateTimeFormat("pl-PL", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(new Date(`${value}T00:00:00`));
 }
 
 function paymentDueDate(invoice: Invoice) {

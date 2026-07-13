@@ -34,6 +34,39 @@ const CLIENT_SELECT = `
       )
     `;
 
+const CLIENT_SELECT_WITHOUT_ADDRESS = `
+      id,
+      nazwa,
+      nip,
+      telefon,
+      email,
+      osoba_kontaktowa,
+      forma_prawna,
+      forma_opodatkowania,
+      obsluga_kadrowa,
+      status_klienta,
+      abonament,
+      model_fakturowania,
+      czynny_vat,
+      vat_ue,
+      schemat_zus,
+      limit_dokumentow,
+      koszt_dodatkowego_dokumentu,
+      pierwszy_okres_rozliczeniowy,
+      ostatni_okres_rozliczeniowy,
+      koszt_obslugi_pracownika,
+      koszt_obslugi_zleceniobiorcy,
+      dodatkowe_uslugi,
+      notatki,
+      opiekun_id,
+      profiles!klienci_opiekun_id_fkey (
+        full_name,
+        email,
+        role,
+        aktywne
+      )
+    `;
+
 type ClientCaregiver = {
   id: string;
   full_name: string | null;
@@ -112,10 +145,17 @@ export async function fetchClientCaregivers(): Promise<ClientCaregiversResult> {
 }
 
 export async function fetchClients() {
-  const result = await supabase
+  let result: Awaited<ReturnType<typeof supabase.from>> | any = await supabase
     .from("klienci")
     .select(CLIENT_SELECT)
     .order("nazwa", { ascending: true });
+
+  if (isMissingBusinessAddressColumn(result.error)) {
+    result = await supabase
+      .from("klienci")
+      .select(CLIENT_SELECT_WITHOUT_ADDRESS)
+      .order("nazwa", { ascending: true });
+  }
 
   if (result.error) return result;
 
@@ -128,12 +168,24 @@ export async function fetchClients() {
 }
 
 export async function updateClient(clientId: string, payload: Record<string, unknown>) {
-  const result = await supabase
+  let result = await supabase
     .from("klienci")
     .update(payload)
     .eq("id", clientId)
     .select(CLIENT_SELECT)
     .single();
+
+  if (isMissingBusinessAddressColumn(result.error)) {
+    const { adres_dzialalnosci, ...payloadWithoutAddress } = payload;
+    if (Object.keys(payloadWithoutAddress).length === 0) return result;
+
+    result = await supabase
+      .from("klienci")
+      .update(payloadWithoutAddress)
+      .eq("id", clientId)
+      .select(CLIENT_SELECT_WITHOUT_ADDRESS)
+      .single();
+  }
 
   if (result.error) return result;
 
@@ -176,4 +228,9 @@ export async function createClient(payload: Record<string, unknown>) {
     .insert(payload)
     .select("*")
     .single();
+}
+
+function isMissingBusinessAddressColumn(error: unknown) {
+  const message = String((error as { message?: unknown } | null)?.message || "");
+  return message.includes("adres_dzialalnosci");
 }

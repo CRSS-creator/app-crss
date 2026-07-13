@@ -313,17 +313,26 @@ async function findExistingWfirmaContractorId(
   if (!normalizedNip) return null;
 
   const fields: Array<"nip" | "tax_id"> = ["nip", "tax_id"];
+  let checkedAnyField = false;
+  let firstError = "";
+
   for (const field of fields) {
     try {
       const response = await findWfirmaContractors({ config, nip: normalizedNip, field });
+      checkedAnyField = true;
       const match = extractWfirmaContractors(response).find((contractor) => {
         return normalizeNip(contractor.nip || contractor.tax_id) === normalizedNip;
       });
       const id = stringify(match?.id);
       if (id) return id;
-    } catch {
+    } catch (error) {
+      if (!firstError) firstError = error instanceof Error ? error.message : String(error);
       // Some wFirma accounts expose contractor tax numbers under only one field name.
     }
+  }
+
+  if (!checkedAnyField) {
+    throw new Error(`Nie udało się sprawdzić kontrahenta w wFirmie po NIP. Wysyłka przerwana, żeby nie utworzyć duplikatu. ${firstError}`);
   }
 
   return null;

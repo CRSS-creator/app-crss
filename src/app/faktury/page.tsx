@@ -11,6 +11,7 @@ import {
   fetchInvoices,
   importWfirmaInvoices,
   sendInvoicesToWfirma,
+  syncWfirmaPayments,
   updateInvoice,
   type Invoice,
   type InvoiceCategory,
@@ -51,6 +52,7 @@ function InvoicesContent() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [importingWfirma, setImportingWfirma] = useState(false);
+  const [syncingPayments, setSyncingPayments] = useState(false);
   const [queueing, setQueueing] = useState(false);
   const [sourceFilter, setSourceFilter] = useState(EMPTY_FILTER);
   const [query, setQuery] = useState("");
@@ -119,6 +121,19 @@ function InvoicesContent() {
       current.filter((invoiceId) => (result.data || []).some((invoice) => invoice.id === invoiceId && canQueueForWfirma(invoice as Invoice)))
     );
     setLoading(false);
+  }
+
+  async function refreshInvoices() {
+    setSyncingPayments(true);
+    const syncResult = await syncWfirmaPayments();
+    setSyncingPayments(false);
+
+    if (syncResult.error) {
+      console.error("Błąd sprawdzania płatności w wFirmie:", syncResult.error);
+      alert(`Nie udało się sprawdzić płatności w wFirmie.\n\n${syncResult.error.message}`);
+    }
+
+    await loadData();
   }
 
   async function generateInvoices(monthDate = monthToDate(invoiceMonth), options?: { silent?: boolean }) {
@@ -230,9 +245,9 @@ function InvoicesContent() {
           <p style={eyebrowStyle}>Automatyzacja</p>
           <h1 style={titleStyle}>Faktury</h1>
         </div>
-        <button type="button" style={secondaryButtonStyle} onClick={() => loadData()} disabled={loading || generating}>
+        <button type="button" style={secondaryButtonStyle} onClick={refreshInvoices} disabled={loading || generating || syncingPayments}>
           <RotateCw size={18} />
-          Odśwież
+          {loading || syncingPayments ? "Odświeżanie..." : "Odśwież"}
         </button>
       </section>
 
@@ -510,7 +525,7 @@ function DetailStat({ label, value }: { label: string; value: React.ReactNode })
   return (
     <div style={detailStatStyle}>
       <span>{label}</span>
-      <strong>{value}</strong>
+      <strong style={detailStatValueStyle}>{value}</strong>
     </div>
   );
 }
@@ -521,7 +536,7 @@ function ReadinessItem({ ok, label, value }: { ok: boolean; label: string; value
       <span style={ok ? readinessDotOkStyle : readinessDotErrorStyle} />
       <div style={readinessTextStyle}>
         <span style={readinessLabelStyle}>{label}</span>
-        <strong style={readinessValueStyle}>{value}</strong>
+        <span style={readinessValueStyle}>{value}</span>
       </div>
     </div>
   );
@@ -532,7 +547,7 @@ function Th({ children }: { children: React.ReactNode }) {
 }
 
 function Td({ children, strong, colSpan, style }: { children: React.ReactNode; strong?: boolean; colSpan?: number; style?: CSSProperties }) {
-  return <td colSpan={colSpan} style={{ ...tdStyle, fontWeight: strong ? 850 : 650, ...style }}>{children}</td>;
+  return <td colSpan={colSpan} style={{ ...tdStyle, fontWeight: strong ? 720 : 500, ...style }}>{children}</td>;
 }
 
 function Small({ children }: { children: React.ReactNode }) {
@@ -743,18 +758,19 @@ const detailsPanelStyle: CSSProperties = { width: "min(920px, 92vw)", height: "1
 const detailsHeaderStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "flex-start", marginBottom: "18px" };
 const detailsTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "28px" };
 const detailsSummaryGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(145px, 1fr))", gap: "10px", marginBottom: "16px" };
-const detailStatStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "10px 12px", display: "grid", gap: "5px", minHeight: "64px", alignContent: "center", color: colors.text };
+const detailStatStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "10px 12px", display: "grid", gap: "5px", minHeight: "64px", alignContent: "center", color: colors.text, fontWeight: 500 };
+const detailStatValueStyle: CSSProperties = { fontWeight: 650 };
 const wfirmaReadinessStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "14px", marginBottom: "16px", background: colors.card };
 const sectionTitleRowStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", marginBottom: "12px" };
 const readinessGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "10px 14px" };
 const readinessItemStyle: CSSProperties = { display: "grid", gridTemplateColumns: "10px minmax(0, 1fr)", gap: "9px", alignItems: "start", color: colors.text, minWidth: 0 };
 const readinessTextStyle: CSSProperties = { display: "grid", gap: "3px", minWidth: 0 };
-const readinessLabelStyle: CSSProperties = { color: colors.muted, fontSize: "12px", fontWeight: 800, lineHeight: 1.2 };
-const readinessValueStyle: CSSProperties = { color: colors.text, fontSize: "14px", fontWeight: 850, lineHeight: 1.3, overflowWrap: "anywhere" };
+const readinessLabelStyle: CSSProperties = { color: colors.muted, fontSize: "12px", fontWeight: 650, lineHeight: 1.2 };
+const readinessValueStyle: CSSProperties = { color: colors.text, fontSize: "14px", fontWeight: 620, lineHeight: 1.3, overflowWrap: "anywhere" };
 const readinessDotOkStyle: CSSProperties = { width: "9px", height: "9px", borderRadius: "999px", background: colors.success };
 const readinessDotErrorStyle: CSSProperties = { ...readinessDotOkStyle, background: colors.danger };
 const lineTableWrapperStyle: CSSProperties = { overflowX: "auto", border: `1px solid ${colors.border}`, borderRadius: radius.input };
 const lineTableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse", minWidth: "760px" };
 const invoiceDescriptionStyle: CSSProperties = { marginTop: "18px", border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "14px", background: colors.card };
 const descriptionTitleStyle: CSSProperties = { margin: "0 0 8px", color: colors.navy, fontSize: "16px" };
-const descriptionTextStyle: CSSProperties = { margin: 0, color: colors.text, fontWeight: 700, lineHeight: 1.55, whiteSpace: "pre-line" };
+const descriptionTextStyle: CSSProperties = { margin: 0, color: colors.text, fontWeight: 500, lineHeight: 1.55, whiteSpace: "pre-line" };

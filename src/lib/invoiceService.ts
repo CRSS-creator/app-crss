@@ -223,6 +223,13 @@ export async function syncWfirmaPayments(month?: string): Promise<{ data: Wfirma
   );
 }
 
+export async function getInvoicePdfUrl(invoiceId: string) {
+  return callWfirmaEndpoint<{ url: string; name: string }>(
+    "/api/faktury/pdf-url",
+    { invoiceId }
+  );
+}
+
 async function getWfirmaPaymentSyncMonths(): Promise<{ data: string[]; error: Error | null }> {
   const result = await supabase
     .from("faktury")

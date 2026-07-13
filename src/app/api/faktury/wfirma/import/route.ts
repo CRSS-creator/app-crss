@@ -12,6 +12,24 @@ import {
 
 const ALLOWED_ROLES = new Set(["owner", "admin"]);
 const OWN_COMPANY_NIPS = new Set(["7851814025"]);
+const PAID_VALUES = new Set([
+  "1",
+  "true",
+  "yes",
+  "paid",
+  "paid_full",
+  "fully_paid",
+  "settled",
+  "closed",
+  "oplacona",
+  "opłacona",
+  "oplacono",
+  "opłacono",
+  "zaplacona",
+  "zapłacona",
+  "zaplacono",
+  "zapłacono",
+]);
 
 type ImportPayload = {
   month?: string;
@@ -148,7 +166,7 @@ async function saveImportedInvoice(
   const contractorInfo = resolveContractorInfo(invoice, clients);
   const contractorNip = contractorInfo.nip;
   const client = clients.find((item) => normalizeNip(item.nip) === normalizeNip(contractorNip));
-  const paymentState = stringify(invoice.paymentstate);
+  const paymentState = normalizeText(invoice.paymentstate);
   const gross = numberValue(invoice.total_composed ?? invoice.total);
   const net = numberValue(invoice.netto);
   const tax = numberValue(invoice.tax);
@@ -158,7 +176,7 @@ async function saveImportedInvoice(
     klient_id: client?.id || null,
     numer: stringify(invoice.fullnumber || invoice.number),
     typ: invoice.type === "correction" ? "korekta" : "sprzedaz",
-    status: paymentState === "paid" ? "oplacona" : "wystawiona",
+    status: PAID_VALUES.has(paymentState) ? "oplacona" : "wystawiona",
     kategoria: "standardowa",
     zrodlo: "wfirma",
     data_wystawienia: issueDate,
@@ -302,6 +320,10 @@ function normalizeNip(value: unknown) {
 function stringify(value: unknown) {
   if (value === null || value === undefined) return "";
   return String(value).trim();
+}
+
+function normalizeText(value: unknown) {
+  return stringify(value).toLowerCase().replace(/\s+/g, "_");
 }
 
 function dateOnly(value: unknown) {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { CalendarClock, DownloadCloud, RotateCw } from "lucide-react";
+import { CalendarClock, DownloadCloud, FileText, RotateCw } from "lucide-react";
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
 import AppSelect from "@/components/AppSelect";
@@ -9,6 +9,7 @@ import { colors, radius, shadow } from "@/app/design";
 import {
   ensureSubscriptionInvoices,
   fetchInvoices,
+  getInvoicePdfUrl,
   importWfirmaInvoices,
   sendInvoicesToWfirma,
   syncWfirmaPayments,
@@ -61,6 +62,7 @@ function InvoicesContent() {
   const [detailsInvoice, setDetailsInvoice] = useState<Invoice | null>(null);
   const [savingCategoryId, setSavingCategoryId] = useState<string | null>(null);
   const [savingPeriodId, setSavingPeriodId] = useState<string | null>(null);
+  const [openingPdfId, setOpeningPdfId] = useState<string | null>(null);
 
   useEffect(() => {
     void loadData({ generateCurrentMonth: true });
@@ -234,6 +236,25 @@ function InvoicesContent() {
     const updatedInvoice = (result.data || { ...invoice, okres }) as Invoice;
     setInvoices((current) => current.map((item) => (item.id === invoice.id ? updatedInvoice : item)));
     setDetailsInvoice((current) => (current?.id === invoice.id ? updatedInvoice : current));
+  }
+
+  async function openInvoicePdf(invoice: Invoice) {
+    if (!invoice.wfirma_pdf_path) {
+      alert("Ta faktura nie ma jeszcze pobranego PDF.");
+      return;
+    }
+
+    setOpeningPdfId(invoice.id);
+    const result = await getInvoicePdfUrl(invoice.id);
+    setOpeningPdfId(null);
+
+    if (result.error || !result.data?.url) {
+      console.error("Błąd otwierania PDF faktury:", result.error);
+      alert(`Nie udało się otworzyć PDF faktury.\n\n${result.error?.message || ""}`);
+      return;
+    }
+
+    window.open(result.data.url, "_blank", "noopener,noreferrer");
   }
 
   const detailsReadinessIssues = detailsInvoice ? wfirmaReadinessIssues(detailsInvoice) : [];
@@ -430,7 +451,7 @@ function InvoicesContent() {
           <aside style={detailsPanelStyle} onClick={(event) => event.stopPropagation()}>
             <div style={detailsHeaderStyle}>
               <div>
-                <p style={eyebrowStyle}>Podgląd PDF</p>
+                <p style={eyebrowStyle}>Szczegóły FV</p>
                 <h2 style={detailsTitleStyle}>{invoiceNumberLabel(detailsInvoice)}</h2>
               </div>
               <button type="button" style={secondaryButtonStyle} onClick={() => setDetailsInvoice(null)}>
@@ -448,6 +469,30 @@ function InvoicesContent() {
               <DetailStat label="Netto" value={formatMoney(detailsInvoice.kwota_netto)} />
               <DetailStat label="Brutto" value={formatMoney(detailsInvoice.kwota_brutto)} />
             </div>
+
+            <section style={invoicePdfStyle}>
+              <div>
+                <h3 style={descriptionTitleStyle}>PDF faktury</h3>
+                <p style={pdfMetaStyle}>
+                  {detailsInvoice.wfirma_pdf_path
+                    ? detailsInvoice.wfirma_pdf_name || "PDF pobrany z wFirmy"
+                    : "PDF pojawi się tutaj po wysłaniu faktury do wFirmy i pobraniu pliku."}
+                </p>
+              </div>
+              {detailsInvoice.wfirma_pdf_path ? (
+                <button
+                  type="button"
+                  style={secondaryButtonStyle}
+                  disabled={openingPdfId === detailsInvoice.id}
+                  onClick={() => openInvoicePdf(detailsInvoice)}
+                >
+                  <FileText size={18} />
+                  {openingPdfId === detailsInvoice.id ? "Otwieranie..." : "Otwórz PDF"}
+                </button>
+              ) : (
+                <Badge tone="neutral">Brak PDF</Badge>
+              )}
+            </section>
 
             <section style={wfirmaReadinessStyle}>
               <div style={sectionTitleRowStyle}>
@@ -760,6 +805,8 @@ const detailsTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSi
 const detailsSummaryGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(145px, 1fr))", gap: "10px", marginBottom: "16px" };
 const detailStatStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "10px 12px", display: "grid", gap: "5px", minHeight: "64px", alignContent: "center", color: colors.text, fontWeight: 500 };
 const detailStatValueStyle: CSSProperties = { fontWeight: 650 };
+const invoicePdfStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "14px", marginBottom: "16px", background: colors.card, display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap" };
+const pdfMetaStyle: CSSProperties = { margin: 0, color: colors.muted, fontSize: "13px", fontWeight: 650, overflowWrap: "anywhere" };
 const wfirmaReadinessStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "14px", marginBottom: "16px", background: colors.card };
 const sectionTitleRowStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", marginBottom: "12px" };
 const readinessGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "10px 14px" };

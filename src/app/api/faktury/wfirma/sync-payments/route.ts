@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getAuthorizedServerUser } from "@/lib/serverAuth";
 import { firstWfirmaInvoice, getWfirmaConfig, getWfirmaInvoice, type WfirmaInvoice } from "@/lib/wfirmaClient";
 
+const ALLOWED_ROLES = new Set(["owner", "admin"]);
 const STATUSES_TO_CHECK = ["wystawiona", "wyslana", "przeterminowana"];
 const MAX_INVOICES_PER_RUN = 200;
 const PAID_VALUES = new Set([
@@ -49,8 +51,8 @@ export async function POST(request: NextRequest) {
 }
 
 async function syncPayments(request: NextRequest) {
-  const secretError = validateSyncSecret(request);
-  if (secretError) return secretError;
+  const authError = await authorizeSync(request);
+  if (authError) return authError;
 
   const admin = createAdminClient();
   if (!admin) {
@@ -126,22 +128,32 @@ async function syncPayments(request: NextRequest) {
   });
 }
 
+async function authorizeSync(request: NextRequest) {
+  const secretResult = validateSyncSecret(request);
+  if (secretResult === true) return null;
+  if (secretResult) return secretResult;
+
+  const auth = await getAuthorizedServerUser(request, ALLOWED_ROLES, "Brak uprawnień do sprawdzania płatności w wFirmie.");
+  return auth.error;
+}
+
 function validateSyncSecret(request: NextRequest) {
   const expected = process.env.WFIRMA_PAYMENT_SYNC_SECRET?.trim();
+  const headerSecret = request.headers.get("x-cron-secret")?.trim();
+  const querySecret = request.nextUrl.searchParams.get("secret")?.trim();
+  const provided = headerSecret || querySecret;
+
+  if (!provided) return null;
+
   if (!expected) {
     return NextResponse.json({ error: "Brak WFIRMA_PAYMENT_SYNC_SECRET w konfiguracji aplikacji." }, { status: 500 });
   }
-
-  const bearer = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim();
-  const headerSecret = request.headers.get("x-cron-secret")?.trim();
-  const querySecret = request.nextUrl.searchParams.get("secret")?.trim();
-  const provided = bearer || headerSecret || querySecret;
 
   if (provided !== expected) {
     return NextResponse.json({ error: "Brak dostępu do nocnego sprawdzania płatności." }, { status: 401 });
   }
 
-  return null;
+  return true;
 }
 
 function createAdminClient() {

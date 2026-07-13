@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
       )
     `)
     .in("id", invoiceIds)
-    .in("wfirma_sync_status", ["nie_wyslano", "w_kolejce", "blad"]);
+    .in("wfirma_sync_status", ["nie_wyslano", "w_kolejce", "blad", "wyslano"]);
 
   if (error) {
     return NextResponse.json({ error: "Nie udało się pobrać faktur do wysyłki." }, { status: 500 });

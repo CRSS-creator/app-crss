@@ -276,21 +276,7 @@ function buildWfirmaInvoicePayload(
     lines.map((line, index) => [
       String(index),
       {
-        invoicecontent: {
-          ...(wfirmaGoodIds[index]
-            ? {
-                good_id: wfirmaGoodIds[index],
-                good: { id: wfirmaGoodIds[index] },
-              }
-            : {}),
-          name: line.nazwa,
-          count: decimal(line.ilosc || 1, 4),
-          unit_count: decimal(line.ilosc || 1, 4),
-          price: decimal(line.cena_netto || 0, 2),
-          unit: line.jednostka || "szt.",
-          vat: normalizeVat(line.stawka_vat),
-          gtu: 12,
-        },
+        invoicecontent: buildWfirmaInvoiceContent(line, wfirmaGoodIds[index]),
       },
     ])
   );
@@ -320,6 +306,29 @@ function buildWfirmaInvoicePayload(
     price_type: "netto",
     description: invoice.opis || undefined,
     invoicecontents,
+  };
+}
+
+function buildWfirmaInvoiceContent(line: InvoiceLineRow, wfirmaGoodId: string | null) {
+  const base = {
+    count: decimal(line.ilosc || 1, 4),
+    unit_count: decimal(line.ilosc || 1, 4),
+    price: decimal(line.cena_netto || 0, 2),
+    vat: normalizeVat(line.stawka_vat),
+    gtu: "12",
+  };
+
+  if (wfirmaGoodId) {
+    return {
+      ...base,
+      good: { id: wfirmaGoodId },
+    };
+  }
+
+  return {
+    ...base,
+    name: line.nazwa,
+    unit: line.jednostka || "szt.",
   };
 }
 
@@ -358,7 +367,8 @@ async function ensureWfirmaGoodForLine(
   const existing = extractWfirmaGoods(found).find((good) => normalizeGoodName(good.name) === normalizeGoodName(name));
   const existingId = stringify(existing?.id);
   if (existingId) {
-    if (stringify(existing?.gtu) !== "12") {
+    const expectedCode = buildWfirmaGoodCode(name);
+    if (stringify(existing?.gtu) !== "12" || stringify(existing?.code) !== expectedCode) {
       await editWfirmaGood(config, existingId, buildWfirmaGoodPayload(line, name));
     }
     return existingId;
@@ -376,12 +386,12 @@ async function ensureWfirmaGoodForLine(
 function buildWfirmaGoodPayload(line: InvoiceLineRow, name: string) {
   return {
     name,
+    code: buildWfirmaGoodCode(name),
     unit: line.jednostka || "szt.",
     netto: decimal(line.cena_netto || 0, 2),
     type: "service",
     vat: normalizeVat(line.stawka_vat),
-    gtu: 12,
-    warehouse_type: "simple",
+    gtu: "12",
   };
 }
 
@@ -461,6 +471,17 @@ function normalizeNip(value: unknown) {
 
 function normalizeGoodName(value: unknown) {
   return stringify(value).replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function buildWfirmaGoodCode(name: string) {
+  const slug = name
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48)
+    .toUpperCase();
+  return `CRSS-GTU12-${slug || "USLUGA"}`;
 }
 
 function dateOnly(value: unknown) {

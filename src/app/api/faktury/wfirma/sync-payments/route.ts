@@ -24,6 +24,23 @@ const PAID_VALUES = new Set([
   "zaplacono",
   "zapłacono",
 ]);
+const UNPAID_VALUES = new Set([
+  "0",
+  "false",
+  "no",
+  "unpaid",
+  "not_paid",
+  "unsettled",
+  "open",
+  "nieoplacona",
+  "nieopłacona",
+  "nieoplacono",
+  "nieopłacono",
+  "niezaplacona",
+  "niezapłacona",
+  "niezaplacono",
+  "niezapłacono",
+]);
 
 type InvoiceRow = {
   id: string;
@@ -176,9 +193,30 @@ function isPaidInvoice(invoice: WfirmaInvoice) {
     record.paid,
     record.status,
     record.state,
+    ...collectPaymentValues(invoice),
   ].map(normalizeText);
 
-  return values.some((value) => PAID_VALUES.has(value));
+  if (values.some((value) => PAID_VALUES.has(value))) return true;
+  if (values.some((value) => UNPAID_VALUES.has(value))) return false;
+
+  return false;
+}
+
+function collectPaymentValues(value: unknown, path: string[] = []): unknown[] {
+  if (!value || typeof value !== "object") return [];
+
+  if (Array.isArray(value)) {
+    return value.flatMap((item, index) => collectPaymentValues(item, [...path, String(index)]));
+  }
+
+  return Object.entries(value as Record<string, unknown>).flatMap(([key, child]) => {
+    const currentPath = [...path, key];
+    const normalizedPath = normalizeText(currentPath.join("_"));
+    const direct = /payment|paid|platnosc|płatność|oplac|opłac|zaplac|zapłac|settle/.test(normalizedPath)
+      ? [child]
+      : [];
+    return [...direct, ...collectPaymentValues(child, currentPath)];
+  });
 }
 
 function normalizeText(value: unknown) {

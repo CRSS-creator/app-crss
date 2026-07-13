@@ -6,6 +6,7 @@ const CLIENT_SELECT = `
       nip,
       telefon,
       email,
+      adres_dzialalnosci,
       osoba_kontaktowa,
       forma_prawna,
       forma_opodatkowania,

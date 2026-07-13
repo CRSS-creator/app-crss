@@ -278,6 +278,8 @@ function buildWfirmaInvoicePayload(
           unit: line.jednostka || "szt.",
           vat: normalizeVat(line.stawka_vat),
           gtu: 12,
+          gtu_code: "GTU_12",
+          jpk_v7_code: "GTU_12",
         },
       },
     ])

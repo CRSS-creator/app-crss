@@ -2,10 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAuthorizedServerUser } from "@/lib/serverAuth";
 import {
+  addWfirmaGood,
   addWfirmaInvoice,
   downloadWfirmaInvoicePdf,
+  editWfirmaGood,
   extractWfirmaContractors,
+  extractWfirmaGoods,
   findWfirmaContractors,
+  findWfirmaGoods,
+  firstWfirmaGood,
   firstWfirmaInvoice,
   getWfirmaConfig,
 } from "@/lib/wfirmaClient";
@@ -109,9 +114,11 @@ export async function POST(request: NextRequest) {
       if (!wfirmaContractorId && (!contractorAddress?.zip || !contractorAddress.city)) {
         throw new Error("Brakuje adresu kontrahenta do wFirmy. Uzupełnij w szczegółach klienta pole Adres działalności w formacie np. ul. Przykładowa 1, 63-100 Śrem.");
       }
+      const invoiceLines = sortedInvoiceLines(invoice);
+      const wfirmaGoodIds = await resolveWfirmaGoodIds(wfirma.config, invoiceLines);
       const response = await addWfirmaInvoice(
         wfirma.config,
-        buildWfirmaInvoicePayload(invoice, issueDate, defaultPaymentDate, contractorAddress, wfirmaContractorId)
+        buildWfirmaInvoicePayload(invoice, issueDate, defaultPaymentDate, contractorAddress, wfirmaContractorId, wfirmaGoodIds)
       );
       const wfirmaInvoice = firstWfirmaInvoice(response);
       const wfirmaIssueDate = dateOnly(wfirmaInvoice?.date) || issueDate;
@@ -261,16 +268,21 @@ function buildWfirmaInvoicePayload(
   issueDate: string,
   defaultPaymentDate: string,
   contractorAddress: ReturnType<typeof parsePolishAddress>,
-  wfirmaContractorId: string | null
+  wfirmaContractorId: string | null,
+  wfirmaGoodIds: Array<string | null>
 ) {
-  const lines = [...(invoice.faktury_pozycje || [])].sort(
-    (first, second) => Number(first.sort_order || 0) - Number(second.sort_order || 0)
-  );
+  const lines = sortedInvoiceLines(invoice);
   const invoicecontents = Object.fromEntries(
     lines.map((line, index) => [
       String(index),
       {
         invoicecontent: {
+          ...(wfirmaGoodIds[index]
+            ? {
+                good_id: wfirmaGoodIds[index],
+                good: { id: wfirmaGoodIds[index] },
+              }
+            : {}),
           name: line.nazwa,
           count: decimal(line.ilosc || 1, 4),
           unit_count: decimal(line.ilosc || 1, 4),
@@ -278,8 +290,6 @@ function buildWfirmaInvoicePayload(
           unit: line.jednostka || "szt.",
           vat: normalizeVat(line.stawka_vat),
           gtu: 12,
-          gtu_code: "GTU_12",
-          jpk_v7_code: "GTU_12",
         },
       },
     ])
@@ -308,9 +318,70 @@ function buildWfirmaInvoicePayload(
     paymentstate: "unpaid",
     currency: invoice.waluta || "PLN",
     price_type: "netto",
-    gtu: 12,
     description: invoice.opis || undefined,
     invoicecontents,
+  };
+}
+
+function sortedInvoiceLines(invoice: InvoiceRow) {
+  return [...(invoice.faktury_pozycje || [])].sort(
+    (first, second) => Number(first.sort_order || 0) - Number(second.sort_order || 0)
+  );
+}
+
+async function resolveWfirmaGoodIds(
+  config: Parameters<typeof addWfirmaInvoice>[0],
+  lines: InvoiceLineRow[]
+) {
+  const cache = new Map<string, string | null>();
+  const ids: Array<string | null> = [];
+
+  for (const line of lines) {
+    const key = normalizeGoodName(line.nazwa);
+    if (!cache.has(key)) {
+      cache.set(key, await ensureWfirmaGoodForLine(config, line));
+    }
+    ids.push(cache.get(key) || null);
+  }
+
+  return ids;
+}
+
+async function ensureWfirmaGoodForLine(
+  config: Parameters<typeof addWfirmaInvoice>[0],
+  line: InvoiceLineRow
+) {
+  const name = stringify(line.nazwa);
+  if (!name) return null;
+
+  const found = await findWfirmaGoods({ config, name });
+  const existing = extractWfirmaGoods(found).find((good) => normalizeGoodName(good.name) === normalizeGoodName(name));
+  const existingId = stringify(existing?.id);
+  if (existingId) {
+    if (stringify(existing?.gtu) !== "12") {
+      await editWfirmaGood(config, existingId, buildWfirmaGoodPayload(line, name));
+    }
+    return existingId;
+  }
+
+  const created = await addWfirmaGood(config, buildWfirmaGoodPayload(line, name));
+  const createdId = stringify(firstWfirmaGood(created)?.id);
+  if (!createdId) {
+    throw new Error(`Nie udalo sie utworzyc uslugi z GTU 12 w wFirmie dla pozycji: ${name}.`);
+  }
+
+  return createdId;
+}
+
+function buildWfirmaGoodPayload(line: InvoiceLineRow, name: string) {
+  return {
+    name,
+    unit: line.jednostka || "szt.",
+    netto: decimal(line.cena_netto || 0, 2),
+    type: "service",
+    vat: normalizeVat(line.stawka_vat),
+    gtu: 12,
+    warehouse_type: "simple",
   };
 }
 
@@ -386,6 +457,10 @@ function stringify(value: unknown) {
 
 function normalizeNip(value: unknown) {
   return stringify(value).replace(/\D/g, "");
+}
+
+function normalizeGoodName(value: unknown) {
+  return stringify(value).replace(/\s+/g, " ").trim().toLowerCase();
 }
 
 function dateOnly(value: unknown) {

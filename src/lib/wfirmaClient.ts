@@ -16,6 +16,17 @@ export type WfirmaContractor = {
   email?: string | null;
 };
 
+export type WfirmaGood = {
+  id?: string | number | null;
+  name?: string | null;
+  code?: string | null;
+  unit?: string | null;
+  netto?: string | number | null;
+  brutto?: string | number | null;
+  type?: string | null;
+  gtu?: string | number | null;
+};
+
 export type WfirmaInvoiceLine = {
   id?: string | number | null;
   name?: string | null;
@@ -168,6 +179,49 @@ export async function findWfirmaContractors(params: {
   });
 }
 
+export async function findWfirmaGoods(params: {
+  config: WfirmaConfig;
+  name: string;
+  page?: number;
+  limit?: number;
+}) {
+  const body = {
+    goods: {
+      parameters: {
+        conditions: {
+          condition: {
+            0: { field: "name", operator: "eq", value: params.name },
+          },
+        },
+        page: params.page || 1,
+        limit: params.limit || 20,
+      },
+    },
+  };
+
+  return wfirmaRequest<{ goods?: unknown; status?: { code?: string } }>("goods/find", {
+    method: "POST",
+    body,
+    config: params.config,
+  });
+}
+
+export async function addWfirmaGood(config: WfirmaConfig, good: unknown) {
+  return wfirmaRequest<{ goods?: unknown; status?: { code?: string } }>("goods/add", {
+    method: "POST",
+    body: { goods: { good } },
+    config,
+  });
+}
+
+export async function editWfirmaGood(config: WfirmaConfig, id: string | number, good: unknown) {
+  return wfirmaRequest<{ goods?: unknown; status?: { code?: string } }>(`goods/edit/${id}`, {
+    method: "POST",
+    body: { goods: { good } },
+    config,
+  });
+}
+
 export async function addWfirmaInvoice(config: WfirmaConfig, invoice: unknown) {
   return wfirmaRequest<{ invoices?: unknown; status?: { code?: string } }>("invoices/add", {
     method: "POST",
@@ -210,8 +264,17 @@ export function extractWfirmaContractors(payload: unknown): WfirmaContractor[] {
   return extractModuleRecords<WfirmaContractor>(contractorsRoot, "contractor");
 }
 
+export function extractWfirmaGoods(payload: unknown): WfirmaGood[] {
+  const goodsRoot = (payload as { goods?: unknown } | null)?.goods;
+  return extractModuleRecords<WfirmaGood>(goodsRoot, "good");
+}
+
 export function extractWfirmaInvoiceLines(invoice: WfirmaInvoice): WfirmaInvoiceLine[] {
   return extractModuleRecords<WfirmaInvoiceLine>(invoice.invoicecontents, "invoicecontent");
+}
+
+export function firstWfirmaGood(payload: unknown) {
+  return extractWfirmaGoods(payload)[0] || null;
 }
 
 export function firstWfirmaInvoice(payload: unknown) {

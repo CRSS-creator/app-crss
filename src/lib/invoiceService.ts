@@ -114,7 +114,6 @@ const INVOICE_SELECT = `
 `;
 
 export async function fetchInvoices() {
-  await syncWfirmaPayments();
   await supabase.rpc("mark_overdue_invoices");
 
   return supabase

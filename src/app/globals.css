@@ -28,3 +28,23 @@ body {
 section[data-active-page="umowy"] > section:first-child a[href="/crm"] {
   display: none !important;
 }
+
+body > div [style*="position: fixed"][style*="z-index: 50"] aside strong,
+body > div [style*="position: fixed"][style*="zIndex: 50"] aside strong {
+  font-weight: 650 !important;
+}
+
+body > div [style*="position: fixed"][style*="z-index: 50"] aside td,
+body > div [style*="position: fixed"][style*="zIndex: 50"] aside td {
+  font-weight: 500 !important;
+}
+
+body > div [style*="position: fixed"][style*="z-index: 50"] aside td[style*="font-weight"],
+body > div [style*="position: fixed"][style*="zIndex: 50"] aside td[style*="font-weight"] {
+  font-weight: 620 !important;
+}
+
+body > div [style*="position: fixed"][style*="z-index: 50"] aside p,
+body > div [style*="position: fixed"][style*="zIndex: 50"] aside p {
+  font-weight: 500 !important;
+}

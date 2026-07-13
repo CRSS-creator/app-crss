@@ -147,6 +147,22 @@ export async function getWfirmaInvoice(config: WfirmaConfig, id: string | number
   });
 }
 
+export async function downloadWfirmaInvoicePdf(config: WfirmaConfig, id: string | number) {
+  const body = { invoices: { invoice: { id } } };
+  const actions = ["invoices/download", "invoices/print", "invoices/pdf", "invoices/get"];
+  const errors: string[] = [];
+
+  for (const action of actions) {
+    try {
+      return await wfirmaBinaryRequest(action, { body, config });
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  throw new Error(errors[0] || "wFirma nie zwróciła pliku PDF faktury.");
+}
+
 export function extractWfirmaInvoices(payload: unknown): WfirmaInvoice[] {
   const invoicesRoot = (payload as { invoices?: unknown } | null)?.invoices;
   return extractModuleRecords<WfirmaInvoice>(invoicesRoot, "invoice");
@@ -188,4 +204,40 @@ function parseJson(value: string) {
   } catch {
     return null;
   }
+}
+
+async function wfirmaBinaryRequest(
+  action: string,
+  options: { body?: unknown; config: WfirmaConfig }
+) {
+  const url = new URL(`${WFIRMA_API_URL}/${action.replace(/^\/+/, "")}`);
+  url.searchParams.set("inputFormat", "json");
+  url.searchParams.set("outputFormat", "pdf");
+  if (options.config.companyId) url.searchParams.set("company_id", options.config.companyId);
+
+  const response = await fetch(url.toString(), {
+    method: "POST",
+    headers: {
+      accessKey: options.config.accessKey,
+      secretKey: options.config.secretKey,
+      appKey: options.config.appKey,
+      "Content-Type": "application/json",
+      Accept: "application/pdf",
+    },
+    body: options.body ? JSON.stringify(options.body) : undefined,
+  });
+
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (!response.ok || !looksLikePdf(bytes)) {
+    const text = new TextDecoder().decode(bytes.slice(0, 1000));
+    const data = parseJson(text);
+    const message = data?.status?.message || data?.status?.description || text || `HTTP ${response.status}`;
+    throw new Error(`wFirma ${response.status}: ${message}`);
+  }
+
+  return bytes;
+}
+
+function looksLikePdf(bytes: Uint8Array) {
+  return bytes.length > 4 && bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46;
 }

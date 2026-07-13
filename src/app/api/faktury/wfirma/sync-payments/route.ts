@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getAuthorizedServerUser } from "@/lib/serverAuth";
-import { firstWfirmaInvoice, getWfirmaConfig, getWfirmaInvoice, type WfirmaInvoice } from "@/lib/wfirmaClient";
+import {
+  extractWfirmaInvoices,
+  findWfirmaInvoices,
+  firstWfirmaInvoice,
+  getWfirmaConfig,
+  getWfirmaInvoice,
+  type WfirmaInvoice,
+} from "@/lib/wfirmaClient";
 
 const ALLOWED_ROLES = new Set(["owner", "admin"]);
 const STATUSES_TO_CHECK = ["wystawiona", "wyslana", "przeterminowana"];
@@ -45,6 +52,7 @@ const UNPAID_VALUES = new Set([
 type InvoiceRow = {
   id: string;
   numer: string | null;
+  data_wystawienia: string | null;
   wfirma_id: string | null;
   status: string;
 };
@@ -83,7 +91,7 @@ async function syncPayments(request: NextRequest) {
 
   const { data, error } = await admin
     .from("faktury")
-    .select("id,numer,wfirma_id,status")
+    .select("id,numer,data_wystawienia,wfirma_id,status")
     .in("status", STATUSES_TO_CHECK)
     .not("wfirma_id", "is", null)
     .order("termin_platnosci", { ascending: true })
@@ -94,6 +102,7 @@ async function syncPayments(request: NextRequest) {
   }
 
   const invoices = ((data || []) as InvoiceRow[]).filter((invoice) => stringify(invoice.wfirma_id));
+  const wfirmaInvoicesById = await loadWfirmaInvoicesById(wfirma.config, invoices);
   const paid: PaidInvoice[] = [];
   const failed: FailedInvoice[] = [];
 
@@ -102,8 +111,7 @@ async function syncPayments(request: NextRequest) {
     const baseResult = { invoiceId: invoice.id, number: invoice.numer, wfirmaId };
 
     try {
-      const response = await getWfirmaInvoice(wfirma.config, wfirmaId);
-      const wfirmaInvoice = firstWfirmaInvoice(response);
+      const wfirmaInvoice = wfirmaInvoicesById.get(wfirmaId) || await getWfirmaInvoiceById(wfirma.config, wfirmaId);
       if (!wfirmaInvoice) throw new Error("wFirma nie zwróciła danych tej faktury.");
 
       if (!isPaidInvoice(wfirmaInvoice)) continue;
@@ -143,6 +151,51 @@ async function syncPayments(request: NextRequest) {
     paid,
     failed,
   });
+}
+
+async function loadWfirmaInvoicesById(
+  config: Parameters<typeof findWfirmaInvoices>[0]["config"],
+  invoices: InvoiceRow[]
+) {
+  const months = Array.from(
+    new Set(
+      invoices
+        .map((invoice) => dateOnly(invoice.data_wystawienia))
+        .filter(Boolean)
+        .map((date) => date!.slice(0, 7))
+    )
+  );
+  const invoicesById = new Map<string, WfirmaInvoice>();
+
+  for (const month of months) {
+    const range = monthRange(month);
+    let page = 1;
+    const limit = 100;
+
+    while (page <= 20) {
+      const response = await findWfirmaInvoices({
+        config,
+        dateFrom: range.dateFrom,
+        dateTo: range.dateTo,
+        page,
+        limit,
+      });
+      const wfirmaInvoices = extractWfirmaInvoices(response);
+      for (const invoice of wfirmaInvoices) {
+        const id = stringify(invoice.id);
+        if (id) invoicesById.set(id, invoice);
+      }
+      if (wfirmaInvoices.length < limit) break;
+      page += 1;
+    }
+  }
+
+  return invoicesById;
+}
+
+async function getWfirmaInvoiceById(config: Parameters<typeof getWfirmaInvoice>[0], wfirmaId: string) {
+  const response = await getWfirmaInvoice(config, wfirmaId);
+  return firstWfirmaInvoice(response);
 }
 
 async function authorizeSync(request: NextRequest) {
@@ -221,6 +274,19 @@ function collectPaymentValues(value: unknown, path: string[] = []): unknown[] {
 
 function normalizeText(value: unknown) {
   return stringify(value).toLowerCase();
+}
+
+function dateOnly(value: unknown) {
+  const text = stringify(value);
+  return /^\d{4}-\d{2}-\d{2}/.test(text) ? text.slice(0, 10) : null;
+}
+
+function monthRange(month: string) {
+  const dateFrom = `${month}-01`;
+  const nextMonth = new Date(`${dateFrom}T00:00:00.000Z`);
+  nextMonth.setUTCMonth(nextMonth.getUTCMonth() + 1);
+  const dateTo = new Date(nextMonth.getTime() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  return { dateFrom, dateTo };
 }
 
 function stringify(value: unknown) {

@@ -94,7 +94,7 @@ export async function wfirmaRequest<T>(
 
   if (!response.ok || data?.status?.code !== "OK") {
     const code = data?.status?.code || response.status;
-    const message = data?.status?.message || data?.status?.description || text || "Nieznany błąd wFirmy.";
+    const message = wfirmaErrorMessage(data, text);
     throw new Error(`wFirma ${code}: ${message}`);
   }
 
@@ -204,6 +204,48 @@ function parseJson(value: string) {
   } catch {
     return null;
   }
+}
+
+function wfirmaErrorMessage(data: unknown, fallbackText: string) {
+  const fieldErrors = collectWfirmaFieldErrors(data);
+  if (fieldErrors.length > 0) return Array.from(new Set(fieldErrors)).join("\n");
+
+  const status = isRecord(data) ? data.status : null;
+  if (isRecord(status)) {
+    const message = stringify(status.message || status.description);
+    if (message) return message;
+  }
+
+  return fallbackText || "Nieznany błąd wFirmy.";
+}
+
+function collectWfirmaFieldErrors(value: unknown): string[] {
+  if (Array.isArray(value)) return value.flatMap(collectWfirmaFieldErrors);
+  if (!isRecord(value)) return [];
+
+  const directError = value.error;
+  const errors = isRecord(directError)
+    ? [formatWfirmaFieldError(directError)].filter(Boolean)
+    : [];
+
+  return [
+    ...errors,
+    ...Object.values(value).flatMap(collectWfirmaFieldErrors),
+  ];
+}
+
+function formatWfirmaFieldError(error: Record<string, unknown>) {
+  const field = stringify(error.field);
+  const message = stringify(error.message);
+  if (!field && !message) return "";
+
+  const label = field === "zip" ? "Kod pocztowy" : field === "city" ? "Miasto" : field || "Pole";
+  return `${label}: ${message || "wFirma odrzuciła tę wartość"}`;
+}
+
+function stringify(value: unknown) {
+  if (value === null || value === undefined) return "";
+  return String(value).trim();
 }
 
 async function wfirmaBinaryRequest(

@@ -216,15 +216,19 @@ async function authorizeSync(request: NextRequest) {
 
 async function syncMonth(request: NextRequest) {
   const queryMonth = request.nextUrl.searchParams.get("month")?.trim();
-  if (/^2026-\d{2}$/.test(queryMonth || "")) return queryMonth || null;
+  if (isValidMonth(queryMonth)) return queryMonth || null;
 
   try {
     const payload = (await request.json()) as SyncPayload;
     const bodyMonth = stringify(payload.month);
-    return /^2026-\d{2}$/.test(bodyMonth) ? bodyMonth : null;
+    return isValidMonth(bodyMonth) ? bodyMonth : null;
   } catch {
     return null;
   }
+}
+
+function isValidMonth(value: string | null | undefined) {
+  return /^\d{4}-(0[1-9]|1[0-2])$/.test(value || "");
 }
 
 function validateSyncSecret(request: NextRequest) {

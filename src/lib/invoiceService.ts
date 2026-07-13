@@ -90,7 +90,7 @@ export type WfirmaPaymentSyncResult = {
   failed: { invoiceId: string; number: string | null; wfirmaId: string; error: string }[];
 };
 
-const WFIRMA_PAYMENT_SYNC_MONTHS_2026 = Array.from({ length: 12 }, (_, index) => `2026-${String(index + 1).padStart(2, "0")}`);
+const WFIRMA_PAYMENT_SYNC_STATUSES: InvoiceStatus[] = ["wystawiona", "wyslana", "przeterminowana"];
 
 const INVOICE_SELECT = `
   *,
@@ -187,6 +187,9 @@ export async function sendInvoicesToWfirma(invoiceIds: string[]) {
 
 export async function syncWfirmaPayments(month?: string): Promise<{ data: WfirmaPaymentSyncResult | null; error: Error | null }> {
   if (!month) {
+    const monthsResult = await getWfirmaPaymentSyncMonths();
+    if (monthsResult.error) return { data: null, error: monthsResult.error };
+
     const combined: WfirmaPaymentSyncResult = {
       checked: 0,
       markedPaid: 0,
@@ -194,7 +197,7 @@ export async function syncWfirmaPayments(month?: string): Promise<{ data: Wfirma
       failed: [],
     };
 
-    for (const syncMonth of WFIRMA_PAYMENT_SYNC_MONTHS_2026) {
+    for (const syncMonth of monthsResult.data) {
       const result = await syncWfirmaPayments(syncMonth);
       if (result.error) return result;
       if (!result.data) continue;
@@ -212,6 +215,30 @@ export async function syncWfirmaPayments(month?: string): Promise<{ data: Wfirma
     "/api/faktury/wfirma/sync-payments",
     { month }
   );
+}
+
+async function getWfirmaPaymentSyncMonths(): Promise<{ data: string[]; error: Error | null }> {
+  const result = await supabase
+    .from("faktury")
+    .select("data_wystawienia")
+    .in("status", WFIRMA_PAYMENT_SYNC_STATUSES)
+    .not("wfirma_id", "is", null)
+    .not("data_wystawienia", "is", null)
+    .order("data_wystawienia", { ascending: true });
+
+  if (result.error) {
+    return { data: [], error: new Error("Nie udało się pobrać miesięcy faktur do sprawdzenia.") };
+  }
+
+  const months = Array.from(
+    new Set(
+      (result.data || [])
+        .map((invoice) => String(invoice.data_wystawienia || "").slice(0, 7))
+        .filter((value) => /^\d{4}-(0[1-9]|1[0-2])$/.test(value))
+    )
+  );
+
+  return { data: months, error: null };
 }
 
 async function callWfirmaEndpoint<T>(url: string, payload: unknown): Promise<{ data: T | null; error: Error | null }> {

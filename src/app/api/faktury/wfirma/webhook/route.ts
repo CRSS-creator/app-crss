@@ -15,19 +15,29 @@ export async function POST(request: NextRequest) {
   const secretValidation = validateWebhookSecret(request);
   if (secretValidation) return secretValidation;
 
+  const rawBody = await request.text();
+  if (!rawBody.trim()) return webhookKeyResponse();
+
   let payload: WebhookPayload;
   try {
-    payload = await request.json();
+    payload = JSON.parse(rawBody) as WebhookPayload;
   } catch {
-    return NextResponse.json({ error: "Nieprawidłowe dane webhooka wFirma." }, { status: 400 });
+    return webhookKeyResponse();
   }
 
+  if (Object.keys(payload).length === 0) return webhookKeyResponse();
+
   const admin = createAdminClient();
-  if (!admin) return NextResponse.json({ error: "Brak konfiguracji Supabase." }, { status: 500 });
+  if (!admin) return NextResponse.json({ error: "Brak konfiguracji Supabase.", ...webhookKeyPayload() }, { status: 500 });
 
   const wfirmaId = extractInvoiceId(payload);
   if (!wfirmaId) {
-    return NextResponse.json({ error: "Webhook nie zawiera ID faktury wFirma." }, { status: 400 });
+    return NextResponse.json({
+      ok: true,
+      skipped: true,
+      reason: "Webhook nie zawiera ID faktury wFirma.",
+      ...webhookKeyPayload(),
+    });
   }
 
   const paymentState = await resolvePaymentState(wfirmaId, payload);
@@ -54,11 +64,17 @@ export async function POST(request: NextRequest) {
     .maybeSingle();
 
   if (error) {
-    return NextResponse.json({ error: "Nie udało się zaktualizować statusu faktury." }, { status: 500 });
+    return NextResponse.json(
+      { error: "Nie udało się zaktualizować statusu faktury.", ...webhookKeyPayload() },
+      { status: 500 }
+    );
   }
 
   if (!data) {
-    return NextResponse.json({ error: "Nie znaleziono faktury z podanym ID wFirma." }, { status: 404 });
+    return NextResponse.json(
+      { error: "Nie znaleziono faktury z podanym ID wFirma.", ...webhookKeyPayload() },
+      { status: 404 }
+    );
   }
 
   return NextResponse.json({ ok: true, invoiceId: data.id, wfirmaId, ...webhookKeyPayload() });
@@ -85,7 +101,7 @@ function validateWebhookSecret(request: NextRequest) {
   const expectedSecret = process.env.WFIRMA_WEBHOOK_SECRET?.trim();
   if (!expectedSecret) {
     return NextResponse.json(
-      { error: "Brak konfiguracji webhooka. Uzupełnij WFIRMA_WEBHOOK_SECRET." },
+      { error: "Brak konfiguracji webhooka. Uzupełnij WFIRMA_WEBHOOK_SECRET.", ...webhookKeyPayload() },
       { status: 500 }
     );
   }
@@ -97,7 +113,7 @@ function validateWebhookSecret(request: NextRequest) {
     request.nextUrl.searchParams.get("secret")?.trim();
 
   if (providedSecret !== expectedSecret) {
-    return NextResponse.json({ error: "Nieprawidłowy sekret webhooka." }, { status: 401 });
+    return NextResponse.json({ error: "Nieprawidłowy sekret webhooka.", ...webhookKeyPayload() }, { status: 401 });
   }
 
   return null;

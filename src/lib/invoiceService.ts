@@ -31,6 +31,9 @@ export type Invoice = {
   opis: string | null;
   wfirma_id: string | null;
   wfirma_url: string | null;
+  wfirma_pdf_path: string | null;
+  wfirma_pdf_name: string | null;
+  wfirma_pdf_synced_at: string | null;
   wfirma_synced_at: string | null;
   wfirma_sync_status: InvoiceSyncStatus;
   wfirma_sync_error: string | null;
@@ -79,6 +82,9 @@ export type InvoicePayload = {
   opis?: string | null;
   wfirma_id?: string | null;
   wfirma_url?: string | null;
+  wfirma_pdf_path?: string | null;
+  wfirma_pdf_name?: string | null;
+  wfirma_pdf_synced_at?: string | null;
   wfirma_sync_status?: InvoiceSyncStatus;
   wfirma_sync_error?: string | null;
 };
@@ -287,6 +293,9 @@ function normalizeInvoicePayload<T extends Partial<InvoicePayload>>(payload: T) 
   if ("okres" in payload) normalized.okres = emptyToNull(payload.okres);
   if ("wfirma_id" in payload) normalized.wfirma_id = emptyToNull(payload.wfirma_id);
   if ("wfirma_url" in payload) normalized.wfirma_url = emptyToNull(payload.wfirma_url);
+  if ("wfirma_pdf_path" in payload) normalized.wfirma_pdf_path = emptyToNull(payload.wfirma_pdf_path);
+  if ("wfirma_pdf_name" in payload) normalized.wfirma_pdf_name = emptyToNull(payload.wfirma_pdf_name);
+  if ("wfirma_pdf_synced_at" in payload) normalized.wfirma_pdf_synced_at = emptyToNull(payload.wfirma_pdf_synced_at);
   if ("wfirma_sync_error" in payload) normalized.wfirma_sync_error = emptyToNull(payload.wfirma_sync_error);
   if ("waluta" in payload) normalized.waluta = payload.waluta || "PLN";
 

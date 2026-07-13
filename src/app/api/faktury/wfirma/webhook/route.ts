@@ -7,6 +7,10 @@ type WebhookPayload = Record<string, unknown>;
 const PAID_VALUES = new Set(["paid", "oplacona", "opłacona", "zaplacona", "zapłacona", "settled", "closed"]);
 const PAYMENT_EVENT_PATTERNS = [/payment/i, /platn/i, /płatn/i, /paid/i, /oplacon/i, /opłacon/i, /zaplacon/i, /zapłacon/i];
 
+export async function GET() {
+  return webhookKeyResponse();
+}
+
 export async function POST(request: NextRequest) {
   const secretValidation = validateWebhookSecret(request);
   if (secretValidation) return secretValidation;
@@ -33,6 +37,7 @@ export async function POST(request: NextRequest) {
       skipped: true,
       reason: paymentState.reason,
       wfirmaId,
+      ...webhookKeyPayload(),
     });
   }
 
@@ -56,7 +61,24 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Nie znaleziono faktury z podanym ID wFirma." }, { status: 404 });
   }
 
-  return NextResponse.json({ ok: true, invoiceId: data.id, wfirmaId });
+  return NextResponse.json({ ok: true, invoiceId: data.id, wfirmaId, ...webhookKeyPayload() });
+}
+
+function webhookKeyResponse() {
+  const payload = webhookKeyPayload();
+  if (!payload.webhook_key) {
+    return NextResponse.json(
+      { error: "Brak konfiguracji klucza webhooka. Uzupełnij WFIRMA_WEBHOOK_KEY." },
+      { status: 500 }
+    );
+  }
+
+  return NextResponse.json(payload);
+}
+
+function webhookKeyPayload() {
+  const webhookKey = process.env.WFIRMA_WEBHOOK_KEY?.trim();
+  return webhookKey ? { webhook_key: webhookKey } : {};
 }
 
 function validateWebhookSecret(request: NextRequest) {

@@ -11,12 +11,12 @@ export async function POST(request: NextRequest) {
   const payload = await parseWebhookPayload(request);
   if (Object.keys(payload).length === 0) return webhookKeyResponse();
 
-  const invoiceNumber = extractInvoiceNumber(payload);
-  if (!invoiceNumber) {
+  const identifiers = extractInvoiceIdentifiers(payload);
+  if (!identifiers.invoiceNumber && identifiers.wfirmaIds.length === 0) {
     return NextResponse.json({
       ok: true,
       skipped: true,
-      reason: "Webhook nie zawiera numeru faktury.",
+      reason: "Webhook nie zawiera numeru faktury ani ID faktury z wFirmy.",
       ...webhookKeyPayload(),
     });
   }
@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Brak konfiguracji Supabase.", ...webhookKeyPayload() }, { status: 500 });
   }
 
-  const { data, error } = await markInvoicePaidByNumber(admin, invoiceNumber);
+  const { data, error } = await markInvoicePaid(admin, identifiers);
 
   if (error) {
     return NextResponse.json(
@@ -39,13 +39,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       ok: true,
       skipped: true,
-      reason: "Nie znaleziono faktury o numerze z webhooka.",
-      invoiceNumber,
+      reason: "Nie znaleziono faktury pasującej do webhooka.",
+      invoiceNumber: identifiers.invoiceNumber,
+      wfirmaIds: identifiers.wfirmaIds,
       ...webhookKeyPayload(),
     });
   }
 
-  return NextResponse.json({ ok: true, invoiceId: data.id, invoiceNumber, ...webhookKeyPayload() });
+  return NextResponse.json({
+    ok: true,
+    invoiceId: data.id,
+    invoiceNumber: identifiers.invoiceNumber,
+    wfirmaIds: identifiers.wfirmaIds,
+    ...webhookKeyPayload(),
+  });
 }
 
 function webhookKeyResponse() {
@@ -94,13 +101,22 @@ async function parseWebhookPayload(request: NextRequest): Promise<WebhookPayload
   }
 }
 
-function extractInvoiceNumber(payload: WebhookPayload) {
-  const candidates = collectNestedValues(payload)
+function extractInvoiceIdentifiers(payload: WebhookPayload) {
+  const fields = collectNestedValues(payload);
+  const invoiceNumber = fields
     .map(({ key, path, value }) => ({ value: stringify(value), score: invoiceNumberScore(key, path, value) }))
     .filter((candidate) => candidate.value && candidate.score > 0)
-    .sort((first, second) => second.score - first.score);
+    .sort((first, second) => second.score - first.score)[0]?.value || "";
+  const wfirmaIds = fields
+    .map(({ key, path, value }) => ({ value: stringify(value), score: wfirmaInvoiceIdScore(key, path, value) }))
+    .filter((candidate) => candidate.value && candidate.score > 0)
+    .sort((first, second) => second.score - first.score)
+    .map((candidate) => candidate.value);
 
-  return candidates[0]?.value || "";
+  return {
+    invoiceNumber,
+    wfirmaIds: Array.from(new Set(wfirmaIds)).slice(0, 5),
+  };
 }
 
 function invoiceNumberScore(key: string, path: string[], value: unknown) {
@@ -122,6 +138,30 @@ function invoiceNumberScore(key: string, path: string[], value: unknown) {
   return score;
 }
 
+function wfirmaInvoiceIdScore(key: string, path: string[], value: unknown) {
+  const text = stringify(value);
+  if (!/^\d{5,}$/.test(text)) return 0;
+
+  const normalizedPath = normalizeText([...path, key].join(".")).replace(/[^a-z0-9]+/g, "_");
+  let score = 0;
+
+  if (/invoice|faktura|document|dokument/.test(normalizedPath)) score += 10;
+  if (/(^|_)id($|_)|invoice_?id|faktura_?id|document_?id/.test(normalizedPath)) score += 8;
+  if (/payment|platnosc|płatność|paid|transaction|bank/.test(normalizedPath)) score -= 12;
+  if (/tax|nip|vat|amount|total|netto|brutto|kwota|price|cena/.test(normalizedPath)) score -= 12;
+
+  return score;
+}
+
+async function markInvoicePaid(admin: SupabaseClient, identifiers: { invoiceNumber: string; wfirmaIds: string[] }) {
+  if (identifiers.invoiceNumber) {
+    const result = await markInvoicePaidByNumber(admin, identifiers.invoiceNumber);
+    if (result.error || result.data) return result;
+  }
+
+  return markInvoicePaidByWfirmaIds(admin, identifiers.wfirmaIds);
+}
+
 async function markInvoicePaidByNumber(admin: SupabaseClient, invoiceNumber: string) {
   const candidateNumbers = invoiceNumberCandidates(invoiceNumber);
   for (const candidate of candidateNumbers) {
@@ -133,6 +173,26 @@ async function markInvoicePaidByNumber(admin: SupabaseClient, invoiceNumber: str
         wfirma_sync_error: null,
       })
       .eq("numer", candidate)
+      .neq("status", "anulowana")
+      .select("id,numer,status")
+      .maybeSingle();
+
+    if (result.error || result.data) return result;
+  }
+
+  return { data: null, error: null };
+}
+
+async function markInvoicePaidByWfirmaIds(admin: SupabaseClient, wfirmaIds: string[]) {
+  for (const wfirmaId of wfirmaIds) {
+    const result = await admin
+      .from("faktury")
+      .update({
+        status: "oplacona",
+        wfirma_synced_at: new Date().toISOString(),
+        wfirma_sync_error: null,
+      })
+      .eq("wfirma_id", wfirmaId)
       .neq("status", "anulowana")
       .select("id,numer,status")
       .maybeSingle();

@@ -1,26 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 type WebhookPayload = Record<string, unknown>;
-
-const PAID_VALUES = new Set([
-  "1",
-  "true",
-  "yes",
-  "paid",
-  "paid_full",
-  "fully_paid",
-  "settled",
-  "closed",
-  "oplacona",
-  "opłacona",
-  "oplacono",
-  "opłacono",
-  "zaplacona",
-  "zapłacona",
-  "zaplacono",
-  "zapłacono",
-]);
 
 export async function GET() {
   return webhookKeyResponse();
@@ -43,32 +24,12 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  if (!isPaidWebhook(payload)) {
-    return NextResponse.json({
-      ok: true,
-      skipped: true,
-      reason: "Webhook nie potwierdza opłacenia faktury.",
-      invoiceNumber,
-      ...webhookKeyPayload(),
-    });
-  }
-
   const admin = createAdminClient();
   if (!admin) {
     return NextResponse.json({ error: "Brak konfiguracji Supabase.", ...webhookKeyPayload() }, { status: 500 });
   }
 
-  const { data, error } = await admin
-    .from("faktury")
-    .update({
-      status: "oplacona",
-      wfirma_synced_at: new Date().toISOString(),
-      wfirma_sync_error: null,
-    })
-    .eq("numer", invoiceNumber)
-    .neq("status", "anulowana")
-    .select("id,numer,status")
-    .maybeSingle();
+  const { data, error } = await markInvoicePaidByNumber(admin, invoiceNumber);
 
   if (error) {
     return NextResponse.json(
@@ -167,24 +128,6 @@ function extractInvoiceNumber(payload: WebhookPayload) {
   return candidates[0]?.value || "";
 }
 
-function isPaidWebhook(payload: WebhookPayload) {
-  const paymentValues = collectNestedValues(payload)
-    .filter(({ key, path }) => isPaymentKey(key) || path.some(isPaymentKey))
-    .map(({ value }) => normalizeText(value))
-    .filter(Boolean);
-
-  if (paymentValues.some((value) => PAID_VALUES.has(value))) return true;
-
-  return collectNestedValues(payload).some(({ key, value }) => {
-    const normalizedKey = normalizeText(key);
-    const normalizedValue = normalizeText(value);
-    return (
-      /payment|platn|płatn|paid|oplac|opłac|zaplac|zapłac/.test(normalizedKey) ||
-      /payment|platn|płatn|paid|oplac|opłac|zaplac|zapłac/.test(normalizedValue)
-    );
-  });
-}
-
 function invoiceNumberScore(key: string, path: string[], value: unknown) {
   const normalizedKey = normalizeText(key);
   const normalizedPath = normalizeText(path.join("."));
@@ -200,8 +143,31 @@ function invoiceNumberScore(key: string, path: string[], value: unknown) {
   return score;
 }
 
-function isPaymentKey(key: string) {
-  return /payment|platn|płatn|paid|oplac|opłac|zaplac|zapłac/.test(normalizeText(key));
+async function markInvoicePaidByNumber(admin: SupabaseClient, invoiceNumber: string) {
+  const candidateNumbers = invoiceNumberCandidates(invoiceNumber);
+  for (const candidate of candidateNumbers) {
+    const result = await admin
+      .from("faktury")
+      .update({
+        status: "oplacona",
+        wfirma_synced_at: new Date().toISOString(),
+        wfirma_sync_error: null,
+      })
+      .eq("numer", candidate)
+      .neq("status", "anulowana")
+      .select("id,numer,status")
+      .maybeSingle();
+
+    if (result.error || result.data) return result;
+  }
+
+  return { data: null, error: null };
+}
+
+function invoiceNumberCandidates(invoiceNumber: string) {
+  const trimmed = invoiceNumber.trim().replace(/\s+/g, " ");
+  const withoutPrefix = trimmed.replace(/^fv\s+/i, "").trim();
+  return Array.from(new Set([trimmed, `FV ${withoutPrefix}`, withoutPrefix].filter(Boolean)));
 }
 
 function collectNestedValues(value: unknown, path: string[] = []): { key: string; path: string[]; value: unknown }[] {

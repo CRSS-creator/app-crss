@@ -136,7 +136,7 @@ export async function POST(request: NextRequest) {
         status: "wystawiona",
         zrodlo: "wfirma",
         data_wystawienia: wfirmaIssueDate,
-        data_sprzedazy: dateOnly(wfirmaInvoice?.disposaldate) || invoice.data_sprzedazy || wfirmaIssueDate,
+        data_sprzedazy: dateOnly(wfirmaInvoice?.disposaldate) || wfirmaIssueDate,
         termin_platnosci: paymentDate,
         wfirma_id: wfirmaId || null,
         wfirma_url: wfirmaInvoice?.hash ? `https://wfirma.pl/faktury/podglad/${wfirmaInvoice.hash}` : null,
@@ -266,16 +266,23 @@ function buildWfirmaInvoicePayload(
   const lines = [...(invoice.faktury_pozycje || [])].sort(
     (first, second) => Number(first.sort_order || 0) - Number(second.sort_order || 0)
   );
-  const invoicecontent = lines.map((line) => ({
-    name: line.nazwa,
-    count: decimal(line.ilosc || 1, 4),
-    unit_count: decimal(line.ilosc || 1, 4),
-    price: decimal(line.cena_netto || 0, 2),
-    unit: line.jednostka || "szt.",
-    vat: normalizeVat(line.stawka_vat),
-  }));
+  const invoicecontents = Object.fromEntries(
+    lines.map((line, index) => [
+      String(index),
+      {
+        invoicecontent: {
+          name: line.nazwa,
+          count: decimal(line.ilosc || 1, 4),
+          unit_count: decimal(line.ilosc || 1, 4),
+          price: decimal(line.cena_netto || 0, 2),
+          unit: line.jednostka || "szt.",
+          vat: normalizeVat(line.stawka_vat),
+        },
+      },
+    ])
+  );
 
-  if (invoicecontent.length === 0) {
+  if (lines.length === 0) {
     throw new Error("Brakuje pozycji faktury do wysłania do wFirmy.");
   }
 
@@ -292,16 +299,14 @@ function buildWfirmaInvoicePayload(
         },
     type: "normal_draft",
     date: issueDate,
-    disposaldate: invoice.data_sprzedazy || issueDate,
+    disposaldate: issueDate,
     payment_date: defaultPaymentDate,
     paymentmethod: "transfer",
     paymentstate: "unpaid",
     currency: invoice.waluta || "PLN",
     price_type: "netto",
     description: invoice.opis || undefined,
-    invoicecontents: {
-      invoicecontent,
-    },
+    invoicecontents,
   };
 }
 

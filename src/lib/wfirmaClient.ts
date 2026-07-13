@@ -7,6 +7,15 @@ type WfirmaConfig = {
   companyId?: string;
 };
 
+export type WfirmaContractor = {
+  id?: string | number | null;
+  name?: string | null;
+  company_name?: string | null;
+  nip?: string | null;
+  tax_id?: string | null;
+  email?: string | null;
+};
+
 export type WfirmaInvoiceLine = {
   id?: string | number | null;
   name?: string | null;
@@ -131,6 +140,34 @@ export async function findWfirmaInvoices(params: {
   });
 }
 
+export async function findWfirmaContractors(params: {
+  config: WfirmaConfig;
+  nip: string;
+  field?: "nip" | "tax_id";
+  page?: number;
+  limit?: number;
+}) {
+  const body = {
+    contractors: {
+      parameters: {
+        conditions: {
+          condition: {
+            0: { field: params.field || "nip", operator: "eq", value: params.nip },
+          },
+        },
+        page: params.page || 1,
+        limit: params.limit || 20,
+      },
+    },
+  };
+
+  return wfirmaRequest<{ contractors?: unknown; status?: { code?: string } }>("contractors/find", {
+    method: "POST",
+    body,
+    config: params.config,
+  });
+}
+
 export async function addWfirmaInvoice(config: WfirmaConfig, invoice: unknown) {
   return wfirmaRequest<{ invoices?: unknown; status?: { code?: string } }>("invoices/add", {
     method: "POST",
@@ -166,6 +203,11 @@ export async function downloadWfirmaInvoicePdf(config: WfirmaConfig, id: string 
 export function extractWfirmaInvoices(payload: unknown): WfirmaInvoice[] {
   const invoicesRoot = (payload as { invoices?: unknown } | null)?.invoices;
   return extractModuleRecords<WfirmaInvoice>(invoicesRoot, "invoice");
+}
+
+export function extractWfirmaContractors(payload: unknown): WfirmaContractor[] {
+  const contractorsRoot = (payload as { contractors?: unknown } | null)?.contractors;
+  return extractModuleRecords<WfirmaContractor>(contractorsRoot, "contractor");
 }
 
 export function extractWfirmaInvoiceLines(invoice: WfirmaInvoice): WfirmaInvoiceLine[] {

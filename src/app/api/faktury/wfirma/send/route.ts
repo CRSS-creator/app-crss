@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAuthorizedServerUser } from "@/lib/serverAuth";
-import { addWfirmaInvoice, downloadWfirmaInvoicePdf, firstWfirmaInvoice, getWfirmaConfig } from "@/lib/wfirmaClient";
+import {
+  addWfirmaInvoice,
+  downloadWfirmaInvoicePdf,
+  extractWfirmaContractors,
+  findWfirmaContractors,
+  firstWfirmaInvoice,
+  getWfirmaConfig,
+} from "@/lib/wfirmaClient";
 
 const ALLOWED_ROLES = new Set(["owner", "admin"]);
 const INVOICE_PDF_BUCKET = "faktury-pdf";
@@ -97,11 +104,15 @@ export async function POST(request: NextRequest) {
 
       const issueDate = invoice.data_wystawienia || new Date().toISOString().slice(0, 10);
       const defaultPaymentDate = addDays(issueDate, 7);
-      const contractorAddress = await getContractorAddress(auth.admin, invoice);
-      if (!contractorAddress?.zip || !contractorAddress.city) {
+      const wfirmaContractorId = await findExistingWfirmaContractorId(wfirma.config, invoice.kontrahent_nip);
+      const contractorAddress = wfirmaContractorId ? null : await getContractorAddress(auth.admin, invoice);
+      if (!wfirmaContractorId && (!contractorAddress?.zip || !contractorAddress.city)) {
         throw new Error("Brakuje adresu kontrahenta do wFirmy. Uzupełnij w szczegółach klienta pole Adres działalności w formacie np. ul. Przykładowa 1, 63-100 Śrem.");
       }
-      const response = await addWfirmaInvoice(wfirma.config, buildWfirmaInvoicePayload(invoice, issueDate, defaultPaymentDate, contractorAddress));
+      const response = await addWfirmaInvoice(
+        wfirma.config,
+        buildWfirmaInvoicePayload(invoice, issueDate, defaultPaymentDate, contractorAddress, wfirmaContractorId)
+      );
       const wfirmaInvoice = firstWfirmaInvoice(response);
       const wfirmaIssueDate = dateOnly(wfirmaInvoice?.date) || issueDate;
       const paymentDate = addDays(wfirmaIssueDate, 7);
@@ -249,7 +260,8 @@ function buildWfirmaInvoicePayload(
   invoice: InvoiceRow,
   issueDate: string,
   defaultPaymentDate: string,
-  contractorAddress: ReturnType<typeof parsePolishAddress>
+  contractorAddress: ReturnType<typeof parsePolishAddress>,
+  wfirmaContractorId: string | null
 ) {
   const lines = [...(invoice.faktury_pozycje || [])].sort(
     (first, second) => Number(first.sort_order || 0) - Number(second.sort_order || 0)
@@ -268,14 +280,16 @@ function buildWfirmaInvoicePayload(
   }
 
   return {
-    contractor: {
-      name: invoice.kontrahent_nazwa,
-      nip: invoice.kontrahent_nip || undefined,
-      email: invoice.kontrahent_email || undefined,
-      zip: contractorAddress?.zip || undefined,
-      city: contractorAddress?.city || undefined,
-      street: contractorAddress?.street || undefined,
-    },
+    contractor: wfirmaContractorId
+      ? { id: wfirmaContractorId }
+      : {
+          name: invoice.kontrahent_nazwa,
+          nip: invoice.kontrahent_nip || undefined,
+          email: invoice.kontrahent_email || undefined,
+          zip: contractorAddress?.zip || undefined,
+          city: contractorAddress?.city || undefined,
+          street: contractorAddress?.street || undefined,
+        },
     type: "normal",
     date: issueDate,
     disposaldate: invoice.data_sprzedazy || issueDate,
@@ -289,6 +303,30 @@ function buildWfirmaInvoicePayload(
       invoicecontent,
     },
   };
+}
+
+async function findExistingWfirmaContractorId(
+  config: Parameters<typeof addWfirmaInvoice>[0],
+  nip: string | null
+) {
+  const normalizedNip = normalizeNip(nip);
+  if (!normalizedNip) return null;
+
+  const fields: Array<"nip" | "tax_id"> = ["nip", "tax_id"];
+  for (const field of fields) {
+    try {
+      const response = await findWfirmaContractors({ config, nip: normalizedNip, field });
+      const match = extractWfirmaContractors(response).find((contractor) => {
+        return normalizeNip(contractor.nip || contractor.tax_id) === normalizedNip;
+      });
+      const id = stringify(match?.id);
+      if (id) return id;
+    } catch {
+      // Some wFirma accounts expose contractor tax numbers under only one field name.
+    }
+  }
+
+  return null;
 }
 
 function parsePolishAddress(address: string) {
@@ -326,6 +364,10 @@ function parseNumber(value: number | string | null | undefined) {
 function stringify(value: unknown) {
   if (value === null || value === undefined) return "";
   return String(value).trim();
+}
+
+function normalizeNip(value: unknown) {
+  return stringify(value).replace(/\D/g, "");
 }
 
 function dateOnly(value: unknown) {

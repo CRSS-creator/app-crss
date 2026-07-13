@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { extractWfirmaInvoices, getWfirmaConfig, getWfirmaInvoice } from "@/lib/wfirmaClient";
+import { extractWfirmaInvoices, findWfirmaInvoices, getWfirmaConfig, getWfirmaInvoice, type WfirmaInvoice } from "@/lib/wfirmaClient";
 
 type WebhookPayload = Record<string, unknown>;
 type InvoiceLookup = {
@@ -55,14 +55,16 @@ export async function POST(request: NextRequest) {
   const eventId = await createWebhookEvent(admin, payload, lookup);
 
   if (lookup.wfirmaIds.length === 0 && lookup.numbers.length === 0) {
+    const syncResult = await syncRecentPaidWfirmaInvoices(admin);
     await updateWebhookEvent(admin, eventId, {
-      result: "skipped",
+      result: syncResult.updated > 0 ? "synced" : "skipped",
       error: "Webhook nie zawiera ID ani numeru faktury wFirma.",
     });
     return NextResponse.json({
       ok: true,
-      skipped: true,
+      skipped: syncResult.updated === 0,
       reason: "Webhook nie zawiera ID ani numeru faktury wFirma.",
+      syncedPaidInvoices: syncResult.updated,
       ...webhookKeyPayload(),
     });
   }
@@ -92,15 +94,17 @@ export async function POST(request: NextRequest) {
   }
 
   if (!updateResult.invoice) {
+    const syncResult = await syncRecentPaidWfirmaInvoices(admin);
     await updateWebhookEvent(admin, eventId, {
-      result: "not_found",
+      result: syncResult.updated > 0 ? "synced" : "not_found",
       error: "Nie znaleziono faktury po danych z webhooka.",
     });
     return NextResponse.json({
       ok: true,
-      skipped: true,
+      skipped: syncResult.updated === 0,
       reason: "Nie znaleziono faktury po danych z webhooka.",
       lookup,
+      syncedPaidInvoices: syncResult.updated,
       ...webhookKeyPayload(),
     });
   }
@@ -239,6 +243,51 @@ async function markInvoicePaid(admin: SupabaseClient, lookup: InvoiceLookup) {
   }
 
   return { invoice: null, matchedBy: null, error: null };
+}
+
+async function syncRecentPaidWfirmaInvoices(admin: SupabaseClient) {
+  const wfirma = getWfirmaConfig();
+  if (wfirma.error || !wfirma.config) return { updated: 0 };
+
+  const dateTo = new Date().toISOString().slice(0, 10);
+  const dateFromDate = new Date();
+  dateFromDate.setUTCMonth(dateFromDate.getUTCMonth() - 4);
+  const dateFrom = dateFromDate.toISOString().slice(0, 10);
+  let updated = 0;
+
+  for (let page = 1; page <= 10; page += 1) {
+    const response = await findWfirmaInvoices({
+      config: wfirma.config,
+      dateFrom,
+      dateTo,
+      page,
+      limit: 50,
+    });
+    const invoices = extractWfirmaInvoices(response);
+    if (invoices.length === 0) break;
+
+    for (const invoice of invoices) {
+      if (!isWfirmaInvoicePaid(invoice)) continue;
+      const lookup = wfirmaInvoiceLookup(invoice);
+      const result = await markInvoicePaid(admin, lookup);
+      if (result.invoice) updated += 1;
+    }
+
+    if (invoices.length < 50) break;
+  }
+
+  return { updated };
+}
+
+function isWfirmaInvoicePaid(invoice: WfirmaInvoice) {
+  return PAID_VALUES.has(normalizeText(invoice.paymentstate));
+}
+
+function wfirmaInvoiceLookup(invoice: WfirmaInvoice): InvoiceLookup {
+  return {
+    wfirmaIds: unique([stringify(invoice.id)].filter(Boolean)),
+    numbers: unique([stringify(invoice.fullnumber), stringify(invoice.number)].filter(Boolean)),
+  };
 }
 
 async function createWebhookEvent(admin: SupabaseClient, payload: WebhookPayload, lookup: InvoiceLookup) {

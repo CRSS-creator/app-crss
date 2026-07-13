@@ -132,13 +132,17 @@ function invoiceNumberScore(key: string, path: string[], value: unknown) {
   const normalizedKey = normalizeText(key);
   const normalizedPath = normalizeText(path.join("."));
   const text = stringify(value);
+  const compactKey = normalizedKey.replace(/[^a-z0-9]+/g, "_");
+  const compactPath = normalizedPath.replace(/[^a-z0-9]+/g, "_");
   let score = 0;
 
-  if (["number", "fullnumber", "full_number", "invoice_number", "document_number", "numer", "numer_faktury"].includes(normalizedKey)) {
-    score += 6;
+  if (/(^|_)full_?number($|_)|(^|_)invoice_?number($|_)|(^|_)document_?number($|_)|(^|_)numer(_faktury)?($|_)/.test(compactKey)) {
+    score += 12;
   }
-  if (/invoice|faktura|document|dokument/.test(normalizedPath)) score += 2;
-  if (/^fv\s*\d+/i.test(text) || /^faktura\s+/i.test(text)) score += 5;
+  if (/invoice|faktura|document|dokument/.test(compactPath)) score += 3;
+  if (looksLikeInvoiceNumber(text)) score += 20;
+  if (/^fv\s*\d+/i.test(text) || /^faktura\s+/i.test(text)) score += 8;
+  if (/^\d{7,}$/.test(text)) score -= 10;
 
   return score;
 }
@@ -168,6 +172,10 @@ function invoiceNumberCandidates(invoiceNumber: string) {
   const trimmed = invoiceNumber.trim().replace(/\s+/g, " ");
   const withoutPrefix = trimmed.replace(/^fv\s+/i, "").trim();
   return Array.from(new Set([trimmed, `FV ${withoutPrefix}`, withoutPrefix].filter(Boolean)));
+}
+
+function looksLikeInvoiceNumber(value: string) {
+  return /^(fv\s*)?\d+\/\d+\/\d{4}$/i.test(value.trim());
 }
 
 function collectNestedValues(value: unknown, path: string[] = []): { key: string; path: string[]; value: unknown }[] {

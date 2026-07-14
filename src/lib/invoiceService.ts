@@ -230,6 +230,13 @@ export async function getInvoicePdfUrl(invoiceId: string) {
   );
 }
 
+export async function sendInvoiceMail(invoiceId: string) {
+  return callWfirmaEndpoint<{ ok: true; recipientEmail: string }>(
+    "/api/faktury/send-mail",
+    { invoiceId }
+  );
+}
+
 async function getWfirmaPaymentSyncMonths(): Promise<{ data: string[]; error: Error | null }> {
   const result = await supabase
     .from("faktury")

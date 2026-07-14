@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { CalendarClock, DownloadCloud, FileText, RotateCw } from "lucide-react";
+import { CalendarClock, DownloadCloud, FileText, RotateCw, Send } from "lucide-react";
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
 import AppSelect from "@/components/AppSelect";
@@ -11,6 +11,7 @@ import {
   fetchInvoices,
   getInvoicePdfUrl,
   importWfirmaInvoices,
+  sendInvoiceMail,
   sendInvoicesToWfirma,
   syncWfirmaPayments,
   updateInvoice,
@@ -63,6 +64,7 @@ function InvoicesContent() {
   const [savingCategoryId, setSavingCategoryId] = useState<string | null>(null);
   const [savingPeriodId, setSavingPeriodId] = useState<string | null>(null);
   const [openingPdfId, setOpeningPdfId] = useState<string | null>(null);
+  const [sendingMailId, setSendingMailId] = useState<string | null>(null);
 
   useEffect(() => {
     void loadData({ generateCurrentMonth: true });
@@ -255,6 +257,26 @@ function InvoicesContent() {
     }
 
     window.open(result.data.url, "_blank", "noopener,noreferrer");
+  }
+
+  async function sendInvoiceByMail(invoice: Invoice) {
+    if (!invoice.wfirma_pdf_path) {
+      alert("Ta faktura nie ma jeszcze PDF do wysyłki.");
+      return;
+    }
+
+    setSendingMailId(invoice.id);
+    const result = await sendInvoiceMail(invoice.id);
+    setSendingMailId(null);
+
+    if (result.error) {
+      console.error("Błąd wysyłki faktury e-mailem:", result.error);
+      alert(`Nie udało się wysłać faktury e-mailem.\n\n${result.error.message}`);
+      return;
+    }
+
+    alert(`Faktura została przekazana do wysyłki na adres: ${result.data?.recipientEmail || "klienta"}.`);
+    await loadData();
   }
 
   const detailsReadinessIssues = detailsInvoice ? wfirmaReadinessIssues(detailsInvoice) : [];
@@ -488,15 +510,26 @@ function InvoicesContent() {
                 </p>
               </div>
               {detailsInvoice.wfirma_pdf_path ? (
-                <button
-                  type="button"
-                  style={secondaryButtonStyle}
-                  disabled={openingPdfId === detailsInvoice.id}
-                  onClick={() => openInvoicePdf(detailsInvoice)}
-                >
-                  <FileText size={18} />
-                  {openingPdfId === detailsInvoice.id ? "Otwieranie..." : "Otwórz PDF"}
-                </button>
+                <div style={pdfActionsStyle}>
+                  <button
+                    type="button"
+                    style={secondaryButtonStyle}
+                    disabled={openingPdfId === detailsInvoice.id}
+                    onClick={() => openInvoicePdf(detailsInvoice)}
+                  >
+                    <FileText size={18} />
+                    {openingPdfId === detailsInvoice.id ? "Otwieranie..." : "Otwórz PDF"}
+                  </button>
+                  <button
+                    type="button"
+                    style={primaryButtonStyle}
+                    disabled={sendingMailId === detailsInvoice.id}
+                    onClick={() => sendInvoiceByMail(detailsInvoice)}
+                  >
+                    <Send size={18} />
+                    {sendingMailId === detailsInvoice.id ? "Wysyłanie..." : "Wyślij e-mail"}
+                  </button>
+                </div>
               ) : (
                 <Badge tone="neutral">Brak PDF</Badge>
               )}
@@ -820,6 +853,7 @@ const detailsSummaryGridStyle: CSSProperties = { display: "grid", gridTemplateCo
 const detailStatStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "10px 12px", display: "grid", gap: "5px", minHeight: "64px", alignContent: "center", color: colors.text, fontWeight: 500 };
 const detailStatValueStyle: CSSProperties = { fontWeight: 650 };
 const invoicePdfStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "14px", marginBottom: "16px", background: colors.card, display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap" };
+const pdfActionsStyle: CSSProperties = { display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" };
 const pdfMetaStyle: CSSProperties = { margin: 0, color: colors.muted, fontSize: "13px", fontWeight: 650, overflowWrap: "anywhere" };
 const wfirmaReadinessStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "14px", marginBottom: "16px", background: colors.card };
 const sectionTitleRowStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", marginBottom: "12px" };

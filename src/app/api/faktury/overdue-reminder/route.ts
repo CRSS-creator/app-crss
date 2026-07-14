@@ -213,7 +213,7 @@ async function sendReminderGroup(context: ReminderContext, group: ReminderGroup)
     await insertReminderHistory(context, group, subject, "wyslane", null);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Nie udało się połączyć z n8n.";
-    if (!message.includes("Automatyzacja zwróciła status")) {
+    if (!message.includes("Automatyzacja zwróciła status") && !message.includes("Automatyzacja nie przyjęła wysyłki")) {
       await insertReminderHistory(context, group, subject, "blad", message);
     }
     throw new Error(message);
@@ -231,7 +231,9 @@ async function insertReminderHistory(
   await context.admin.from("faktury_email_history").insert(
     group.invoices.map((invoice) => ({
       faktura_id: invoice.id,
+      notification_type: "overdue_notification",
       recipient_email: group.recipientEmail,
+      recipient_phone: group.recipientPhone,
       subject,
       status,
       error,

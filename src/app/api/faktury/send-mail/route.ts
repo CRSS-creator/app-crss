@@ -240,7 +240,9 @@ async function insertMailHistory(
   if (!context.admin) return;
   await context.admin.from("faktury_email_history").insert({
     faktura_id: invoice.id,
+    notification_type: "invoice_mail",
     recipient_email: recipientEmail,
+    recipient_phone: null,
     subject,
     status,
     error,

@@ -20,6 +20,7 @@ import {
   updateInvoice,
   type Invoice,
   type InvoiceCategory,
+  type InvoiceEmailHistory,
   type InvoiceLine,
   type InvoiceSyncStatus,
 } from "@/lib/invoiceService";
@@ -849,17 +850,18 @@ function InvoicesContent() {
             </section>
 
             <section style={invoiceDescriptionStyle}>
-              <h3 style={descriptionTitleStyle}>Historia wysyłki e-mail</h3>
+              <h3 style={descriptionTitleStyle}>Historia wysyłki i powiadomień</h3>
               {invoiceMailHistory(detailsInvoice).length === 0 ? (
-                <p style={descriptionTextStyle}>Brak wysyłek tej faktury.</p>
+                <p style={descriptionTextStyle}>Brak wysyłek i powiadomień tej faktury.</p>
               ) : (
                 <div style={mailHistoryListStyle}>
                   {invoiceMailHistory(detailsInvoice).map((entry) => (
                     <div key={entry.id} style={mailHistoryItemStyle}>
                       <div>
-                        <strong>{entry.status === "wyslane" ? "Wysłano" : "Błąd wysyłki"}</strong>
+                        <strong>{invoiceHistoryTitle(entry)}</strong>
                         <p style={pdfMetaStyle}>
                           {formatDateTime(entry.created_at)} · {entry.recipient_email}
+                          {entry.recipient_phone ? ` · SMS: ${entry.recipient_phone}` : ""}
                           {entry.sent_by_name ? ` · ${entry.sent_by_name}` : ""}
                         </p>
                         <p style={pdfMetaStyle}>{entry.subject}</p>
@@ -1057,8 +1059,17 @@ function invoiceMailHistory(invoice: Invoice) {
   );
 }
 
+function invoiceHistoryTitle(entry: InvoiceEmailHistory) {
+  if (entry.status !== "wyslane") {
+    return entry.notification_type === "overdue_notification" ? "Błąd powiadomienia" : "Błąd wysyłki";
+  }
+  return entry.notification_type === "overdue_notification"
+    ? "Wysłano powiadomienie e-mail + SMS"
+    : "Wysłano fakturę e-mailem";
+}
+
 function invoiceMailSent(invoice: Invoice) {
-  return invoiceMailHistory(invoice).some((entry) => entry.status === "wyslane");
+  return invoiceMailHistory(invoice).some((entry) => entry.status === "wyslane" && entry.notification_type !== "overdue_notification");
 }
 
 function invoiceNumberLabel(invoice: Invoice) {

@@ -50,7 +50,9 @@ export type Invoice = {
 export type InvoiceEmailHistory = {
   id: string;
   created_at: string;
+  notification_type: "invoice_mail" | "overdue_notification";
   recipient_email: string;
+  recipient_phone: string | null;
   subject: string;
   status: "wyslane" | "blad";
   error: string | null;
@@ -137,6 +139,8 @@ const INVOICE_SELECT = `
     id,
     created_at,
     recipient_email,
+    recipient_phone,
+    notification_type,
     subject,
     status,
     error,

@@ -420,20 +420,45 @@ function TaxHistoryTab({ entries, loading }: { entries: TaxObligationHistoryRow[
           </thead>
           <tbody>
             {loading ? (
-              <tr><Td colSpan={7}>Ładowanie historii...</Td></tr>
+              <tr><TaxHistoryTd colSpan={7}>Ładowanie historii...</TaxHistoryTd></tr>
             ) : filteredEntries.length === 0 ? (
-              <tr><Td colSpan={7}>Brak wysyłek dla wybranych filtrów.</Td></tr>
+              <tr><TaxHistoryTd colSpan={7}>Brak wysyłek dla wybranych filtrów.</TaxHistoryTd></tr>
             ) : filteredEntries.map((entry) => {
               const obligations = Array.isArray(entry.obligations) ? entry.obligations : [];
               return (
-                <tr key={entry.id} style={rowStyle}>
-                  <Td>{formatDateTime(entry.created_at)}</Td>
-                  <Td strong>{entry.client_name || "Brak klienta"}<small style={smallTextStyle}>{entry.client_nip || "Brak NIP"}</small></Td>
-                  <Td>{entry.period_label || formatMonthFromDate(entry.period)}</Td>
-                  <Td><Badge>{entry.channel === "email" ? "E-mail" : "SMS"}</Badge></Td>
-                  <Td>{obligations.map((item) => `${item.name || "Zobowiązanie"}${item.amountLabel ? ` - ${item.amountLabel}` : ""}`).join(", ") || "Brak danych"}</Td>
-                  <Td>{entry.channel === "email" ? entry.recipient_email || "Brak e-maila" : entry.recipient_phone || "Brak telefonu"}</Td>
-                  <Td>{entry.sent_by_name || "Nieustalony użytkownik"}</Td>
+                <tr key={entry.id} style={taxHistoryRowStyle}>
+                  <TaxHistoryTd>
+                    <span style={taxDateStyle}>{formatDateOnly(entry.created_at)}</span>
+                    <span style={taxSubtleTextStyle}>{formatTimeOnly(entry.created_at)}</span>
+                  </TaxHistoryTd>
+                  <TaxHistoryTd>
+                    <span style={taxClientNameStyle}>{entry.client_name || "Brak klienta"}</span>
+                    <span style={taxSubtleTextStyle}>{entry.client_nip || "Brak NIP"}</span>
+                  </TaxHistoryTd>
+                  <TaxHistoryTd>
+                    <span style={taxMonthStyle}>{entry.period_label || formatMonthFromDate(entry.period)}</span>
+                  </TaxHistoryTd>
+                  <TaxHistoryTd>
+                    <Badge>{entry.channel === "email" ? "E-mail" : "SMS"}</Badge>
+                  </TaxHistoryTd>
+                  <TaxHistoryTd>
+                    <div style={taxObligationsListStyle}>
+                      {obligations.length === 0 ? (
+                        <span style={taxSubtleTextStyle}>Brak danych</span>
+                      ) : obligations.map((item, index) => (
+                        <span key={`${entry.id}-${index}`} style={taxObligationItemStyle}>
+                          <span>{item.name || "Zobowiązanie"}</span>
+                          {item.amountLabel ? <strong>{item.amountLabel}</strong> : null}
+                        </span>
+                      ))}
+                    </div>
+                  </TaxHistoryTd>
+                  <TaxHistoryTd>
+                    <span style={taxRecipientStyle}>{entry.channel === "email" ? entry.recipient_email || "Brak e-maila" : entry.recipient_phone || "Brak telefonu"}</span>
+                  </TaxHistoryTd>
+                  <TaxHistoryTd>
+                    <span style={taxSenderStyle}>{entry.sent_by_name || "Nieustalony użytkownik"}</span>
+                  </TaxHistoryTd>
                 </tr>
               );
             })}
@@ -680,6 +705,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) { re
 function Summary({ label, value }: { label: string; value: string | number }) { return <div style={summaryStyle}><span>{label}</span><strong>{value}</strong></div>; }
 function Th({ children }: { children: ReactNode }) { return <th style={thStyle}>{children}</th>; }
 function Td({ children, strong, colSpan }: { children: ReactNode; strong?: boolean; colSpan?: number }) { return <td colSpan={colSpan} style={{ ...tdStyle, fontWeight: strong ? 800 : 600 }}>{children}</td>; }
+function TaxHistoryTd({ children, colSpan }: { children: ReactNode; colSpan?: number }) { return <td colSpan={colSpan} style={taxHistoryTdStyle}>{children}</td>; }
 function Badge({ children }: { children: ReactNode }) { return <span style={badgeStyle}>{children}</span>; }
 
 function profileName(user: UserProfile | ProfileSummary) { return user.full_name || user.email || "Użytkownik"; }
@@ -707,6 +733,21 @@ function formatDateTime(value: string) {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
+function formatDateOnly(value: string) {
+  return new Intl.DateTimeFormat("pl-PL", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(new Date(value));
+}
+
+function formatTimeOnly(value: string) {
+  return new Intl.DateTimeFormat("pl-PL", {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value));
@@ -760,6 +801,16 @@ const tableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse" };
 const thStyle: CSSProperties = { textAlign: "left", padding: "13px 14px", color: colors.muted, fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: `1px solid ${colors.border}`, whiteSpace: "nowrap" };
 const tdStyle: CSSProperties = { padding: "14px", borderBottom: `1px solid ${colors.border}`, color: colors.text, verticalAlign: "middle" };
 const rowStyle: CSSProperties = { background: colors.white };
+const taxHistoryRowStyle: CSSProperties = { background: colors.white };
+const taxHistoryTdStyle: CSSProperties = { padding: "14px 15px", borderBottom: `1px solid ${colors.border}`, color: colors.text, verticalAlign: "middle", fontWeight: 550, lineHeight: 1.45 };
+const taxDateStyle: CSSProperties = { display: "block", color: colors.navy, fontSize: "14px", fontWeight: 750 };
+const taxSubtleTextStyle: CSSProperties = { display: "block", marginTop: "4px", color: colors.muted, fontSize: "12px", fontWeight: 500, lineHeight: 1.35 };
+const taxClientNameStyle: CSSProperties = { display: "block", color: colors.navy, fontSize: "15px", fontWeight: 750, lineHeight: 1.35 };
+const taxMonthStyle: CSSProperties = { display: "block", color: colors.text, fontSize: "14px", fontWeight: 650, lineHeight: 1.35, textTransform: "lowercase" };
+const taxObligationsListStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "6px", minWidth: "210px" };
+const taxObligationItemStyle: CSSProperties = { display: "flex", gap: "8px", alignItems: "baseline", justifyContent: "space-between", borderRadius: radius.badge, background: "rgba(23, 59, 115, 0.06)", color: colors.text, padding: "6px 9px", fontSize: "13px", fontWeight: 600, lineHeight: 1.35 };
+const taxRecipientStyle: CSSProperties = { display: "block", maxWidth: "260px", color: colors.text, fontSize: "14px", fontWeight: 600, lineHeight: 1.45, overflowWrap: "anywhere" };
+const taxSenderStyle: CSSProperties = { display: "block", color: colors.navy, fontSize: "14px", fontWeight: 700, lineHeight: 1.35 };
 const badgeStyle: CSSProperties = { display: "inline-flex", alignItems: "center", borderRadius: radius.badge, padding: "6px 10px", background: "rgba(23, 59, 115, 0.10)", color: colors.navy, fontSize: "12px", fontWeight: 850, whiteSpace: "nowrap" };
 const activeBadgeStyle: CSSProperties = { ...badgeStyle, background: "#dcfce7", color: colors.success };
 const inactiveBadgeStyle: CSSProperties = { ...badgeStyle, background: "#f1f5f9", color: colors.muted };

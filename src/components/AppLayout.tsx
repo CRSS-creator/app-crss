@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { colors, radius } from "@/app/design";
 import { useCurrentUserRole } from "@/hooks/useCurrentUserRole";
 import { canAccessModule, type AppModule } from "@/lib/permissions";
-import { createDueNotifications, fetchUnreadNotificationsCount } from "@/lib/notificationService";
+import { createDueNotifications, fetchUnreadNotifications, fetchUnreadNotificationsCount, type AppNotification } from "@/lib/notificationService";
 import UserAccessPanel from "@/components/UserAccessPanel";
 import ContractRegisterSplitWidget from "@/components/ContractRegisterSplitWidget";
 import CrmDetailsLayoutFixWidget from "@/components/CrmDetailsLayoutFixWidget";
@@ -80,10 +80,13 @@ export default function AppLayout({ children, activePage }: AppLayoutProps) {
   const { role, loading: roleLoading } = useCurrentUserRole();
   const pathname = usePathname();
   const [unreadCount, setUnreadCount] = useState(0);
+  const knownNotificationIdsRef = useRef<Set<string>>(new Set());
+  const notificationsPrimedRef = useRef(false);
 
   useEffect(() => {
     if (roleLoading || !role || !canAccessModule(role, "powiadomienia")) return;
 
+    requestBrowserNotificationPermissionOnce();
     loadUnreadCount();
 
     const intervalId = window.setInterval(loadUnreadCount, 5 * 60 * 1000);
@@ -121,6 +124,44 @@ export default function AppLayout({ children, activePage }: AppLayoutProps) {
     await createDueNotifications();
     const { count } = await fetchUnreadNotificationsCount();
     setUnreadCount(count || 0);
+    await showNewBrowserNotifications();
+  }
+
+  async function showNewBrowserNotifications() {
+    const { data, error } = await fetchUnreadNotifications(10);
+    if (error) {
+      console.error("Błąd pobierania nieprzeczytanych powiadomień:", error);
+      return;
+    }
+
+    const notifications = (data || []) as AppNotification[];
+    const currentIds = new Set(notifications.map((notification) => notification.id));
+
+    if (!notificationsPrimedRef.current) {
+      knownNotificationIdsRef.current = currentIds;
+      notificationsPrimedRef.current = true;
+      return;
+    }
+
+    const newNotifications = notifications
+      .filter((notification) => !knownNotificationIdsRef.current.has(notification.id))
+      .sort((first, second) => String(first.created_at).localeCompare(String(second.created_at)));
+
+    knownNotificationIdsRef.current = new Set([...knownNotificationIdsRef.current, ...currentIds]);
+
+    if (!canShowBrowserNotification()) return;
+
+    newNotifications.forEach((notification) => {
+      const browserNotification = new Notification(notification.title || "Nowe powiadomienie CRSS", {
+        body: notification.body || "Masz nowe powiadomienie w aplikacji CRSS.",
+        icon: "/logo-crss.svg",
+        tag: `crss-${notification.id}`,
+      });
+      browserNotification.onclick = () => {
+        window.focus();
+        window.location.href = "/powiadomienia";
+      };
+    });
   }
 
   const visibleMenu = menu
@@ -185,6 +226,21 @@ export default function AppLayout({ children, activePage }: AppLayoutProps) {
       </section>
     </main>
   );
+}
+
+function requestBrowserNotificationPermissionOnce() {
+  if (typeof window === "undefined" || !("Notification" in window)) return;
+  if (Notification.permission !== "default") return;
+
+  const storageKey = "crss-browser-notification-permission-requested";
+  if (window.localStorage.getItem(storageKey) === "1") return;
+
+  window.localStorage.setItem(storageKey, "1");
+  void Notification.requestPermission();
+}
+
+function canShowBrowserNotification() {
+  return typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted";
 }
 
 function NavItem({

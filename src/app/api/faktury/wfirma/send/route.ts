@@ -159,11 +159,19 @@ export async function POST(request: NextRequest) {
         .update(updatePayload)
         .eq("id", invoice.id);
       if (updateResult.error && updateResult.error.message.includes("wfirma_pdf")) {
-        const { wfirma_pdf_path, wfirma_pdf_name, wfirma_pdf_synced_at, ...fallbackPayload } = updatePayload;
         const fallbackResult = await auth.admin
           .from("faktury")
           .update({
-            ...fallbackPayload,
+            numer: updatePayload.numer,
+            status: updatePayload.status,
+            zrodlo: updatePayload.zrodlo,
+            data_wystawienia: updatePayload.data_wystawienia,
+            data_sprzedazy: updatePayload.data_sprzedazy,
+            termin_platnosci: updatePayload.termin_platnosci,
+            wfirma_id: updatePayload.wfirma_id,
+            wfirma_url: updatePayload.wfirma_url,
+            wfirma_synced_at: updatePayload.wfirma_synced_at,
+            wfirma_sync_status: updatePayload.wfirma_sync_status,
             wfirma_sync_error: pdfError || "Faktura wysłana, ale na serwerze nie ma jeszcze migracji pól PDF.",
           })
           .eq("id", invoice.id);
@@ -363,18 +371,26 @@ async function ensureWfirmaGoodForLine(
   const name = stringify(line.nazwa);
   if (!name) return null;
 
+  const expectedCode = buildWfirmaGoodCode(name);
   const found = await findWfirmaGoods({ config, name });
   const existing = extractWfirmaGoods(found).find((good) => normalizeGoodName(good.name) === normalizeGoodName(name));
-  const existingId = stringify(existing?.id);
+  const foundByCode = existing ? null : await findWfirmaGoods({ config, code: expectedCode });
+  const existingByCode = extractWfirmaGoods(foundByCode).find((good) => stringify(good.code) === expectedCode);
+  const existingGood = existing || existingByCode;
+  const existingId = stringify(existingGood?.id);
   if (existingId) {
-    const expectedCode = buildWfirmaGoodCode(name);
-    if (stringify(existing?.gtu) !== "12" || stringify(existing?.code) !== expectedCode) {
+    if (stringify(existingGood?.gtu) !== "12" || stringify(existingGood?.code) !== expectedCode) {
       await editWfirmaGood(config, existingId, buildWfirmaGoodPayload(line, name));
     }
     return existingId;
   }
 
-  const created = await addWfirmaGood(config, buildWfirmaGoodPayload(line, name));
+  const created = await addWfirmaGood(config, buildWfirmaGoodPayload(line, name)).catch(async (error) => {
+    const retryFoundByCode = await findWfirmaGoods({ config, code: expectedCode });
+    const retryExisting = extractWfirmaGoods(retryFoundByCode).find((good) => stringify(good.code) === expectedCode);
+    if (retryExisting) return { goods: { good: retryExisting } };
+    throw error;
+  });
   const createdId = stringify(firstWfirmaGood(created)?.id);
   if (!createdId) {
     throw new Error(`Nie udalo sie utworzyc uslugi z GTU 12 w wFirmie dla pozycji: ${name}.`);

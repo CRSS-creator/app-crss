@@ -181,16 +181,19 @@ export async function findWfirmaContractors(params: {
 
 export async function findWfirmaGoods(params: {
   config: WfirmaConfig;
-  name: string;
+  name?: string;
+  code?: string;
   page?: number;
   limit?: number;
 }) {
+  const field = params.code ? "code" : "name";
+  const value = params.code || params.name || "";
   const body = {
     goods: {
       parameters: {
         conditions: {
           condition: {
-            0: { field: "name", operator: "eq", value: params.name },
+            0: { field, operator: "eq", value },
           },
         },
         page: params.page || 1,

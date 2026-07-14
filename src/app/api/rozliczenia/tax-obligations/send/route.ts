@@ -356,38 +356,48 @@ export async function POST(request: NextRequest) {
   });
 
   try {
-    const response = await fetch(webhookConfig.webhookUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        event: "tax_obligations_notification_requested",
-        channel: payload.channel,
-        settlementId: settlement.id,
-        clientId: client.id,
-        clientName: client.nazwa,
-        clientNip: client.nip,
-        recipientEmail: payload.channel === "email" ? recipientEmails.join("; ") : null,
-        recipientEmails: payload.channel === "email" ? recipientEmails : [],
-        recipientPhone: payload.channel === "sms" ? recipientPhones.join("; ") : null,
-        recipientPhones: payload.channel === "sms" ? recipientPhones : [],
-        period: settlement.okres,
-        periodLabel,
-        subject,
-        messageHtml,
-        smsMessage,
-        replyToEmail: caregiver?.email || null,
-        obligations: preparedObligations,
-        caregiverName: caregiver?.full_name || null,
-        caregiverEmail: caregiver?.email || null,
-        requestedByName: auth.requesterName,
-        appUrl: APP_URL,
-      }),
-    });
+    const deliveryTargets = payload.channel === "email" ? recipientEmails : recipientPhones;
+    const failedTargets: string[] = [];
 
-    if (!response.ok) {
-      const details = await response.text().catch(() => "");
-      const message = details ? `Automatyzacja zwróciła status ${response.status}: ${details}` : `Automatyzacja zwróciła status ${response.status}.`;
-      return NextResponse.json({ error: message }, { status: 502 });
+    for (const deliveryTarget of deliveryTargets) {
+      const response = await fetch(webhookConfig.webhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event: "tax_obligations_notification_requested",
+          channel: payload.channel,
+          settlementId: settlement.id,
+          clientId: client.id,
+          clientName: client.nazwa,
+          clientNip: client.nip,
+          recipientEmail: payload.channel === "email" ? deliveryTarget : null,
+          recipientEmails: payload.channel === "email" ? recipientEmails : [],
+          recipientPhone: payload.channel === "sms" ? deliveryTarget : null,
+          recipientPhones: payload.channel === "sms" ? recipientPhones : [],
+          period: settlement.okres,
+          periodLabel,
+          subject,
+          messageHtml,
+          smsMessage,
+          replyToEmail: caregiver?.email || null,
+          obligations: preparedObligations,
+          caregiverName: caregiver?.full_name || null,
+          caregiverEmail: caregiver?.email || null,
+          requestedByName: auth.requesterName,
+          appUrl: APP_URL,
+        }),
+      });
+
+      if (!response.ok) {
+        failedTargets.push(deliveryTarget);
+      }
+    }
+
+    if (failedTargets.length > 0) {
+      return NextResponse.json(
+        { error: `Nie udalo sie przekazac wysylki do n8n dla: ${failedTargets.join(", ")}.` },
+        { status: 502 }
+      );
     }
 
     const sentAt = new Date().toISOString();

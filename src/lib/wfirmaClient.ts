@@ -243,12 +243,18 @@ export async function getWfirmaInvoice(config: WfirmaConfig, id: string | number
 
 export async function downloadWfirmaInvoicePdf(config: WfirmaConfig, id: string | number) {
   const body = { invoices: { invoice: { id } } };
-  const actions = ["invoices/download", "invoices/print", "invoices/pdf", "invoices/get"];
+  const actions: Array<{ action: string; method?: "GET" | "POST"; body?: unknown }> = [
+    { action: `invoices/download/${id}`, method: "GET" },
+    { action: `invoices/download/${id}`, method: "POST" },
+    { action: "invoices/download", method: "POST", body },
+    { action: "invoices/print", method: "POST", body },
+    { action: "invoices/pdf", method: "POST", body },
+  ];
   const errors: string[] = [];
 
-  for (const action of actions) {
+  for (const { action, method, body: actionBody } of actions) {
     try {
-      return await wfirmaBinaryRequest(action, { body, config });
+      return await wfirmaBinaryRequest(action, { method, body: actionBody, config });
     } catch (error) {
       errors.push(error instanceof Error ? error.message : String(error));
     }
@@ -358,7 +364,7 @@ function stringify(value: unknown) {
 
 async function wfirmaBinaryRequest(
   action: string,
-  options: { body?: unknown; config: WfirmaConfig }
+  options: { method?: "GET" | "POST"; body?: unknown; config: WfirmaConfig }
 ) {
   const url = new URL(`${WFIRMA_API_URL}/${action.replace(/^\/+/, "")}`);
   url.searchParams.set("inputFormat", "json");
@@ -366,13 +372,13 @@ async function wfirmaBinaryRequest(
   if (options.config.companyId) url.searchParams.set("company_id", options.config.companyId);
 
   const response = await fetch(url.toString(), {
-    method: "POST",
+    method: options.method || "POST",
     headers: {
       accessKey: options.config.accessKey,
       secretKey: options.config.secretKey,
       appKey: options.config.appKey,
-      "Content-Type": "application/json",
       Accept: "application/pdf",
+      ...(options.body ? { "Content-Type": "application/json" } : {}),
     },
     body: options.body ? JSON.stringify(options.body) : undefined,
   });

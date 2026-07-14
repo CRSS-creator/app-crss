@@ -56,6 +56,8 @@ type InvoiceRow = {
   id: string;
   numer: string | null;
   data_wystawienia: string | null;
+  kontrahent_nip: string | null;
+  kwota_brutto: number | string | null;
   wfirma_id: string | null;
   wfirma_pdf_path: string | null;
   wfirma_pdf_name: string | null;
@@ -102,7 +104,7 @@ async function syncPayments(request: NextRequest) {
   const requestedRange = requestedMonth ? monthRange(requestedMonth) : null;
   let query = admin
     .from("faktury")
-    .select("id,numer,data_wystawienia,wfirma_id,wfirma_pdf_path,wfirma_pdf_name,status")
+    .select("id,numer,data_wystawienia,kontrahent_nip,kwota_brutto,wfirma_id,wfirma_pdf_path,wfirma_pdf_name,status")
     .in("status", STATUSES_TO_CHECK)
     .not("wfirma_id", "is", null)
     .order("termin_platnosci", { ascending: true });
@@ -216,6 +218,15 @@ async function loadWfirmaInvoicesById(
     }
   }
 
+  for (const invoice of invoices) {
+    const wfirmaId = stringify(invoice.wfirma_id);
+    const currentMatch = invoicesById.get(wfirmaId);
+    if (currentMatch && !isDraftInvoiceNumber(currentMatch)) continue;
+
+    const replacement = findMatchingFinalWfirmaInvoice(invoice, Array.from(invoicesById.values()));
+    if (replacement) invoicesById.set(wfirmaId, replacement);
+  }
+
   const missingIds = invoices
     .map((invoice) => stringify(invoice.wfirma_id))
     .filter((wfirmaId) => wfirmaId && !invoicesById.has(wfirmaId));
@@ -234,6 +245,53 @@ async function loadWfirmaInvoicesById(
   return invoicesById;
 }
 
+function findMatchingFinalWfirmaInvoice(invoice: InvoiceRow, candidates: WfirmaInvoice[]) {
+  const invoiceNip = normalizeNip(invoice.kontrahent_nip);
+  const invoiceGross = numberValue(invoice.kwota_brutto);
+  if (!invoiceNip || invoiceGross <= 0) return null;
+
+  const matches = candidates.filter((candidate) => {
+    const candidateNip = normalizeNip(wfirmaInvoiceContractorNip(candidate));
+    const candidateGross = numberValue(candidate.total_composed ?? candidate.total);
+    return candidateNip === invoiceNip && Math.abs(candidateGross - invoiceGross) < 0.02;
+  });
+
+  return matches.find((candidate) => !isDraftInvoiceNumber(candidate)) || matches[0] || null;
+}
+
+function isDraftInvoiceNumber(invoice: WfirmaInvoice) {
+  const number = stringify(invoice.fullnumber || invoice.number).toUpperCase();
+  return number.startsWith("WRF");
+}
+
+function wfirmaInvoiceContractorNip(invoice: WfirmaInvoice) {
+  const direct = stringify(invoice.contractor_nip || invoice.contractor_tax_id || invoice.contractor?.nip || invoice.contractor?.tax_id);
+  if (direct) return direct;
+  return firstNestedValue(invoice, /(^|_)(nip|tax_id)$/i);
+}
+
+function firstNestedValue(value: unknown, keyPattern: RegExp): string {
+  if (!value || typeof value !== "object") return "";
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = firstNestedValue(item, keyPattern);
+      if (found) return found;
+    }
+    return "";
+  }
+
+  for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+    if (keyPattern.test(key)) {
+      const text = stringify(child);
+      if (text) return text;
+    }
+    const nested = firstNestedValue(child, keyPattern);
+    if (nested) return nested;
+  }
+
+  return "";
+}
+
 async function authorizeSync(request: NextRequest) {
   const secretResult = validateSyncSecret(request);
   if (secretResult === true) return null;
@@ -250,6 +308,7 @@ async function syncWfirmaInvoiceSnapshot(
   wfirmaInvoice: WfirmaInvoice
 ) {
   const wfirmaId = stringify(invoice.wfirma_id);
+  const nextWfirmaId = stringify(wfirmaInvoice.id) || wfirmaId;
   const invoiceNumber = stringify(wfirmaInvoice.fullnumber || wfirmaInvoice.number) || invoice.numer;
   const issueDate = dateOnly(wfirmaInvoice.date);
   const saleDate = dateOnly(wfirmaInvoice.disposaldate);
@@ -257,12 +316,12 @@ async function syncWfirmaInvoiceSnapshot(
   const updatedNumber = Boolean(invoiceNumber && invoiceNumber !== invoice.numer);
   let pdfResult: { path: string | null; name: string | null; error: string | null } | null = null;
 
-  if (wfirmaId && shouldRefreshPdf(invoice, invoiceNumber)) {
+  if (nextWfirmaId && shouldRefreshPdf(invoice, invoiceNumber)) {
     pdfResult = await saveWfirmaInvoicePdf({
       admin,
       invoiceId: invoice.id,
       invoiceNumber,
-      wfirmaId,
+      wfirmaId: nextWfirmaId,
       config,
     });
   }
@@ -272,6 +331,8 @@ async function syncWfirmaInvoiceSnapshot(
   };
 
   if (updatedNumber) updatePayload.numer = invoiceNumber;
+  if (nextWfirmaId && nextWfirmaId !== wfirmaId) updatePayload.wfirma_id = nextWfirmaId;
+  if (wfirmaInvoice.hash) updatePayload.wfirma_url = `https://wfirma.pl/faktury/podglad/${wfirmaInvoice.hash}`;
   if (issueDate) updatePayload.data_wystawienia = issueDate;
   if (saleDate) updatePayload.data_sprzedazy = saleDate;
   if (paymentDate) updatePayload.termin_platnosci = paymentDate;
@@ -414,6 +475,15 @@ function collectPaymentValues(value: unknown, path: string[] = []): unknown[] {
 
 function normalizeText(value: unknown) {
   return stringify(value).toLowerCase();
+}
+
+function normalizeNip(value: unknown) {
+  return stringify(value).replace(/\D/g, "");
+}
+
+function numberValue(value: unknown) {
+  const parsed = Number(stringify(value).replace(",", "."));
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function dateOnly(value: unknown) {

@@ -4,6 +4,7 @@ export type ClientCardFormData = {
   adresZamieszkania: string;
   adresZamieszkaniaJakDzialalnosci: boolean;
   formaOpodatkowania: string;
+  glownaStawkaRyczaltu: string;
   urzadSkarbowy: string;
   telefon: string;
   uslugiBylyPracodawca: string;
@@ -32,6 +33,7 @@ export const emptyClientCardFormData: ClientCardFormData = {
   adresZamieszkania: "",
   adresZamieszkaniaJakDzialalnosci: false,
   formaOpodatkowania: "",
+  glownaStawkaRyczaltu: "",
   urzadSkarbowy: "",
   telefon: "",
   uslugiBylyPracodawca: "",
@@ -63,6 +65,7 @@ export type PublicClientCardResponse = {
     email: string | null;
     telefon: string | null;
     forma_opodatkowania: string | null;
+    glowna_stawka_ryczaltu: string | null;
     czynny_vat: boolean | null;
     vat_ue: boolean | null;
     osoba_kontaktowa: string | null;
@@ -83,6 +86,7 @@ export function validateClientCardFormData(data: ClientCardFormData) {
   requireText(data.adresDzialalnosci, "Adres działalności");
   if (!data.adresZamieszkaniaJakDzialalnosci) requireText(data.adresZamieszkania, "Adres zamieszkania");
   requireText(data.formaOpodatkowania, "Forma opodatkowania");
+  if (data.formaOpodatkowania === "Ryczałt") requireText(data.glownaStawkaRyczaltu, "Główna stawka ryczałtu");
   requireText(data.urzadSkarbowy, "Właściwy Urząd Skarbowy");
   requireText(data.uslugiBylyPracodawca, "Usługi na rzecz byłego pracodawcy");
   requireText(data.sprzedazOsobyPrywatneUe, "Sprzedaż na rzecz osób fizycznych z innych krajów UE");

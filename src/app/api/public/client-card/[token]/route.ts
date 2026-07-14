@@ -19,6 +19,7 @@ type ClientRecord = {
   opiekun_id: string | null;
   telefon: string | null;
   forma_opodatkowania: string | null;
+  glowna_stawka_ryczaltu: string | null;
   czynny_vat: boolean | null;
   vat_ue: boolean | null;
   osoba_kontaktowa: string | null;
@@ -70,6 +71,7 @@ async function getForm(token: string) {
         opiekun_id,
         telefon,
         forma_opodatkowania,
+        glowna_stawka_ryczaltu,
         czynny_vat,
         vat_ue,
         osoba_kontaktowa
@@ -199,6 +201,7 @@ async function saveClientCard(request: NextRequest, context: RouteContext) {
       osoba_kontaktowa: data.osobaKontaktowa.trim(),
       telefon: data.telefon?.trim() || client.telefon || null,
       forma_opodatkowania: data.formaOpodatkowania?.trim() || client.forma_opodatkowania || null,
+      glowna_stawka_ryczaltu: data.formaOpodatkowania === "Ryczałt" ? data.glownaStawkaRyczaltu?.trim() || null : null,
       czynny_vat: data.czynnyVat === "tak" ? true : data.czynnyVat === "nie" ? false : client.czynny_vat,
       vat_ue: data.vatUe === "tak" ? true : data.vatUe === "nie" ? false : client.vat_ue,
       schemat_zus: data.zusUlgaTytul?.trim() || null,

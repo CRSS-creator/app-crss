@@ -54,6 +54,7 @@ type Client = {
   osoba_kontaktowa: string | null;
   forma_prawna: string | null;
   forma_opodatkowania: string | null;
+  glowna_stawka_ryczaltu: string | null;
   obsluga_kadrowa: boolean | null;
   status_klienta: string | null;
   abonament: number | null;
@@ -82,6 +83,7 @@ type ClientDraft = {
   osoba_kontaktowa: string;
   forma_prawna: string;
   forma_opodatkowania: string;
+  glowna_stawka_ryczaltu: string;
   obsluga_kadrowa: boolean;
   status_klienta: string;
   abonament: string;
@@ -144,6 +146,20 @@ const TAXATION_FORM_OPTIONS = [
   { value: "Podatek liniowy", label: "Podatek liniowy" },
   { value: "Ryczałt", label: "Ryczałt" },
   { value: "CIT", label: "CIT" },
+];
+
+const LUMP_SUM_RATE_OPTIONS = [
+  { value: "", label: "Wybierz" },
+  { value: "2%", label: "2%" },
+  { value: "3%", label: "3%" },
+  { value: "5,5%", label: "5,5%" },
+  { value: "8,5%", label: "8,5%" },
+  { value: "10%", label: "10%" },
+  { value: "12%", label: "12%" },
+  { value: "12,5%", label: "12,5%" },
+  { value: "14%", label: "14%" },
+  { value: "15%", label: "15%" },
+  { value: "17%", label: "17%" },
 ];
 
 const EMPTY_FILTER = "Wszystkie";
@@ -678,6 +694,7 @@ function ClientDrawer({
           nip: draft.nip.trim() || null,
           forma_prawna: draft.forma_prawna.trim() || null,
           forma_opodatkowania: draft.forma_opodatkowania.trim() || null,
+          glowna_stawka_ryczaltu: draft.forma_opodatkowania === "Ryczałt" ? draft.glowna_stawka_ryczaltu.trim() || null : null,
           obsluga_kadrowa: draft.obsluga_kadrowa,
           status_klienta: draft.status_klienta.trim() || null,
           abonament: draft.abonament ? Number(draft.abonament) : null,
@@ -864,11 +881,20 @@ function ClientDrawer({
                 <EditableSelect
                   label="Forma opodatkowania"
                   value={draft.forma_opodatkowania}
-                  onChange={(value) =>
-                    updateDraft("forma_opodatkowania", value)
-                  }
+                  onChange={(value) => {
+                    updateDraft("forma_opodatkowania", value);
+                    if (value !== "Ryczałt") updateDraft("glowna_stawka_ryczaltu", "");
+                  }}
                   options={TAXATION_FORM_OPTIONS}
                 />
+                {draft.forma_opodatkowania === "Ryczałt" && (
+                  <EditableSelect
+                    label="Główna stawka ryczałtu"
+                    value={draft.glowna_stawka_ryczaltu}
+                    onChange={(value) => updateDraft("glowna_stawka_ryczaltu", value)}
+                    options={LUMP_SUM_RATE_OPTIONS}
+                  />
+                )}
               </>
             ) : (
               <>
@@ -877,6 +903,9 @@ function ClientDrawer({
                   label="Forma opodatkowania"
                   value={client.forma_opodatkowania}
                 />
+                {client.forma_opodatkowania === "Ryczałt" && (
+                  <InfoRow label="Główna stawka ryczałtu" value={client.glowna_stawka_ryczaltu} />
+                )}
               </>
             )}
 
@@ -1175,6 +1204,7 @@ function CreateClientDrawer({
     osoba_kontaktowa: "",
     forma_prawna: "",
     forma_opodatkowania: "",
+    glowna_stawka_ryczaltu: "",
     obsluga_kadrowa: false,
     status_klienta: "Aktywny",
     abonament: "",
@@ -1224,6 +1254,7 @@ function CreateClientDrawer({
       osoba_kontaktowa: draft.osoba_kontaktowa.trim() || null,
       forma_prawna: draft.forma_prawna.trim() || null,
       forma_opodatkowania: draft.forma_opodatkowania.trim() || null,
+      glowna_stawka_ryczaltu: draft.forma_opodatkowania === "Ryczałt" ? draft.glowna_stawka_ryczaltu.trim() || null : null,
       obsluga_kadrowa: draft.obsluga_kadrowa,
       status_klienta: draft.status_klienta.trim() || "Aktywny",
       abonament: draft.abonament ? Number(draft.abonament) : null,
@@ -1397,7 +1428,10 @@ function CreateClientDrawer({
   <EditableSelect
     label="Forma opodatkowania"
     value={draft.forma_opodatkowania}
-    onChange={(v) => updateDraft("forma_opodatkowania", v)}
+    onChange={(v) => {
+      updateDraft("forma_opodatkowania", v);
+      if (v !== "Ryczałt") updateDraft("glowna_stawka_ryczaltu", "");
+    }}
     options={[
       { value: "", label: "Wybierz" },
       { value: "Skala podatkowa", label: "Skala podatkowa" },
@@ -1406,6 +1440,15 @@ function CreateClientDrawer({
       { value: "CIT", label: "CIT" },
     ]}
   />
+
+  {draft.forma_opodatkowania === "Ryczałt" && (
+    <EditableSelect
+      label="Główna stawka ryczałtu"
+      value={draft.glowna_stawka_ryczaltu}
+      onChange={(v) => updateDraft("glowna_stawka_ryczaltu", v)}
+      options={LUMP_SUM_RATE_OPTIONS}
+    />
+  )}
 
   <EditableCheckbox
     label="Czynny VAT"
@@ -1588,6 +1631,7 @@ function createDraft(client: Client): ClientDraft {
     osoba_kontaktowa: client.osoba_kontaktowa || "",
     forma_prawna: client.forma_prawna || "",
     forma_opodatkowania: client.forma_opodatkowania || "",
+    glowna_stawka_ryczaltu: client.glowna_stawka_ryczaltu || "",
     obsluga_kadrowa: Boolean(client.obsluga_kadrowa),
     status_klienta: client.status_klienta || "",
     abonament:

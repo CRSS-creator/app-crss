@@ -48,6 +48,9 @@ export async function buildClientCardPdf(input: ClientCardPdfInput): Promise<Buf
   field(context, "Adres działalności", input.data.adresDzialalnosci);
   field(context, "Adres zamieszkania", input.data.adresZamieszkaniaJakDzialalnosci ? "Taki sam jak adres działalności" : input.data.adresZamieszkania);
   field(context, "Forma opodatkowania", input.data.formaOpodatkowania);
+  if (input.data.formaOpodatkowania === "Ryczałt") {
+    field(context, "Główna stawka ryczałtu", input.data.glownaStawkaRyczaltu);
+  }
   field(context, "Właściwy Urząd Skarbowy", input.data.urzadSkarbowy);
   field(context, "Czy wykonuje lub wykonywał/a usługi na rzecz byłego pracodawcy", input.data.uslugiBylyPracodawca);
 

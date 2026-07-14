@@ -24,6 +24,20 @@ const TAX_OPTIONS = [
   { value: "CIT", label: "CIT" },
 ];
 
+const LUMP_SUM_RATE_OPTIONS = [
+  { value: "", label: "Wybierz" },
+  { value: "2%", label: "2%" },
+  { value: "3%", label: "3%" },
+  { value: "5,5%", label: "5,5%" },
+  { value: "8,5%", label: "8,5%" },
+  { value: "10%", label: "10%" },
+  { value: "12%", label: "12%" },
+  { value: "12,5%", label: "12,5%" },
+  { value: "14%", label: "14%" },
+  { value: "15%", label: "15%" },
+  { value: "17%", label: "17%" },
+];
+
 export default function ClientCardPage() {
   const params = useParams<{ token: string }>();
   const token = params?.token;
@@ -51,6 +65,7 @@ export default function ClientCardPage() {
           osobaKontaktowa: data.client.osoba_kontaktowa || "",
           telefon: data.client.telefon || "",
           formaOpodatkowania: data.client.forma_opodatkowania || "",
+          glownaStawkaRyczaltu: data.client.glowna_stawka_ryczaltu || "",
           czynnyVat: data.client.czynny_vat === true ? "tak" : data.client.czynny_vat === false ? "nie" : "",
           vatUe: data.client.vat_ue === true ? "tak" : data.client.vat_ue === false ? "nie" : "",
         });
@@ -162,10 +177,24 @@ export default function ClientCardPage() {
             <span>Adres zamieszkania taki sam jak adres działalności</span>
           </label>
           <Field label="Forma opodatkowania">
-            <select style={inputStyle} value={draft.formaOpodatkowania} onChange={(event) => updateDraft("formaOpodatkowania", event.target.value)}>
+            <select
+              style={inputStyle}
+              value={draft.formaOpodatkowania}
+              onChange={(event) => {
+                updateDraft("formaOpodatkowania", event.target.value);
+                if (event.target.value !== "Ryczałt") updateDraft("glownaStawkaRyczaltu", "");
+              }}
+            >
               {TAX_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
           </Field>
+          {draft.formaOpodatkowania === "Ryczałt" && (
+            <Field label="Główna stawka ryczałtu">
+              <select style={inputStyle} value={draft.glownaStawkaRyczaltu} onChange={(event) => updateDraft("glownaStawkaRyczaltu", event.target.value)}>
+                {LUMP_SUM_RATE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            </Field>
+          )}
           <Field label="Właściwy Urząd Skarbowy">
             <input style={inputStyle} value={draft.urzadSkarbowy} onChange={(event) => updateDraft("urzadSkarbowy", event.target.value)} />
           </Field>

@@ -646,7 +646,7 @@ function InvoicesContent() {
             {overdueInvoices.length === 0 ? (
               <div style={emptyOverdueStyle}>Brak przeterminowanych faktur.</div>
             ) : (
-              <div style={{ display: "grid", gap: "14px" }}>
+              <div style={overdueModalBodyStyle}>
                 <div style={overdueToolbarStyle}>
                   <input
                     value={overdueQuery}
@@ -1203,13 +1203,14 @@ const dangerBadgeStyle: CSSProperties = { ...badgeBaseStyle, background: "#fee2e
 const neutralBadgeStyle: CSSProperties = { ...badgeBaseStyle, background: "rgba(23, 59, 115, 0.10)", color: colors.navy };
 const overlayStyle: CSSProperties = { position: "fixed", inset: 0, background: "rgba(7, 15, 31, 0.42)", zIndex: 50, display: "flex", justifyContent: "flex-end" };
 const overdueOverlayStyle: CSSProperties = { position: "fixed", inset: 0, background: "rgba(7, 15, 31, 0.48)", zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", padding: "28px", boxSizing: "border-box" };
-const overdueModalStyle: CSSProperties = { width: "min(1240px, 96vw)", maxHeight: "88vh", background: colors.white, borderRadius: radius.card, boxShadow: shadow.card, padding: "24px", overflow: "hidden", boxSizing: "border-box", display: "flex", flexDirection: "column" };
+const overdueModalStyle: CSSProperties = { width: "min(1240px, 96vw)", height: "88vh", maxHeight: "88vh", background: colors.white, borderRadius: radius.card, boxShadow: shadow.card, padding: "24px", overflow: "hidden", boxSizing: "border-box", display: "flex", flexDirection: "column" };
 const overdueModalHeaderStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "16px", marginBottom: "18px" };
 const overdueModalTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "32px", lineHeight: 1.1 };
 const overdueModalMetaStyle: CSSProperties = { margin: "8px 0 0", color: colors.muted, fontSize: "14px", fontWeight: 750 };
+const overdueModalBodyStyle: CSSProperties = { display: "grid", gridTemplateRows: "auto minmax(0, 1fr)", gap: "14px", flex: 1, minHeight: 0 };
 const overdueToolbarStyle: CSSProperties = { display: "flex", gap: "12px", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" };
 const overdueSearchStyle: CSSProperties = { ...inputStyle, flex: "1 1 420px", minWidth: "260px" };
-const overdueTableWrapperStyle: CSSProperties = { overflow: "auto", border: `1px solid ${colors.border}`, borderRadius: radius.input };
+const overdueTableWrapperStyle: CSSProperties = { overflow: "auto", minHeight: 0, border: `1px solid ${colors.border}`, borderRadius: radius.input };
 const overdueTableStyle: CSSProperties = { width: "100%", minWidth: "1080px", borderCollapse: "collapse" };
 const emptyOverdueStyle: CSSProperties = { padding: "28px", border: `1px dashed ${colors.border}`, borderRadius: radius.input, background: colors.card, color: colors.muted, textAlign: "center", fontWeight: 800 };
 const detailsPanelStyle: CSSProperties = { width: "min(920px, 92vw)", height: "100%", background: colors.white, boxShadow: shadow.card, padding: "24px", overflowY: "auto", boxSizing: "border-box" };

@@ -102,9 +102,9 @@ function InvoicesContent() {
 
   const overdueInvoices = useMemo(
     () => invoices
-      .filter((invoice) => invoiceListMonth(invoice) === invoiceMonth && invoice.status === "przeterminowana")
+      .filter((invoice) => invoice.status === "przeterminowana")
       .sort(compareInvoicesByNumber),
-    [invoices, invoiceMonth]
+    [invoices]
   );
   const overdueCount = overdueInvoices.length;
 
@@ -564,13 +564,13 @@ function InvoicesContent() {
               <div>
                 <p style={eyebrowStyle}>Faktury</p>
                 <h2 style={overdueModalTitleStyle}>Przeterminowane</h2>
-                <p style={overdueModalMetaStyle}>{formatMonth(invoiceMonth)} · {overdueCount} pozycji</p>
+                <p style={overdueModalMetaStyle}>Wszystkie okresy - {overdueCount} pozycji</p>
               </div>
               <button type="button" style={secondaryButtonStyle} onClick={() => setOverdueModalOpen(false)}>Zamknij</button>
             </header>
 
             {overdueInvoices.length === 0 ? (
-              <div style={emptyOverdueStyle}>Brak przeterminowanych faktur w wybranym miesiącu.</div>
+              <div style={emptyOverdueStyle}>Brak przeterminowanych faktur.</div>
             ) : (
               <div style={overdueTableWrapperStyle}>
                 <table style={overdueTableStyle}>

@@ -477,12 +477,6 @@ function InvoicesContent() {
                     <Td strong style={invoiceNumberCellStyle}>
                       <span style={invoiceNumberRowStyle}>
                         {invoiceNumberLabel(invoice)}
-                        {invoice.wfirma_pdf_path ? (
-                          <span style={pdfReadyIconStyle} title="PDF faktury jest gotowy">
-                            <FileText size={13} />
-                            PDF
-                          </span>
-                        ) : null}
                         {invoiceMailSent(invoice) ? (
                           <span style={mailSentIconStyle} title="Faktura wysłana mailem">
                             <Mail size={13} />
@@ -965,7 +959,6 @@ const thStyle: CSSProperties = { textAlign: "left", padding: "12px 10px", border
 const tdStyle: CSSProperties = { padding: "13px 10px", borderBottom: `1px solid ${colors.border}`, color: colors.text, verticalAlign: "middle" };
 const invoiceNumberCellStyle: CSSProperties = { minWidth: "128px", whiteSpace: "nowrap", fontSize: "15px", lineHeight: 1.2, fontVariantNumeric: "tabular-nums" };
 const invoiceNumberRowStyle: CSSProperties = { display: "inline-flex", alignItems: "center", gap: "7px", minWidth: 0 };
-const pdfReadyIconStyle: CSSProperties = { display: "inline-flex", alignItems: "center", gap: "3px", borderRadius: radius.badge, background: "#dcfce7", color: colors.success, padding: "3px 6px", fontSize: "10px", fontWeight: 900, lineHeight: 1 };
 const mailSentIconStyle: CSSProperties = { display: "inline-flex", alignItems: "center", justifyContent: "center", width: "24px", height: "20px", borderRadius: radius.badge, background: "#dcfce7", color: colors.success };
 const amountCellStyle: CSSProperties = { whiteSpace: "nowrap", minWidth: "118px", fontSize: "15px", fontVariantNumeric: "tabular-nums" };
 const rowStyle: CSSProperties = { background: colors.white };

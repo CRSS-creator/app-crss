@@ -41,6 +41,7 @@ export type Invoice = {
     nazwa: string | null;
     nip: string | null;
     email: string | null;
+    telefon: string | null;
   } | null;
   faktury_pozycje?: InvoiceLine[] | null;
   faktury_email_history?: InvoiceEmailHistory[] | null;
@@ -115,7 +116,8 @@ const INVOICE_SELECT = `
   klienci (
     nazwa,
     nip,
-    email
+    email,
+    telefon
   ),
   faktury_pozycje (
     id,

@@ -300,8 +300,8 @@ function InvoicesContent() {
     setSendingOverdueReminder(false);
 
     if (result.error) {
-      console.error("Błąd wysyłki przypomnień o przeterminowanych fakturach:", result.error);
-      alert(`Nie udało się wysłać przypomnień.\n\n${result.error.message}`);
+      console.error("Błąd wysyłki powiadomień o przeterminowanych fakturach:", result.error);
+      alert(`Nie udało się wysłać powiadomień.\n\n${result.error.message}`);
       return;
     }
 
@@ -309,7 +309,7 @@ function InvoicesContent() {
     await loadData();
     const sent = result.data?.sent || 0;
     const failed = result.data?.failed.length || 0;
-    alert(`Wysłano przypomnienia: ${sent}. Błędy: ${failed}.`);
+    alert(`Wysłano powiadomienia: ${sent}. Błędy: ${failed}.`);
   }
 
   async function importInvoicesFromWfirma() {
@@ -660,7 +660,7 @@ function InvoicesContent() {
                     onClick={sendSelectedOverdueReminders}
                   >
                     <Mail size={18} />
-                    {sendingOverdueReminder ? "Wysyłanie..." : `Wyślij przypomnienie (${selectedOverdueReminderIds.length})`}
+                    {sendingOverdueReminder ? "Wysyłanie..." : `Wyślij powiadomienie (${selectedOverdueReminderIds.length})`}
                   </button>
                 </div>
 
@@ -700,8 +700,8 @@ function InvoicesContent() {
                                 checked={selectedOverdueInvoiceIds.includes(invoice.id)}
                                 disabled={!canSendOverdueReminder(invoice)}
                                 onChange={(event) => toggleOverdueSelection(invoice.id, event.target.checked)}
-                                title={canSendOverdueReminder(invoice) ? "Zaznacz do przypomnienia" : "Brak adresu e-mail klienta"}
-                                aria-label={`Zaznacz przypomnienie dla ${invoice.numer || invoice.kontrahent_nazwa}`}
+                                title={canSendOverdueReminder(invoice) ? "Zaznacz do powiadomienia" : "Brak adresu e-mail albo telefonu klienta"}
+                                aria-label={`Zaznacz powiadomienie dla ${invoice.numer || invoice.kontrahent_nazwa}`}
                               />
                             </Td>
                             <Td strong style={invoiceNumberCellStyle}>{invoiceNumberLabel(invoice)}<Small>{invoice.numer ? "Numer z wFirmy" : "Po wysłaniu do wFirmy"}</Small></Td>
@@ -1036,7 +1036,7 @@ function canSendInvoiceMail(invoice: Invoice) {
 }
 
 function canSendOverdueReminder(invoice: Invoice) {
-  return Boolean(invoice.status === "przeterminowana" && hasInvoiceEmail(invoice));
+  return Boolean(invoice.status === "przeterminowana" && hasInvoiceEmail(invoice) && hasInvoicePhone(invoice));
 }
 
 function canSelectInvoice(invoice: Invoice) {
@@ -1045,6 +1045,10 @@ function canSelectInvoice(invoice: Invoice) {
 
 function hasInvoiceEmail(invoice: Invoice) {
   return [invoice.kontrahent_email, invoice.klienci?.email].some((value) => String(value || "").includes("@"));
+}
+
+function hasInvoicePhone(invoice: Invoice) {
+  return Boolean(invoice.klienci?.telefon);
 }
 
 function invoiceMailHistory(invoice: Invoice) {

@@ -126,6 +126,10 @@ export async function POST(request: NextRequest) {
       failed.push({ invoiceId: invoice.id, error: "Brak adresu e-mail klienta przy tej fakturze." });
       return false;
     }
+    if (!firstInvoicePhone(invoice)) {
+      failed.push({ invoiceId: invoice.id, error: "Brak numeru telefonu klienta przy tej fakturze." });
+      return false;
+    }
     return true;
   });
 
@@ -164,40 +168,44 @@ export async function POST(request: NextRequest) {
 
 async function sendReminderGroup(context: ReminderContext, group: ReminderGroup) {
   const subject = group.invoices.length === 1
-    ? `Przypomnienie o płatności faktury ${group.invoices[0].numer || ""} - CRSS`.trim()
-    : `Przypomnienie o zaległych płatnościach - CRSS`;
-  const html = buildOverdueReminderHtml(group);
+    ? `Powiadomienie o przeterminowanej fakturze ${group.invoices[0].numer || ""} - CRSS`.trim()
+    : `Powiadomienie o przeterminowanych fakturach - CRSS`;
+  const messageHtml = buildOverdueNotificationHtml(group);
+  const smsMessage = buildOverdueNotificationSms(group);
 
   try {
-    const response = await fetch(context.webhookUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        event: "overdue_invoice_reminder_requested",
-        clientName: group.clientName,
-        recipientEmail: group.recipientEmail,
-        recipientPhone: group.recipientPhone,
-        replyToEmail: group.replyToEmail,
-        replyToName: group.replyToName,
-        subject,
-        html,
-        invoices: group.invoices.map((invoice) => ({
-          invoiceId: invoice.id,
-          invoiceNumber: invoice.numer,
-          amountGross: invoice.kwota_brutto,
-          currency: invoice.waluta || "PLN",
-          issueDate: invoice.data_wystawienia,
-          paymentDate: invoice.termin_platnosci,
-          overdueDays: overdueDays(invoice.termin_platnosci),
-        })),
-        attachments: [],
-        appUrl: APP_URL,
-      }),
-    });
+    const failedChannels: string[] = [];
+    for (const channel of ["email", "sms"] as const) {
+      const response = await fetch(context.webhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event: "overdue_invoice_notification_requested",
+          channel,
+          clientName: group.clientName,
+          recipientEmail: channel === "email" ? group.recipientEmail : null,
+          recipientEmails: channel === "email" ? [group.recipientEmail] : [],
+          recipientPhone: channel === "sms" ? group.recipientPhone : null,
+          recipientPhones: channel === "sms" && group.recipientPhone ? [group.recipientPhone] : [],
+          replyToEmail: group.replyToEmail,
+          replyToName: group.replyToName,
+          subject,
+          messageHtml,
+          smsMessage,
+          invoices: preparedInvoices(group),
+          requestedByName: context.requesterName,
+          appUrl: APP_URL,
+        }),
+      });
 
-    if (!response.ok) {
-      const details = await response.text().catch(() => "");
-      const message = details ? `Automatyzacja zwróciła status ${response.status}: ${details}` : `Automatyzacja zwróciła status ${response.status}.`;
+      if (!response.ok) {
+        const details = await response.text().catch(() => "");
+        failedChannels.push(details ? `${channel}: ${response.status} ${details}` : `${channel}: ${response.status}`);
+      }
+    }
+
+    if (failedChannels.length > 0) {
+      const message = `Automatyzacja nie przyjęła wysyłki: ${failedChannels.join("; ")}`;
       await insertReminderHistory(context, group, subject, "blad", message);
       throw new Error(message);
     }
@@ -288,7 +296,21 @@ function firstEmail(value: string | null | undefined) {
   return splitEmails(value)[0] || null;
 }
 
-function buildOverdueReminderHtml(group: ReminderGroup) {
+function preparedInvoices(group: ReminderGroup) {
+  return group.invoices.map((invoice) => ({
+    invoiceId: invoice.id,
+    invoiceNumber: invoice.numer,
+    amountGross: invoice.kwota_brutto,
+    amountGrossLabel: formatMoney(invoice.kwota_brutto, invoice.waluta || "PLN"),
+    currency: invoice.waluta || "PLN",
+    issueDate: invoice.data_wystawienia,
+    paymentDate: invoice.termin_platnosci,
+    paymentDateLabel: formatDate(invoice.termin_platnosci),
+    overdueDays: overdueDays(invoice.termin_platnosci),
+  }));
+}
+
+function buildOverdueNotificationHtml(group: ReminderGroup) {
   const clientName = escapeHtml(group.clientName || "Państwa firmy");
   const rows = group.invoices.map((invoice) => {
     const days = overdueDays(invoice.termin_platnosci);
@@ -331,6 +353,14 @@ function buildOverdueReminderHtml(group: ReminderGroup) {
 </div>`.trim();
 }
 
+function buildOverdueNotificationSms(group: ReminderGroup) {
+  const invoiceText = group.invoices
+    .map((invoice) => `${toSmsText(invoice.numer || "FV")} - ${overdueDays(invoice.termin_platnosci)} dni po terminie`)
+    .join("; ");
+
+  return toSmsText(`Dzień dobry, informujemy o przeterminowanych fakturach: ${invoiceText}. Szczegóły wysłaliśmy na adres e-mail. CRSS Sp. z o.o.`);
+}
+
 function overdueDays(value: string | null) {
   if (!value) return 0;
   const due = new Date(`${value}T00:00:00Z`).getTime();
@@ -358,6 +388,19 @@ function formatDate(value: string | null) {
     month: "2-digit",
     year: "numeric",
   }).format(new Date(`${value}T00:00:00`));
+}
+
+function toSmsText(value: string | null | undefined) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/ł/g, "l")
+    .replace(/Ł/g, "L")
+    .replace(/zł/g, "zl")
+    .replace(/ZŁ/g, "ZL")
+    .replace(/[^\x20-\x7E]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function escapeHtml(value: string) {

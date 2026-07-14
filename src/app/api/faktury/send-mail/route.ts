@@ -8,6 +8,7 @@ const INVOICE_PDF_BUCKET = "faktury-pdf";
 
 type SendInvoiceMailPayload = {
   invoiceId?: string;
+  invoiceIds?: string[];
 };
 
 type InvoiceMailRow = {
@@ -23,6 +24,13 @@ type InvoiceMailRow = {
   wfirma_pdf_path: string | null;
   wfirma_pdf_name: string | null;
   klienci?: { email: string | null }[] | { email: string | null } | null;
+};
+
+type SendContext = {
+  webhookUrl: string;
+  requesterId: string;
+  requesterName: string;
+  admin: Awaited<ReturnType<typeof getAuthorizedServerUser>>["admin"];
 };
 
 export async function POST(request: NextRequest) {
@@ -51,12 +59,26 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Nieprawidłowe dane wysyłki faktury." }, { status: 400 });
   }
 
-  const invoiceId = payload.invoiceId?.trim();
-  if (!invoiceId) {
-    return NextResponse.json({ error: "Brak ID faktury." }, { status: 400 });
+  const invoiceIds = Array.from(
+    new Set([
+      ...(Array.isArray(payload.invoiceIds) ? payload.invoiceIds : []),
+      ...(payload.invoiceId ? [payload.invoiceId] : []),
+    ].map((value) => value?.trim()).filter(Boolean) as string[])
+  );
+
+  if (invoiceIds.length === 0) {
+    return NextResponse.json({ error: "Wybierz co najmniej jedną fakturę." }, { status: 400 });
   }
 
-  const { data: invoice, error } = await auth.admin
+  const { data: requesterProfile } = await auth.admin
+    .from("profiles")
+    .select("full_name,email")
+    .eq("id", auth.requesterId)
+    .maybeSingle();
+
+  const requesterName = requesterProfile?.full_name || requesterProfile?.email || "Nieustalony użytkownik";
+
+  const { data: invoices, error } = await auth.admin
     .from("faktury")
     .select(`
       id,
@@ -74,52 +96,82 @@ export async function POST(request: NextRequest) {
         email
       )
     `)
-    .eq("id", invoiceId)
-    .single();
+    .in("id", invoiceIds);
 
-  if (error || !invoice) {
-    return NextResponse.json({ error: "Nie znaleziono faktury." }, { status: 404 });
+  if (error) {
+    return NextResponse.json({ error: "Nie udało się pobrać faktur do wysyłki." }, { status: 500 });
   }
 
-  const invoiceRecord = invoice as InvoiceMailRow;
-  if (!invoiceRecord.wfirma_pdf_path) {
-    return NextResponse.json({ error: "Ta faktura nie ma jeszcze PDF do wysyłki." }, { status: 400 });
+  const context: SendContext = {
+    webhookUrl,
+    requesterId: auth.requesterId,
+    requesterName,
+    admin: auth.admin,
+  };
+  const sent: { invoiceId: string; recipientEmail: string }[] = [];
+  const failed: { invoiceId: string; error: string }[] = [];
+
+  for (const invoice of (invoices || []) as InvoiceMailRow[]) {
+    try {
+      const recipientEmail = await sendSingleInvoiceMail(context, invoice);
+      sent.push({ invoiceId: invoice.id, recipientEmail });
+    } catch (error) {
+      failed.push({
+        invoiceId: invoice.id,
+        error: error instanceof Error ? error.message : "Nieznany błąd wysyłki.",
+      });
+    }
   }
 
-  const recipientEmail = firstInvoiceEmail(invoiceRecord);
-  if (!recipientEmail) {
-    return NextResponse.json({ error: "Brak adresu e-mail klienta przy tej fakturze." }, { status: 400 });
+  const missingIds = invoiceIds.filter((id) => !(invoices || []).some((invoice) => invoice.id === id));
+  missingIds.forEach((invoiceId) => failed.push({ invoiceId, error: "Nie znaleziono faktury." }));
+
+  if (sent.length === 0 && failed.length > 0) {
+    return NextResponse.json(
+      { error: failed.map((item) => item.error).join("\n"), sent: 0, failed },
+      { status: 400 }
+    );
   }
 
-  const signedUrl = await auth.admin.storage
+  return NextResponse.json({ ok: true, sent: sent.length, failed, recipients: sent });
+}
+
+async function sendSingleInvoiceMail(context: SendContext, invoice: InvoiceMailRow) {
+  if (!context.admin) throw new Error("Brak połączenia z bazą.");
+  if (!invoice.wfirma_pdf_path) throw new Error("Ta faktura nie ma jeszcze PDF do wysyłki.");
+
+  const recipientEmail = firstInvoiceEmail(invoice);
+  if (!recipientEmail) throw new Error("Brak adresu e-mail klienta przy tej fakturze.");
+
+  const signedUrl = await context.admin.storage
     .from(INVOICE_PDF_BUCKET)
-    .createSignedUrl(invoiceRecord.wfirma_pdf_path, 30 * 60);
+    .createSignedUrl(invoice.wfirma_pdf_path, 30 * 60);
 
   if (signedUrl.error || !signedUrl.data?.signedUrl) {
-    return NextResponse.json({ error: "Nie udało się przygotować PDF faktury do wysyłki." }, { status: 500 });
+    throw new Error("Nie udało się przygotować PDF faktury do wysyłki.");
   }
 
-  const invoiceNumber = invoiceRecord.numer || "faktura";
+  const invoiceNumber = invoice.numer || "faktura";
   const subject = `Faktura ${invoiceNumber} - CRSS`;
-  const html = buildInvoiceMailHtml(invoiceRecord);
-  const attachmentName = invoiceRecord.wfirma_pdf_name || `${sanitizeFileNamePart(invoiceNumber) || "faktura"}.pdf`;
+  const html = buildInvoiceMailHtml(invoice);
+  const attachmentName = invoice.wfirma_pdf_name || `${sanitizeFileNamePart(invoiceNumber) || "faktura"}.pdf`;
 
   try {
-    const response = await fetch(webhookUrl, {
+    const response = await fetch(context.webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         event: "invoice_mail_requested",
-        invoiceId: invoiceRecord.id,
+        invoiceId: invoice.id,
         invoiceNumber,
-        clientName: invoiceRecord.kontrahent_nazwa,
+        clientName: invoice.kontrahent_nazwa,
         recipientEmail,
         subject,
         html,
-        amountGross: invoiceRecord.kwota_brutto,
-        currency: invoiceRecord.waluta || "PLN",
-        issueDate: invoiceRecord.data_wystawienia,
-        paymentDate: invoiceRecord.termin_platnosci,
+        amountGross: invoice.kwota_brutto,
+        currency: invoice.waluta || "PLN",
+        issueDate: invoice.data_wystawienia,
+        paymentDate: invoice.termin_platnosci,
         attachments: [
           {
             fileName: attachmentName,
@@ -134,21 +186,50 @@ export async function POST(request: NextRequest) {
     if (!response.ok) {
       const details = await response.text().catch(() => "");
       const message = details ? `Automatyzacja zwróciła status ${response.status}: ${details}` : `Automatyzacja zwróciła status ${response.status}.`;
-      return NextResponse.json({ error: message }, { status: 502 });
+      await insertMailHistory(context, invoice, recipientEmail, subject, "blad", message);
+      throw new Error(message);
     }
 
-    if (!["oplacona", "anulowana"].includes(invoiceRecord.status)) {
-      await auth.admin
+    await insertMailHistory(context, invoice, recipientEmail, subject, "wyslane", null);
+
+    if (!["oplacona", "anulowana"].includes(invoice.status)) {
+      await context.admin
         .from("faktury")
         .update({ status: "wyslana" })
-        .eq("id", invoiceRecord.id);
+        .eq("id", invoice.id);
     }
 
-    return NextResponse.json({ ok: true, recipientEmail });
+    return recipientEmail;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Nie udało się połączyć z n8n.";
-    return NextResponse.json({ error: `Nie udało się połączyć z automatyzacją n8n: ${message}` }, { status: 502 });
+    if (!message.includes("Automatyzacja zwróciła status")) {
+      await insertMailHistory(context, invoice, recipientEmail, subject, "blad", message);
+    }
+    throw new Error(message);
   }
+}
+
+async function insertMailHistory(
+  context: SendContext,
+  invoice: InvoiceMailRow,
+  recipientEmail: string,
+  subject: string,
+  status: "wyslane" | "blad",
+  error: string | null
+) {
+  if (!context.admin) return;
+  await context.admin.from("faktury_email_history").insert({
+    faktura_id: invoice.id,
+    recipient_email: recipientEmail,
+    subject,
+    status,
+    error,
+    invoice_number: invoice.numer,
+    wfirma_pdf_path: invoice.wfirma_pdf_path,
+    wfirma_pdf_name: invoice.wfirma_pdf_name,
+    sent_by: context.requesterId,
+    sent_by_name: context.requesterName,
+  });
 }
 
 function firstInvoiceEmail(invoice: InvoiceMailRow) {

@@ -43,6 +43,18 @@ export type Invoice = {
     email: string | null;
   } | null;
   faktury_pozycje?: InvoiceLine[] | null;
+  faktury_email_history?: InvoiceEmailHistory[] | null;
+};
+
+export type InvoiceEmailHistory = {
+  id: string;
+  created_at: string;
+  recipient_email: string;
+  subject: string;
+  status: "wyslane" | "blad";
+  error: string | null;
+  invoice_number: string | null;
+  sent_by_name: string | null;
 };
 
 export type InvoiceLine = {
@@ -118,6 +130,16 @@ const INVOICE_SELECT = `
     kwota_vat,
     kwota_brutto,
     sort_order
+  ),
+  faktury_email_history (
+    id,
+    created_at,
+    recipient_email,
+    subject,
+    status,
+    error,
+    invoice_number,
+    sent_by_name
   )
 `;
 
@@ -231,9 +253,18 @@ export async function getInvoicePdfUrl(invoiceId: string) {
 }
 
 export async function sendInvoiceMail(invoiceId: string) {
-  return callWfirmaEndpoint<{ ok: true; recipientEmail: string }>(
+  return sendInvoiceMails([invoiceId]);
+}
+
+export async function sendInvoiceMails(invoiceIds: string[]) {
+  return callWfirmaEndpoint<{
+    ok: true;
+    sent: number;
+    failed: { invoiceId: string; error: string }[];
+    recipients: { invoiceId: string; recipientEmail: string }[];
+  }>(
     "/api/faktury/send-mail",
-    { invoiceId }
+    { invoiceIds }
   );
 }
 

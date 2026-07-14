@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { CalendarClock, DownloadCloud, FileText, RotateCw, Send } from "lucide-react";
+import { CalendarClock, DownloadCloud, FileText, Mail, RotateCw, Send } from "lucide-react";
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
 import AppSelect from "@/components/AppSelect";
@@ -12,6 +12,7 @@ import {
   getInvoicePdfUrl,
   importWfirmaInvoices,
   sendInvoiceMail,
+  sendInvoiceMails,
   sendInvoicesToWfirma,
   syncWfirmaPayments,
   updateInvoice,
@@ -56,6 +57,7 @@ function InvoicesContent() {
   const [importingWfirma, setImportingWfirma] = useState(false);
   const [syncingPayments, setSyncingPayments] = useState(false);
   const [queueing, setQueueing] = useState(false);
+  const [sendingBulkMail, setSendingBulkMail] = useState(false);
   const [sourceFilter, setSourceFilter] = useState(EMPTY_FILTER);
   const [query, setQuery] = useState("");
   const [invoiceMonth, setInvoiceMonth] = useState(() => currentMonthInput());
@@ -105,11 +107,18 @@ function InvoicesContent() {
   }, [filteredInvoices]);
 
   const selectableInvoices = useMemo(
-    () => filteredInvoices.filter((invoice) => canQueueForWfirma(invoice)),
+    () => filteredInvoices.filter((invoice) => canSelectInvoice(invoice)),
     [filteredInvoices]
   );
+  const selectedWfirmaIds = useMemo(
+    () => selectedInvoiceIds.filter((invoiceId) => invoices.some((invoice) => invoice.id === invoiceId && canQueueForWfirma(invoice))),
+    [invoices, selectedInvoiceIds]
+  );
+  const selectedMailIds = useMemo(
+    () => selectedInvoiceIds.filter((invoiceId) => invoices.some((invoice) => invoice.id === invoiceId && canSendInvoiceMail(invoice))),
+    [invoices, selectedInvoiceIds]
+  );
 
-  const selectedCount = selectedInvoiceIds.length;
   const allSelectableChecked =
     selectableInvoices.length > 0 && selectableInvoices.every((invoice) => selectedInvoiceIds.includes(invoice.id));
 
@@ -122,7 +131,7 @@ function InvoicesContent() {
     if (result.error) console.error("Błąd pobierania faktur:", result.error);
     setInvoices((result.data || []) as Invoice[]);
     setSelectedInvoiceIds((current) =>
-      current.filter((invoiceId) => (result.data || []).some((invoice) => invoice.id === invoiceId && canQueueForWfirma(invoice as Invoice)))
+      current.filter((invoiceId) => (result.data || []).some((invoice) => invoice.id === invoiceId && canSelectInvoice(invoice as Invoice)))
     );
     setLoading(false);
   }
@@ -169,10 +178,10 @@ function InvoicesContent() {
   }
 
   async function queueSelectedForWfirma() {
-    if (selectedInvoiceIds.length === 0) return;
+    if (selectedWfirmaIds.length === 0) return;
 
     setQueueing(true);
-    const result = await sendInvoicesToWfirma(selectedInvoiceIds);
+    const result = await sendInvoicesToWfirma(selectedWfirmaIds);
     setQueueing(false);
 
     if (result.error) {
@@ -185,6 +194,26 @@ function InvoicesContent() {
     await loadData();
     if (result.data?.failed.length) {
       alert(`Wysłano: ${result.data.sent}. Błędy: ${result.data.failed.length}. Szczegóły są w statusach faktur.`);
+    }
+  }
+
+  async function sendSelectedByMail() {
+    if (selectedMailIds.length === 0) return;
+
+    setSendingBulkMail(true);
+    const result = await sendInvoiceMails(selectedMailIds);
+    setSendingBulkMail(false);
+
+    if (result.error) {
+      console.error("Błąd zbiorczej wysyłki faktur e-mailem:", result.error);
+      alert(`Nie udało się wysłać zaznaczonych faktur e-mailem.\n\n${result.error.message}`);
+      return;
+    }
+
+    setSelectedInvoiceIds([]);
+    await loadData();
+    if (result.data?.failed.length) {
+      alert(`Wysłano mailem: ${result.data.sent}. Błędy: ${result.data.failed.length}. Szczegóły są w historii faktur.`);
     }
   }
 
@@ -275,7 +304,8 @@ function InvoicesContent() {
       return;
     }
 
-    alert(`Faktura została przekazana do wysyłki na adres: ${result.data?.recipientEmail || "klienta"}.`);
+    const recipientEmail = result.data?.recipients[0]?.recipientEmail || "klienta";
+    alert(`Faktura została przekazana do wysyłki na adres: ${recipientEmail}.`);
     await loadData();
   }
 
@@ -340,14 +370,25 @@ function InvoicesContent() {
               Zaznacz faktury, które nie były jeszcze wysłane do wFirmy, a potem wyślij je zbiorczo.
             </p>
           </div>
-          <button
-            type="button"
-            style={primaryButtonStyle}
-            disabled={selectedCount === 0 || queueing}
-            onClick={queueSelectedForWfirma}
-          >
-            {queueing ? "Przekazywanie..." : `Wyślij do wFirmy (${selectedCount})`}
-          </button>
+          <div style={bulkButtonGroupStyle}>
+            <button
+              type="button"
+              style={primaryButtonStyle}
+              disabled={selectedWfirmaIds.length === 0 || queueing}
+              onClick={queueSelectedForWfirma}
+            >
+              {queueing ? "Przekazywanie..." : `Wyślij do wFirmy (${selectedWfirmaIds.length})`}
+            </button>
+            <button
+              type="button"
+              style={secondaryButtonStyle}
+              disabled={selectedMailIds.length === 0 || sendingBulkMail}
+              onClick={sendSelectedByMail}
+            >
+              <Mail size={18} />
+              {sendingBulkMail ? "Wysyłanie..." : `Wyślij mailem (${selectedMailIds.length})`}
+            </button>
+          </div>
         </div>
         <div style={filtersStyle}>
           <input
@@ -404,7 +445,7 @@ function InvoicesContent() {
                       <input
                         type="checkbox"
                         checked={selectedInvoiceIds.includes(invoice.id)}
-                        disabled={!canQueueForWfirma(invoice)}
+                        disabled={!canSelectInvoice(invoice)}
                         onChange={(event) => toggleInvoiceSelection(invoice.id, event.target.checked)}
                         aria-label={`Zaznacz fakturę ${invoice.numer || invoice.kontrahent_nazwa}`}
                       />
@@ -416,6 +457,11 @@ function InvoicesContent() {
                           <span style={pdfReadyIconStyle} title="PDF faktury jest gotowy">
                             <FileText size={13} />
                             PDF
+                          </span>
+                        ) : null}
+                        {invoiceMailSent(invoice) ? (
+                          <span style={mailSentIconStyle} title="Faktura wysłana mailem">
+                            <Mail size={13} />
                           </span>
                         ) : null}
                       </span>
@@ -591,6 +637,32 @@ function InvoicesContent() {
               <h3 style={descriptionTitleStyle}>Opis faktury</h3>
               <p style={descriptionTextStyle}>{detailsInvoice.opis || "Brak opisu."}</p>
             </section>
+
+            <section style={invoiceDescriptionStyle}>
+              <h3 style={descriptionTitleStyle}>Historia wysyłki e-mail</h3>
+              {invoiceMailHistory(detailsInvoice).length === 0 ? (
+                <p style={descriptionTextStyle}>Brak wysyłek tej faktury.</p>
+              ) : (
+                <div style={mailHistoryListStyle}>
+                  {invoiceMailHistory(detailsInvoice).map((entry) => (
+                    <div key={entry.id} style={mailHistoryItemStyle}>
+                      <div>
+                        <strong>{entry.status === "wyslane" ? "Wysłano" : "Błąd wysyłki"}</strong>
+                        <p style={pdfMetaStyle}>
+                          {formatDateTime(entry.created_at)} · {entry.recipient_email}
+                          {entry.sent_by_name ? ` · ${entry.sent_by_name}` : ""}
+                        </p>
+                        <p style={pdfMetaStyle}>{entry.subject}</p>
+                        {entry.error ? <p style={mailErrorTextStyle}>{entry.error}</p> : null}
+                      </div>
+                      <Badge tone={entry.status === "wyslane" ? "success" : "danger"}>
+                        {entry.status === "wyslane" ? "OK" : "Błąd"}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
           </aside>
         </div>
       )}
@@ -679,6 +751,17 @@ function formatDate(value: string | null) {
   }).format(new Date(`${value}T00:00:00`));
 }
 
+function formatDateTime(value: string | null) {
+  if (!value) return "Brak daty";
+  return new Intl.DateTimeFormat("pl-PL", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
 function paymentDueDate(invoice: Invoice) {
   if (invoice.data_wystawienia) return addDays(invoice.data_wystawienia, 7);
   return invoice.termin_platnosci;
@@ -736,6 +819,28 @@ function syncLabel(status: InvoiceSyncStatus) {
 
 function canQueueForWfirma(invoice: Invoice) {
   return invoice.status !== "anulowana" && ["nie_wyslano", "blad", "wyslano"].includes(invoice.wfirma_sync_status);
+}
+
+function canSendInvoiceMail(invoice: Invoice) {
+  return Boolean(invoice.wfirma_pdf_path && hasInvoiceEmail(invoice) && invoice.status !== "anulowana");
+}
+
+function canSelectInvoice(invoice: Invoice) {
+  return canQueueForWfirma(invoice) || canSendInvoiceMail(invoice);
+}
+
+function hasInvoiceEmail(invoice: Invoice) {
+  return [invoice.kontrahent_email, invoice.klienci?.email].some((value) => String(value || "").includes("@"));
+}
+
+function invoiceMailHistory(invoice: Invoice) {
+  return [...(invoice.faktury_email_history || [])].sort((first, second) =>
+    String(second.created_at || "").localeCompare(String(first.created_at || ""))
+  );
+}
+
+function invoiceMailSent(invoice: Invoice) {
+  return invoiceMailHistory(invoice).some((entry) => entry.status === "wyslane");
 }
 
 function invoiceNumberLabel(invoice: Invoice) {
@@ -810,6 +915,7 @@ const automationPanelStyle: CSSProperties = { display: "flex", justifyContent: "
 const listPanelStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.card, padding: "20px", boxShadow: shadow.soft, minWidth: 0 };
 const automationControlsStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "10px", alignItems: "end", width: "min(100%, 700px)" };
 const bulkActionsStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "16px", marginBottom: "14px" };
+const bulkButtonGroupStyle: CSSProperties = { display: "flex", gap: "10px", justifyContent: "flex-end", alignItems: "center", flexWrap: "wrap" };
 const listTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "20px" };
 const bulkHelpStyle: CSSProperties = { margin: "6px 0 0", color: colors.muted, fontSize: "13px", fontWeight: 700 };
 const fieldStyle: CSSProperties = { display: "grid", gap: "7px", color: colors.muted, fontSize: "12px", fontWeight: 850 };
@@ -837,6 +943,7 @@ const tdStyle: CSSProperties = { padding: "13px 10px", borderBottom: `1px solid 
 const invoiceNumberCellStyle: CSSProperties = { minWidth: "128px", whiteSpace: "nowrap", fontSize: "15px", lineHeight: 1.2, fontVariantNumeric: "tabular-nums" };
 const invoiceNumberRowStyle: CSSProperties = { display: "inline-flex", alignItems: "center", gap: "7px", minWidth: 0 };
 const pdfReadyIconStyle: CSSProperties = { display: "inline-flex", alignItems: "center", gap: "3px", borderRadius: radius.badge, background: "#dcfce7", color: colors.success, padding: "3px 6px", fontSize: "10px", fontWeight: 900, lineHeight: 1 };
+const mailSentIconStyle: CSSProperties = { display: "inline-flex", alignItems: "center", justifyContent: "center", width: "24px", height: "20px", borderRadius: radius.badge, background: "#dcfce7", color: colors.success };
 const amountCellStyle: CSSProperties = { whiteSpace: "nowrap", minWidth: "118px", fontSize: "15px", fontVariantNumeric: "tabular-nums" };
 const rowStyle: CSSProperties = { background: colors.white };
 const pendingInvoiceRowStyle: CSSProperties = { background: "#fff8e7" };
@@ -869,3 +976,6 @@ const lineTableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse
 const invoiceDescriptionStyle: CSSProperties = { marginTop: "18px", border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "14px", background: colors.card };
 const descriptionTitleStyle: CSSProperties = { margin: "0 0 8px", color: colors.navy, fontSize: "16px" };
 const descriptionTextStyle: CSSProperties = { margin: 0, color: colors.text, fontWeight: 500, lineHeight: 1.55, whiteSpace: "pre-line" };
+const mailHistoryListStyle: CSSProperties = { display: "grid", gap: "10px" };
+const mailHistoryItemStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px", borderTop: `1px solid ${colors.border}`, paddingTop: "10px" };
+const mailErrorTextStyle: CSSProperties = { margin: "6px 0 0", color: colors.danger, fontSize: "13px", fontWeight: 700, whiteSpace: "pre-line" };

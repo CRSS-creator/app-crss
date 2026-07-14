@@ -23,7 +23,13 @@ type InvoiceMailRow = {
   termin_platnosci: string | null;
   wfirma_pdf_path: string | null;
   wfirma_pdf_name: string | null;
-  klienci?: { email: string | null }[] | { email: string | null } | null;
+  klienci?: {
+    email: string | null;
+    profiles?: { full_name: string | null; email: string | null }[] | { full_name: string | null; email: string | null } | null;
+  }[] | {
+    email: string | null;
+    profiles?: { full_name: string | null; email: string | null }[] | { full_name: string | null; email: string | null } | null;
+  } | null;
 };
 
 type SendContext = {
@@ -93,7 +99,11 @@ export async function POST(request: NextRequest) {
       wfirma_pdf_path,
       wfirma_pdf_name,
       klienci (
-        email
+        email,
+        profiles!klienci_opiekun_id_fkey (
+          full_name,
+          email
+        )
       )
     `)
     .in("id", invoiceIds);
@@ -155,6 +165,9 @@ async function sendSingleInvoiceMail(context: SendContext, invoice: InvoiceMailR
   const subject = `Faktura ${invoiceNumber} - CRSS`;
   const html = buildInvoiceMailHtml(invoice);
   const attachmentName = invoice.wfirma_pdf_name || `${sanitizeFileNamePart(invoiceNumber) || "faktura"}.pdf`;
+  const caregiver = invoiceCaregiver(invoice);
+  const replyToEmail = firstEmail(caregiver?.email);
+  const replyToName = caregiver?.full_name || replyToEmail || null;
 
   try {
     const response = await fetch(context.webhookUrl, {
@@ -166,6 +179,8 @@ async function sendSingleInvoiceMail(context: SendContext, invoice: InvoiceMailR
         invoiceNumber,
         clientName: invoice.kontrahent_nazwa,
         recipientEmail,
+        replyToEmail,
+        replyToName,
         subject,
         html,
         amountGross: invoice.kwota_brutto,
@@ -239,6 +254,16 @@ function firstInvoiceEmail(invoice: InvoiceMailRow) {
     ...splitEmails(client?.email),
   ];
   return candidates[0] || null;
+}
+
+function invoiceCaregiver(invoice: InvoiceMailRow) {
+  const client = Array.isArray(invoice.klienci) ? invoice.klienci[0] : invoice.klienci;
+  if (!client?.profiles) return null;
+  return Array.isArray(client.profiles) ? client.profiles[0] : client.profiles;
+}
+
+function firstEmail(value: string | null | undefined) {
+  return splitEmails(value)[0] || null;
 }
 
 function buildInvoiceMailHtml(invoice: InvoiceMailRow) {

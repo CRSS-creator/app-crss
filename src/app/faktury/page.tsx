@@ -61,7 +61,7 @@ function InvoicesContent() {
   const [queueing, setQueueing] = useState(false);
   const [sendingBulkMail, setSendingBulkMail] = useState(false);
   const [sourceFilter, setSourceFilter] = useState(EMPTY_FILTER);
-  const [overdueOnly, setOverdueOnly] = useState(false);
+  const [overdueModalOpen, setOverdueModalOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [invoiceMonth, setInvoiceMonth] = useState(() => currentMonthInput());
   const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<string[]>([]);
@@ -81,7 +81,6 @@ function InvoicesContent() {
       .filter((invoice) => {
         const matchesSource = sourceFilter === EMPTY_FILTER || invoice.zrodlo === sourceFilter;
         const matchesIssueMonth = invoiceListMonth(invoice) === invoiceMonth;
-        const matchesOverdue = !overdueOnly || invoice.status === "przeterminowana";
         const haystack = [
           invoice.numer,
           invoice.kontrahent_nazwa,
@@ -96,15 +95,18 @@ function InvoicesContent() {
           .filter(Boolean)
           .join(" ")
           .toLowerCase();
-        return matchesSource && matchesIssueMonth && matchesOverdue && (!normalizedQuery || haystack.includes(normalizedQuery));
+        return matchesSource && matchesIssueMonth && (!normalizedQuery || haystack.includes(normalizedQuery));
       })
       .sort(compareInvoicesByNumber);
-  }, [invoices, invoiceMonth, overdueOnly, query, sourceFilter]);
+  }, [invoices, invoiceMonth, query, sourceFilter]);
 
-  const overdueCount = useMemo(
-    () => invoices.filter((invoice) => invoiceListMonth(invoice) === invoiceMonth && invoice.status === "przeterminowana").length,
+  const overdueInvoices = useMemo(
+    () => invoices
+      .filter((invoice) => invoiceListMonth(invoice) === invoiceMonth && invoice.status === "przeterminowana")
+      .sort(compareInvoicesByNumber),
     [invoices, invoiceMonth]
   );
+  const overdueCount = overdueInvoices.length;
 
   const totals = useMemo(() => {
     const activeInvoices = filteredInvoices.filter((invoice) => invoice.status !== "anulowana");
@@ -345,9 +347,9 @@ function InvoicesContent() {
             <RotateCw size={18} />
             {loading || syncingPayments ? "Odświeżanie..." : "Odśwież"}
           </button>
-          <button type="button" style={overdueOnly ? overdueActiveButtonStyle : secondaryButtonStyle} onClick={() => {
+          <button type="button" style={secondaryButtonStyle} onClick={() => {
             setSelectedInvoiceIds([]);
-            setOverdueOnly((current) => !current);
+            setOverdueModalOpen(true);
           }}>
             <TriangleAlert size={18} />
             Przeterminowane ({overdueCount})
@@ -554,6 +556,63 @@ function InvoicesContent() {
           </table>
         </div>
       </section>
+
+      {overdueModalOpen && (
+        <div style={overdueOverlayStyle} onClick={() => setOverdueModalOpen(false)}>
+          <aside style={overdueModalStyle} onClick={(event) => event.stopPropagation()}>
+            <header style={overdueModalHeaderStyle}>
+              <div>
+                <p style={eyebrowStyle}>Faktury</p>
+                <h2 style={overdueModalTitleStyle}>Przeterminowane</h2>
+                <p style={overdueModalMetaStyle}>{formatMonth(invoiceMonth)} · {overdueCount} pozycji</p>
+              </div>
+              <button type="button" style={secondaryButtonStyle} onClick={() => setOverdueModalOpen(false)}>Zamknij</button>
+            </header>
+
+            {overdueInvoices.length === 0 ? (
+              <div style={emptyOverdueStyle}>Brak przeterminowanych faktur w wybranym miesiącu.</div>
+            ) : (
+              <div style={overdueTableWrapperStyle}>
+                <table style={overdueTableStyle}>
+                  <thead>
+                    <tr>
+                      <Th>Numer</Th>
+                      <Th>Kontrahent</Th>
+                      <Th>Data wystawienia</Th>
+                      <Th>Termin płatności</Th>
+                      <Th>Status</Th>
+                      <Th>Kwota</Th>
+                      <Th>wFirma</Th>
+                      <Th>Szczegóły</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {overdueInvoices.map((invoice) => (
+                      <tr key={invoice.id} style={rowStyle}>
+                        <Td strong style={invoiceNumberCellStyle}>{invoiceNumberLabel(invoice)}<Small>{invoice.numer ? "Numer z wFirmy" : "Po wysłaniu do wFirmy"}</Small></Td>
+                        <Td>{invoice.kontrahent_nazwa}<Small>{invoice.kontrahent_nip || invoice.klienci?.nazwa || "Brak NIP"}</Small></Td>
+                        <Td>{invoice.data_wystawienia ? formatDate(invoice.data_wystawienia) : "Po wysłaniu"}</Td>
+                        <Td>{invoice.termin_platnosci ? formatDate(invoice.termin_platnosci) : "Brak"}</Td>
+                        <Td><Badge tone="danger">Przeterminowana</Badge></Td>
+                        <Td strong style={amountCellStyle}>{formatMoney(invoice.kwota_netto)}</Td>
+                        <Td><Badge tone={invoice.wfirma_sync_status === "blad" ? "danger" : ["wyslano", "zaimportowano"].includes(invoice.wfirma_sync_status) ? "success" : "neutral"}>{syncLabel(invoice.wfirma_sync_status)}</Badge></Td>
+                        <Td>
+                          <button type="button" style={smallButtonStyle} onClick={() => {
+                            setOverdueModalOpen(false);
+                            setDetailsInvoice(invoice);
+                          }}>
+                            Szczegóły
+                          </button>
+                        </Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </aside>
+        </div>
+      )}
 
       {detailsInvoice && (
         <div style={overlayStyle} onClick={() => setDetailsInvoice(null)}>
@@ -956,7 +1015,6 @@ const fieldStyle: CSSProperties = { display: "grid", gap: "7px", color: colors.m
 const inputStyle: CSSProperties = { width: "100%", minHeight: "42px", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, padding: "10px 12px", fontWeight: 750, boxSizing: "border-box" };
 const primaryButtonStyle: CSSProperties = { border: `1px solid ${colors.red}`, borderRadius: radius.input, background: colors.red, color: colors.white, minHeight: "42px", padding: "9px 14px", fontSize: "15px", lineHeight: 1, fontWeight: 850, cursor: "pointer", display: "inline-flex", justifyContent: "center", alignItems: "center", gap: "8px", whiteSpace: "nowrap" };
 const secondaryButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.navy, minHeight: "42px", padding: "9px 13px", fontSize: "15px", lineHeight: 1, fontWeight: 800, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "8px", whiteSpace: "nowrap" };
-const overdueActiveButtonStyle: CSSProperties = { ...secondaryButtonStyle, borderColor: "#fecaca", background: "#fee2e2", color: colors.danger };
 const smallButtonStyle: CSSProperties = { ...secondaryButtonStyle, minHeight: "34px", padding: "7px 10px" };
 const filtersStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(220px, 1fr) 170px", gap: "10px", marginBottom: "14px" };
 const searchStyle: CSSProperties = { ...inputStyle };
@@ -987,6 +1045,14 @@ const successBadgeStyle: CSSProperties = { ...badgeBaseStyle, background: "#dcfc
 const dangerBadgeStyle: CSSProperties = { ...badgeBaseStyle, background: "#fee2e2", color: colors.danger };
 const neutralBadgeStyle: CSSProperties = { ...badgeBaseStyle, background: "rgba(23, 59, 115, 0.10)", color: colors.navy };
 const overlayStyle: CSSProperties = { position: "fixed", inset: 0, background: "rgba(7, 15, 31, 0.42)", zIndex: 50, display: "flex", justifyContent: "flex-end" };
+const overdueOverlayStyle: CSSProperties = { position: "fixed", inset: 0, background: "rgba(7, 15, 31, 0.48)", zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", padding: "28px", boxSizing: "border-box" };
+const overdueModalStyle: CSSProperties = { width: "min(1240px, 96vw)", maxHeight: "88vh", background: colors.white, borderRadius: radius.card, boxShadow: shadow.card, padding: "24px", overflow: "hidden", boxSizing: "border-box", display: "flex", flexDirection: "column" };
+const overdueModalHeaderStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "16px", marginBottom: "18px" };
+const overdueModalTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "32px", lineHeight: 1.1 };
+const overdueModalMetaStyle: CSSProperties = { margin: "8px 0 0", color: colors.muted, fontSize: "14px", fontWeight: 750 };
+const overdueTableWrapperStyle: CSSProperties = { overflow: "auto", border: `1px solid ${colors.border}`, borderRadius: radius.input };
+const overdueTableStyle: CSSProperties = { width: "100%", minWidth: "1080px", borderCollapse: "collapse" };
+const emptyOverdueStyle: CSSProperties = { padding: "28px", border: `1px dashed ${colors.border}`, borderRadius: radius.input, background: colors.card, color: colors.muted, textAlign: "center", fontWeight: 800 };
 const detailsPanelStyle: CSSProperties = { width: "min(920px, 92vw)", height: "100%", background: colors.white, boxShadow: shadow.card, padding: "24px", overflowY: "auto", boxSizing: "border-box" };
 const detailsHeaderStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "flex-start", marginBottom: "18px" };
 const detailsTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "28px" };

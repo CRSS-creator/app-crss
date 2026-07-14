@@ -268,6 +268,18 @@ export async function sendInvoiceMails(invoiceIds: string[]) {
   );
 }
 
+export async function sendOverdueInvoiceReminders(invoiceIds: string[]) {
+  return callWfirmaEndpoint<{
+    ok: true;
+    sent: number;
+    failed: { invoiceId: string; error: string }[];
+    recipients: { recipientEmail: string; invoiceIds: string[] }[];
+  }>(
+    "/api/faktury/overdue-reminder",
+    { invoiceIds }
+  );
+}
+
 async function getWfirmaPaymentSyncMonths(): Promise<{ data: string[]; error: Error | null }> {
   const result = await supabase
     .from("faktury")

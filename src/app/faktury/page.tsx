@@ -14,6 +14,7 @@ import {
   importWfirmaInvoices,
   sendInvoiceMail,
   sendInvoiceMails,
+  sendOverdueInvoiceReminders,
   sendInvoicesToWfirma,
   syncWfirmaPayments,
   updateInvoice,
@@ -62,6 +63,9 @@ function InvoicesContent() {
   const [sendingBulkMail, setSendingBulkMail] = useState(false);
   const [sourceFilter, setSourceFilter] = useState(EMPTY_FILTER);
   const [overdueModalOpen, setOverdueModalOpen] = useState(false);
+  const [overdueQuery, setOverdueQuery] = useState("");
+  const [selectedOverdueInvoiceIds, setSelectedOverdueInvoiceIds] = useState<string[]>([]);
+  const [sendingOverdueReminder, setSendingOverdueReminder] = useState(false);
   const [query, setQuery] = useState("");
   const [invoiceMonth, setInvoiceMonth] = useState(() => currentMonthInput());
   const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<string[]>([]);
@@ -103,10 +107,38 @@ function InvoicesContent() {
   const overdueInvoices = useMemo(
     () => invoices
       .filter((invoice) => invoice.status === "przeterminowana")
-      .sort(compareInvoicesByNumber),
+      .sort(compareOverdueInvoices),
     [invoices]
   );
+  const visibleOverdueInvoices = useMemo(() => {
+    const normalizedQuery = overdueQuery.trim().toLowerCase();
+    if (!normalizedQuery) return overdueInvoices;
+    return overdueInvoices.filter((invoice) => {
+      const haystack = [
+        invoice.numer,
+        invoice.kontrahent_nazwa,
+        invoice.kontrahent_nip,
+        invoice.klienci?.nazwa,
+        invoice.wfirma_id,
+        invoice.data_wystawienia,
+        invoice.termin_platnosci,
+        formatMoney(invoice.kwota_netto),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(normalizedQuery);
+    });
+  }, [overdueInvoices, overdueQuery]);
+  const selectableOverdueInvoices = useMemo(
+    () => visibleOverdueInvoices.filter((invoice) => canSendOverdueReminder(invoice)),
+    [visibleOverdueInvoices]
+  );
   const overdueCount = overdueInvoices.length;
+  const selectedOverdueReminderIds = useMemo(
+    () => selectedOverdueInvoiceIds.filter((invoiceId) => invoices.some((invoice) => invoice.id === invoiceId && canSendOverdueReminder(invoice))),
+    [invoices, selectedOverdueInvoiceIds]
+  );
 
   const totals = useMemo(() => {
     const activeInvoices = filteredInvoices.filter((invoice) => invoice.status !== "anulowana");
@@ -132,6 +164,8 @@ function InvoicesContent() {
 
   const allSelectableChecked =
     selectableInvoices.length > 0 && selectableInvoices.every((invoice) => selectedInvoiceIds.includes(invoice.id));
+  const allOverdueSelectableChecked =
+    selectableOverdueInvoices.length > 0 && selectableOverdueInvoices.every((invoice) => selectedOverdueInvoiceIds.includes(invoice.id));
 
   async function loadData(options?: { generateCurrentMonth?: boolean }) {
     setLoading(true);
@@ -143,6 +177,9 @@ function InvoicesContent() {
     setInvoices((result.data || []) as Invoice[]);
     setSelectedInvoiceIds((current) =>
       current.filter((invoiceId) => (result.data || []).some((invoice) => invoice.id === invoiceId && canSelectInvoice(invoice as Invoice)))
+    );
+    setSelectedOverdueInvoiceIds((current) =>
+      current.filter((invoiceId) => (result.data || []).some((invoice) => invoice.id === invoiceId && canSendOverdueReminder(invoice as Invoice)))
     );
     setLoading(false);
   }
@@ -201,6 +238,20 @@ function InvoicesContent() {
     });
   }
 
+  function toggleOverdueSelection(invoiceId: string, checked: boolean) {
+    setSelectedOverdueInvoiceIds((current) =>
+      checked ? Array.from(new Set([...current, invoiceId])) : current.filter((id) => id !== invoiceId)
+    );
+  }
+
+  function toggleAllVisibleOverdue(checked: boolean) {
+    setSelectedOverdueInvoiceIds((current) => {
+      const visibleIds = selectableOverdueInvoices.map((invoice) => invoice.id);
+      if (!checked) return current.filter((id) => !visibleIds.includes(id));
+      return Array.from(new Set([...current, ...visibleIds]));
+    });
+  }
+
   async function queueSelectedForWfirma() {
     if (selectedWfirmaIds.length === 0) return;
 
@@ -239,6 +290,26 @@ function InvoicesContent() {
     if (result.data?.failed.length) {
       alert(`Wysłano mailem: ${result.data.sent}. Błędy: ${result.data.failed.length}. Szczegóły są w historii faktur.`);
     }
+  }
+
+  async function sendSelectedOverdueReminders() {
+    if (selectedOverdueReminderIds.length === 0) return;
+
+    setSendingOverdueReminder(true);
+    const result = await sendOverdueInvoiceReminders(selectedOverdueReminderIds);
+    setSendingOverdueReminder(false);
+
+    if (result.error) {
+      console.error("Błąd wysyłki przypomnień o przeterminowanych fakturach:", result.error);
+      alert(`Nie udało się wysłać przypomnień.\n\n${result.error.message}`);
+      return;
+    }
+
+    setSelectedOverdueInvoiceIds([]);
+    await loadData();
+    const sent = result.data?.sent || 0;
+    const failed = result.data?.failed.length || 0;
+    alert(`Wysłano przypomnienia: ${sent}. Błędy: ${failed}.`);
   }
 
   async function importInvoicesFromWfirma() {
@@ -349,6 +420,8 @@ function InvoicesContent() {
           </button>
           <button type="button" style={secondaryButtonStyle} onClick={() => {
             setSelectedInvoiceIds([]);
+            setSelectedOverdueInvoiceIds([]);
+            setOverdueQuery("");
             setOverdueModalOpen(true);
           }}>
             <TriangleAlert size={18} />
@@ -572,42 +645,87 @@ function InvoicesContent() {
             {overdueInvoices.length === 0 ? (
               <div style={emptyOverdueStyle}>Brak przeterminowanych faktur.</div>
             ) : (
-              <div style={overdueTableWrapperStyle}>
-                <table style={overdueTableStyle}>
-                  <thead>
-                    <tr>
-                      <Th>Numer</Th>
-                      <Th>Kontrahent</Th>
-                      <Th>Data wystawienia</Th>
-                      <Th>Termin płatności</Th>
-                      <Th>Status</Th>
-                      <Th>Kwota</Th>
-                      <Th>wFirma</Th>
-                      <Th>Szczegóły</Th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {overdueInvoices.map((invoice) => (
-                      <tr key={invoice.id} style={rowStyle}>
-                        <Td strong style={invoiceNumberCellStyle}>{invoiceNumberLabel(invoice)}<Small>{invoice.numer ? "Numer z wFirmy" : "Po wysłaniu do wFirmy"}</Small></Td>
-                        <Td>{invoice.kontrahent_nazwa}<Small>{invoice.kontrahent_nip || invoice.klienci?.nazwa || "Brak NIP"}</Small></Td>
-                        <Td>{invoice.data_wystawienia ? formatDate(invoice.data_wystawienia) : "Po wysłaniu"}</Td>
-                        <Td>{invoice.termin_platnosci ? formatDate(invoice.termin_platnosci) : "Brak"}</Td>
-                        <Td><Badge tone="danger">Przeterminowana</Badge></Td>
-                        <Td strong style={amountCellStyle}>{formatMoney(invoice.kwota_netto)}</Td>
-                        <Td><Badge tone={invoice.wfirma_sync_status === "blad" ? "danger" : ["wyslano", "zaimportowano"].includes(invoice.wfirma_sync_status) ? "success" : "neutral"}>{syncLabel(invoice.wfirma_sync_status)}</Badge></Td>
-                        <Td>
-                          <button type="button" style={smallButtonStyle} onClick={() => {
-                            setOverdueModalOpen(false);
-                            setDetailsInvoice(invoice);
-                          }}>
-                            Szczegóły
-                          </button>
-                        </Td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div style={{ display: "grid", gap: "14px" }}>
+                <div style={overdueToolbarStyle}>
+                  <input
+                    value={overdueQuery}
+                    onChange={(event) => setOverdueQuery(event.target.value)}
+                    placeholder="Szukaj po numerze, kontrahencie, NIP albo ID wFirma"
+                    style={overdueSearchStyle}
+                  />
+                  <button
+                    type="button"
+                    style={primaryButtonStyle}
+                    disabled={selectedOverdueReminderIds.length === 0 || sendingOverdueReminder}
+                    onClick={sendSelectedOverdueReminders}
+                  >
+                    <Mail size={18} />
+                    {sendingOverdueReminder ? "Wysyłanie..." : `Wyślij przypomnienie (${selectedOverdueReminderIds.length})`}
+                  </button>
+                </div>
+
+                {visibleOverdueInvoices.length === 0 ? (
+                  <div style={emptyOverdueStyle}>Brak faktur pasujących do wyszukiwania.</div>
+                ) : (
+                  <div style={overdueTableWrapperStyle}>
+                    <table style={overdueTableStyle}>
+                      <thead>
+                        <tr>
+                          <Th>
+                            <input
+                              type="checkbox"
+                              checked={allOverdueSelectableChecked}
+                              disabled={selectableOverdueInvoices.length === 0}
+                              onChange={(event) => toggleAllVisibleOverdue(event.target.checked)}
+                              aria-label="Zaznacz widoczne przeterminowane faktury"
+                            />
+                          </Th>
+                          <Th>Numer</Th>
+                          <Th>Kontrahent</Th>
+                          <Th>Data wystawienia</Th>
+                          <Th>Termin płatności</Th>
+                          <Th>Po terminie</Th>
+                          <Th>Status</Th>
+                          <Th>Kwota</Th>
+                          <Th>wFirma</Th>
+                          <Th>Szczegóły</Th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {visibleOverdueInvoices.map((invoice) => (
+                          <tr key={invoice.id} style={rowStyle}>
+                            <Td>
+                              <input
+                                type="checkbox"
+                                checked={selectedOverdueInvoiceIds.includes(invoice.id)}
+                                disabled={!canSendOverdueReminder(invoice)}
+                                onChange={(event) => toggleOverdueSelection(invoice.id, event.target.checked)}
+                                title={canSendOverdueReminder(invoice) ? "Zaznacz do przypomnienia" : "Brak adresu e-mail klienta"}
+                                aria-label={`Zaznacz przypomnienie dla ${invoice.numer || invoice.kontrahent_nazwa}`}
+                              />
+                            </Td>
+                            <Td strong style={invoiceNumberCellStyle}>{invoiceNumberLabel(invoice)}<Small>{invoice.numer ? "Numer z wFirmy" : "Po wysłaniu do wFirmy"}</Small></Td>
+                            <Td>{invoice.kontrahent_nazwa}<Small>{invoice.kontrahent_nip || invoice.klienci?.nazwa || "Brak NIP"}</Small></Td>
+                            <Td>{invoice.data_wystawienia ? formatDate(invoice.data_wystawienia) : "Po wysłaniu"}</Td>
+                            <Td>{invoice.termin_platnosci ? formatDate(invoice.termin_platnosci) : "Brak"}</Td>
+                            <Td strong>{overdueDays(invoice.termin_platnosci)} dni</Td>
+                            <Td><Badge tone="danger">Przeterminowana</Badge></Td>
+                            <Td strong style={amountCellStyle}>{formatMoney(invoice.kwota_netto)}</Td>
+                            <Td><Badge tone={invoice.wfirma_sync_status === "blad" ? "danger" : ["wyslano", "zaimportowano"].includes(invoice.wfirma_sync_status) ? "success" : "neutral"}>{syncLabel(invoice.wfirma_sync_status)}</Badge></Td>
+                            <Td>
+                              <button type="button" style={smallButtonStyle} onClick={() => {
+                                setOverdueModalOpen(false);
+                                setDetailsInvoice(invoice);
+                              }}>
+                                Szczegóły
+                              </button>
+                            </Td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             )}
           </aside>
@@ -917,6 +1035,10 @@ function canSendInvoiceMail(invoice: Invoice) {
   return Boolean(invoice.wfirma_pdf_path && hasInvoiceEmail(invoice) && invoice.status !== "anulowana");
 }
 
+function canSendOverdueReminder(invoice: Invoice) {
+  return Boolean(invoice.status === "przeterminowana" && hasInvoiceEmail(invoice));
+}
+
 function canSelectInvoice(invoice: Invoice) {
   return canQueueForWfirma(invoice) || canSendInvoiceMail(invoice);
 }
@@ -956,6 +1078,26 @@ function compareInvoicesByNumber(first: Invoice, second: Invoice) {
   const dateCompare = String(second.data_wystawienia || "").localeCompare(String(first.data_wystawienia || ""));
   if (dateCompare !== 0) return dateCompare;
   return invoiceNumberLabel(first).localeCompare(invoiceNumberLabel(second), "pl", { numeric: true, sensitivity: "base" });
+}
+
+function compareOverdueInvoices(first: Invoice, second: Invoice) {
+  const dueCompare = dateSortValue(first.termin_platnosci) - dateSortValue(second.termin_platnosci);
+  if (dueCompare !== 0) return dueCompare;
+  const issueCompare = dateSortValue(first.data_wystawienia) - dateSortValue(second.data_wystawienia);
+  if (issueCompare !== 0) return issueCompare;
+  return compareInvoicesByNumber(first, second);
+}
+
+function overdueDays(value: string | null) {
+  if (!value) return 0;
+  const due = new Date(`${value}T00:00:00.000Z`).getTime();
+  const now = new Date();
+  const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.max(0, Math.floor((today - due) / 86_400_000));
+}
+
+function dateSortValue(value: string | null) {
+  return value ? new Date(`${value}T00:00:00.000Z`).getTime() : Number.MAX_SAFE_INTEGER;
 }
 
 function invoiceListMonth(invoice: Invoice) {
@@ -1050,6 +1192,8 @@ const overdueModalStyle: CSSProperties = { width: "min(1240px, 96vw)", maxHeight
 const overdueModalHeaderStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "16px", marginBottom: "18px" };
 const overdueModalTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "32px", lineHeight: 1.1 };
 const overdueModalMetaStyle: CSSProperties = { margin: "8px 0 0", color: colors.muted, fontSize: "14px", fontWeight: 750 };
+const overdueToolbarStyle: CSSProperties = { display: "flex", gap: "12px", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" };
+const overdueSearchStyle: CSSProperties = { ...inputStyle, flex: "1 1 420px", minWidth: "260px" };
 const overdueTableWrapperStyle: CSSProperties = { overflow: "auto", border: `1px solid ${colors.border}`, borderRadius: radius.input };
 const overdueTableStyle: CSSProperties = { width: "100%", minWidth: "1080px", borderCollapse: "collapse" };
 const emptyOverdueStyle: CSSProperties = { padding: "28px", border: `1px dashed ${colors.border}`, borderRadius: radius.input, background: colors.card, color: colors.muted, textAlign: "center", fontWeight: 800 };

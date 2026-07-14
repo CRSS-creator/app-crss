@@ -56,6 +56,7 @@ function InvoicesContent() {
   const [generating, setGenerating] = useState(false);
   const [importingWfirma, setImportingWfirma] = useState(false);
   const [syncingPayments, setSyncingPayments] = useState(false);
+  const [syncingSelectedMonth, setSyncingSelectedMonth] = useState(false);
   const [queueing, setQueueing] = useState(false);
   const [sendingBulkMail, setSendingBulkMail] = useState(false);
   const [sourceFilter, setSourceFilter] = useState(EMPTY_FILTER);
@@ -144,6 +145,19 @@ function InvoicesContent() {
     if (syncResult.error) {
       console.error("Błąd sprawdzania płatności w wFirmie:", syncResult.error);
       alert(`Nie udało się sprawdzić płatności w wFirmie.\n\n${syncResult.error.message}`);
+    }
+
+    await loadData();
+  }
+
+  async function refreshSelectedMonthInvoices() {
+    setSyncingSelectedMonth(true);
+    const syncResult = await syncWfirmaPayments(invoiceMonth);
+    setSyncingSelectedMonth(false);
+
+    if (syncResult.error) {
+      console.error("Błąd sprawdzania płatności w wFirmie dla miesiąca:", syncResult.error);
+      alert(`Nie udało się odświeżyć płatności za wybrany miesiąc.\n\n${syncResult.error.message}`);
     }
 
     await loadData();
@@ -358,6 +372,16 @@ function InvoicesContent() {
           >
             <DownloadCloud size={18} />
             {importingWfirma ? "Importowanie..." : "Importuj z wFirmy"}
+          </button>
+          <button
+            type="button"
+            style={secondaryButtonStyle}
+            disabled={loading || syncingSelectedMonth || generating || importingWfirma}
+            onClick={refreshSelectedMonthInvoices}
+            title="Odświeża płatności tylko dla wybranego miesiąca"
+          >
+            <RotateCw size={18} />
+            {syncingSelectedMonth ? "Odświeżanie..." : "Odśwież"}
           </button>
         </div>
       </section>

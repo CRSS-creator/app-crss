@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthorizedServerUser } from "@/lib/serverAuth";
-import { splitEmails } from "@/lib/contactFields";
+import { splitEmails, splitPhones } from "@/lib/contactFields";
 
 const ALLOWED_ROLES = new Set(["owner", "admin"]);
 const APP_URL = "https://app.crss.com.pl";
@@ -25,9 +25,11 @@ type InvoiceMailRow = {
   wfirma_pdf_name: string | null;
   klienci?: {
     email: string | null;
+    telefon: string | null;
     profiles?: { full_name: string | null; email: string | null }[] | { full_name: string | null; email: string | null } | null;
   }[] | {
     email: string | null;
+    telefon: string | null;
     profiles?: { full_name: string | null; email: string | null }[] | { full_name: string | null; email: string | null } | null;
   } | null;
 };
@@ -100,6 +102,7 @@ export async function POST(request: NextRequest) {
       wfirma_pdf_name,
       klienci (
         email,
+        telefon,
         profiles!klienci_opiekun_id_fkey (
           full_name,
           email
@@ -152,6 +155,7 @@ async function sendSingleInvoiceMail(context: SendContext, invoice: InvoiceMailR
 
   const recipientEmail = firstInvoiceEmail(invoice);
   if (!recipientEmail) throw new Error("Brak adresu e-mail klienta przy tej fakturze.");
+  const recipientPhone = firstInvoicePhone(invoice);
 
   const signedUrl = await context.admin.storage
     .from(INVOICE_PDF_BUCKET)
@@ -179,6 +183,7 @@ async function sendSingleInvoiceMail(context: SendContext, invoice: InvoiceMailR
         invoiceNumber,
         clientName: invoice.kontrahent_nazwa,
         recipientEmail,
+        recipientPhone,
         replyToEmail,
         replyToName,
         subject,
@@ -254,6 +259,11 @@ function firstInvoiceEmail(invoice: InvoiceMailRow) {
     ...splitEmails(client?.email),
   ];
   return candidates[0] || null;
+}
+
+function firstInvoicePhone(invoice: InvoiceMailRow) {
+  const client = Array.isArray(invoice.klienci) ? invoice.klienci[0] : invoice.klienci;
+  return splitPhones(client?.telefon)[0] || null;
 }
 
 function invoiceCaregiver(invoice: InvoiceMailRow) {

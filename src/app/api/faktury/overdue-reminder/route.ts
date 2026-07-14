@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthorizedServerUser } from "@/lib/serverAuth";
-import { splitEmails } from "@/lib/contactFields";
+import { splitEmails, splitPhones } from "@/lib/contactFields";
 
 const ALLOWED_ROLES = new Set(["owner", "admin"]);
 const APP_URL = "https://app.crss.com.pl";
@@ -23,9 +23,11 @@ type OverdueInvoiceRow = {
   wfirma_pdf_name: string | null;
   klienci?: {
     email: string | null;
+    telefon: string | null;
     profiles?: { full_name: string | null; email: string | null }[] | { full_name: string | null; email: string | null } | null;
   }[] | {
     email: string | null;
+    telefon: string | null;
     profiles?: { full_name: string | null; email: string | null }[] | { full_name: string | null; email: string | null } | null;
   } | null;
 };
@@ -39,6 +41,7 @@ type ReminderContext = {
 
 type ReminderGroup = {
   recipientEmail: string;
+  recipientPhone: string | null;
   clientName: string;
   replyToEmail: string | null;
   replyToName: string | null;
@@ -100,6 +103,7 @@ export async function POST(request: NextRequest) {
       wfirma_pdf_name,
       klienci (
         email,
+        telefon,
         profiles!klienci_opiekun_id_fkey (
           full_name,
           email
@@ -172,6 +176,7 @@ async function sendReminderGroup(context: ReminderContext, group: ReminderGroup)
         event: "overdue_invoice_reminder_requested",
         clientName: group.clientName,
         recipientEmail: group.recipientEmail,
+        recipientPhone: group.recipientPhone,
         replyToEmail: group.replyToEmail,
         replyToName: group.replyToName,
         subject,
@@ -246,6 +251,7 @@ function groupInvoicesByRecipient(invoices: OverdueInvoiceRow[]) {
     }
     groups.set(key, {
       recipientEmail,
+      recipientPhone: firstInvoicePhone(invoice),
       clientName: invoice.kontrahent_nazwa,
       replyToEmail,
       replyToName: caregiver?.full_name || replyToEmail || null,
@@ -265,6 +271,11 @@ function firstInvoiceEmail(invoice: OverdueInvoiceRow) {
     ...splitEmails(client?.email),
   ];
   return candidates[0] || null;
+}
+
+function firstInvoicePhone(invoice: OverdueInvoiceRow) {
+  const client = Array.isArray(invoice.klienci) ? invoice.klienci[0] : invoice.klienci;
+  return splitPhones(client?.telefon)[0] || null;
 }
 
 function invoiceCaregiver(invoice: OverdueInvoiceRow) {

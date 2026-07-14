@@ -841,7 +841,7 @@ function syncLabel(status: InvoiceSyncStatus) {
 }
 
 function canQueueForWfirma(invoice: Invoice) {
-  return invoice.status !== "anulowana" && ["nie_wyslano", "blad", "wyslano"].includes(invoice.wfirma_sync_status);
+  return invoice.status !== "anulowana" && ["nie_wyslano", "blad"].includes(invoice.wfirma_sync_status);
 }
 
 function canSendInvoiceMail(invoice: Invoice) {

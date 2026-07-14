@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
       )
     `)
     .in("id", invoiceIds)
-    .in("wfirma_sync_status", ["nie_wyslano", "w_kolejce", "blad", "wyslano"]);
+    .in("wfirma_sync_status", ["nie_wyslano", "w_kolejce", "blad"]);
 
   if (error) {
     return NextResponse.json({ error: "Nie udało się pobrać faktur do wysyłki." }, { status: 500 });
@@ -96,6 +96,12 @@ export async function POST(request: NextRequest) {
 
   const sent: string[] = [];
   const failed: { invoiceId: string; error: string }[] = [];
+  const fetchedInvoiceIds = new Set(((invoices || []) as InvoiceRow[]).map((invoice) => invoice.id));
+  invoiceIds
+    .filter((invoiceId) => !fetchedInvoiceIds.has(invoiceId))
+    .forEach((invoiceId) => {
+      failed.push({ invoiceId, error: "Ta faktura zostaĹ‚a juĹĽ wysĹ‚ana do wFirmy albo nie moĹĽe zostaÄ‡ wysĹ‚ana ponownie." });
+    });
 
   for (const invoice of (invoices || []) as InvoiceRow[]) {
     try {

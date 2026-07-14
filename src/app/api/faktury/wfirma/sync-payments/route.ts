@@ -1,14 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAuthorizedServerUser } from "@/lib/serverAuth";
 import {
+  downloadWfirmaInvoicePdf,
   extractWfirmaInvoices,
   findWfirmaInvoices,
+  firstWfirmaInvoice,
+  getWfirmaInvoice,
   getWfirmaConfig,
   type WfirmaInvoice,
 } from "@/lib/wfirmaClient";
 
 const ALLOWED_ROLES = new Set(["owner", "admin"]);
+const INVOICE_PDF_BUCKET = "faktury-pdf";
 const STATUSES_TO_CHECK = ["wystawiona", "wyslana", "przeterminowana"];
 const MAX_INVOICES_PER_RUN = 80;
 const PAID_VALUES = new Set([
@@ -52,6 +57,8 @@ type InvoiceRow = {
   numer: string | null;
   data_wystawienia: string | null;
   wfirma_id: string | null;
+  wfirma_pdf_path: string | null;
+  wfirma_pdf_name: string | null;
   status: string;
 };
 
@@ -95,7 +102,7 @@ async function syncPayments(request: NextRequest) {
   const requestedRange = requestedMonth ? monthRange(requestedMonth) : null;
   let query = admin
     .from("faktury")
-    .select("id,numer,data_wystawienia,wfirma_id,status")
+    .select("id,numer,data_wystawienia,wfirma_id,wfirma_pdf_path,wfirma_pdf_name,status")
     .in("status", STATUSES_TO_CHECK)
     .not("wfirma_id", "is", null)
     .order("termin_platnosci", { ascending: true });
@@ -114,6 +121,7 @@ async function syncPayments(request: NextRequest) {
   const wfirmaInvoicesById = await loadWfirmaInvoicesById(wfirma.config, invoices, requestedMonth);
   const paid: PaidInvoice[] = [];
   const failed: FailedInvoice[] = [];
+  const refreshed: { invoiceId: string; number: string | null; pdf: boolean }[] = [];
 
   for (const invoice of invoices) {
     const wfirmaId = stringify(invoice.wfirma_id);
@@ -122,6 +130,11 @@ async function syncPayments(request: NextRequest) {
     try {
       const wfirmaInvoice = wfirmaInvoicesById.get(wfirmaId);
       if (!wfirmaInvoice) throw new Error("wFirma nie zwróciła danych tej faktury.");
+
+      const syncResult = await syncWfirmaInvoiceSnapshot(admin, wfirma.config, invoice, wfirmaInvoice);
+      if (syncResult.updatedNumber || syncResult.savedPdf) {
+        refreshed.push({ invoiceId: invoice.id, number: syncResult.invoiceNumber, pdf: syncResult.savedPdf });
+      }
 
       if (!isPaidInvoice(wfirmaInvoice)) continue;
 
@@ -157,6 +170,7 @@ async function syncPayments(request: NextRequest) {
   return NextResponse.json({
     checked: invoices.length,
     markedPaid: paid.length,
+    refreshed,
     paid,
     failed,
   });
@@ -202,6 +216,21 @@ async function loadWfirmaInvoicesById(
     }
   }
 
+  const missingIds = invoices
+    .map((invoice) => stringify(invoice.wfirma_id))
+    .filter((wfirmaId) => wfirmaId && !invoicesById.has(wfirmaId));
+
+  for (const wfirmaId of missingIds) {
+    try {
+      const response = await getWfirmaInvoice(config, wfirmaId);
+      const invoice = firstWfirmaInvoice(response);
+      const id = stringify(invoice?.id || wfirmaId);
+      if (invoice && id) invoicesById.set(id, invoice);
+    } catch {
+      // The caller reports missing invoices in the regular failed list.
+    }
+  }
+
   return invoicesById;
 }
 
@@ -212,6 +241,93 @@ async function authorizeSync(request: NextRequest) {
 
   const auth = await getAuthorizedServerUser(request, ALLOWED_ROLES, "Brak uprawnień do sprawdzania płatności w wFirmie.");
   return auth.error;
+}
+
+async function syncWfirmaInvoiceSnapshot(
+  admin: SupabaseClient,
+  config: Parameters<typeof findWfirmaInvoices>[0]["config"],
+  invoice: InvoiceRow,
+  wfirmaInvoice: WfirmaInvoice
+) {
+  const wfirmaId = stringify(invoice.wfirma_id);
+  const invoiceNumber = stringify(wfirmaInvoice.fullnumber || wfirmaInvoice.number) || invoice.numer;
+  const issueDate = dateOnly(wfirmaInvoice.date);
+  const saleDate = dateOnly(wfirmaInvoice.disposaldate);
+  const paymentDate = dateOnly(wfirmaInvoice.payment_date);
+  const updatedNumber = Boolean(invoiceNumber && invoiceNumber !== invoice.numer);
+  let pdfResult: { path: string | null; name: string | null; error: string | null } | null = null;
+
+  if (wfirmaId && shouldRefreshPdf(invoice, invoiceNumber)) {
+    pdfResult = await saveWfirmaInvoicePdf({
+      admin,
+      invoiceId: invoice.id,
+      invoiceNumber,
+      wfirmaId,
+      config,
+    });
+  }
+
+  const updatePayload: Record<string, unknown> = {
+    wfirma_synced_at: new Date().toISOString(),
+  };
+
+  if (updatedNumber) updatePayload.numer = invoiceNumber;
+  if (issueDate) updatePayload.data_wystawienia = issueDate;
+  if (saleDate) updatePayload.data_sprzedazy = saleDate;
+  if (paymentDate) updatePayload.termin_platnosci = paymentDate;
+
+  if (pdfResult?.path) {
+    updatePayload.wfirma_pdf_path = pdfResult.path;
+    updatePayload.wfirma_pdf_name = pdfResult.name;
+    updatePayload.wfirma_pdf_synced_at = new Date().toISOString();
+    updatePayload.wfirma_sync_error = null;
+  } else if (pdfResult?.error) {
+    updatePayload.wfirma_sync_error = `Faktura odĹ›wieĹĽona, ale nie udaĹ‚o siÄ™ pobraÄ‡ PDF z wFirmy: ${pdfResult.error}`;
+  }
+
+  const update = await admin
+    .from("faktury")
+    .update(updatePayload)
+    .eq("id", invoice.id);
+
+  if (update.error) {
+    throw new Error(`Nie udaĹ‚o siÄ™ zapisaÄ‡ danych faktury z wFirmy: ${update.error.message}`);
+  }
+
+  return {
+    invoiceNumber,
+    updatedNumber,
+    savedPdf: Boolean(pdfResult?.path),
+  };
+}
+
+function shouldRefreshPdf(invoice: InvoiceRow, invoiceNumber: string | null) {
+  if (!invoiceNumber) return !invoice.wfirma_pdf_path;
+  const expectedName = buildInvoicePdfName(invoiceNumber, stringify(invoice.wfirma_id));
+  return !invoice.wfirma_pdf_path || invoice.wfirma_pdf_name !== expectedName;
+}
+
+async function saveWfirmaInvoicePdf(params: {
+  admin: SupabaseClient;
+  invoiceId: string;
+  invoiceNumber: string | null;
+  wfirmaId: string;
+  config: Parameters<typeof downloadWfirmaInvoicePdf>[0];
+}) {
+  try {
+    const pdf = await downloadWfirmaInvoicePdf(params.config, params.wfirmaId);
+    const name = buildInvoicePdfName(params.invoiceNumber, params.wfirmaId);
+    const path = `${params.invoiceId}/${Date.now()}-${name}`;
+    const upload = await params.admin.storage.from(INVOICE_PDF_BUCKET).upload(path, pdf, {
+      contentType: "application/pdf",
+      upsert: true,
+    });
+
+    if (upload.error) throw upload.error;
+    return { path, name, error: null as string | null };
+  } catch (error) {
+    return { path: null, name: null, error: error instanceof Error ? error.message : "Nieznany bĹ‚Ä…d pobierania PDF." };
+  }
 }
 
 async function syncMonth(request: NextRequest) {
@@ -311,6 +427,21 @@ function monthRange(month: string) {
   nextMonth.setUTCMonth(nextMonth.getUTCMonth() + 1);
   const dateTo = new Date(nextMonth.getTime() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   return { dateFrom, dateTo };
+}
+
+function buildInvoicePdfName(invoiceNumber: string | null, wfirmaId: string) {
+  const base = sanitizeFileNamePart(invoiceNumber || `wfirma-${wfirmaId}`);
+  return `${base || "faktura"}.pdf`;
+}
+
+function sanitizeFileNamePart(value: string) {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80)
+    .toLowerCase();
 }
 
 function stringify(value: unknown) {

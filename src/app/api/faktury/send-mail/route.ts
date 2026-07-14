@@ -285,7 +285,7 @@ function buildInvoiceMailHtml(invoice: InvoiceMailRow) {
         <p style="margin:0 0 8px 0;"><strong>Kwota brutto:</strong> ${amount}</p>
         <p style="margin:0;"><strong>Termin płatności:</strong> ${paymentDate}</p>
       </div>
-      <p style="margin:0 0 16px 0;">W razie pytań prosimy o kontakt z zespołem CRSS.</p>
+      <p style="margin:0 0 16px 0;">W razie pytań prosimy o kontakt.</p>
       <p style="margin:24px 0 0 0;">Pozdrawiamy serdecznie,<br><strong>Zespół CRSS</strong></p>
     </div>
     <p style="margin:18px 4px 0;color:#7a8598;font-size:13px;">Wiadomość wysłana automatycznie.</p>

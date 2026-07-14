@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
-import { Play, Square } from "lucide-react";
+import { FileText, Play, Square } from "lucide-react";
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
 import AppSelect from "@/components/AppSelect";
@@ -11,11 +11,13 @@ import { colors, radius, shadow } from "@/app/design";
 import { supabase } from "@/lib/supabaseClient";
 import {
   ensureCurrentMonthSettlements,
+  fetchSettlementInvoiceMarkers,
   fetchMonthlySettlements,
   fetchSettlementTaskProgress,
   sendDocumentsReminder,
   updateMonthlySettlement,
   type MonthlySettlement,
+  type SettlementInvoiceMarker,
   type SettlementProgress,
   type SettlementStatus,
 } from "@/lib/monthlySettlementsService";
@@ -64,6 +66,7 @@ function SettlementsContent() {
   const [period, setPeriod] = useState(currentMonthInput());
   const [settlements, setSettlements] = useState<MonthlySettlement[]>([]);
   const [progressRows, setProgressRows] = useState<SettlementProgress[]>([]);
+  const [invoiceMarkers, setInvoiceMarkers] = useState<SettlementInvoiceMarker[]>([]);
   const [recurringRealizations, setRecurringRealizations] = useState<RecurringTaskRealization[]>([]);
   const [recurringTimeEntries, setRecurringTimeEntries] = useState<TimeEntry[]>([]);
   const [taxObligations, setTaxObligations] = useState<TaxObligation[]>([]);
@@ -78,6 +81,10 @@ function SettlementsContent() {
   const progressBySettlement = useMemo(
     () => Object.fromEntries(progressRows.map((row) => [row.rozliczenie_id, row])),
     [progressRows]
+  );
+  const invoiceMarkerByClientId = useMemo(
+    () => Object.fromEntries(invoiceMarkers.map((marker) => [marker.klient_id, marker])),
+    [invoiceMarkers]
   );
 
   const visibleSettlements = [...settlements].filter((settlement) => {
@@ -105,9 +112,10 @@ function SettlementsContent() {
     const userId = userResult.data.user?.id || null;
     setCurrentUserId(userId);
 
-    const [settlementsResult, progressResult, recurringResult, recurringTimeResult, taxResult, timersResult] = await Promise.all([
+    const [settlementsResult, progressResult, invoiceMarkersResult, recurringResult, recurringTimeResult, taxResult, timersResult] = await Promise.all([
       fetchMonthlySettlements(normalizedPeriod),
       fetchSettlementTaskProgress(normalizedPeriod),
+      fetchSettlementInvoiceMarkers(normalizedPeriod),
       fetchRecurringTaskRealizations(normalizedPeriod),
       fetchRecurringTaskTimeEntries(normalizedPeriod),
       fetchTaxObligations(normalizedPeriod),
@@ -122,6 +130,7 @@ function SettlementsContent() {
 
     setSettlements((settlementsResult.data || []) as MonthlySettlement[]);
     setProgressRows((progressResult.data || []) as SettlementProgress[]);
+    setInvoiceMarkers((invoiceMarkersResult.data || []) as SettlementInvoiceMarker[]);
     setRecurringRealizations((recurringResult.data || []) as RecurringTaskRealization[]);
     setRecurringTimeEntries((recurringTimeResult.data || []) as TimeEntry[]);
     setTaxObligations((taxResult.data || []) as TaxObligation[]);
@@ -308,9 +317,10 @@ function SettlementsContent() {
                 {visibleSettlements.map((settlement) => {
                   const client = getClient(settlement.klienci);
                   const progress = progressBySettlement[settlement.id] || { progress: 0, total_tasks: 0, done_tasks: 0 };
+                  const invoiceMarker = client?.id ? invoiceMarkerByClientId[client.id] : null;
                   return (
                     <tr key={settlement.id} style={rowStyle}>
-                      <Td><div style={clientCellStyle}><span style={clientNameStyle}>{client?.nazwa || "Klient"}</span><small>{client?.nip || "Brak NIP"} · {getCaregiverName(client)}</small></div></Td>
+                      <Td><div style={clientCellStyle}><span style={clientNameRowStyle}><span style={clientNameStyle}>{client?.nazwa || "Klient"}</span>{invoiceMarker ? <InvoiceMarker number={invoiceMarker.numer} /> : null}</span><small>{client?.nip || "Brak NIP"} · {getCaregiverName(client)}</small></div></Td>
                       <Td><AppSelect style={{ ...statusInputStyle, ...statusSelectStyle(settlement.status_ksiegowosci) }} value={settlement.status_ksiegowosci} disabled={savingId === settlement.id} options={STATUS_OPTIONS} onChange={(value) => patchSettlement(settlement, { status_ksiegowosci: value as SettlementStatus })} /></Td>
                       <Td><NumberInput value={settlement.liczba_dokumentow} disabled={false} onChange={(value) => patchSettlement(settlement, { liczba_dokumentow: value })} /></Td>
                       <Td>{client?.obsluga_kadrowa ? <NumberInput value={settlement.liczba_pracownikow} disabled={false} onChange={(value) => patchSettlement(settlement, { liczba_pracownikow: value })} /> : <span style={emptyCellStyle}>-</span>}</Td>
@@ -684,6 +694,14 @@ function ProgressBadge({ progress, done, total, large }: { progress: number; don
   const isComplete = total > 0 && done === total;
   return <div style={{ ...(large ? progressLargeStyle : progressStyle), ...(isComplete ? progressCompleteStyle : {}) }}><span>{progress}%</span><span>{done}/{total} zadań</span></div>;
 }
+function InvoiceMarker({ number }: { number: string | null }) {
+  return (
+    <span style={invoiceMarkerStyle} title={number ? `Faktura wystawiona: ${number}` : "Faktura wystawiona"}>
+      <FileText size={13} />
+      FV
+    </span>
+  );
+}
 function SummaryCard({ label, value }: { label: string; value: string | number }) { return <div style={summaryCardStyle}><span>{label}</span><strong>{value}</strong></div>; }
 function Field({ label, children }: { label: string; children: ReactNode }) { return <label style={fieldStyle}><span style={labelStyle}>{label}</span>{children}</label>; }
 function Th({ children, width }: { children: ReactNode; width?: string }) { return <th style={{ ...thStyle, width }}>{children}</th>; }
@@ -806,7 +824,9 @@ const statusInputStyle: CSSProperties = { ...inputStyle, minWidth: 0, maxWidth: 
 const smallInputStyle: CSSProperties = { ...inputStyle, width: "100%", maxWidth: "150px", minWidth: "94px", background: colors.inputBackground, textAlign: "center", fontWeight: 500 };
 const textareaStyle: CSSProperties = { ...inputStyle, minHeight: "96px", resize: "vertical", background: colors.inputBackground };
 const clientCellStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "5px", minWidth: 0, fontWeight: 400 };
+const clientNameRowStyle: CSSProperties = { display: "inline-flex", alignItems: "center", gap: "8px", minWidth: 0, flexWrap: "wrap" };
 const clientNameStyle: CSSProperties = { fontWeight: 800 };
+const invoiceMarkerStyle: CSSProperties = { display: "inline-flex", alignItems: "center", gap: "4px", borderRadius: "999px", background: "#dcfce7", color: "#15803d", padding: "3px 7px", fontSize: "11px", lineHeight: 1, fontWeight: 800 };
 const progressStyle: CSSProperties = { display: "inline-flex", flexDirection: "column", gap: "4px", borderRadius: radius.input, background: "#e8eef8", color: colors.navy, padding: "8px 10px", fontWeight: 500, minWidth: "86px", fontSize: "14px" };
 const progressLargeStyle: CSSProperties = { ...progressStyle, width: "100%", padding: "18px", fontSize: "20px" };
 const progressCompleteStyle: CSSProperties = { background: "#dcfce7", color: "#166534" };

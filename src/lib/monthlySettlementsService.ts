@@ -62,6 +62,11 @@ export type SettlementProgress = {
   progress: number;
 };
 
+export type SettlementInvoiceMarker = {
+  klient_id: string;
+  numer: string | null;
+};
+
 const SETTLEMENT_SELECT = `
   *,
   klienci!rozliczenia_miesieczne_klient_id_fkey (
@@ -107,6 +112,16 @@ export async function updateMonthlySettlement(settlementId: string, payload: Set
 
 export async function fetchSettlementTaskProgress(period: string) {
   return supabase.rpc("settlement_task_progress", { public_period: period });
+}
+
+export async function fetchSettlementInvoiceMarkers(period: string) {
+  return supabase
+    .from("faktury")
+    .select("klient_id,numer")
+    .eq("okres", period)
+    .not("klient_id", "is", null)
+    .not("numer", "is", null)
+    .in("status", ["wystawiona", "wyslana", "oplacona", "przeterminowana"]);
 }
 
 export async function sendDocumentsReminder(settlementId: string) {

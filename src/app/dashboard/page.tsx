@@ -87,6 +87,7 @@ function DashboardContent({ role }: { role: UserRole }) {
   }));
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(() => new Date());
+  const [timeDetailsOpen, setTimeDetailsOpen] = useState(false);
 
   useEffect(() => {
     let ignore = false;
@@ -185,10 +186,24 @@ function DashboardContent({ role }: { role: UserRole }) {
           <span style={todayWorkLabelStyle}>Mój czas pracy dzisiaj</span>
           <strong style={todayWorkValueStyle}>{formatDuration(view.todayWorkSeconds)}</strong>
         </div>
-        <div style={todayWorkMetaStyle}>
-          {view.activeTimeEntriesCount > 0 ? `Aktywny licznik: ${view.activeTimeEntriesCount}` : "Brak aktywnego licznika"}
+        <div style={todayWorkActionsStyle}>
+          <div style={todayWorkMetaStyle}>
+            {view.activeTimeEntriesCount > 0 ? `Aktywny licznik: ${view.activeTimeEntriesCount}` : "Brak aktywnego licznika"}
+          </div>
+          <button type="button" style={todayWorkDetailsButtonStyle} onClick={() => setTimeDetailsOpen(true)}>
+            Szczegóły
+          </button>
         </div>
       </section>
+
+      {timeDetailsOpen && (
+        <TimeDetailsModal
+          activeEntries={view.activeTimeDetails}
+          entries={view.todayTimeDetails}
+          totalSeconds={view.todayWorkSeconds}
+          onClose={() => setTimeDetailsOpen(false)}
+        />
+      )}
 
       <section style={cardsGridStyle}>
         <MetricCard title="Klienci aktywni" value={view.activeClientsCount} href="/klienci" />
@@ -299,7 +314,9 @@ function buildDashboardView(data: DashboardState, role: UserRole, now: Date) {
     return normalize(client.status_klienta) === "onboarding" || onboardingClientIds.has(client.id);
   });
   const todayWorkSeconds = calculateTodayWorkSeconds(data.todayTimeEntries, now);
-  const activeTimeEntriesCount = data.todayTimeEntries.filter((entry) => !entry.ended_at).length;
+  const todayTimeDetails = buildTodayTimeDetails(data.todayTimeEntries, data.tasks, data.clients, now);
+  const activeTimeDetails = todayTimeDetails.filter((entry) => entry.active);
+  const activeTimeEntriesCount = activeTimeDetails.length;
 
   const unreadNotifications = visibleNotifications.filter((notification) => notification.status === "unread");
   const openTasks = visibleTasks.filter((task) => !["zrobione", "anulowane"].includes(task.status));
@@ -359,6 +376,8 @@ function buildDashboardView(data: DashboardState, role: UserRole, now: Date) {
     unreadNotificationsCount: unreadNotifications.length,
     todayWorkSeconds,
     activeTimeEntriesCount,
+    todayTimeDetails,
+    activeTimeDetails,
     settlementsWaitingForDocs: visibleSettlements.filter((settlement) => settlement.status_ksiegowosci === "czeka_na_dokumenty").length,
     settlementsInProgress: visibleSettlements.filter((settlement) => settlement.status_ksiegowosci === "w_trakcie_ksiegowania").length,
     settlementsToReview: visibleSettlements.filter((settlement) => settlement.status_ksiegowosci === "do_sprawdzenia").length,
@@ -443,6 +462,90 @@ function EmptyState({ children }: { children: ReactNode }) {
   return <div style={emptyStateStyle}>{children}</div>;
 }
 
+type WorkTimeDetail = {
+  id: string;
+  title: string;
+  clientName: string | null;
+  startLabel: string;
+  endLabel: string;
+  durationSeconds: number;
+  active: boolean;
+  note: string | null;
+};
+
+function TimeDetailsModal({
+  activeEntries,
+  entries,
+  totalSeconds,
+  onClose,
+}: {
+  activeEntries: WorkTimeDetail[];
+  entries: WorkTimeDetail[];
+  totalSeconds: number;
+  onClose: () => void;
+}) {
+  return (
+    <div style={modalOverlayStyle} onClick={onClose}>
+      <section style={timeModalStyle} onClick={(event) => event.stopPropagation()}>
+        <header style={timeModalHeaderStyle}>
+          <div>
+            <p style={timeModalEyebrowStyle}>Dzisiejszy czas pracy</p>
+            <h2 style={timeModalTitleStyle}>Szczegóły licznika</h2>
+          </div>
+          <div style={timeModalHeaderActionsStyle}>
+            <strong style={timeModalTotalStyle}>{formatDuration(totalSeconds)}</strong>
+            <button type="button" style={closeButtonStyle} onClick={onClose}>
+              Zamknij
+            </button>
+          </div>
+        </header>
+
+        <section style={timeModalSectionStyle}>
+          <h3 style={timeModalSectionTitleStyle}>Teraz liczy się czas</h3>
+          {activeEntries.length === 0 ? (
+            <EmptyState>Brak aktywnego licznika.</EmptyState>
+          ) : (
+            <div style={timeEntryListStyle}>
+              {activeEntries.map((entry) => (
+                <TimeEntryRow key={entry.id} entry={entry} highlight />
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section style={timeModalSectionStyle}>
+          <h3 style={timeModalSectionTitleStyle}>Zadania z dzisiaj</h3>
+          {entries.length === 0 ? (
+            <EmptyState>Brak zapisanego czasu pracy na dzisiaj.</EmptyState>
+          ) : (
+            <div style={timeEntryListStyle}>
+              {entries.map((entry) => (
+                <TimeEntryRow key={entry.id} entry={entry} />
+              ))}
+            </div>
+          )}
+        </section>
+      </section>
+    </div>
+  );
+}
+
+function TimeEntryRow({ entry, highlight = false }: { entry: WorkTimeDetail; highlight?: boolean }) {
+  return (
+    <article style={highlight ? activeTimeEntryRowStyle : timeEntryRowStyle}>
+      <div style={timeEntryMainStyle}>
+        <strong style={timeEntryTitleStyle}>{entry.title}</strong>
+        <span style={timeEntryMetaStyle}>
+          {entry.clientName ? `${entry.clientName} · ` : ""}
+          {entry.startLabel} - {entry.endLabel}
+        </span>
+        {entry.note && <span style={timeEntryNoteStyle}>{entry.note}</span>}
+      </div>
+      <strong style={timeEntryDurationStyle}>{formatDuration(entry.durationSeconds)}</strong>
+    </article>
+  );
+}
+
 function currentSettlementPeriod() {
   const today = new Date();
   const year = today.getMonth() === 0 ? today.getFullYear() - 1 : today.getFullYear();
@@ -461,13 +564,43 @@ function getTodayBounds(reference = new Date()) {
 function calculateTodayWorkSeconds(entries: TimeEntry[], now: Date) {
   const { start, end } = getTodayBounds(now);
   return entries.reduce((sum, entry) => {
-    const entryStart = new Date(entry.started_at);
-    const entryEnd = entry.ended_at ? new Date(entry.ended_at) : now;
-    const overlapStart = Math.max(entryStart.getTime(), start.getTime());
-    const overlapEnd = Math.min(entryEnd.getTime(), end.getTime());
-    if (overlapEnd <= overlapStart) return sum;
-    return sum + Math.floor((overlapEnd - overlapStart) / 1000);
+    return sum + calculateEntryOverlapSeconds(entry, start, end, now);
   }, 0);
+}
+
+function buildTodayTimeDetails(entries: TimeEntry[], tasks: Task[], clients: Client[], now: Date): WorkTimeDetail[] {
+  const { start, end } = getTodayBounds(now);
+  const tasksById = new Map(tasks.map((task) => [task.id, task]));
+  const clientsById = new Map(clients.map((client) => [client.id, client]));
+
+  return entries
+    .map((entry) => {
+      const durationSeconds = calculateEntryOverlapSeconds(entry, start, end, now);
+      if (durationSeconds <= 0) return null;
+      const task = entry.zadanie_id ? tasksById.get(entry.zadanie_id) : null;
+      const client = entry.klient_id ? clientsById.get(entry.klient_id) : null;
+      return {
+        id: entry.id,
+        title: task?.tytul || entry.opis || (entry.zadanie_cykliczne_id ? "Zadanie cykliczne" : "Zadanie"),
+        clientName: client?.nazwa || null,
+        startLabel: formatTimeOnly(entry.started_at),
+        endLabel: entry.ended_at ? formatTimeOnly(entry.ended_at) : "teraz",
+        durationSeconds,
+        active: !entry.ended_at,
+        note: task?.tytul ? entry.opis : null,
+      };
+    })
+    .filter((entry): entry is WorkTimeDetail => Boolean(entry))
+    .sort((first, second) => Number(second.active) - Number(first.active) || second.durationSeconds - first.durationSeconds);
+}
+
+function calculateEntryOverlapSeconds(entry: TimeEntry, dayStart: Date, dayEnd: Date, now: Date) {
+  const entryStart = new Date(entry.started_at);
+  const entryEnd = entry.ended_at ? new Date(entry.ended_at) : now;
+  const overlapStart = Math.max(entryStart.getTime(), dayStart.getTime());
+  const overlapEnd = Math.min(entryEnd.getTime(), dayEnd.getTime());
+  if (overlapEnd <= overlapStart) return 0;
+  return Math.floor((overlapEnd - overlapStart) / 1000);
 }
 
 function formatDuration(totalSeconds: number) {
@@ -496,6 +629,13 @@ function formatDateTime(value: string) {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
+function formatTimeOnly(value: string) {
+  return new Intl.DateTimeFormat("pl-PL", {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value));
@@ -592,6 +732,22 @@ const todayWorkMetaStyle: CSSProperties = {
   background: "#e9eef7",
   borderRadius: radius.button,
   color: colors.navy,
+  fontWeight: 800,
+  padding: "12px 16px",
+};
+
+const todayWorkActionsStyle: CSSProperties = {
+  alignItems: "center",
+  display: "flex",
+  gap: "10px",
+};
+
+const todayWorkDetailsButtonStyle: CSSProperties = {
+  background: colors.card,
+  border: `1px solid ${colors.border}`,
+  borderRadius: radius.button,
+  color: colors.navy,
+  cursor: "pointer",
   fontWeight: 800,
   padding: "12px 16px",
 };
@@ -752,4 +908,135 @@ const emptyStateStyle: CSSProperties = {
   fontWeight: 800,
   padding: "18px",
   textAlign: "center",
+};
+
+const modalOverlayStyle: CSSProperties = {
+  alignItems: "center",
+  background: "rgba(15, 23, 42, 0.42)",
+  display: "flex",
+  inset: 0,
+  justifyContent: "center",
+  padding: "28px",
+  position: "fixed",
+  zIndex: 1000,
+};
+
+const timeModalStyle: CSSProperties = {
+  background: colors.card,
+  border: `1px solid ${colors.border}`,
+  borderRadius: radius.card,
+  boxShadow: shadow.card,
+  color: colors.text,
+  maxHeight: "86vh",
+  maxWidth: "980px",
+  overflowY: "auto",
+  padding: "28px",
+  width: "min(980px, 100%)",
+};
+
+const timeModalHeaderStyle: CSSProperties = {
+  alignItems: "flex-start",
+  display: "flex",
+  gap: "18px",
+  justifyContent: "space-between",
+  marginBottom: "24px",
+};
+
+const timeModalEyebrowStyle: CSSProperties = {
+  color: colors.red,
+  fontWeight: 800,
+  margin: "0 0 6px",
+};
+
+const timeModalTitleStyle: CSSProperties = {
+  color: colors.navy,
+  fontSize: "32px",
+  fontWeight: 500,
+  margin: 0,
+};
+
+const timeModalHeaderActionsStyle: CSSProperties = {
+  alignItems: "center",
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "10px",
+  justifyContent: "flex-end",
+};
+
+const timeModalTotalStyle: CSSProperties = {
+  background: "#e9eef7",
+  borderRadius: radius.button,
+  color: colors.navy,
+  padding: "12px 16px",
+};
+
+const closeButtonStyle: CSSProperties = {
+  background: colors.card,
+  border: `1px solid ${colors.border}`,
+  borderRadius: radius.button,
+  color: colors.navy,
+  cursor: "pointer",
+  fontWeight: 800,
+  padding: "12px 16px",
+};
+
+const timeModalSectionStyle: CSSProperties = {
+  marginTop: "18px",
+};
+
+const timeModalSectionTitleStyle: CSSProperties = {
+  color: colors.navy,
+  fontSize: "20px",
+  fontWeight: 700,
+  margin: "0 0 12px",
+};
+
+const timeEntryListStyle: CSSProperties = {
+  display: "grid",
+  gap: "10px",
+};
+
+const timeEntryRowStyle: CSSProperties = {
+  alignItems: "center",
+  background: colors.inputBackground,
+  border: `1px solid ${colors.border}`,
+  borderRadius: radius.input,
+  display: "flex",
+  gap: "16px",
+  justifyContent: "space-between",
+  padding: "14px 16px",
+};
+
+const activeTimeEntryRowStyle: CSSProperties = {
+  ...timeEntryRowStyle,
+  background: "#dcfce7",
+  borderColor: "#bbf7d0",
+};
+
+const timeEntryMainStyle: CSSProperties = {
+  display: "grid",
+  gap: "4px",
+  minWidth: 0,
+};
+
+const timeEntryTitleStyle: CSSProperties = {
+  color: colors.navy,
+  fontSize: "16px",
+};
+
+const timeEntryMetaStyle: CSSProperties = {
+  color: colors.muted,
+  fontSize: "13px",
+  fontWeight: 700,
+};
+
+const timeEntryNoteStyle: CSSProperties = {
+  color: colors.text,
+  fontSize: "13px",
+};
+
+const timeEntryDurationStyle: CSSProperties = {
+  color: colors.navy,
+  flex: "0 0 auto",
+  fontSize: "18px",
 };

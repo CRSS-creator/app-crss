@@ -119,6 +119,7 @@ export async function fetchSettlementInvoiceMarkers(period: string) {
     .from("faktury")
     .select("klient_id,numer")
     .eq("okres", period)
+    .eq("kategoria", "standardowa")
     .not("klient_id", "is", null)
     .not("numer", "is", null)
     .in("status", ["wystawiona", "wyslana", "oplacona", "przeterminowana"]);

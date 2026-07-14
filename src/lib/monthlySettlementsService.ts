@@ -120,7 +120,7 @@ export async function fetchSettlementInvoiceMarkers(period: string) {
     .select("klient_id,numer")
     .eq("okres", period)
     .eq("kategoria", "standardowa")
-    .eq("automatyczna", true)
+    .in("automatyczna", [true, false])
     .not("klient_id", "is", null)
     .not("numer", "is", null)
     .in("status", ["wystawiona", "wyslana", "oplacona", "przeterminowana"]);

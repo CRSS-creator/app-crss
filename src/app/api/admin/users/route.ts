@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 const ALLOWED_ADMIN_ROLES = new Set(["owner", "manager", "admin"]);
-const ALLOWED_USER_ROLES = new Set(["owner", "manager", "admin", "accountant"]);
+const ALLOWED_USER_ROLES = new Set(["owner", "manager", "admin", "accountant", "handlowiec"]);
 const APP_URL = "https://app.crss.com.pl";
 const LOGO_URL = `${APP_URL}/logo-crss-mail.png`;
 

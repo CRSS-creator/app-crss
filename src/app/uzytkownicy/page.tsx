@@ -28,6 +28,7 @@ const ROLE_OPTIONS = [
   { value: "manager", label: "Manager" },
   { value: "admin", label: "Admin" },
   { value: "accountant", label: "Accountant" },
+  { value: "handlowiec", label: "Handlowiec" },
 ];
 
 const VAT_OPTIONS = [

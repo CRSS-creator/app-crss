@@ -1,4 +1,4 @@
-export type UserRole = "owner" | "manager" | "admin" | "accountant" | string;
+export type UserRole = "owner" | "manager" | "admin" | "accountant" | "handlowiec" | string;
 
 export type AppModule =
   | "dashboard"
@@ -31,10 +31,10 @@ const moduleAccess: Record<AppModule, string[]> = {
   limity: ["owner", "manager", "admin"],
   onboarding: ["owner", "manager", "admin", "accountant"],
   "zamykanie-roku": ["owner", "manager", "admin"],
-  crm: ["owner", "admin"],
+  crm: ["owner", "admin", "handlowiec"],
   umowy: ["owner", "admin"],
   faktury: ["owner", "admin"],
-  cso: ["owner", "admin"],
+  cso: ["owner", "admin", "handlowiec"],
   cfo: ["owner", "admin"],
   aml: ["owner", "manager", "admin"],
   rodo: ["owner", "manager", "admin"],

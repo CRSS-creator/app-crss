@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
 import AppSelect from "@/components/AppSelect";
+import { AppDateInput } from "@/components/AppDateInputs";
 import { colors, radius, shadow } from "@/app/design";
 import { supabase } from "@/lib/supabaseClient";
 import type { UserRole } from "@/lib/permissions";
@@ -465,7 +466,7 @@ function TaskDrawer({ mode, task, currentUserId, assignees, clients, onClose, on
                 <AppSelect style={inputStyle} value={draft.priorytet} options={PRIORITY_OPTIONS} onChange={(value) => updateDraft("priorytet", value as TaskPriority)} />
               </EditableRow>
             </div>
-            <EditableRow label="Termin"><input style={inputStyle} type="date" value={draft.termin} onChange={(event) => updateDraft("termin", event.target.value)} /></EditableRow>
+            <EditableRow label="Termin"><AppDateInput style={inputStyle} value={draft.termin} onChange={(value) => updateDraft("termin", value)} /></EditableRow>
             <EditableRow label="Osoba odpowiedzialna">
               <AppSelect style={inputStyle} value={draft.osoba_id} options={[{ value: "", label: "Wybierz osobę" }, ...assignees.map((assignee) => ({ value: assignee.id, label: formatProfileName(assignee) }))]} onChange={(value) => updateDraft("osoba_id", value)} />
             </EditableRow>

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import AppSelect from "@/components/AppSelect";
+import { AppMonthInput } from "@/components/AppDateInputs";
 import { colors, radius, shadow } from "@/app/design";
 import { LEGAL_FORM_OPTIONS, TAXATION_FORM_OPTIONS } from "@/lib/clientDictionaries";
 import { normalizeContactList } from "@/lib/contactFields";
@@ -258,7 +259,11 @@ function TextField({ label, value, onChange, type = "text" }: { label: string; v
   return (
     <label style={fieldStyle}>
       <span>{label}</span>
-      <input type={type} value={value} onChange={(event) => onChange(event.target.value)} style={inputStyle} />
+      {type === "month" ? (
+        <AppMonthInput value={value} onChange={onChange} style={inputStyle} />
+      ) : (
+        <input type={type} value={value} onChange={(event) => onChange(event.target.value)} style={inputStyle} />
+      )}
     </label>
   );
 }

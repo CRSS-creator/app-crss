@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
+import { AppDateInput } from "@/components/AppDateInputs";
 import { colors, radius, shadow } from "@/app/design";
 import { fetchCrmLeads } from "@/lib/crmService";
 import {
@@ -334,7 +335,7 @@ function CrmOffersContent() {
                 <Field label="Tytuł"><input style={inputStyle} value={draft.tytul} onChange={(event) => updateDraft("tytul", event.target.value)} /></Field>
                 <Field label="Dla firmy"><input style={inputStyle} value={draft.przygotowana_dla} onChange={(event) => updateDraft("przygotowana_dla", event.target.value)} /></Field>
                 <Field label="Osoba kontaktowa"><input style={inputStyle} value={draft.osoba_kontaktowa} onChange={(event) => updateDraft("osoba_kontaktowa", event.target.value)} /></Field>
-                <Field label="Ważna do"><input style={inputStyle} type="date" value={draft.wazna_do} onChange={(event) => updateDraft("wazna_do", event.target.value)} /></Field>
+                <Field label="Ważna do"><AppDateInput style={inputStyle} value={draft.wazna_do} onChange={(value) => updateDraft("wazna_do", value)} /></Field>
               </section>
 
               <section style={n8nPanelStyle}>

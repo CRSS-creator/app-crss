@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
 import AppSelect from "@/components/AppSelect";
+import { AppMonthInput } from "@/components/AppDateInputs";
 import AdditionalFeesSettingsPanel from "@/components/AdditionalFeesSettingsPanel";
 import { colors, radius, shadow } from "@/app/design";
 import { supabase } from "@/lib/supabaseClient";
@@ -388,11 +389,10 @@ function TaxHistoryTab({ entries, loading }: { entries: TaxObligationHistoryRow[
           onChange={(event) => setClientQuery(event.target.value)}
           placeholder="Szukaj po kliencie lub NIP"
         />
-        <input
+        <AppMonthInput
           style={inputStyle}
-          type="month"
           value={periodFilter}
-          onChange={(event) => setPeriodFilter(event.target.value)}
+          onChange={setPeriodFilter}
         />
         <AppSelect
           style={inputStyle}

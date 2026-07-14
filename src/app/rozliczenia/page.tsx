@@ -5,6 +5,7 @@ import { Play, Square } from "lucide-react";
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
 import AppSelect from "@/components/AppSelect";
+import { AppDateInput, AppMonthInput } from "@/components/AppDateInputs";
 import SettlementAdditionalFeesPanel from "@/components/SettlementAdditionalFeesPanel";
 import { colors, radius, shadow } from "@/app/design";
 import { supabase } from "@/lib/supabaseClient";
@@ -280,7 +281,7 @@ function SettlementsContent() {
           <p style={eyebrowStyle}>Operacyjne</p>
           <h1 style={titleStyle}>Rozliczenia miesięczne</h1>
         </div>
-        <input style={monthInputStyle} type="month" value={period} onChange={(event) => setPeriod(event.target.value)} />
+        <AppMonthInput style={monthInputStyle} value={period} onChange={setPeriod} />
       </section>
 
       <section style={summaryGridStyle}>
@@ -508,11 +509,10 @@ function SettlementDrawer({ settlement, progress, recurringTasks, recurringTimeE
                           <AmountInput value={obligation.kwota} onChange={(value) => onTaxObligationUpdate(obligation.id, { kwota: value })} />
                         </Field>
                         <Field label="Termin">
-                          <input
+                          <AppDateInput
                             style={taxFieldInputStyle}
-                            type="date"
                             value={formatDateForInput(obligation.termin_platnosci)}
-                            onChange={(event) => onTaxObligationUpdate(obligation.id, { termin_platnosci: event.target.value || null })}
+                            onChange={(value) => onTaxObligationUpdate(obligation.id, { termin_platnosci: value || null })}
                           />
                         </Field>
                       </div>

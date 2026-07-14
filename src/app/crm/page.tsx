@@ -5,6 +5,7 @@ import Link from "next/link";
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
 import AppSelect from "@/components/AppSelect";
+import { AppDateInput } from "@/components/AppDateInputs";
 import { colors, radius, shadow } from "@/app/design";
 import { normalizeContactList } from "@/lib/contactFields";
 import { supabase } from "@/lib/supabaseClient";
@@ -526,7 +527,18 @@ function statusLabel(status: string | null) { return STATUSES.find((item) => ite
 function SummaryCard({ label, value }: { label: string; value: string | number }) { return <div style={summaryCardStyle}><span>{label}</span><strong>{value}</strong></div>; }
 function FormSection({ title, children }: { title: string; children: React.ReactNode }) { return <section style={drawerSectionStyle}><h3>{title}</h3>{children}</section>; }
 function TermsAndNotesSection({ children }: { children: React.ReactNode }) { return <section style={termsSectionStyle}><h3>Terminy i notatki</h3><div style={termsGridStyle}>{children}</div></section>; }
-function EditableInput({ label, value, onChange, type = "text", placeholder }: { label: string; value: string; onChange: (value: string) => void; type?: "text" | "number" | "email" | "date"; placeholder?: string }) { return <label style={editableRowStyle}><span>{label}</span><input type={type} value={value} placeholder={placeholder} onClick={(event) => { if (type === "date") (event.currentTarget as HTMLInputElement & { showPicker?: () => void }).showPicker?.(); }} onChange={(event) => onChange(event.target.value)} style={inputStyle} /></label>; }
+function EditableInput({ label, value, onChange, type = "text", placeholder }: { label: string; value: string; onChange: (value: string) => void; type?: "text" | "number" | "email" | "date"; placeholder?: string }) {
+  return (
+    <label style={editableRowStyle}>
+      <span>{label}</span>
+      {type === "date" ? (
+        <AppDateInput value={value} onChange={onChange} style={inputStyle} />
+      ) : (
+        <input type={type} value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} style={inputStyle} />
+      )}
+    </label>
+  );
+}
 function EditableSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: { value: string; label: string }[] }) { return <label style={editableRowStyle}><span>{label}</span><AppSelect value={value} onChange={onChange} style={inputStyle} options={options} /></label>; }
 function EditableCheckbox({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) { return <label style={editableRowStyle}><span>{label}</span><input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} /></label>; }
 function EditableTextarea({ label, value, onChange, rows = 4 }: { label: string; value: string; onChange: (value: string) => void; rows?: number }) { return <label style={textareaRowStyle}><span>{label}</span><textarea value={value} onChange={(event) => onChange(event.target.value)} style={textareaStyle} rows={rows} /></label>; }

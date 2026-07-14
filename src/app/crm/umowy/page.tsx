@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
 import AppSelect from "@/components/AppSelect";
+import { AppMonthInput } from "@/components/AppDateInputs";
 import ContractClientOnboardingPanel from "@/components/ContractClientOnboardingPanel";
 import { colors, radius, shadow } from "@/app/design";
 import { normalizeContactList } from "@/lib/contactFields";
@@ -655,7 +656,16 @@ function FormSection({ title, children }: { title: string; children: React.React
 }
 
 function EditableInput({ label, value, onChange, type = "text", placeholder }: { label: string; value: string; onChange: (value: string) => void; type?: "text" | "number" | "email" | "month"; placeholder?: string }) {
-  return <label style={editableRowStyle}><span>{label}</span><input type={type} value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} style={inputStyle} /></label>;
+  return (
+    <label style={editableRowStyle}>
+      <span>{label}</span>
+      {type === "month" ? (
+        <AppMonthInput value={value} onChange={onChange} style={inputStyle} />
+      ) : (
+        <input type={type} value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} style={inputStyle} />
+      )}
+    </label>
+  );
 }
 
 function EditableSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: { value: string; label: string }[] }) {

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
 import AppSelect from "@/components/AppSelect";
+import { AppMonthInput } from "@/components/AppDateInputs";
 import {
   createClient as createClientRecord,
   fetchClientCaregivers,
@@ -1682,13 +1683,17 @@ function EditableInput({
   return (
     <div style={editableRowStyle}>
       <label style={infoLabelStyle}>{label}</label>
-      <input
-        type={type}
-        value={value}
-        placeholder={placeholder}
-        onChange={(event) => onChange(event.target.value)}
-        style={inputStyle}
-      />
+      {type === "month" ? (
+        <AppMonthInput value={value} onChange={onChange} style={inputStyle} />
+      ) : (
+        <input
+          type={type}
+          value={value}
+          placeholder={placeholder}
+          onChange={(event) => onChange(event.target.value)}
+          style={inputStyle}
+        />
+      )}
     </div>
   );
 }

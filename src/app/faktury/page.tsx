@@ -5,6 +5,7 @@ import { CalendarClock, DownloadCloud, FileText, Mail, RotateCw, Send } from "lu
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
 import AppSelect from "@/components/AppSelect";
+import { AppMonthInput } from "@/components/AppDateInputs";
 import { colors, radius, shadow } from "@/app/design";
 import {
   ensureSubscriptionInvoices,
@@ -348,11 +349,10 @@ function InvoicesContent() {
         <div style={automationControlsStyle}>
           <label style={fieldStyle}>
             <span>Miesiąc wystawienia</span>
-            <input
+            <AppMonthInput
               style={inputStyle}
-              type="month"
               value={invoiceMonth}
-              onChange={(event) => setInvoiceMonth(event.target.value)}
+              onChange={setInvoiceMonth}
             />
           </label>
           <button
@@ -497,13 +497,12 @@ function InvoicesContent() {
                     </Td>
                     <Td>{invoice.data_wystawienia ? formatDate(invoice.data_wystawienia) : "Po wysłaniu"}</Td>
                     <Td>
-                      <input
+                      <AppMonthInput
                         style={periodInputStyle}
-                        type="month"
                         value={toMonthInput(invoice.okres || invoice.data_wystawienia)}
                         disabled={savingPeriodId === invoice.id}
-                        onChange={(event) => changeInvoicePeriod(invoice, event.target.value)}
-                        aria-label={`Zmień okres faktury ${invoice.numer || invoice.kontrahent_nazwa}`}
+                        onChange={(value) => changeInvoicePeriod(invoice, value)}
+                        ariaLabel={`Zmień okres faktury ${invoice.numer || invoice.kontrahent_nazwa}`}
                       />
                     </Td>
                     <Td>

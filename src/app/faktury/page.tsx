@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { CalendarClock, DownloadCloud, FileText, Mail, RotateCw, Send } from "lucide-react";
+import { CalendarClock, DownloadCloud, FileText, Mail, RotateCw, Send, TriangleAlert } from "lucide-react";
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
 import AppSelect from "@/components/AppSelect";
@@ -61,6 +61,7 @@ function InvoicesContent() {
   const [queueing, setQueueing] = useState(false);
   const [sendingBulkMail, setSendingBulkMail] = useState(false);
   const [sourceFilter, setSourceFilter] = useState(EMPTY_FILTER);
+  const [overdueOnly, setOverdueOnly] = useState(false);
   const [query, setQuery] = useState("");
   const [invoiceMonth, setInvoiceMonth] = useState(() => currentMonthInput());
   const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<string[]>([]);
@@ -80,6 +81,7 @@ function InvoicesContent() {
       .filter((invoice) => {
         const matchesSource = sourceFilter === EMPTY_FILTER || invoice.zrodlo === sourceFilter;
         const matchesIssueMonth = invoiceListMonth(invoice) === invoiceMonth;
+        const matchesOverdue = !overdueOnly || invoice.status === "przeterminowana";
         const haystack = [
           invoice.numer,
           invoice.kontrahent_nazwa,
@@ -94,10 +96,15 @@ function InvoicesContent() {
           .filter(Boolean)
           .join(" ")
           .toLowerCase();
-        return matchesSource && matchesIssueMonth && (!normalizedQuery || haystack.includes(normalizedQuery));
+        return matchesSource && matchesIssueMonth && matchesOverdue && (!normalizedQuery || haystack.includes(normalizedQuery));
       })
       .sort(compareInvoicesByNumber);
-  }, [invoices, invoiceMonth, query, sourceFilter]);
+  }, [invoices, invoiceMonth, overdueOnly, query, sourceFilter]);
+
+  const overdueCount = useMemo(
+    () => invoices.filter((invoice) => invoiceListMonth(invoice) === invoiceMonth && invoice.status === "przeterminowana").length,
+    [invoices, invoiceMonth]
+  );
 
   const totals = useMemo(() => {
     const activeInvoices = filteredInvoices.filter((invoice) => invoice.status !== "anulowana");
@@ -333,10 +340,19 @@ function InvoicesContent() {
           <p style={eyebrowStyle}>Automatyzacja</p>
           <h1 style={titleStyle}>Faktury</h1>
         </div>
-        <button type="button" style={secondaryButtonStyle} onClick={refreshInvoices} disabled={loading || generating || syncingPayments}>
-          <RotateCw size={18} />
-          {loading || syncingPayments ? "Odświeżanie..." : "Odśwież"}
-        </button>
+        <div style={headerActionsStyle}>
+          <button type="button" style={secondaryButtonStyle} onClick={refreshInvoices} disabled={loading || generating || syncingPayments}>
+            <RotateCw size={18} />
+            {loading || syncingPayments ? "Odświeżanie..." : "Odśwież"}
+          </button>
+          <button type="button" style={overdueOnly ? overdueActiveButtonStyle : secondaryButtonStyle} onClick={() => {
+            setSelectedInvoiceIds([]);
+            setOverdueOnly((current) => !current);
+          }}>
+            <TriangleAlert size={18} />
+            Przeterminowane ({overdueCount})
+          </button>
+        </div>
       </section>
 
       <section style={summaryGridStyle}>
@@ -924,6 +940,7 @@ function lineGross(line: InvoiceLine) {
 }
 
 const headerStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "flex-start", marginBottom: "24px" };
+const headerActionsStyle: CSSProperties = { display: "flex", gap: "10px", alignItems: "center", justifyContent: "flex-end", flexWrap: "wrap" };
 const eyebrowStyle: CSSProperties = { color: colors.red, fontWeight: 850, margin: "0 0 8px" };
 const titleStyle: CSSProperties = { fontSize: "42px", lineHeight: 1.05, margin: 0, color: colors.navy };
 const summaryGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "16px", marginBottom: "20px" };
@@ -939,6 +956,7 @@ const fieldStyle: CSSProperties = { display: "grid", gap: "7px", color: colors.m
 const inputStyle: CSSProperties = { width: "100%", minHeight: "42px", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, padding: "10px 12px", fontWeight: 750, boxSizing: "border-box" };
 const primaryButtonStyle: CSSProperties = { border: `1px solid ${colors.red}`, borderRadius: radius.input, background: colors.red, color: colors.white, minHeight: "42px", padding: "9px 14px", fontSize: "15px", lineHeight: 1, fontWeight: 850, cursor: "pointer", display: "inline-flex", justifyContent: "center", alignItems: "center", gap: "8px", whiteSpace: "nowrap" };
 const secondaryButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.navy, minHeight: "42px", padding: "9px 13px", fontSize: "15px", lineHeight: 1, fontWeight: 800, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "8px", whiteSpace: "nowrap" };
+const overdueActiveButtonStyle: CSSProperties = { ...secondaryButtonStyle, borderColor: "#fecaca", background: "#fee2e2", color: colors.danger };
 const smallButtonStyle: CSSProperties = { ...secondaryButtonStyle, minHeight: "34px", padding: "7px 10px" };
 const filtersStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(220px, 1fr) 170px", gap: "10px", marginBottom: "14px" };
 const searchStyle: CSSProperties = { ...inputStyle };

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
@@ -294,7 +294,7 @@ function CrmContent() {
         {loading ? <div style={emptyStyle}>Ładowanie danych...</div> : filteredLeads.length === 0 ? <div style={emptyStyle}>Brak szans sprzedaży do wyświetlenia</div> : (
           <div style={tableWrapperStyle}>
             <table style={tableStyle}>
-              <thead><tr><Th>Firma</Th><Th>Etap</Th><Th>Status</Th><Th>Kadry</Th><Th>MRR</Th><Th>Status CTA</Th><Th>Akcje</Th></tr></thead>
+              <thead><tr><Th>Firma</Th><Th>Etap</Th><Th>Status</Th><Th>Kadry</Th><Th>MRR</Th><Th>Akcje</Th></tr></thead>
               <tbody>{filteredLeads.map((lead) => (
                 <tr key={lead.id} style={rowStyle}>
                   <Td strong>{lead.nazwa || "—"}</Td>
@@ -302,7 +302,6 @@ function CrmContent() {
                   <Td><Badge>{statusLabel(lead.status)}</Badge></Td>
                   <Td>{lead.czy_kadry ? "Tak" : "Nie"}</Td>
                   <Td>{lead.szacowany_mrr ? `${lead.szacowany_mrr.toLocaleString("pl-PL")} zł` : "—"}</Td>
-                  <Td><Badge>W propozycjach</Badge></Td>
                   <Td><button style={secondaryButtonStyle} onClick={() => setSelectedLead(lead)}>Szczegóły</button></Td>
                 </tr>
               ))}</tbody>
@@ -326,22 +325,23 @@ function LeadDrawer({ mode, lead, tasks, onClose, onCreated, onSaved, onDeleted,
   const [uploadingDocument, setUploadingDocument] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  useEffect(() => {
-    if (mode === "edit" && lead) loadDocuments();
-  }, [mode, lead?.id]);
-
   function updateDraft<K extends keyof LeadDraft>(key: K, value: LeadDraft[K]) {
     setDraft((current) => ({ ...current, [key]: value }));
   }
 
-  async function loadDocuments() {
+  const loadDocuments = useCallback(async () => {
     if (!lead) return;
     setDocumentsLoading(true);
     const { data, error } = await fetchCrmDocuments(lead.id);
     if (error) console.error("Błąd pobierania dokumentów CRM:", error);
     else setDocuments(data || []);
     setDocumentsLoading(false);
-  }
+  }, [lead]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (mode === "edit" && lead) void loadDocuments();
+  }, [mode, lead, loadDocuments]);
 
   async function saveLead() {
     if (!draft.nazwa.trim()) {
@@ -550,7 +550,6 @@ const headerStyle: React.CSSProperties = { display: "flex", justifyContent: "spa
 const headerActionsStyle: React.CSSProperties = { display: "flex", gap: "12px", flexWrap: "wrap", justifyContent: "flex-end" };
 const eyebrowStyle: React.CSSProperties = { color: colors.red, fontWeight: 800, margin: "0 0 8px" };
 const titleStyle: React.CSSProperties = { fontSize: "42px", lineHeight: 1.05, margin: 0, color: colors.navy };
-const subtitleStyle: React.CSSProperties = { maxWidth: "780px", fontSize: "17px", lineHeight: 1.7, color: colors.muted, marginTop: "14px" };
 const primaryButtonStyle: React.CSSProperties = { border: "none", borderRadius: radius.button, padding: "14px 18px", minHeight: "46px", background: colors.red, color: colors.white, fontWeight: 800, cursor: "pointer", textDecoration: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", textAlign: "center" };
 const primarySmallButtonStyle: React.CSSProperties = { ...primaryButtonStyle, padding: "11px 15px", minHeight: "42px" };
 const secondaryButtonStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "10px 14px", minHeight: "42px", background: colors.white, color: colors.navy, fontWeight: 800, cursor: "pointer", textDecoration: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", textAlign: "center" };

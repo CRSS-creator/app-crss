@@ -575,13 +575,15 @@ function RodoAdditionalRegister({ definition, currentUserName }: { definition: R
             <table data-rodo-register-kind={definition.kind} style={tableStyle}>
               <colgroup>
                 <col style={{ width: "4%" }} />
-                {definition.columns.map((column) => <col key={column.key} style={{ width: column.width }} />)}
+                {definition.columns.map((column) => <col key={column.key} data-print-hidden={isRegisterColumnPrintHidden(definition, column) ? "true" : undefined} style={{ width: column.width }} />)}
                 <col data-print-hidden="true" style={{ width: "10%" }} />
               </colgroup>
               <thead>
                 <tr>
                   <Th>Lp.</Th>
-                  {definition.columns.map((column) => <Th key={column.key}>{column.label}</Th>)}
+                  {definition.columns.map((column) => (
+                    <th key={column.key} data-print-hidden={isRegisterColumnPrintHidden(definition, column) ? "true" : undefined} style={thStyle}>{column.label}</th>
+                  ))}
                   <th data-print-hidden="true" style={thStyle}>Szczegóły</th>
                 </tr>
               </thead>
@@ -590,11 +592,11 @@ function RodoAdditionalRegister({ definition, currentUserName }: { definition: R
                   <tr key={record.id} style={rowStyle}>
                     <Td>{recordOrdinals.get(record.id) || "-"}</Td>
                     {definition.columns.map((column) => (
-                      <Td key={column.key}>
+                      <td key={column.key} data-print-hidden={isRegisterColumnPrintHidden(definition, column) ? "true" : undefined} style={tdStyle}>
                         {column.key === "status" ? (
                           <RegisterStatusBadge value={String(getRecordValue(record, column.key) || "")} label={formatRegisterValue(record, column)} />
                         ) : formatRegisterValue(record, column)}
-                      </Td>
+                      </td>
                     ))}
                     <td data-print-hidden="true" style={tdStyle}><button style={secondaryButtonStyle} onClick={() => setSelectedRecord(record)}>Szczegóły</button></td>
                   </tr>
@@ -1219,6 +1221,10 @@ function formatRegisterValue(record: RodoAdditionalRegisterRecord, column: Regis
   const value = getRecordValue(record, column.key);
   if (column.format) return column.format(value);
   return value || "-";
+}
+
+function isRegisterColumnPrintHidden(definition: RegisterDefinition, column: RegisterColumn) {
+  return definition.kind === "authorizedPersons" && column.key === "status";
 }
 
 function optionLabel(options: { value: string; label: string }[], value: string | null | undefined) {

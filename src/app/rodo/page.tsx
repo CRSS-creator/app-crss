@@ -545,7 +545,11 @@ function RodoAdditionalRegister({ definition, currentUserName }: { definition: R
                   <tr key={record.id} style={rowStyle}>
                     <Td>{index + 1}</Td>
                     {definition.columns.map((column) => (
-                      <Td key={column.key}>{formatRegisterValue(record, column)}</Td>
+                      <Td key={column.key}>
+                        {column.key === "status" ? (
+                          <RegisterStatusBadge value={String(getRecordValue(record, column.key) || "")} label={formatRegisterValue(record, column)} />
+                        ) : formatRegisterValue(record, column)}
+                      </Td>
                     ))}
                     <td data-print-hidden="true" style={tdStyle}><button style={secondaryButtonStyle} onClick={() => setSelectedRecord(record)}>Szczegóły</button></td>
                   </tr>
@@ -1198,6 +1202,23 @@ function StatusBadge({ status }: { status: RodoProcessingContractStatus }) {
     anulowana: { background: "#fee2e2", color: "#b91c1c" },
   };
   return <span style={{ ...badgeStyle, ...palette[status] }}>{statusLabel(status)}</span>;
+}
+
+function RegisterStatusBadge({ value, label }: { value: string; label: string }) {
+  const palette: Record<string, CSSProperties> = {
+    aktywne: { background: "#dcfce7", color: "#15803d" },
+    wygasle: { background: "#fee2e2", color: "#b91c1c" },
+    cofniete: { background: "#fee2e2", color: "#b91c1c" },
+    zamkniete: { background: "#eef2f7", color: colors.navy },
+    wykonane: { background: "#dcfce7", color: "#15803d" },
+    planowane: { background: "#dbeafe", color: "#1d4ed8" },
+    nowe: { background: "#dbeafe", color: "#1d4ed8" },
+    w_analizie: { background: "#fef3c7", color: "#92400e" },
+    wymaga_dzialania: { background: "#fef3c7", color: "#92400e" },
+    zgloszone: { background: "#fef3c7", color: "#92400e" },
+    anulowane: { background: "#fee2e2", color: "#b91c1c" },
+  };
+  return <span style={{ ...badgeStyle, ...(palette[value] || { background: "#eef2f7", color: colors.navy }) }}>{label}</span>;
 }
 
 function SummaryCard({ label, value }: { label: string; value: string | number }) {

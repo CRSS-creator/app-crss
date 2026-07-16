@@ -134,13 +134,6 @@ function AmlContent() {
         <div>
           <p style={eyebrowStyle}>AML</p>
           <h1 style={titleStyle}>Rejestr klientów AML</h1>
-          <input
-            type="search"
-            value={searchTerm}
-            onChange={(event) => setSearchTerm(event.target.value)}
-            placeholder="Szukaj po kliencie, NIP, opiekunie lub statusie"
-            style={searchInputStyle}
-          />
         </div>
       </header>
 
@@ -163,6 +156,13 @@ function AmlContent() {
             <h2 style={sectionTitleStyle}>Podmioty z onboardingu</h2>
             <p style={sectionHintStyle}>Szczegóły otwierają pełną historię AML i zapisane raporty weryfikacji.</p>
           </div>
+          <input
+            type="search"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            placeholder="Szukaj po kliencie, NIP, opiekunie lub statusie"
+            style={searchInputStyle}
+          />
         </div>
 
         {loading ? (
@@ -651,8 +651,7 @@ const headerStyle: CSSProperties = { display: "flex", justifyContent: "space-bet
 const eyebrowStyle: CSSProperties = { margin: "0 0 8px", fontSize: "13px", fontWeight: 850, letterSpacing: "0.08em", color: colors.red, textTransform: "uppercase" };
 const titleStyle: CSSProperties = { margin: 0, fontSize: "34px", lineHeight: 1.15, color: colors.navy };
 const searchInputStyle: CSSProperties = {
-  marginTop: "14px",
-  width: "min(560px, 100%)",
+  width: "min(420px, 100%)",
   minHeight: "46px",
   border: `1px solid ${colors.border}`,
   borderRadius: radius.button,
@@ -672,7 +671,7 @@ const workflowStyle: CSSProperties = { display: "grid", gridTemplateColumns: "re
 const workflowStepStyle: CSSProperties = { minHeight: "58px", display: "flex", alignItems: "center", gap: "10px", padding: "12px 14px", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.card, color: colors.navy, fontWeight: 800, fontSize: "13px" };
 const workflowIconStyle: CSSProperties = { width: "34px", height: "34px", borderRadius: radius.button, display: "inline-flex", alignItems: "center", justifyContent: "center", background: "rgba(23, 59, 115, 0.08)", color: colors.navy, flex: "0 0 auto" };
 const cardStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.card, boxShadow: shadow.card, overflow: "hidden" };
-const sectionHeaderStyle: CSSProperties = { padding: "24px 28px", borderBottom: `1px solid ${colors.border}` };
+const sectionHeaderStyle: CSSProperties = { padding: "24px 28px", borderBottom: `1px solid ${colors.border}`, display: "flex", justifyContent: "space-between", gap: "18px", alignItems: "flex-start" };
 const sectionTitleStyle: CSSProperties = { margin: 0, fontSize: "22px", color: colors.navy };
 const sectionHintStyle: CSSProperties = { margin: "6px 0 0", color: colors.muted, fontSize: "14px" };
 const tableWrapStyle: CSSProperties = { width: "100%", overflowX: "auto" };

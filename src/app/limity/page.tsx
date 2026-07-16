@@ -90,6 +90,7 @@ function LimitsContent() {
   const rows = useMemo(() => buildRows(activeType, clients, registers, monthlyRecords), [activeType, clients, registers, monthlyRecords]);
   const selectedRow = rows.find((row) => row.register.id === selectedRegisterId) || rows[0] || null;
   const availableClients = clients.filter((client) => !registers.some((register) => register.typ === activeType && register.klient_id === client.id));
+  const isVatRegister = activeType === "vat";
 
   async function handleAddClient() {
     if (!clientToAdd) return;
@@ -137,14 +138,16 @@ function LimitsContent() {
           <div style={sectionHeaderStyle}>
             <div>
               <h2 style={sectionTitleStyle}>{activeTabLabel(activeType)}</h2>
-              <p style={sectionHintStyle}>Lista klientów dodanych do tego limitu. Szczegóły służą do uzupełnienia limitu rocznego i miesięcy.</p>
+              <p style={sectionHintStyle}>{isVatRegister ? "Klienci zwolnieni z VAT są dodawani automatycznie. Szczegóły służą do uzupełnienia miesięcy." : "Lista klientów dodanych do tego limitu. Szczegóły służą do uzupełnienia limitu rocznego i miesięcy."}</p>
             </div>
-            <button type="button" onClick={() => setShowAddForm((value) => !value)} style={primaryButtonStyle}>
-              <Plus size={18} /> Dodaj klienta
-            </button>
+            {!isVatRegister && (
+              <button type="button" onClick={() => setShowAddForm((value) => !value)} style={primaryButtonStyle}>
+                <Plus size={18} /> Dodaj klienta
+              </button>
+            )}
           </div>
 
-          {showAddForm && (
+          {showAddForm && !isVatRegister && (
             <div style={addFormStyle}>
               <select value={clientToAdd} onChange={(event) => setClientToAdd(event.target.value)} style={selectStyle}>
                 <option value="">Wybierz klienta</option>
@@ -159,7 +162,7 @@ function LimitsContent() {
           {loading ? (
             <p style={emptyStyle}>Ładowanie limitów...</p>
           ) : rows.length === 0 ? (
-            <p style={emptyStyle}>Brak klientów w tym limicie. Dodaj pierwszego klienta przyciskiem powyżej.</p>
+            <p style={emptyStyle}>{isVatRegister ? "Brak klientów zwolnionych z VAT." : "Brak klientów w tym limicie. Dodaj pierwszego klienta przyciskiem powyżej."}</p>
           ) : (
             <div style={listStyle}>
               {rows.map((row) => {

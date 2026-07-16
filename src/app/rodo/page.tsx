@@ -29,7 +29,7 @@ import {
   type RodoRegisterKind,
   type RodoRegisterPayload,
 } from "@/lib/rodoRegistersService";
-import { CalendarDays, X } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, X } from "lucide-react";
 
 type Client = {
   id: string;
@@ -1250,6 +1250,57 @@ function toDateTimeLocalValue(value: string) {
   return date.toISOString().slice(0, 16);
 }
 
+function parseRodoInputDate(value: string) {
+  if (!value) return null;
+  const normalized = value.slice(0, 10);
+  const match = normalized.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatRodoDateInputValue(value: string, mode: "date" | "datetime-local") {
+  const date = parseRodoInputDate(value);
+  if (!date) return "";
+  const datePart = new Intl.DateTimeFormat("pl-PL", { day: "2-digit", month: "2-digit", year: "numeric" }).format(date);
+  if (mode === "date") return datePart;
+  return `${datePart}, ${extractDateTimeLocalTime(value) || "09:00"}`;
+}
+
+function extractDateTimeLocalTime(value: string) {
+  const localValue = toDateTimeLocalValue(value);
+  return localValue.includes("T") ? localValue.split("T")[1]?.slice(0, 5) || "" : "";
+}
+
+function toIsoDate(date: Date) {
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+function formatCalendarMonth(date: Date) {
+  return new Intl.DateTimeFormat("pl-PL", { month: "long", year: "numeric" }).format(date);
+}
+
+function buildCalendarDays(viewDate: Date) {
+  const firstDay = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1);
+  const mondayOffset = (firstDay.getDay() + 6) % 7;
+  const start = new Date(firstDay);
+  start.setDate(firstDay.getDate() - mondayOffset);
+
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(start);
+    date.setDate(start.getDate() + index);
+    return date;
+  });
+}
+
+function isSameCalendarDay(first: Date, second: Date) {
+  return first.getFullYear() === second.getFullYear()
+    && first.getMonth() === second.getMonth()
+    && first.getDate() === second.getDate();
+}
+
 function StatusBadge({ status }: { status: RodoProcessingContractStatus }) {
   const palette: Record<RodoProcessingContractStatus, CSSProperties> = {
     szkic: { background: "#eef2f7", color: colors.navy },
@@ -1358,41 +1409,105 @@ function FileRow({ label, fileName, onOpen, onDownload, onDelete, deleting }: { 
 }
 
 function DatePickerInput({ value, onChange, mode = "date" }: { value: string; onChange: (value: string) => void; mode?: "date" | "datetime-local" }) {
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  const shownValue = mode === "datetime-local" ? toDateTimeLocalValue(value) : value;
+  const [open, setOpen] = useState(false);
+  const [viewDate, setViewDate] = useState(() => parseRodoInputDate(value) || new Date());
+  const selectedDate = parseRodoInputDate(value);
+  const shownValue = formatRodoDateInputValue(value, mode);
+  const selectedTime = mode === "datetime-local" ? extractDateTimeLocalTime(value) : "";
+  const calendarDays = buildCalendarDays(viewDate);
 
-  function openPicker() {
-    const input = inputRef.current as (HTMLInputElement & { showPicker?: () => void }) | null;
-    if (!input) return;
-    if (typeof input.showPicker === "function") {
-      input.showPicker();
-      return;
-    }
-    input.focus();
+  function openCalendar() {
+    setViewDate(selectedDate || new Date());
+    setOpen(true);
+  }
+
+  function selectDate(date: Date) {
+    const isoDate = toIsoDate(date);
+    onChange(mode === "datetime-local" ? `${isoDate}T${selectedTime || "09:00"}` : isoDate);
+    setOpen(false);
+  }
+
+  function changeMonth(offset: number) {
+    setViewDate((current) => new Date(current.getFullYear(), current.getMonth() + offset, 1));
+  }
+
+  function updateTime(time: string) {
+    const isoDate = selectedDate ? toIsoDate(selectedDate) : toIsoDate(new Date());
+    onChange(`${isoDate}T${time}`);
   }
 
   return (
-    <div style={datePickerShellStyle} onClick={openPicker}>
-      <input
-        ref={inputRef}
-        data-rodo-date-input
-        type={mode}
-        value={shownValue}
-        onChange={(event) => onChange(event.target.value)}
-        style={datePickerInputStyle}
-      />
-      <button
-        type="button"
-        aria-label="Wybierz datę"
-        style={datePickerButtonStyle}
-        onClick={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          openPicker();
-        }}
-      >
-        <CalendarDays size={17} strokeWidth={2.3} />
-      </button>
+    <div style={datePickerWrapperStyle}>
+      <div style={datePickerShellStyle} onClick={openCalendar}>
+        <input
+          data-rodo-date-input
+          type="text"
+          value={shownValue}
+          placeholder={mode === "datetime-local" ? "dd.mm.rrrr, gg:mm" : "dd.mm.rrrr"}
+          readOnly
+          style={datePickerInputStyle}
+        />
+        <button
+          type="button"
+          aria-label="Wybierz datę"
+          style={datePickerButtonStyle}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            openCalendar();
+          }}
+        >
+          <CalendarDays size={17} strokeWidth={2.3} />
+        </button>
+      </div>
+      {open && (
+        <div style={calendarPopoverStyle}>
+          <div style={calendarHeaderStyle}>
+            <button type="button" style={calendarIconButtonStyle} onClick={() => changeMonth(-1)} aria-label="Poprzedni miesiąc">
+              <ChevronLeft size={17} />
+            </button>
+            <strong>{formatCalendarMonth(viewDate)}</strong>
+            <button type="button" style={calendarIconButtonStyle} onClick={() => changeMonth(1)} aria-label="Następny miesiąc">
+              <ChevronRight size={17} />
+            </button>
+          </div>
+          <div style={calendarWeekdaysStyle}>
+            {["pon", "wt", "śr", "czw", "pt", "sob", "nie"].map((day) => <span key={day}>{day}</span>)}
+          </div>
+          <div style={calendarGridStyle}>
+            {calendarDays.map((date) => {
+              const inCurrentMonth = date.getMonth() === viewDate.getMonth();
+              const selected = selectedDate ? isSameCalendarDay(date, selectedDate) : false;
+              const today = isSameCalendarDay(date, new Date());
+              return (
+                <button
+                  key={toIsoDate(date)}
+                  type="button"
+                  style={{
+                    ...calendarDayStyle,
+                    ...(!inCurrentMonth ? calendarDayMutedStyle : {}),
+                    ...(today ? calendarDayTodayStyle : {}),
+                    ...(selected ? calendarDaySelectedStyle : {}),
+                  }}
+                  onClick={() => selectDate(date)}
+                >
+                  {date.getDate()}
+                </button>
+              );
+            })}
+          </div>
+          {mode === "datetime-local" && (
+            <label style={calendarTimeRowStyle}>
+              <span>Godzina</span>
+              <input type="time" value={selectedTime || "09:00"} onChange={(event) => updateTime(event.target.value)} style={calendarTimeInputStyle} />
+            </label>
+          )}
+          <div style={calendarFooterStyle}>
+            <button type="button" style={calendarTextButtonStyle} onClick={() => { onChange(""); setOpen(false); }}>Wyczyść</button>
+            <button type="button" style={calendarTextButtonStyle} onClick={() => selectDate(new Date())}>Dzisiaj</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1505,9 +1620,23 @@ const suggestionEmptyStyle: CSSProperties = { padding: "10px", color: colors.mut
 const clearButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.navy, padding: "9px 11px", fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" };
 const textareaRowStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "8px", color: colors.muted, fontWeight: 700 };
 const inputStyle: CSSProperties = { width: "100%", border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "10px 12px", background: colors.inputBackground, color: colors.text, fontWeight: 650, outline: "none" };
+const datePickerWrapperStyle: CSSProperties = { position: "relative", width: "100%" };
 const datePickerShellStyle: CSSProperties = { position: "relative", width: "100%", minHeight: "42px", display: "flex", alignItems: "center", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, overflow: "hidden" };
 const datePickerInputStyle: CSSProperties = { width: "100%", minHeight: "42px", border: "none", borderRadius: radius.input, padding: "10px 46px 10px 12px", background: "transparent", color: colors.text, fontWeight: 650, outline: "none", font: "inherit" };
 const datePickerButtonStyle: CSSProperties = { position: "absolute", right: "8px", top: "50%", transform: "translateY(-50%)", width: "30px", height: "30px", border: `1px solid ${colors.border}`, borderRadius: "10px", background: colors.white, color: colors.navy, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 };
+const calendarPopoverStyle: CSSProperties = { position: "absolute", zIndex: 40, top: "calc(100% + 8px)", left: 0, width: "292px", border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.white, boxShadow: shadow.soft, padding: "12px", color: colors.text };
+const calendarHeaderStyle: CSSProperties = { display: "grid", gridTemplateColumns: "32px 1fr 32px", alignItems: "center", gap: "8px", color: colors.navy, fontSize: "14px", textAlign: "center", marginBottom: "10px" };
+const calendarIconButtonStyle: CSSProperties = { width: "32px", height: "32px", border: `1px solid ${colors.border}`, borderRadius: "10px", background: colors.inputBackground, color: colors.navy, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 };
+const calendarWeekdaysStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "4px", color: colors.muted, fontSize: "11px", fontWeight: 850, textAlign: "center", textTransform: "uppercase", marginBottom: "6px" };
+const calendarGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "4px" };
+const calendarDayStyle: CSSProperties = { width: "34px", height: "32px", border: "1px solid transparent", borderRadius: "10px", background: "transparent", color: colors.text, cursor: "pointer", fontWeight: 750, fontSize: "13px", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 };
+const calendarDayMutedStyle: CSSProperties = { color: "#94a3b8", fontWeight: 650 };
+const calendarDayTodayStyle: CSSProperties = { borderColor: colors.border, background: colors.inputBackground };
+const calendarDaySelectedStyle: CSSProperties = { background: colors.red, borderColor: colors.red, color: colors.white };
+const calendarFooterStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "10px", marginTop: "10px", borderTop: `1px solid ${colors.border}`, paddingTop: "10px" };
+const calendarTextButtonStyle: CSSProperties = { border: "none", background: "transparent", color: colors.navy, fontWeight: 850, cursor: "pointer", padding: "6px 4px" };
+const calendarTimeRowStyle: CSSProperties = { display: "grid", gridTemplateColumns: "80px 1fr", alignItems: "center", gap: "8px", marginTop: "10px", color: colors.muted, fontSize: "13px", fontWeight: 800 };
+const calendarTimeInputStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, color: colors.text, padding: "8px 10px", fontWeight: 750, outline: "none" };
 const textareaStyle: CSSProperties = { ...inputStyle, resize: "vertical", minHeight: "96px", lineHeight: 1.6 };
 const screenHiddenStyle = `
   [data-screen-hidden="true"] {

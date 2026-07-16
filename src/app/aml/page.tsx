@@ -71,6 +71,7 @@ function AmlContent() {
   const [loading, setLoading] = useState(true);
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [verifyingClientId, setVerifyingClientId] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
     void loadData();
@@ -107,6 +108,7 @@ function AmlContent() {
     () => buildRows(clients, stages, registers, verifications, history),
     [clients, stages, registers, verifications, history]
   );
+  const filteredRows = useMemo(() => filterRows(rows, searchTerm), [rows, searchTerm]);
   const selectedRow = rows.find((row) => row.client.id === selectedClientId) || null;
   const waitingCount = rows.filter((row) => !row.register?.ostatnia_weryfikacja_at).length;
   const requiresAnalysisCount = rows.filter((row) => row.register?.status === "wymaga_analizy").length;
@@ -132,7 +134,13 @@ function AmlContent() {
         <div>
           <p style={eyebrowStyle}>AML</p>
           <h1 style={titleStyle}>Rejestr klientów AML</h1>
-          <p style={subtitleStyle}>Lista jest zasilana automatycznie klientami, którzy są aktualnie w onboardingu.</p>
+          <input
+            type="search"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            placeholder="Szukaj po kliencie, NIP, opiekunie lub statusie"
+            style={searchInputStyle}
+          />
         </div>
       </header>
 
@@ -161,6 +169,8 @@ function AmlContent() {
           <p style={emptyStyle}>Ładowanie rejestru AML...</p>
         ) : rows.length === 0 ? (
           <p style={emptyStyle}>Brak klientów w onboardingu do pokazania w rejestrze AML.</p>
+        ) : filteredRows.length === 0 ? (
+          <p style={emptyStyle}>Brak wyników dla wpisanej frazy.</p>
         ) : (
           <div style={tableWrapStyle}>
             <table style={tableStyle}>
@@ -177,7 +187,7 @@ function AmlContent() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row, index) => (
+                {filteredRows.map((row, index) => (
                   <tr key={row.client.id}>
                     <Td>{index + 1}</Td>
                     <Td>
@@ -368,6 +378,26 @@ function buildRows(
     });
 }
 
+function filterRows(rows: AmlRow[], searchTerm: string) {
+  const query = searchTerm.trim().toLowerCase();
+  if (!query) return rows;
+
+  return rows.filter((row) => {
+    const values = [
+      row.client.nazwa,
+      row.client.nip,
+      row.client.email,
+      row.client.telefon,
+      caregiverLabel(row.client),
+      stageStatusLabel(row.stage),
+      registerStatusLabel(row.register),
+      formatDateTime(row.register?.ostatnia_weryfikacja_at),
+    ];
+
+    return values.some((value) => String(value || "").toLowerCase().includes(query));
+  });
+}
+
 function indexProfiles(profiles: Profile[]) {
   return Object.fromEntries(profiles.map((profile) => [profile.id, profile]));
 }
@@ -501,7 +531,19 @@ const pageStyle: CSSProperties = { display: "flex", flexDirection: "column", gap
 const headerStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "24px", alignItems: "flex-start" };
 const eyebrowStyle: CSSProperties = { margin: "0 0 8px", fontSize: "13px", fontWeight: 850, letterSpacing: "0.08em", color: colors.red, textTransform: "uppercase" };
 const titleStyle: CSSProperties = { margin: 0, fontSize: "34px", lineHeight: 1.15, color: colors.navy };
-const subtitleStyle: CSSProperties = { margin: "10px 0 0", maxWidth: "720px", color: colors.muted, fontSize: "16px", lineHeight: 1.55 };
+const searchInputStyle: CSSProperties = {
+  marginTop: "14px",
+  width: "min(560px, 100%)",
+  minHeight: "46px",
+  border: `1px solid ${colors.border}`,
+  borderRadius: radius.button,
+  background: colors.white,
+  color: colors.text,
+  padding: "0 16px",
+  fontSize: "15px",
+  fontWeight: 700,
+  outline: "none",
+};
 const statsGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "14px" };
 const statCardStyle: CSSProperties = { minHeight: "92px", border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.card, boxShadow: shadow.soft, padding: "20px", display: "flex", alignItems: "center", gap: "16px" };
 const statIconStyle: CSSProperties = { width: "44px", height: "44px", borderRadius: radius.button, display: "inline-flex", alignItems: "center", justifyContent: "center" };

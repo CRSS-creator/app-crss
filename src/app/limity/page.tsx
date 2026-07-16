@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { Plus, Save } from "lucide-react";
+import { Check, Plus, Save, X } from "lucide-react";
 import AccessGuard from "@/components/AccessGuard";
 import AppLayout from "@/components/AppLayout";
 import { colors, radius, shadow } from "@/app/design";
@@ -60,7 +60,7 @@ function LimitsContent() {
   const [clients, setClients] = useState<Client[]>([]);
   const [registers, setRegisters] = useState<LimitRegisterRecord[]>([]);
   const [monthlyRecords, setMonthlyRecords] = useState<LimitMonthlyRecord[]>([]);
-  const [selectedRegisterId, setSelectedRegisterId] = useState<string | null>(null);
+  const [detailsRegisterId, setDetailsRegisterId] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [clientToAdd, setClientToAdd] = useState("");
   const [loading, setLoading] = useState(true);
@@ -88,7 +88,7 @@ function LimitsContent() {
   }
 
   const rows = useMemo(() => buildRows(activeType, clients, registers, monthlyRecords), [activeType, clients, registers, monthlyRecords]);
-  const selectedRow = rows.find((row) => row.register.id === selectedRegisterId) || rows[0] || null;
+  const detailsRow = rows.find((row) => row.register.id === detailsRegisterId) || null;
   const availableClients = clients.filter((client) => !registers.some((register) => register.typ === activeType && register.klient_id === client.id));
   const isVatRegister = activeType === "vat";
   const isAutomaticRegister = activeType === "vat" || activeType === "wnt";
@@ -103,12 +103,12 @@ function LimitsContent() {
     setClientToAdd("");
     setShowAddForm(false);
     await loadData();
-    setSelectedRegisterId(result.data?.id || null);
+    setDetailsRegisterId(result.data?.id || null);
   }
 
   function changeTab(type: LimitType) {
     setActiveType(type);
-    setSelectedRegisterId(null);
+    setDetailsRegisterId(null);
     setShowAddForm(false);
     setClientToAdd("");
   }
@@ -134,8 +134,7 @@ function LimitsContent() {
         ))}
       </nav>
 
-      <section style={layoutStyle}>
-        <div style={cardStyle}>
+      <section style={cardStyle}>
           <div style={sectionHeaderStyle}>
             <div>
               <h2 style={sectionTitleStyle}>{activeTabLabel(activeType)}</h2>
@@ -165,40 +164,63 @@ function LimitsContent() {
           ) : rows.length === 0 ? (
             <p style={emptyStyle}>{emptyRegisterText(activeType)}</p>
           ) : (
-            <div style={listStyle}>
-              {rows.map((row) => {
-                const usage = calculateUsage(row.register, row.monthly);
-                return (
-                  <button key={row.register.id} type="button" onClick={() => setSelectedRegisterId(row.register.id)} style={selectedRow?.register.id === row.register.id ? activeRowStyle : rowStyle}>
-                    <div style={rowTopStyle}>
-                      <div>
-                        <strong style={clientNameStyle}>{row.client?.nazwa || "Klient bez nazwy"}</strong>
-                        <span style={clientMetaStyle}>{row.client?.nip || "Brak NIP"} · {caregiverLabel(row.client)}</span>
-                      </div>
-                      <strong style={percentStyle}>{usage.percent.toFixed(0)}%</strong>
-                    </div>
-                    <ProgressBar percent={usage.percent} />
-                  </button>
-                );
-              })}
+            <div style={tableWrapStyle}>
+              <table style={tableStyle}>
+                <thead>
+                  <tr>
+                    <Th>Klient</Th>
+                    <Th>Status zwolnienia</Th>
+                    <Th>Wpis w tym miesiącu</Th>
+                    <Th>Wykorzystano w roku</Th>
+                    <Th>Pozostało</Th>
+                    <Th>Szczegóły</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row) => {
+                    const usage = calculateUsage(row.register, row.monthly);
+                    const currentMonthDone = hasMonthlyEntry(row.monthly, year);
+                    return (
+                      <tr key={row.register.id}>
+                        <Td>
+                          <strong style={clientNameStyle}>{row.client?.nazwa || "Klient bez nazwy"}</strong>
+                          <span style={clientMetaStyle}>{row.client?.nip || "Brak NIP"} · {caregiverLabel(row.client)}</span>
+                        </Td>
+                        <Td>{exemptionStatusLabel(row.register.status_zwolnienia)}</Td>
+                        <Td><MonthlyStatus done={currentMonthDone} /></Td>
+                        <Td>
+                          <strong style={amountStyle}>{formatMoney(usage.used)}</strong>
+                          <ProgressBar percent={usage.percent} />
+                        </Td>
+                        <Td><strong style={amountStyle}>{formatMoney(usage.remaining)}</strong></Td>
+                        <Td>
+                          <button type="button" onClick={() => setDetailsRegisterId(row.register.id)} style={detailsButtonStyle}>Szczegóły</button>
+                        </Td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
-        </div>
-
-        <div style={cardStyle}>
-          {selectedRow ? (
-            <LimitDetails key={`${selectedRow.register.id}-${year}`} row={selectedRow} year={year} onSaved={() => void loadData()} />
-          ) : (
-            <p style={emptyStyle}>Wybierz klienta z listy, aby uzupełnić limit roczny i miesiące.</p>
-          )}
-        </div>
       </section>
+
+      {detailsRow && (
+        <LimitDetailsModal
+          key={`${detailsRow.register.id}-${year}`}
+          row={detailsRow}
+          year={year}
+          onClose={() => setDetailsRegisterId(null)}
+          onSaved={() => void loadData()}
+        />
+      )}
     </div>
   );
 }
 
-function LimitDetails({ row, year, onSaved }: { row: LimitRow; year: number; onSaved: () => void }) {
+function LimitDetailsModal({ row, year, onClose, onSaved }: { row: LimitRow; year: number; onClose: () => void; onSaved: () => void }) {
   const [annualLimit, setAnnualLimit] = useState(String(toNumber(row.register.limit_roczny)));
+  const [exemptionStatus, setExemptionStatus] = useState(row.register.status_zwolnienia || "podmiotowe");
   const [notes, setNotes] = useState(row.register.uwagi || "");
   const [monthValues, setMonthValues] = useState<Record<number, string>>(() => monthValueMap(row.monthly));
   const [businessStartDate, setBusinessStartDate] = useState(`${year}-01-01`);
@@ -210,6 +232,7 @@ function LimitDetails({ row, year, onSaved }: { row: LimitRow; year: number; onS
     setSaving(true);
     const registerResult = await updateLimitRegister(row.register.id, {
       limit_roczny: parseAmount(annualLimit),
+      status_zwolnienia: row.register.typ === "wnt" ? null : exemptionStatus,
       uwagi: notes.trim() || null,
     });
 
@@ -234,15 +257,21 @@ function LimitDetails({ row, year, onSaved }: { row: LimitRow; year: number; onS
   }
 
   return (
-    <section>
-      <div style={sectionHeaderStyle}>
+    <div style={modalBackdropStyle}>
+      <section style={modalStyle}>
+      <div style={modalHeaderStyle}>
         <div>
           <h2 style={sectionTitleStyle}>{row.client?.nazwa || "Klient bez nazwy"}</h2>
           <p style={sectionHintStyle}>{activeTabLabel(row.register.typ)} · {year} · {row.client?.nip || "Brak NIP"}</p>
         </div>
-        <button type="button" onClick={() => void saveDetails()} disabled={saving} style={primaryButtonStyle}>
-          <Save size={18} /> {saving ? "Zapisywanie..." : "Zapisz"}
-        </button>
+        <div style={modalActionsStyle}>
+          <button type="button" onClick={() => void saveDetails()} disabled={saving} style={primaryButtonStyle}>
+            <Save size={18} /> {saving ? "Zapisywanie..." : "Zapisz"}
+          </button>
+          <button type="button" onClick={onClose} style={iconButtonStyle} aria-label="Zamknij">
+            <X size={20} />
+          </button>
+        </div>
       </div>
 
       <div style={detailsBodyStyle}>
@@ -251,6 +280,15 @@ function LimitDetails({ row, year, onSaved }: { row: LimitRow; year: number; onS
             <span style={fieldLabelStyle}>Limit roczny</span>
             <input value={annualLimit} onChange={(event) => setAnnualLimit(event.target.value)} inputMode="decimal" style={inputStyle} />
           </label>
+          {row.register.typ !== "wnt" && (
+            <label style={fieldStyle}>
+              <span style={fieldLabelStyle}>Status zwolnienia</span>
+              <select value={exemptionStatus} onChange={(event) => setExemptionStatus(event.target.value)} style={inputStyle}>
+                <option value="podmiotowe">Podmiotowe</option>
+                <option value="przedmiotowe">Przedmiotowe</option>
+              </select>
+            </label>
+          )}
           <label style={fieldStyle}>
             <span style={fieldLabelStyle}>Uwagi</span>
             <input value={notes} onChange={(event) => setNotes(event.target.value)} style={inputStyle} />
@@ -290,7 +328,8 @@ function LimitDetails({ row, year, onSaved }: { row: LimitRow; year: number; onS
           })}
         </div>
       </div>
-    </section>
+      </section>
+    </div>
   );
 }
 
@@ -301,6 +340,22 @@ function ProgressBar({ percent }: { percent: number }) {
       <div style={{ ...progressFillStyle, width: `${width}%`, background: progressColor(percent) }} />
     </div>
   );
+}
+
+function MonthlyStatus({ done }: { done: boolean }) {
+  return done ? (
+    <span style={monthlyDoneStyle}><Check size={15} /> Dodano</span>
+  ) : (
+    <span style={monthlyMissingStyle}>Brak wpisu</span>
+  );
+}
+
+function Th({ children }: { children: React.ReactNode }) {
+  return <th style={thStyle}>{children}</th>;
+}
+
+function Td({ children }: { children: React.ReactNode }) {
+  return <td style={tdStyle}>{children}</td>;
 }
 
 function buildRows(type: LimitType, clients: Client[], registers: LimitRegisterRecord[], monthlyRecords: LimitMonthlyRecord[]) {
@@ -317,8 +372,15 @@ function buildRows(type: LimitType, clients: Client[], registers: LimitRegisterR
 function calculateUsage(register: LimitRegisterRecord, monthly: LimitMonthlyRecord[]) {
   const limit = toNumber(register.limit_roczny);
   const used = monthly.reduce((sum, item) => sum + toNumber(item.kwota), 0);
+  const remaining = Math.max(0, limit - used);
   const percent = limit > 0 ? (used / limit) * 100 : 0;
-  return { percent };
+  return { limit, used, remaining, percent };
+}
+
+function hasMonthlyEntry(monthly: LimitMonthlyRecord[], year: number) {
+  const now = new Date();
+  const currentMonth = now.getFullYear() === year ? now.getMonth() + 1 : 12;
+  return monthly.some((record) => record.miesiac === currentMonth);
 }
 
 function monthValueMap(monthly: LimitMonthlyRecord[]) {
@@ -331,6 +393,12 @@ function monthValueMap(monthly: LimitMonthlyRecord[]) {
 
 function activeTabLabel(type: LimitType) {
   return LIMIT_TABS.find((tab) => tab.value === type)?.label || type;
+}
+
+function exemptionStatusLabel(status: string | null | undefined) {
+  if (status === "podmiotowe") return "Podmiotowe";
+  if (status === "przedmiotowe") return "Przedmiotowe";
+  return "-";
 }
 
 function registerHint(type: LimitType) {
@@ -399,7 +467,6 @@ const yearInputStyle: CSSProperties = { width: "92px", minHeight: "38px", border
 const tabsStyle: CSSProperties = { display: "flex", gap: "10px", flexWrap: "wrap" };
 const tabStyle: CSSProperties = { minHeight: "42px", padding: "0 18px", borderRadius: radius.button, border: `1px solid ${colors.border}`, background: colors.card, color: colors.navy, fontWeight: 850, cursor: "pointer" };
 const activeTabStyle: CSSProperties = { ...tabStyle, background: colors.navy, color: colors.white, borderColor: colors.navy };
-const layoutStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(420px, 0.95fr) minmax(560px, 1.25fr)", gap: "18px", alignItems: "start" };
 const cardStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.card, boxShadow: shadow.card, overflow: "hidden" };
 const sectionHeaderStyle: CSSProperties = { padding: "22px 24px", borderBottom: `1px solid ${colors.border}`, display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "flex-start" };
 const sectionTitleStyle: CSSProperties = { margin: 0, fontSize: "22px", color: colors.navy };
@@ -409,15 +476,23 @@ const smallPrimaryButtonStyle: CSSProperties = { ...primaryButtonStyle, minHeigh
 const addFormStyle: CSSProperties = { display: "grid", gridTemplateColumns: "1fr auto", gap: "10px", padding: "14px 24px", borderBottom: `1px solid ${colors.border}`, background: colors.inputBackground };
 const selectStyle: CSSProperties = { minHeight: "40px", border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "0 12px", color: colors.navy, fontWeight: 750, background: colors.white };
 const emptyStyle: CSSProperties = { margin: 0, padding: "28px 24px", color: colors.muted, fontWeight: 750 };
-const listStyle: CSSProperties = { display: "flex", flexDirection: "column" };
-const rowStyle: CSSProperties = { width: "100%", textAlign: "left", border: "none", borderBottom: `1px solid ${colors.border}`, background: colors.card, padding: "16px 20px", cursor: "pointer" };
-const activeRowStyle: CSSProperties = { ...rowStyle, background: "rgba(23, 59, 115, 0.06)" };
-const rowTopStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "14px", marginBottom: "12px" };
+const tableWrapStyle: CSSProperties = { width: "100%", overflowX: "auto" };
+const tableStyle: CSSProperties = { width: "100%", minWidth: "980px", borderCollapse: "collapse" };
+const thStyle: CSSProperties = { padding: "14px 18px", textAlign: "left", fontSize: "12px", color: colors.text, textTransform: "uppercase", letterSpacing: "0.08em", borderBottom: `1px solid ${colors.border}`, whiteSpace: "nowrap" };
+const tdStyle: CSSProperties = { padding: "16px 18px", borderBottom: `1px solid ${colors.border}`, color: colors.text, verticalAlign: "middle", fontSize: "14px" };
 const clientNameStyle: CSSProperties = { display: "block", color: colors.navy, fontSize: "15px", lineHeight: 1.35 };
 const clientMetaStyle: CSSProperties = { display: "block", marginTop: "4px", color: colors.muted, fontSize: "12px", fontWeight: 750 };
-const percentStyle: CSSProperties = { color: colors.navy, fontSize: "18px" };
+const amountStyle: CSSProperties = { display: "block", marginBottom: "8px", color: colors.navy, fontSize: "14px" };
+const monthlyDoneStyle: CSSProperties = { display: "inline-flex", alignItems: "center", gap: "6px", minHeight: "30px", padding: "6px 10px", borderRadius: radius.badge, background: "rgba(22, 163, 74, 0.12)", color: colors.success, fontSize: "12px", fontWeight: 850 };
+const monthlyMissingStyle: CSSProperties = { display: "inline-flex", alignItems: "center", minHeight: "30px", padding: "6px 10px", borderRadius: radius.badge, background: "rgba(100, 116, 139, 0.12)", color: colors.muted, fontSize: "12px", fontWeight: 850 };
+const detailsButtonStyle: CSSProperties = { minHeight: "38px", padding: "0 14px", borderRadius: radius.button, border: `1px solid ${colors.border}`, background: colors.white, color: colors.navy, fontWeight: 850, cursor: "pointer" };
 const progressTrackStyle: CSSProperties = { width: "100%", height: "10px", borderRadius: radius.badge, background: "rgba(100, 116, 139, 0.16)", overflow: "hidden" };
 const progressFillStyle: CSSProperties = { height: "100%", borderRadius: radius.badge, transition: "width 0.2s ease" };
+const modalBackdropStyle: CSSProperties = { position: "fixed", inset: 0, zIndex: 60, background: "rgba(15, 23, 42, 0.38)", display: "flex", justifyContent: "center", alignItems: "flex-start", padding: "28px", overflowY: "auto" };
+const modalStyle: CSSProperties = { width: "min(1040px, calc(100vw - 56px))", borderRadius: radius.card, background: colors.white, boxShadow: "0 32px 90px rgba(15, 23, 42, 0.28)", border: `1px solid ${colors.border}`, overflow: "hidden" };
+const modalHeaderStyle: CSSProperties = { padding: "22px 24px", borderBottom: `1px solid ${colors.border}`, display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "flex-start" };
+const modalActionsStyle: CSSProperties = { display: "flex", gap: "10px", alignItems: "center" };
+const iconButtonStyle: CSSProperties = { width: "42px", height: "42px", borderRadius: radius.button, border: `1px solid ${colors.border}`, background: colors.white, color: colors.navy, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer" };
 const detailsBodyStyle: CSSProperties = { padding: "22px 24px", display: "flex", flexDirection: "column", gap: "18px" };
 const annualGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "220px 1fr", gap: "12px" };
 const fieldStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "8px" };

@@ -9,6 +9,7 @@ export type LimitRegisterRecord = {
   klient_id: string;
   typ: LimitType;
   limit_roczny: number | string;
+  status_zwolnienia: string | null;
   uwagi: string | null;
   created_by: string | null;
   updated_by: string | null;
@@ -54,6 +55,7 @@ export async function addClientToLimit(clientId: string, type: LimitType) {
       klient_id: clientId,
       typ: type,
       limit_roczny: DEFAULT_ANNUAL_LIMITS[type],
+      status_zwolnienia: type === "wnt" ? null : "podmiotowe",
       created_by: userId,
       updated_by: userId,
     })
@@ -61,7 +63,7 @@ export async function addClientToLimit(clientId: string, type: LimitType) {
     .single();
 }
 
-export async function updateLimitRegister(id: string, values: { limit_roczny: number; uwagi?: string | null }) {
+export async function updateLimitRegister(id: string, values: { limit_roczny: number; status_zwolnienia?: string | null; uwagi?: string | null }) {
   const userId = (await supabase.auth.getUser()).data.user?.id || null;
   return supabase
     .from("limity_rejestry")

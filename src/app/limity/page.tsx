@@ -242,6 +242,7 @@ function LimitDetailsModal({ row, year, onClose, onSaved }: { row: LimitRow; yea
   const [saving, setSaving] = useState(false);
   const proportionalBase = proportionalLimitBase(row.register.typ);
   const proportionalResult = proportionalBase ? calculateProportionalLimit(proportionalBase, businessStartDate, year) : null;
+  const firstActiveMonth = activeMonthFromStartDate(businessStartDate, year);
 
   async function saveDetails() {
     setSaving(true);
@@ -258,7 +259,9 @@ function LimitDetailsModal({ row, year, onClose, onSaved }: { row: LimitRow; yea
     }
 
     for (let month = 1; month <= 12; month += 1) {
-      const amount = parseAmount(monthValues[month] || "0");
+      if (month < firstActiveMonth) continue;
+      if (!hasTypedMonthlyValue(monthValues[month])) continue;
+      const amount = parseAmount(monthValues[month]);
       const result = await upsertMonthlyLimitAmount(row.register.id, year, month, amount);
       if (result.error) {
         setSaving(false);
@@ -329,14 +332,19 @@ function LimitDetailsModal({ row, year, onClose, onSaved }: { row: LimitRow; yea
         <div style={monthGridStyle}>
           {MONTHS.map((monthName, index) => {
             const month = index + 1;
+            const disabled = month < firstActiveMonth;
             return (
-              <label key={month} style={monthFieldStyle}>
+              <label key={month} style={disabled ? disabledMonthFieldStyle : monthFieldStyle}>
                 <span style={fieldLabelStyle}>{monthName}</span>
                 <input
                   value={monthValues[month] || ""}
-                  onChange={(event) => setMonthValues((values) => ({ ...values, [month]: event.target.value }))}
+                  onChange={(event) => {
+                    if (disabled) return;
+                    setMonthValues((values) => ({ ...values, [month]: event.target.value }));
+                  }}
                   inputMode="decimal"
-                  style={inputStyle}
+                  disabled={disabled}
+                  style={disabled ? disabledInputStyle : inputStyle}
                 />
               </label>
             );
@@ -424,6 +432,10 @@ function monthValueMap(monthly: LimitMonthlyRecord[]) {
   }));
 }
 
+function hasTypedMonthlyValue(value: string | undefined) {
+  return value !== undefined && value.trim() !== "";
+}
+
 function activeTabLabel(type: LimitType) {
   return LIMIT_TABS.find((tab) => tab.value === type)?.label || type;
 }
@@ -458,6 +470,14 @@ function toNumber(value: number | string | null | undefined) {
 
 function parseAmount(value: string) {
   return toNumber(value);
+}
+
+function activeMonthFromStartDate(startDate: string, year: number) {
+  const start = new Date(`${startDate}T00:00:00`);
+  if (Number.isNaN(start.getTime())) return 1;
+  if (start.getFullYear() < year) return 1;
+  if (start.getFullYear() > year) return 13;
+  return start.getMonth() + 1;
 }
 
 function proportionalLimitBase(type: LimitType) {
@@ -533,8 +553,10 @@ const annualGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "
 const fieldStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "8px" };
 const fieldLabelStyle: CSSProperties = { color: colors.muted, fontSize: "12px", fontWeight: 850, textTransform: "uppercase" };
 const inputStyle: CSSProperties = { minHeight: "42px", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.text, padding: "0 12px", fontSize: "14px", fontWeight: 750 };
+const disabledInputStyle: CSSProperties = { ...inputStyle, background: "rgba(226, 232, 240, 0.72)", color: colors.muted, cursor: "not-allowed" };
 const proportionalBoxStyle: CSSProperties = { display: "grid", gridTemplateColumns: "220px 1fr auto", gap: "12px", alignItems: "end", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.inputBackground, padding: "14px" };
 const proportionalInfoStyle: CSSProperties = { minHeight: "42px", display: "flex", flexDirection: "column", justifyContent: "center", gap: "4px", color: colors.muted, fontSize: "12px", fontWeight: 800 };
 const secondaryButtonStyle: CSSProperties = { minHeight: "42px", padding: "0 14px", borderRadius: radius.button, border: `1px solid ${colors.border}`, background: colors.white, color: colors.navy, fontWeight: 850, cursor: "pointer" };
 const monthGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "12px" };
 const monthFieldStyle: CSSProperties = { ...fieldStyle, border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.inputBackground, padding: "12px" };
+const disabledMonthFieldStyle: CSSProperties = { ...monthFieldStyle, opacity: 0.58 };

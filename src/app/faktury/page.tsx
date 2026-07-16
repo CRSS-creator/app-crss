@@ -145,7 +145,6 @@ function InvoicesContent() {
     const activeInvoices = filteredInvoices.filter((invoice) => invoice.status !== "anulowana");
     return {
       count: filteredInvoices.length,
-      sentToWfirma: filteredInvoices.filter((invoice) => invoice.wfirma_sync_status === "wyslano").length,
       net: activeInvoices.reduce((sum, invoice) => sum + Number(invoice.kwota_netto || 0), 0),
     };
   }, [filteredInvoices]);
@@ -433,7 +432,6 @@ function InvoicesContent() {
 
       <section style={summaryGridStyle}>
         <Summary label="Faktury" value={totals.count} />
-        <Summary label="Wysłane do wFirmy" value={totals.sentToWfirma} />
         <Summary label="Netto" value={formatMoney(totals.net)} />
       </section>
 
@@ -1159,7 +1157,7 @@ const headerStyle: CSSProperties = { display: "flex", justifyContent: "space-bet
 const headerActionsStyle: CSSProperties = { display: "flex", gap: "10px", alignItems: "center", justifyContent: "flex-end", flexWrap: "wrap" };
 const eyebrowStyle: CSSProperties = { color: colors.red, fontWeight: 850, margin: "0 0 8px" };
 const titleStyle: CSSProperties = { fontSize: "42px", lineHeight: 1.05, margin: 0, color: colors.navy };
-const summaryGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "16px", marginBottom: "20px" };
+const summaryGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "16px", marginBottom: "20px" };
 const summaryStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.card, padding: "16px", boxShadow: shadow.soft, display: "grid", gap: "8px", color: colors.muted, fontWeight: 800 };
 const automationPanelStyle: CSSProperties = { display: "flex", justifyContent: "flex-end", marginBottom: "14px" };
 const listPanelStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.card, padding: "20px", boxShadow: shadow.soft, minWidth: 0 };

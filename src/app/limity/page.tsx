@@ -63,6 +63,7 @@ function LimitsContent() {
   const [detailsRegisterId, setDetailsRegisterId] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [clientToAdd, setClientToAdd] = useState("");
+  const [clientAddSearch, setClientAddSearch] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -92,7 +93,8 @@ function LimitsContent() {
   const filteredRows = useMemo(() => filterRows(rows, searchTerm), [rows, searchTerm]);
   const detailsRow = rows.find((row) => row.register.id === detailsRegisterId) || null;
   const availableClients = clients.filter((client) => !registers.some((register) => register.typ === activeType && register.klient_id === client.id));
-  const isVatRegister = activeType === "vat";
+  const filteredAvailableClients = filterClientsForPicker(availableClients, clientAddSearch);
+  const selectedClientToAdd = availableClients.find((client) => client.id === clientToAdd) || null;
   const isAutomaticRegister = activeType === "vat" || activeType === "wnt";
   const showExemptionStatus = activeType !== "wnt";
 
@@ -104,6 +106,7 @@ function LimitsContent() {
       return;
     }
     setClientToAdd("");
+    setClientAddSearch("");
     setShowAddForm(false);
     await loadData();
     setDetailsRegisterId(result.data?.id || null);
@@ -114,6 +117,7 @@ function LimitsContent() {
     setDetailsRegisterId(null);
     setShowAddForm(false);
     setClientToAdd("");
+    setClientAddSearch("");
     setSearchTerm("");
   }
 
@@ -162,12 +166,43 @@ function LimitsContent() {
 
           {showAddForm && !isAutomaticRegister && (
             <div style={addFormStyle}>
-              <select value={clientToAdd} onChange={(event) => setClientToAdd(event.target.value)} style={selectStyle}>
-                <option value="">Wybierz klienta</option>
-                {availableClients.map((client) => (
-                  <option key={client.id} value={client.id}>{client.nazwa || "Klient bez nazwy"} {client.nip ? `(${client.nip})` : ""}</option>
-                ))}
-              </select>
+              <div style={clientPickerStyle}>
+                <input
+                  type="search"
+                  value={clientAddSearch}
+                  onChange={(event) => {
+                    setClientAddSearch(event.target.value);
+                    setClientToAdd("");
+                  }}
+                  placeholder="Wpisz nazwę klienta lub NIP"
+                  style={clientPickerInputStyle}
+                />
+                {selectedClientToAdd && (
+                  <div style={selectedClientStyle}>
+                    Wybrano: <strong>{selectedClientToAdd.nazwa || "Klient bez nazwy"}</strong>
+                  </div>
+                )}
+                <div style={clientPickerListStyle}>
+                  {filteredAvailableClients.length === 0 ? (
+                    <div style={clientPickerEmptyStyle}>Brak klientów do dodania.</div>
+                  ) : (
+                    filteredAvailableClients.slice(0, 8).map((client) => (
+                      <button
+                        key={client.id}
+                        type="button"
+                        onClick={() => {
+                          setClientToAdd(client.id);
+                          setClientAddSearch(`${client.nazwa || "Klient bez nazwy"}${client.nip ? ` (${client.nip})` : ""}`);
+                        }}
+                        style={clientToAdd === client.id ? activeClientOptionStyle : clientOptionStyle}
+                      >
+                        <strong>{client.nazwa || "Klient bez nazwy"}</strong>
+                        <span>{client.nip || "Brak NIP"} · {caregiverLabel(client)}</span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
               <button type="button" onClick={() => void handleAddClient()} disabled={!clientToAdd} style={smallPrimaryButtonStyle}>Dodaj</button>
             </div>
           )}
@@ -410,6 +445,23 @@ function filterRows(rows: LimitRow[], searchTerm: string) {
   });
 }
 
+function filterClientsForPicker(clients: Client[], searchTerm: string) {
+  const query = searchTerm.trim().toLowerCase();
+  if (!query) return clients.slice(0, 8);
+
+  return clients.filter((client) => {
+    const values = [
+      client.nazwa,
+      client.nip,
+      client.email,
+      client.telefon,
+      caregiverLabel(client),
+    ];
+
+    return values.some((value) => String(value || "").toLowerCase().includes(query));
+  });
+}
+
 function calculateUsage(register: LimitRegisterRecord, monthly: LimitMonthlyRecord[]) {
   const limit = toNumber(register.limit_roczny);
   const used = monthly.reduce((sum, item) => sum + toNumber(item.kwota), 0);
@@ -528,8 +580,14 @@ const sectionActionsStyle: CSSProperties = { display: "flex", gap: "10px", align
 const searchInputStyle: CSSProperties = { width: "min(360px, 100%)", minHeight: "42px", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.text, padding: "0 14px", fontSize: "14px", fontWeight: 750, outline: "none" };
 const primaryButtonStyle: CSSProperties = { minHeight: "42px", padding: "0 16px", border: "none", borderRadius: radius.button, background: colors.red, color: colors.white, fontWeight: 850, display: "inline-flex", alignItems: "center", gap: "8px", cursor: "pointer" };
 const smallPrimaryButtonStyle: CSSProperties = { ...primaryButtonStyle, minHeight: "40px" };
-const addFormStyle: CSSProperties = { display: "grid", gridTemplateColumns: "1fr auto", gap: "10px", padding: "14px 24px", borderBottom: `1px solid ${colors.border}`, background: colors.inputBackground };
-const selectStyle: CSSProperties = { minHeight: "40px", border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "0 12px", color: colors.navy, fontWeight: 750, background: colors.white };
+const addFormStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: "12px", padding: "16px 24px", borderBottom: `1px solid ${colors.border}`, background: colors.inputBackground, alignItems: "start" };
+const clientPickerStyle: CSSProperties = { position: "relative", display: "flex", flexDirection: "column", gap: "8px" };
+const clientPickerInputStyle: CSSProperties = { minHeight: "42px", border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "0 14px", color: colors.navy, fontWeight: 750, background: colors.white, outline: "none" };
+const selectedClientStyle: CSSProperties = { color: colors.muted, fontSize: "12px", fontWeight: 800 };
+const clientPickerListStyle: CSSProperties = { display: "grid", gap: "6px", maxHeight: "310px", overflowY: "auto" };
+const clientOptionStyle: CSSProperties = { width: "100%", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.text, padding: "10px 12px", display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", textAlign: "left", cursor: "pointer" };
+const activeClientOptionStyle: CSSProperties = { ...clientOptionStyle, borderColor: colors.navy, background: "rgba(23, 59, 115, 0.08)" };
+const clientPickerEmptyStyle: CSSProperties = { border: `1px dashed ${colors.border}`, borderRadius: radius.button, color: colors.muted, padding: "12px", fontWeight: 750 };
 const emptyStyle: CSSProperties = { margin: 0, padding: "28px 24px", color: colors.muted, fontWeight: 750 };
 const tableWrapStyle: CSSProperties = { width: "100%", overflowX: "auto" };
 const tableStyle: CSSProperties = { width: "100%", minWidth: "980px", borderCollapse: "collapse" };

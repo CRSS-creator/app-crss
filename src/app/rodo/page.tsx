@@ -397,7 +397,7 @@ function RodoContent() {
               <tbody>
                 {filteredContracts.map((contract, index) => (
                   <tr key={contract.id} style={rowStyle}>
-                    <Td strong>{index + 72}</Td>
+                    <Td strong>{index + 73}</Td>
                     <Td strong>{contract.numer_umowy || "Bez numeru"}</Td>
                     <Td>{contract.nazwa_klienta}</Td>
                     <Td>{contract.nip || "-"}</Td>

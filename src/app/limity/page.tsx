@@ -530,11 +530,15 @@ function Td({ children }: { children: React.ReactNode }) {
 function buildRows(type: LimitType, clients: Client[], registers: LimitRegisterRecord[], monthlyRecords: LimitMonthlyRecord[]) {
   return registers
     .filter((register) => register.typ === type)
-    .map((register) => ({
-      register,
-      client: clients.find((client) => client.id === register.klient_id) || null,
-      monthly: monthlyRecords.filter((month) => month.limit_id === register.id),
-    }))
+    .map((register) => {
+      const client = clients.find((item) => item.id === register.klient_id) || null;
+      return {
+        register,
+        client,
+        monthly: monthlyRecords.filter((month) => month.limit_id === register.id),
+      };
+    })
+    .filter((row) => row.client)
     .sort((first, second) => String(first.client?.nazwa || "").localeCompare(String(second.client?.nazwa || ""), "pl"));
 }
 

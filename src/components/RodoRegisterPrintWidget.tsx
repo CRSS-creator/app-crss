@@ -130,19 +130,32 @@ function injectPrintStyles() {
       }
 
       [data-printable-rodo-register="true"] th:nth-child(1),
-      [data-printable-rodo-register="true"] td:nth-child(1) { width: 12% !important; }
-      [data-printable-rodo-register="true"] th:nth-child(2),
-      [data-printable-rodo-register="true"] td:nth-child(2) { width: 15% !important; }
-      [data-printable-rodo-register="true"] th:nth-child(3),
-      [data-printable-rodo-register="true"] td:nth-child(3) { width: 9% !important; }
-      [data-printable-rodo-register="true"] th:nth-child(4),
-      [data-printable-rodo-register="true"] td:nth-child(4) { width: 17% !important; }
-      [data-printable-rodo-register="true"] th:nth-child(5),
-      [data-printable-rodo-register="true"] td:nth-child(5) { width: 11% !important; }
-      [data-printable-rodo-register="true"] th:nth-child(6),
-      [data-printable-rodo-register="true"] td:nth-child(6) { width: 22% !important; }
-      [data-printable-rodo-register="true"] th:nth-child(7),
-      [data-printable-rodo-register="true"] td:nth-child(7) { width: 8% !important; }
+      [data-printable-rodo-register="true"] td:nth-child(1) {
+        font-size: 7pt !important;
+        font-weight: 600 !important;
+      }
+
+      [data-printable-rodo-register="true"] table[data-rodo-contract-table="true"] th:nth-child(1),
+      [data-printable-rodo-register="true"] table[data-rodo-contract-table="true"] td:nth-child(1) { width: 4% !important; }
+      [data-printable-rodo-register="true"] table[data-rodo-contract-table="true"] th:nth-child(2),
+      [data-printable-rodo-register="true"] table[data-rodo-contract-table="true"] td:nth-child(2) { width: 12% !important; }
+      [data-printable-rodo-register="true"] table[data-rodo-contract-table="true"] th:nth-child(3),
+      [data-printable-rodo-register="true"] table[data-rodo-contract-table="true"] td:nth-child(3) { width: 16% !important; }
+      [data-printable-rodo-register="true"] table[data-rodo-contract-table="true"] th:nth-child(4),
+      [data-printable-rodo-register="true"] table[data-rodo-contract-table="true"] td:nth-child(4) {
+        width: 9% !important;
+        white-space: nowrap !important;
+      }
+      [data-printable-rodo-register="true"] table[data-rodo-contract-table="true"] th:nth-child(5),
+      [data-printable-rodo-register="true"] table[data-rodo-contract-table="true"] td:nth-child(5) { width: 16% !important; }
+      [data-printable-rodo-register="true"] table[data-rodo-contract-table="true"] th:nth-child(6),
+      [data-printable-rodo-register="true"] table[data-rodo-contract-table="true"] td:nth-child(6) { width: 11% !important; }
+      [data-printable-rodo-register="true"] table[data-rodo-contract-table="true"] th:nth-child(7),
+      [data-printable-rodo-register="true"] table[data-rodo-contract-table="true"] td:nth-child(7) { width: 18% !important; }
+      [data-printable-rodo-register="true"] table[data-rodo-contract-table="true"] th:nth-child(8),
+      [data-printable-rodo-register="true"] table[data-rodo-contract-table="true"] td:nth-child(8) { width: 7% !important; }
+      [data-printable-rodo-register="true"] table[data-rodo-contract-table="true"] th:nth-child(9),
+      [data-printable-rodo-register="true"] table[data-rodo-contract-table="true"] td:nth-child(9) { width: 7% !important; }
     }
   `;
 

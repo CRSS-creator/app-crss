@@ -27,6 +27,7 @@ export type RodoProcessingContract = {
   podpisany_pdf_path: string | null;
   podpisany_pdf_name: string | null;
   podpisana_at: string | null;
+  data_wygasniecia: string | null;
   klienci?: {
     nazwa: string | null;
     nip: string | null;
@@ -59,6 +60,7 @@ export type RodoProcessingContractPayload = {
   podpisany_pdf_path?: string | null;
   podpisany_pdf_name?: string | null;
   podpisana_at?: string | null;
+  data_wygasniecia?: string | null;
 };
 
 export async function fetchRodoProcessingContracts() {

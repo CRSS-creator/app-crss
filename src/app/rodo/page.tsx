@@ -62,6 +62,7 @@ type RodoDraft = {
   siedziba: string;
   nip: string;
   reprezentant: string;
+  data_wygasniecia: string;
   zakres_powierzenia: string;
   uwagi: string;
 };
@@ -104,6 +105,7 @@ const STATUS_OPTIONS: { value: RodoProcessingContractStatus; label: string }[] =
   { value: "anulowana", label: "Anulowana" },
 ];
 const STATUS_FILTER_OPTIONS = [{ value: "Wszystkie", label: "Wszystkie statusy" }, ...STATUS_OPTIONS];
+const RODO_CONTRACT_REGISTER_START = 73;
 
 const RODO_REGISTER_TABS: { value: ActiveRodoRegister; label: string }[] = [
   { value: "contracts", label: "Umowy powierzenia" },
@@ -380,7 +382,7 @@ function RodoContent() {
 
         {loading ? <div style={emptyStyle}>Ładowanie umów...</div> : filteredContracts.length === 0 ? <div style={emptyStyle}>Brak umów powierzenia do wyświetlenia.</div> : (
           <div style={tableWrapperStyle}>
-            <table style={tableStyle}>
+            <table data-rodo-contract-table="true" style={tableStyle}>
               <thead>
                 <tr>
                   <Th>Lp.</Th>
@@ -390,21 +392,25 @@ function RodoContent() {
                   <Th>Siedziba klienta</Th>
                   <Th>Umowa główna</Th>
                   <Th>Zakres</Th>
-                  <Th>Status umowy</Th>
+                  <Th>Data podpisania</Th>
+                  <Th>Wygaśnięcie</Th>
+                  <th data-print-hidden="true" style={thStyle}>Status umowy</th>
                   <th data-print-hidden="true" style={thStyle}>Szczegóły</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredContracts.map((contract, index) => (
                   <tr key={contract.id} style={rowStyle}>
-                    <Td strong>{index + 73}</Td>
+                    <Td strong>{contractRegisterOrdinal(index, filteredContracts.length)}</Td>
                     <Td strong>{contract.numer_umowy || "Bez numeru"}</Td>
                     <Td>{contract.nazwa_klienta}</Td>
                     <Td>{contract.nip || "-"}</Td>
                     <Td>{contract.siedziba || "-"}</Td>
                     <Td>{contract.crm_umowy?.numer_umowy || "Brak powiązania"}</Td>
                     <Td>{contract.zakres_powierzenia || "zgodnie z zawartą umową główną"}</Td>
-                    <Td><StatusBadge status={contract.status} /></Td>
+                    <Td>{formatDate(contract.podpisana_at)}</Td>
+                    <Td>{formatContractExpiration(contract.data_wygasniecia)}</Td>
+                    <td data-print-hidden="true" style={tdStyle}><StatusBadge status={contract.status} /></td>
                     <td data-print-hidden="true" style={tdStyle}><button style={secondaryButtonStyle} onClick={() => setSelectedContract(contract)}>Szczegóły</button></td>
                   </tr>
                 ))}
@@ -754,6 +760,7 @@ function RodoDrawer({ contract, clients, accountingContracts, profiles, onClose,
       siedziba: emptyToNull(draft.siedziba),
       nip: emptyToNull(draft.nip),
       reprezentant: emptyToNull(draft.reprezentant),
+      data_wygasniecia: emptyToNull(draft.data_wygasniecia),
       zakres_powierzenia: emptyToNull(draft.zakres_powierzenia),
       uwagi: emptyToNull(draft.uwagi),
       podpisana_at: draft.status === "podpisana" ? new Date().toISOString() : null,
@@ -927,6 +934,7 @@ function RodoDrawer({ contract, clients, accountingContracts, profiles, onClose,
             <EditableInput label="Siedziba" value={draft.siedziba} onChange={(value) => updateDraft("siedziba", value)} />
             <EditableInput label="NIP" value={draft.nip} onChange={(value) => updateDraft("nip", value)} />
             <EditableInput label="Reprezentant" value={draft.reprezentant} onChange={(value) => updateDraft("reprezentant", value)} />
+            <EditableInput label="Data wygaśnięcia" value={draft.data_wygasniecia} onChange={(value) => updateDraft("data_wygasniecia", value)} type="date" />
           </FormSection>
 
           <FormSection title="Zakres powierzenia">
@@ -992,6 +1000,7 @@ function createEmptyDraft(): RodoDraft {
     siedziba: "",
     nip: "",
     reprezentant: "",
+    data_wygasniecia: "",
     zakres_powierzenia: "Przetwarzanie danych osobowych w zakresie niezbędnym do świadczenia usług księgowych, podatkowych oraz kadrowo-płacowych.",
     uwagi: "",
   };
@@ -1007,6 +1016,7 @@ function createDraft(contract: RodoProcessingContract): RodoDraft {
     siedziba: contract.siedziba || "",
     nip: contract.nip || "",
     reprezentant: contract.reprezentant || "",
+    data_wygasniecia: contract.data_wygasniecia || "",
     zakres_powierzenia: contract.zakres_powierzenia || "",
     uwagi: contract.uwagi || "",
   };
@@ -1061,6 +1071,10 @@ function extractContractNumberParts(value: string | null) {
   };
 }
 
+function contractRegisterOrdinal(index: number, visibleCount: number) {
+  return RODO_CONTRACT_REGISTER_START + visibleCount - 1 - index;
+}
+
 function emptyToNull(value: string) {
   return value.trim() ? value.trim() : null;
 }
@@ -1094,6 +1108,10 @@ function formatDateTime(value: string | null | undefined) {
 function formatDate(value: string | null | undefined) {
   if (!value) return "-";
   return new Intl.DateTimeFormat("pl-PL", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(value));
+}
+
+function formatContractExpiration(value: string | null | undefined) {
+  return value ? formatDate(value) : "umowa trwa";
 }
 
 function formatTime(value: string | null | undefined) {
@@ -1192,7 +1210,7 @@ function FileRow({ label, fileName, onOpen, onDownload, onDelete, deleting }: { 
   );
 }
 
-function EditableInput({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (value: string) => void; type?: "text" | "email" }) {
+function EditableInput({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (value: string) => void; type?: "text" | "email" | "date" }) {
   return <label style={editableRowStyle}><span>{label}</span><input type={type} value={value} onChange={(event) => onChange(event.target.value)} style={inputStyle} /></label>;
 }
 

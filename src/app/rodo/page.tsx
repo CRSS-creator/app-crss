@@ -20,10 +20,12 @@ import {
   type RodoProcessingContractStatus,
 } from "@/lib/rodoProcessingContractService";
 import {
+  fetchRodoHistory,
   createRodoRegisterRecord,
   fetchRodoRegisterRecords,
   updateRodoRegisterRecord,
   type RodoAdditionalRegisterRecord,
+  type RodoHistoryEntry,
   type RodoRegisterKind,
   type RodoRegisterPayload,
 } from "@/lib/rodoRegistersService";
@@ -106,6 +108,26 @@ const STATUS_OPTIONS: { value: RodoProcessingContractStatus; label: string }[] =
 ];
 const STATUS_FILTER_OPTIONS = [{ value: "Wszystkie", label: "Wszystkie statusy" }, ...STATUS_OPTIONS];
 const RODO_CONTRACT_REGISTER_START = 73;
+const CONTRACT_HISTORY_FIELD_LABELS: Record<string, string> = {
+  klient_id: "Klient",
+  umowa_ksiegowa_id: "Umowa księgowa",
+  status: "Status",
+  numer_umowy: "Numer umowy",
+  nazwa_klienta: "Nazwa klienta",
+  siedziba: "Siedziba",
+  nip: "NIP",
+  reprezentant: "Reprezentant",
+  email_klienta: "Email klienta",
+  zakres_powierzenia: "Zakres powierzenia",
+  uwagi: "Uwagi",
+  wygenerowany_pdf_path: "Wygenerowany PDF",
+  wygenerowany_pdf_name: "Nazwa wygenerowanego PDF",
+  podpisany_pdf_path: "Podpisany PDF",
+  podpisany_pdf_name: "Nazwa podpisanego PDF",
+  podpisana_at: "Data podpisania",
+  data_wygasniecia: "Data wygaśnięcia",
+  created_by: "Utworzył",
+};
 
 const RODO_REGISTER_TABS: { value: ActiveRodoRegister; label: string }[] = [
   { value: "contracts", label: "Umowy powierzenia" },
@@ -450,6 +472,7 @@ function RodoContent() {
 
 function RodoAdditionalRegister({ definition, currentUserName }: { definition: RegisterDefinition; currentUserName: string }) {
   const [records, setRecords] = useState<RodoAdditionalRegisterRecord[]>([]);
+  const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("Wszystkie");
   const [search, setSearch] = useState("");
@@ -465,12 +488,21 @@ function RodoAdditionalRegister({ definition, currentUserName }: { definition: R
 
   async function loadRecords() {
     setLoading(true);
-    const result = await fetchRodoRegisterRecords(definition.kind);
-    if (result.error) {
-      console.error("Blad pobierania rejestru RODO:", result.error);
+    const [recordsResult, profilesResult] = await Promise.all([
+      fetchRodoRegisterRecords(definition.kind),
+      fetchRodoProfiles(),
+    ]);
+    if (recordsResult.error) {
+      console.error("Blad pobierania rejestru RODO:", recordsResult.error);
       setRecords([]);
     } else {
-      setRecords((result.data || []) as RodoAdditionalRegisterRecord[]);
+      setRecords((recordsResult.data || []) as RodoAdditionalRegisterRecord[]);
+    }
+    if (profilesResult.error) {
+      console.error("Blad pobierania uzytkownikow do historii RODO:", profilesResult.error);
+      setProfiles([]);
+    } else {
+      setProfiles((profilesResult.data || []) as UserProfile[]);
     }
     setLoading(false);
   }
@@ -577,6 +609,7 @@ function RodoAdditionalRegister({ definition, currentUserName }: { definition: R
         <RodoRegisterDrawer
           definition={definition}
           record={selectedRecord}
+          profiles={profiles}
           onClose={() => {
             setCreatingRecord(false);
             setSelectedRecord(null);
@@ -588,9 +621,26 @@ function RodoAdditionalRegister({ definition, currentUserName }: { definition: R
   );
 }
 
-function RodoRegisterDrawer({ definition, record, onClose, onSaved }: { definition: RegisterDefinition; record: RodoAdditionalRegisterRecord | null; onClose: () => void; onSaved: (record: RodoAdditionalRegisterRecord) => void }) {
+function RodoRegisterDrawer({ definition, record, profiles, onClose, onSaved }: { definition: RegisterDefinition; record: RodoAdditionalRegisterRecord | null; profiles: UserProfile[]; onClose: () => void; onSaved: (record: RodoAdditionalRegisterRecord) => void }) {
   const [draft, setDraft] = useState<RodoRegisterPayload>(() => createRegisterDraft(definition, record));
+  const [history, setHistory] = useState<RodoHistoryEntry[]>([]);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!record) {
+      return;
+    }
+
+    fetchRodoHistory(definition.kind, record.id)
+      .then((result) => {
+        if (result.error) {
+          console.error("Blad pobierania historii RODO:", result.error);
+          setHistory([]);
+        } else {
+          setHistory((result.data || []) as RodoHistoryEntry[]);
+        }
+      });
+  }, [definition.kind, record]);
 
   function updateDraft(key: string, value: string) {
     setDraft((current) => ({ ...current, [key]: value }));
@@ -648,7 +698,11 @@ function RodoRegisterDrawer({ definition, record, onClose, onSaved }: { definiti
 
           {record && (
             <FormSection title="Historia">
-              <div style={auditBoxStyle}>Wpis utworzono {formatDateTime(record.created_at)}. Ostatnia zmiana: {formatDateTime(record.updated_at)}.</div>
+              <RodoHistoryList
+                entries={history}
+                profiles={profiles}
+                fieldLabels={registerHistoryFieldLabels(definition)}
+              />
             </FormSection>
           )}
         </div>
@@ -695,6 +749,7 @@ function RegisterFieldControl({ field, value, onChange }: { field: RegisterField
 function RodoDrawer({ contract, clients, accountingContracts, profiles, onClose, onSaved }: { contract: RodoProcessingContract | null; clients: Client[]; accountingContracts: CrmContract[]; profiles: UserProfile[]; onClose: () => void; onSaved: (contract: RodoProcessingContract) => void }) {
   const signedPdfInputRef = useRef<HTMLInputElement | null>(null);
   const [draft, setDraft] = useState<RodoDraft>(() => contract ? createDraft(contract) : createEmptyDraft());
+  const [history, setHistory] = useState<RodoHistoryEntry[]>([]);
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [deletingPdf, setDeletingPdf] = useState(false);
@@ -721,6 +776,22 @@ function RodoDrawer({ contract, clients, accountingContracts, profiles, onClose,
       description: [client.nip, client.email].filter(Boolean).join(" · "),
     }));
   }, [clients]);
+
+  useEffect(() => {
+    if (!contract) {
+      return;
+    }
+
+    fetchRodoHistory("contracts", contract.id)
+      .then((result) => {
+        if (result.error) {
+          console.error("Blad pobierania historii umowy RODO:", result.error);
+          setHistory([]);
+        } else {
+          setHistory((result.data || []) as RodoHistoryEntry[]);
+        }
+      });
+  }, [contract]);
 
   function updateDraft<K extends keyof RodoDraft>(key: K, value: RodoDraft[K]) {
     setDraft((current) => ({ ...current, [key]: value }));
@@ -975,11 +1046,7 @@ function RodoDrawer({ contract, clients, accountingContracts, profiles, onClose,
 
           {contract && (
             <FormSection title="Historia">
-              <div style={auditBoxStyle}>{contractAuditDescription(contract, profiles)}</div>
-              <div style={auditMetaStyle}>
-                <span>Utworzono: {formatDateTime(contract.created_at)}</span>
-                <span>Ostatnia zmiana: {formatDateTime(contract.updated_at)}</span>
-              </div>
+              <RodoHistoryList entries={history} profiles={profiles} fieldLabels={CONTRACT_HISTORY_FIELD_LABELS} />
             </FormSection>
           )}
 
@@ -1101,11 +1168,6 @@ function statusLabel(status: RodoProcessingContractStatus) {
   return STATUS_OPTIONS.find((item) => item.value === status)?.label || status;
 }
 
-function contractAuditDescription(contract: RodoProcessingContract, profiles: UserProfile[]) {
-  const userName = profileName(contract.created_by, profiles);
-  return `Użytkownik ${userName} dodał umowę w dniu ${formatDate(contract.created_at)} o godzinie ${formatTime(contract.created_at)}.`;
-}
-
 function profileName(profileId: string | null, profiles: UserProfile[]) {
   if (!profileId) return "brak zapisanego autora";
   const profile = profiles.find((item) => item.id === profileId);
@@ -1130,11 +1192,6 @@ function formatDate(value: string | null | undefined) {
 
 function formatContractExpiration(value: string | null | undefined) {
   return value ? formatDate(value) : "umowa trwa";
-}
-
-function formatTime(value: string | null | undefined) {
-  if (!value) return "-";
-  return new Intl.DateTimeFormat("pl-PL", { hour: "2-digit", minute: "2-digit" }).format(new Date(value));
 }
 
 function formatPrintDateTime(value: string | null | undefined) {
@@ -1202,6 +1259,61 @@ function StatusBadge({ status }: { status: RodoProcessingContractStatus }) {
     anulowana: { background: "#fee2e2", color: "#b91c1c" },
   };
   return <span style={{ ...badgeStyle, ...palette[status] }}>{statusLabel(status)}</span>;
+}
+
+function RodoHistoryList({ entries, profiles, fieldLabels }: { entries: RodoHistoryEntry[]; profiles: UserProfile[]; fieldLabels: Record<string, string> }) {
+  if (entries.length === 0) return <div style={emptyStyle}>Brak historii dla tego wpisu.</div>;
+
+  return (
+    <div style={historyListStyle}>
+      {entries.map((entry) => {
+        const changes = Array.isArray(entry.changed_fields) ? entry.changed_fields : [];
+        return (
+          <article key={entry.id} style={historyEntryStyle}>
+            <div style={historyHeaderStyle}>
+              <strong>{entry.action === "created" ? "Utworzono wpis" : "Zaktualizowano wpis"}</strong>
+              <span>{formatDateTime(entry.created_at)}</span>
+            </div>
+            <div style={historyUserStyle}>Użytkownik: {profileName(entry.changed_by, profiles)}</div>
+            {entry.action === "created" ? (
+              <div style={historyDescriptionStyle}>Zapis początkowy wpisu w rejestrze.</div>
+            ) : changes.length === 0 ? (
+              <div style={historyDescriptionStyle}>Zapisano zmianę bez różnic w polach rejestrowych.</div>
+            ) : (
+              <div style={historyChangesStyle}>
+                {changes.map((change) => (
+                  <div key={`${entry.id}-${change.field}`} style={historyChangeStyle}>
+                    <span>{fieldLabels[change.field] || change.field}</span>
+                    <small>{formatHistoryValue(change.old)} → {formatHistoryValue(change.new)}</small>
+                  </div>
+                ))}
+              </div>
+            )}
+          </article>
+        );
+      })}
+    </div>
+  );
+}
+
+function registerHistoryFieldLabels(definition: RegisterDefinition) {
+  return [...definition.fields, ...definition.columns].reduce<Record<string, string>>((labels, field) => {
+    labels[field.key] = field.label;
+    return labels;
+  }, {
+    created_by: "Utworzył",
+  });
+}
+
+function formatHistoryValue(value: unknown) {
+  if (value === null || value === undefined || value === "") return "puste";
+  if (typeof value === "string") {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return formatDate(value);
+    if (/^\d{4}-\d{2}-\d{2}T/.test(value)) return formatDateTime(value);
+    return value;
+  }
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return JSON.stringify(value);
 }
 
 function RegisterStatusBadge({ value, label }: { value: string; label: string }) {
@@ -1422,5 +1534,10 @@ const fileRowStyle: CSSProperties = { border: `1px solid ${colors.border}`, bord
 const fileInfoStyle: CSSProperties = { display: "flex", flexWrap: "wrap", gap: "4px", alignItems: "baseline", minWidth: 0 };
 const fileActionsStyle: CSSProperties = { display: "flex", gap: "8px", alignItems: "center", flexShrink: 0 };
 const uploadRowStyle: CSSProperties = { display: "flex", justifyContent: "flex-end", marginBottom: "10px" };
-const auditBoxStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "13px 14px", color: colors.text, fontWeight: 750, lineHeight: 1.55 };
-const auditMetaStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "6px", marginTop: "10px", color: colors.muted, fontSize: "13px", fontWeight: 700 };
+const historyListStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "10px" };
+const historyEntryStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "13px 14px", color: colors.text, lineHeight: 1.45 };
+const historyHeaderStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "baseline", color: colors.navy, fontWeight: 850, fontSize: "13px" };
+const historyUserStyle: CSSProperties = { marginTop: "5px", color: colors.muted, fontSize: "13px", fontWeight: 700 };
+const historyDescriptionStyle: CSSProperties = { marginTop: "8px", color: colors.text, fontSize: "13px", fontWeight: 650 };
+const historyChangesStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "6px", marginTop: "10px" };
+const historyChangeStyle: CSSProperties = { display: "grid", gridTemplateColumns: "150px 1fr", gap: "10px", borderTop: `1px solid ${colors.border}`, paddingTop: "7px", color: colors.muted, fontSize: "12px", fontWeight: 750 };

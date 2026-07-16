@@ -1,6 +1,25 @@
 import { supabase } from "@/lib/supabaseClient";
 
 export type RodoRegisterKind = "changes" | "incidents" | "authorizedPersons";
+export type RodoHistoryKind = RodoRegisterKind | "contracts";
+
+export type RodoHistoryChange = {
+  field: string;
+  old: unknown;
+  new: unknown;
+};
+
+export type RodoHistoryEntry = {
+  id: string;
+  record_kind: RodoHistoryKind;
+  record_id: string;
+  action: "created" | "updated";
+  changed_by: string | null;
+  changed_fields: RodoHistoryChange[];
+  old_data: Record<string, unknown> | null;
+  new_data: Record<string, unknown> | null;
+  created_at: string;
+};
 
 export type RodoRegisterBaseRecord = {
   id: string;
@@ -73,6 +92,15 @@ export async function fetchRodoRegisterRecords(kind: RodoRegisterKind) {
   return supabase
     .from(REGISTER_TABLES[kind])
     .select("*")
+    .order("created_at", { ascending: false });
+}
+
+export async function fetchRodoHistory(kind: RodoHistoryKind, recordId: string) {
+  return supabase
+    .from("rodo_historia")
+    .select("*")
+    .eq("record_kind", kind)
+    .eq("record_id", recordId)
     .order("created_at", { ascending: false });
 }
 

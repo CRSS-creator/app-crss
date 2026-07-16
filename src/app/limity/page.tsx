@@ -201,7 +201,10 @@ function LimitDetails({ row, year, onSaved }: { row: LimitRow; year: number; onS
   const [annualLimit, setAnnualLimit] = useState(String(toNumber(row.register.limit_roczny)));
   const [notes, setNotes] = useState(row.register.uwagi || "");
   const [monthValues, setMonthValues] = useState<Record<number, string>>(() => monthValueMap(row.monthly));
+  const [businessStartDate, setBusinessStartDate] = useState(`${year}-01-01`);
   const [saving, setSaving] = useState(false);
+  const proportionalBase = proportionalLimitBase(row.register.typ);
+  const proportionalResult = proportionalBase ? calculateProportionalLimit(proportionalBase, businessStartDate, year) : null;
 
   async function saveDetails() {
     setSaving(true);
@@ -253,6 +256,22 @@ function LimitDetails({ row, year, onSaved }: { row: LimitRow; year: number; onS
             <input value={notes} onChange={(event) => setNotes(event.target.value)} style={inputStyle} />
           </label>
         </div>
+
+        {proportionalBase && proportionalResult && (
+          <div style={proportionalBoxStyle}>
+            <label style={fieldStyle}>
+              <span style={fieldLabelStyle}>Rozpoczęcie działalności w roku</span>
+              <input type="date" value={businessStartDate} onChange={(event) => setBusinessStartDate(event.target.value)} style={inputStyle} />
+            </label>
+            <div style={proportionalInfoStyle}>
+              <strong>{formatMoney(proportionalResult.amount)}</strong>
+              <span>{proportionalBase.toLocaleString("pl-PL")} zł / 365 × {proportionalResult.days} dni</span>
+            </div>
+            <button type="button" onClick={() => setAnnualLimit(String(proportionalResult.amount.toFixed(2)))} style={secondaryButtonStyle}>
+              Ustaw wyliczony limit
+            </button>
+          </div>
+        )}
 
         <div style={monthGridStyle}>
           {MONTHS.map((monthName, index) => {
@@ -340,6 +359,30 @@ function parseAmount(value: string) {
   return toNumber(value);
 }
 
+function proportionalLimitBase(type: LimitType) {
+  if (type === "vat") return 240000;
+  if (type === "kasa_fiskalna") return 20000;
+  return null;
+}
+
+function calculateProportionalLimit(base: number, startDate: string, year: number) {
+  const start = new Date(`${startDate}T00:00:00`);
+  const yearStart = new Date(`${year}-01-01T00:00:00`);
+  const yearEnd = new Date(`${year}-12-31T00:00:00`);
+
+  if (Number.isNaN(start.getTime())) return { days: 365, amount: base };
+
+  const effectiveStart = start < yearStart ? yearStart : start > yearEnd ? yearEnd : start;
+  const millisecondsPerDay = 24 * 60 * 60 * 1000;
+  const days = Math.floor((yearEnd.getTime() - effectiveStart.getTime()) / millisecondsPerDay) + 1;
+  const amount = Math.round(((base / 365) * days) * 100) / 100;
+  return { days, amount };
+}
+
+function formatMoney(value: number) {
+  return value.toLocaleString("pl-PL", { style: "currency", currency: "PLN" });
+}
+
 function progressColor(percent: number) {
   if (percent >= 100) return colors.danger;
   if (percent >= 80) return colors.warning;
@@ -380,5 +423,8 @@ const annualGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "
 const fieldStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "8px" };
 const fieldLabelStyle: CSSProperties = { color: colors.muted, fontSize: "12px", fontWeight: 850, textTransform: "uppercase" };
 const inputStyle: CSSProperties = { minHeight: "42px", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.text, padding: "0 12px", fontSize: "14px", fontWeight: 750 };
+const proportionalBoxStyle: CSSProperties = { display: "grid", gridTemplateColumns: "220px 1fr auto", gap: "12px", alignItems: "end", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.inputBackground, padding: "14px" };
+const proportionalInfoStyle: CSSProperties = { minHeight: "42px", display: "flex", flexDirection: "column", justifyContent: "center", gap: "4px", color: colors.muted, fontSize: "12px", fontWeight: 800 };
+const secondaryButtonStyle: CSSProperties = { minHeight: "42px", padding: "0 14px", borderRadius: radius.button, border: `1px solid ${colors.border}`, background: colors.white, color: colors.navy, fontWeight: 850, cursor: "pointer" };
 const monthGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "12px" };
 const monthFieldStyle: CSSProperties = { ...fieldStyle, border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.inputBackground, padding: "12px" };

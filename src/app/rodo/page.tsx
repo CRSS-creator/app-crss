@@ -227,14 +227,14 @@ const REGISTER_DEFINITIONS: Record<RodoRegisterKind, RegisterDefinition> = {
     dateField: "data_nadania",
     statusOptions: AUTHORIZED_PERSON_STATUS_OPTIONS,
     columns: [
-      { key: "numer_upowaznienia", label: "Nr upoważnienia", width: "13%" },
-      { key: "imie_nazwisko", label: "Imię i nazwisko", width: "16%" },
-      { key: "rola_stanowisko", label: "Rola / stanowisko", width: "14%" },
-      { key: "zakres_upowaznienia", label: "Zakres", width: "19%" },
+      { key: "numer_upowaznienia", label: "Nr upoważnienia", width: "10%" },
+      { key: "imie_nazwisko", label: "Imię i nazwisko", width: "13%" },
+      { key: "rola_stanowisko", label: "Rola / stanowisko", width: "12%" },
+      { key: "zakres_upowaznienia", label: "Zakres", width: "23%" },
       { key: "systemy_obszary", label: "Systemy / obszary", width: "16%" },
-      { key: "data_nadania", label: "Nadanie", width: "9%", format: formatDate },
-      { key: "data_cofniecia", label: "Cofnięcie", width: "9%", format: formatDate },
-      { key: "status", label: "Status", width: "9%", format: (value) => optionLabel(AUTHORIZED_PERSON_STATUS_OPTIONS, value) },
+      { key: "data_nadania", label: "Nadanie", width: "8%", format: formatDate },
+      { key: "data_cofniecia", label: "Cofnięcie", width: "8%", format: formatDate },
+      { key: "status", label: "Status", width: "7%", format: (value) => optionLabel(AUTHORIZED_PERSON_STATUS_OPTIONS, value) },
     ],
     fields: [
       { key: "numer_upowaznienia", label: "Numer upoważnienia" },
@@ -532,7 +532,12 @@ function RodoAdditionalRegister({ definition, currentUserName }: { definition: R
 
         {loading ? <div style={emptyStyle}>Ładowanie rejestru...</div> : filteredRecords.length === 0 ? <div style={emptyStyle}>{definition.emptyLabel}</div> : (
           <div style={tableWrapperStyle}>
-            <table style={tableStyle}>
+            <table data-rodo-register-kind={definition.kind} style={tableStyle}>
+              <colgroup>
+                <col style={{ width: "4%" }} />
+                {definition.columns.map((column) => <col key={column.key} style={{ width: column.width }} />)}
+                <col data-print-hidden="true" style={{ width: "10%" }} />
+              </colgroup>
               <thead>
                 <tr>
                   <Th>Lp.</Th>

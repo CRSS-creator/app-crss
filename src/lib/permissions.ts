@@ -28,7 +28,7 @@ const moduleAccess: Record<AppModule, string[]> = {
   rozliczenia: ["owner", "manager", "admin", "accountant"],
   komunikaty: ["owner", "manager", "admin", "accountant"],
   kadry: ["owner", "manager", "admin", "accountant"],
-  limity: ["owner", "manager", "admin"],
+  limity: ["owner", "manager", "admin", "accountant"],
   onboarding: ["owner", "manager", "admin", "accountant"],
   "zamykanie-roku": ["owner", "manager", "admin"],
   crm: ["owner", "admin", "handlowiec"],

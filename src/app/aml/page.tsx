@@ -294,7 +294,7 @@ function AmlDetailsModal({
                     </div>
                     <strong style={historyActionStyle}>{historyActionLabel(entry.akcja)}</strong>
                     <p style={historyDescriptionStyle}>{entry.opis}</p>
-                    <pre style={changesStyle}>{formatChanges(entry.zmiany)}</pre>
+                    <div style={changesStyle}>{formatChanges(entry.zmiany)}</div>
                   </div>
                 </div>
               ))}
@@ -434,6 +434,7 @@ function verificationResultLabel(result: string) {
 
 function sourceStatusLabel(status: string) {
   if (status === "ok") return "OK";
+  if (status === "confirmed") return "Potwierdzono";
   if (status === "warning") return "Uwaga";
   if (status === "error") return "Błąd";
   if (status === "skipped") return "Do dopięcia";
@@ -462,8 +463,39 @@ function formatDate(value: string | null | undefined) {
 }
 
 function formatChanges(value: Record<string, unknown>) {
-  if (!value || Object.keys(value).length === 0) return "Brak szczegółów zmian.";
-  return JSON.stringify(value, null, 2);
+  if (!value || Object.keys(value).length === 0) return <p style={changeLineStyle}>Brak szczegółów zmian.</p>;
+
+  const sources = Array.isArray(value.sources) ? value.sources as Array<Record<string, unknown>> : [];
+  const result = value.wynik ? String(value.wynik) : "";
+  const status = value.status ? String(value.status) : "";
+  const hasPdf = Boolean(value.pdf_path);
+
+  return (
+    <div style={changeListStyle}>
+      {result && <p style={changeLineStyle}><strong>Wynik:</strong> {verificationResultLabel(result)}</p>}
+      {status && <p style={changeLineStyle}><strong>Status wpisu:</strong> {registerStatusText(status)}</p>}
+      {sources.length > 0 && (
+        <div style={changeSourcesStyle}>
+          <strong>Sprawdzone źródła:</strong>
+          <ul style={changeSourceListStyle}>
+            {sources.map((source, index) => (
+              <li key={index}>
+                {String(source.source || "Źródło")} - {sourceStatusLabel(String(source.status || ""))}
+                {source.label ? `: ${String(source.label)}` : ""}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {hasPdf && <p style={changeLineStyle}><strong>Raport PDF:</strong> zapisany przy weryfikacji.</p>}
+    </div>
+  );
+}
+
+function registerStatusText(status: string) {
+  if (status === "zweryfikowano_automatycznie") return "Zweryfikowano automatycznie";
+  if (status === "wymaga_analizy") return "Wymaga analizy";
+  return status.replace(/_/g, " ");
 }
 
 function stageBadgeStyle(stage: OnboardingStageRecord | null): CSSProperties {
@@ -483,6 +515,7 @@ function registerBadgeStyle(register: AmlRegisterRecord | null): CSSProperties {
 
 function sourceBadgeStyle(status: string): CSSProperties {
   if (status === "ok") return { ...sourceBadgeBaseStyle, background: "rgba(22, 163, 74, 0.12)", color: colors.success };
+  if (status === "confirmed") return { ...sourceBadgeBaseStyle, background: "rgba(22, 163, 74, 0.12)", color: colors.success };
   if (status === "warning") return { ...sourceBadgeBaseStyle, background: "rgba(245, 158, 11, 0.14)", color: "#9a5b00" };
   if (status === "error") return { ...sourceBadgeBaseStyle, background: "rgba(220, 38, 38, 0.12)", color: colors.danger };
   return { ...sourceBadgeBaseStyle, background: "rgba(100, 116, 139, 0.12)", color: colors.muted };
@@ -593,4 +626,8 @@ const historyIconStyle: CSSProperties = { width: "34px", height: "34px", borderR
 const historyMetaStyle: CSSProperties = { color: colors.muted, fontSize: "12px", fontWeight: 800 };
 const historyActionStyle: CSSProperties = { display: "block", marginTop: "4px", color: colors.navy };
 const historyDescriptionStyle: CSSProperties = { margin: "6px 0 8px", color: colors.text, lineHeight: 1.5 };
-const changesStyle: CSSProperties = { margin: 0, padding: "10px", borderRadius: radius.button, background: colors.inputBackground, color: colors.muted, fontSize: "12px", overflowX: "auto", whiteSpace: "pre-wrap" };
+const changesStyle: CSSProperties = { margin: 0, padding: "12px", borderRadius: radius.button, background: colors.inputBackground, color: colors.muted, fontSize: "13px" };
+const changeListStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "8px" };
+const changeLineStyle: CSSProperties = { margin: 0, lineHeight: 1.45 };
+const changeSourcesStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "6px", lineHeight: 1.45 };
+const changeSourceListStyle: CSSProperties = { margin: 0, paddingLeft: "18px" };

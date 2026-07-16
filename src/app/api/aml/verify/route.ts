@@ -25,7 +25,7 @@ type AuthorizedUser = {
 
 type OfficialCheck = {
   source: string;
-  status: "ok" | "warning" | "error" | "skipped";
+  status: "ok" | "warning" | "error" | "skipped" | "confirmed";
   label: string;
   details: Record<string, unknown>;
 };
@@ -61,15 +61,18 @@ export async function POST(request: NextRequest) {
   const checksVies = Boolean(client.vat_ue);
   const vatCheck = checksVat
     ? await verifyVatWhitelist(nip)
-    : skippedCheck("Biała Lista VAT MF", "Pominięto, bo klient jest oznaczony jako zwolniony z VAT.");
-  if (checksVat) checks.push(vatCheck);
+    : confirmedCheck("Status VAT", "Weryfikacja potwierdzona: klient jest oznaczony w aplikacji jako zwolniony z VAT.");
+  checks.push(vatCheck);
 
   const vatSubject = getVatSubject(vatCheck);
   const krsNumber = normalizeKrs(String(vatSubject?.krs || ""));
   const regonNumber = String(vatSubject?.regon || "").trim() || null;
   const requestId = String((vatCheck.details as { requestId?: unknown }).requestId || "").trim() || null;
 
-  if (checksVies) checks.push(await verifyVies(nip));
+  checks.push(checksVies
+    ? await verifyVies(nip)
+    : confirmedCheck("VAT-UE", "Weryfikacja potwierdzona: klient nie jest oznaczony jako podatnik VAT-UE.")
+  );
   checks.push(krsNumber ? await verifyKrs(krsNumber) : skippedCheck("KRS", "Brak numeru KRS w danych z Białej Listy VAT."));
   checks.push(skippedCheck("CEIDG", "Oficjalne API CEIDG wymaga skonfigurowanego dostępu. Źródło przygotowane do dopięcia po dodaniu klucza."));
   checks.push(skippedCheck("GUS REGON", "Oficjalne API GUS BIR wymaga klucza API. Źródło przygotowane do dopięcia po dodaniu klucza."));
@@ -109,8 +112,8 @@ export async function POST(request: NextRequest) {
       wynik: result,
       zrodla: checks.map((check) => ({ source: check.source, status: check.status, label: check.label })),
       dane: { checks },
-      vat_status: checksVat ? (vatCheck.status === "ok" ? String(vatSubject?.statusVat || "sprawdzono") : vatCheck.status) : "nie_dotyczy",
-      vies_status: checksVies ? statusForSource(checks, "VIES") : "nie_dotyczy",
+      vat_status: checksVat ? (vatCheck.status === "ok" ? String(vatSubject?.statusVat || "sprawdzono") : vatCheck.status) : "potwierdzono_zwolnienie",
+      vies_status: checksVies ? statusForSource(checks, "VIES") : "potwierdzono_brak_vat_ue",
       krs_status: statusForSource(checks, "KRS"),
       pep_status: "do_weryfikacji_formularzem",
       sankcje_status: "do_dopiecia",
@@ -150,7 +153,7 @@ export async function POST(request: NextRequest) {
     zmiany: {
       status: nextStatus,
       wynik: result,
-      sources: checks.map((check) => ({ source: check.source, status: check.status })),
+      sources: checks.map((check) => ({ source: check.source, status: check.status, label: check.label })),
       pdf_path: storagePath,
     },
     created_by: auth.requesterId,
@@ -311,6 +314,10 @@ function skippedCheck(source: string, label: string): OfficialCheck {
   return { source, status: "skipped", label, details: { checkedAt: new Date().toISOString() } };
 }
 
+function confirmedCheck(source: string, label: string): OfficialCheck {
+  return { source, status: "confirmed", label, details: { checkedAt: new Date().toISOString() } };
+}
+
 function summarizeResult(checks: OfficialCheck[]) {
   if (checks.some((check) => check.status === "error")) return "wymaga_analizy";
   if (checks.some((check) => check.status === "warning")) return "wymaga_analizy";
@@ -462,6 +469,7 @@ function resultLabel(result: string) {
 
 function statusLabel(status: OfficialCheck["status"]) {
   if (status === "ok") return "OK";
+  if (status === "confirmed") return "POTWIERDZONO";
   if (status === "warning") return "UWAGA";
   if (status === "error") return "BŁĄD";
   return "POMINIĘTO";
@@ -469,6 +477,7 @@ function statusLabel(status: OfficialCheck["status"]) {
 
 function statusColor(status: OfficialCheck["status"]) {
   if (status === "ok") return rgb(0.09, 0.55, 0.25);
+  if (status === "confirmed") return rgb(0.09, 0.55, 0.25);
   if (status === "warning") return rgb(0.73, 0.42, 0);
   if (status === "error") return rgb(0.78, 0.10, 0.10);
   return rgb(0.32, 0.38, 0.5);

@@ -95,6 +95,7 @@ export async function POST(request: NextRequest) {
         if (Date.now() - startedAt > 20000) break;
         try {
           if (!isInvoiceDateInRange(invoice, range.dateFrom, range.dateTo)) continue;
+          if (isCorrectionInvoice(invoice)) continue;
           const savedId = await saveImportedInvoice(auth.admin, invoice, clients);
           if (savedId) imported.push(savedId);
         } catch (error) {
@@ -175,7 +176,7 @@ async function saveImportedInvoice(
   const payload = {
     klient_id: client?.id || null,
     numer: stringify(invoice.fullnumber || invoice.number),
-    typ: invoice.type === "correction" ? "korekta" : "sprzedaz",
+    typ: "sprzedaz",
     status: PAID_VALUES.has(paymentState) ? "oplacona" : "wystawiona",
     kategoria: "standardowa",
     zrodlo: "wfirma",
@@ -225,7 +226,11 @@ function resolveContractorInfo(invoice: WfirmaInvoice, clients: ClientMatch[]): 
 }
 
 function contractorCandidates(value: unknown, path: string[] = []): ContractorInfo[] {
-  return scoredContractorCandidates(value, path).map(({ score: _score, ...candidate }) => candidate);
+  return scoredContractorCandidates(value, path).map((candidate) => ({
+    name: candidate.name,
+    nip: candidate.nip,
+    email: candidate.email,
+  }));
 }
 
 function scoredContractorCandidates(value: unknown, path: string[] = []): ScoredContractorInfo[] {
@@ -340,6 +345,12 @@ function addDays(value: string, days: number) {
 function isInvoiceDateInRange(invoice: WfirmaInvoice, dateFrom: string, dateTo: string) {
   const invoiceDate = dateOnly(invoice.date);
   return Boolean(invoiceDate && invoiceDate >= dateFrom && invoiceDate <= dateTo);
+}
+
+function isCorrectionInvoice(invoice: WfirmaInvoice) {
+  const type = normalizeText(invoice.type);
+  const number = stringify(invoice.fullnumber || invoice.number).toUpperCase();
+  return type.includes("correction") || type.includes("korekt") || number.startsWith("FK");
 }
 
 function numberValue(value: unknown) {

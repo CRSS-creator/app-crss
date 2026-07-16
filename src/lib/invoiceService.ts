@@ -155,6 +155,7 @@ export async function fetchInvoices() {
   return supabase
     .from("faktury")
     .select(INVOICE_SELECT)
+    .neq("typ", "korekta")
     .order("data_wystawienia", { ascending: false, nullsFirst: true })
     .order("created_at", { ascending: false })
     .range(0, 4999);

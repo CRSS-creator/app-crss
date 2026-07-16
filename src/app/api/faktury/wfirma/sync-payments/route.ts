@@ -210,6 +210,7 @@ async function loadWfirmaInvoicesById(
       });
       const wfirmaInvoices = extractWfirmaInvoices(response);
       for (const invoice of wfirmaInvoices) {
+        if (isCorrectionInvoice(invoice)) continue;
         const id = stringify(invoice.id);
         if (id) invoicesById.set(id, invoice);
       }
@@ -262,6 +263,12 @@ function findMatchingFinalWfirmaInvoice(invoice: InvoiceRow, candidates: WfirmaI
 function isDraftInvoiceNumber(invoice: WfirmaInvoice) {
   const number = stringify(invoice.fullnumber || invoice.number).toUpperCase();
   return number.startsWith("WRF");
+}
+
+function isCorrectionInvoice(invoice: WfirmaInvoice) {
+  const type = normalizeText(invoice.type);
+  const number = stringify(invoice.fullnumber || invoice.number).toUpperCase();
+  return type.includes("correction") || type.includes("korekt") || number.startsWith("FK");
 }
 
 function wfirmaInvoiceContractorNip(invoice: WfirmaInvoice) {

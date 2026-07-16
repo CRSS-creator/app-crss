@@ -61,6 +61,7 @@ function LimitsContent() {
   const [registers, setRegisters] = useState<LimitRegisterRecord[]>([]);
   const [monthlyRecords, setMonthlyRecords] = useState<LimitMonthlyRecord[]>([]);
   const [detailsRegisterId, setDetailsRegisterId] = useState<string | null>(null);
+  const [showBulkModal, setShowBulkModal] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [clientToAdd, setClientToAdd] = useState("");
   const [clientAddSearch, setClientAddSearch] = useState("");
@@ -128,9 +129,14 @@ function LimitsContent() {
           <p style={eyebrowStyle}>Limity</p>
           <h1 style={titleStyle}>Rejestry limitów klientów</h1>
         </div>
-        <div style={yearBoxStyle}>
-          <span style={yearLabelStyle}>Rok</span>
-          <input type="number" value={year} onChange={(event) => setYear(Number(event.target.value) || currentYear)} style={yearInputStyle} />
+        <div style={headerActionsStyle}>
+          <div style={yearBoxStyle}>
+            <span style={yearLabelStyle}>Rok</span>
+            <input type="number" value={year} onChange={(event) => setYear(Number(event.target.value) || currentYear)} style={yearInputStyle} />
+          </div>
+          <button type="button" onClick={() => setShowBulkModal(true)} style={primaryButtonStyle}>
+            Wpis zbiorczy
+          </button>
         </div>
       </header>
 
@@ -264,6 +270,111 @@ function LimitsContent() {
           onSaved={() => void loadData()}
         />
       )}
+
+      {showBulkModal && (
+        <BulkMonthlyEntryModal
+          rows={rows}
+          year={year}
+          type={activeType}
+          onClose={() => setShowBulkModal(false)}
+          onSaved={() => void loadData()}
+        />
+      )}
+    </div>
+  );
+}
+
+function BulkMonthlyEntryModal({ rows, year, type, onClose, onSaved }: { rows: LimitRow[]; year: number; type: LimitType; onClose: () => void; onSaved: () => void }) {
+  const caregiverOptions = useMemo(() => buildCaregiverOptions(rows), [rows]);
+  const now = new Date();
+  const currentMonth = now.getFullYear() === year ? now.getMonth() + 1 : 1;
+  const [caregiverKeyValue, setCaregiverKeyValue] = useState(caregiverOptions[0]?.key || "");
+  const [month, setMonth] = useState(currentMonth);
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const selectedRows = useMemo(() => rows.filter((row) => caregiverKey(row.client) === caregiverKeyValue), [rows, caregiverKeyValue]);
+
+  async function saveBulkEntries() {
+    setSaving(true);
+
+    for (const row of selectedRows) {
+      const value = bulkMonthlyValue(row, month, values);
+      if (!hasTypedMonthlyValue(value)) continue;
+
+      const result = await upsertMonthlyLimitAmount(row.register.id, year, month, parseAmount(value));
+      if (result.error) {
+        setSaving(false);
+        alert(result.error.message);
+        return;
+      }
+    }
+
+    setSaving(false);
+    onSaved();
+    onClose();
+  }
+
+  return (
+    <div style={modalBackdropStyle}>
+      <section style={wideModalStyle}>
+        <div style={modalHeaderStyle}>
+          <div>
+            <h2 style={sectionTitleStyle}>Wpis zbiorczy</h2>
+            <p style={sectionHintStyle}>{activeTabLabel(type)} · {year} · klienci wybranego opiekuna</p>
+          </div>
+          <div style={modalActionsStyle}>
+            <button type="button" onClick={() => void saveBulkEntries()} disabled={saving || selectedRows.length === 0} style={primaryButtonStyle}>
+              <Save size={18} /> {saving ? "Zapisywanie..." : "Zapisz wpisy"}
+            </button>
+            <button type="button" onClick={onClose} style={iconButtonStyle} aria-label="Zamknij">
+              <X size={20} />
+            </button>
+          </div>
+        </div>
+
+        <div style={detailsBodyStyle}>
+          <div style={bulkControlsStyle}>
+            <label style={fieldStyle}>
+              <span style={fieldLabelStyle}>Opiekun</span>
+              <select value={caregiverKeyValue} onChange={(event) => setCaregiverKeyValue(event.target.value)} style={inputStyle}>
+                {caregiverOptions.map((option) => (
+                  <option key={option.key} value={option.key}>{option.label}</option>
+                ))}
+              </select>
+            </label>
+            <label style={fieldStyle}>
+              <span style={fieldLabelStyle}>Miesiąc</span>
+              <select value={month} onChange={(event) => setMonth(Number(event.target.value))} style={inputStyle}>
+                {MONTHS.map((monthName, index) => (
+                  <option key={monthName} value={index + 1}>{monthName}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          {selectedRows.length === 0 ? (
+            <p style={emptyInlineStyle}>Brak klientów dla wybranego opiekuna.</p>
+          ) : (
+            <div style={bulkListStyle}>
+              {selectedRows.map((row) => (
+                <label key={row.register.id} style={bulkRowStyle}>
+                  <span>
+                    <strong style={clientNameStyle}>{row.client?.nazwa || "Klient bez nazwy"}</strong>
+                    <span style={clientMetaStyle}>{row.client?.nip || "Brak NIP"}</span>
+                  </span>
+                  <input
+                    value={bulkMonthlyValue(row, month, values)}
+                    onChange={(event) => setValues((current) => ({ ...current, [bulkValueKey(row.register.id, month)]: event.target.value }))}
+                    inputMode="decimal"
+                    placeholder="Kwota"
+                    style={bulkAmountInputStyle}
+                  />
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
     </div>
   );
 }
@@ -462,6 +573,28 @@ function filterClientsForPicker(clients: Client[], searchTerm: string) {
   });
 }
 
+function buildCaregiverOptions(rows: LimitRow[]) {
+  const options = new Map<string, string>();
+  rows.forEach((row) => {
+    options.set(caregiverKey(row.client), caregiverLabel(row.client));
+  });
+
+  return Array.from(options, ([key, label]) => ({ key, label }))
+    .sort((first, second) => first.label.localeCompare(second.label, "pl"));
+}
+
+function bulkValueKey(registerId: string, month: number) {
+  return `${registerId}:${month}`;
+}
+
+function bulkMonthlyValue(row: LimitRow, month: number, values: Record<string, string>) {
+  const key = bulkValueKey(row.register.id, month);
+  if (key in values) return values[key];
+
+  const record = row.monthly.find((item) => item.miesiac === month);
+  return record ? String(toNumber(record.kwota)) : "";
+}
+
 function calculateUsage(register: LimitRegisterRecord, monthly: LimitMonthlyRecord[]) {
   const limit = toNumber(register.limit_roczny);
   const used = monthly.reduce((sum, item) => sum + toNumber(item.kwota), 0);
@@ -515,6 +648,10 @@ function caregiverLabel(client: Client | null) {
   return profile?.full_name || profile?.email || "Brak opiekuna";
 }
 
+function caregiverKey(client: Client | null) {
+  return client?.opiekun_id || `no-caregiver:${caregiverLabel(client)}`;
+}
+
 function toNumber(value: number | string | null | undefined) {
   const parsed = Number(String(value ?? 0).replace(",", "."));
   return Number.isFinite(parsed) ? parsed : 0;
@@ -564,6 +701,7 @@ function progressColor(percent: number) {
 
 const pageStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "22px" };
 const headerStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "24px", alignItems: "flex-start" };
+const headerActionsStyle: CSSProperties = { display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", justifyContent: "flex-end" };
 const eyebrowStyle: CSSProperties = { margin: "0 0 8px", fontSize: "13px", fontWeight: 850, letterSpacing: "0.08em", color: colors.red, textTransform: "uppercase" };
 const titleStyle: CSSProperties = { margin: 0, fontSize: "34px", lineHeight: 1.15, color: colors.navy };
 const yearBoxStyle: CSSProperties = { display: "flex", alignItems: "center", gap: "10px", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.card, padding: "10px 12px" };
@@ -603,6 +741,7 @@ const progressTrackStyle: CSSProperties = { width: "100%", height: "10px", borde
 const progressFillStyle: CSSProperties = { height: "100%", borderRadius: radius.badge, transition: "width 0.2s ease" };
 const modalBackdropStyle: CSSProperties = { position: "fixed", inset: 0, zIndex: 60, background: "rgba(15, 23, 42, 0.38)", display: "flex", justifyContent: "center", alignItems: "flex-start", padding: "28px", overflowY: "auto" };
 const modalStyle: CSSProperties = { width: "min(1040px, calc(100vw - 56px))", borderRadius: radius.card, background: colors.white, boxShadow: "0 32px 90px rgba(15, 23, 42, 0.28)", border: `1px solid ${colors.border}`, overflow: "hidden" };
+const wideModalStyle: CSSProperties = { ...modalStyle, width: "min(1180px, calc(100vw - 56px))" };
 const modalHeaderStyle: CSSProperties = { padding: "22px 24px", borderBottom: `1px solid ${colors.border}`, display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "flex-start" };
 const modalActionsStyle: CSSProperties = { display: "flex", gap: "10px", alignItems: "center" };
 const iconButtonStyle: CSSProperties = { width: "42px", height: "42px", borderRadius: radius.button, border: `1px solid ${colors.border}`, background: colors.white, color: colors.navy, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer" };
@@ -615,6 +754,11 @@ const disabledInputStyle: CSSProperties = { ...inputStyle, background: "rgba(226
 const proportionalBoxStyle: CSSProperties = { display: "grid", gridTemplateColumns: "220px 1fr auto", gap: "12px", alignItems: "end", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.inputBackground, padding: "14px" };
 const proportionalInfoStyle: CSSProperties = { minHeight: "42px", display: "flex", flexDirection: "column", justifyContent: "center", gap: "4px", color: colors.muted, fontSize: "12px", fontWeight: 800 };
 const secondaryButtonStyle: CSSProperties = { minHeight: "42px", padding: "0 14px", borderRadius: radius.button, border: `1px solid ${colors.border}`, background: colors.white, color: colors.navy, fontWeight: 850, cursor: "pointer" };
+const bulkControlsStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(260px, 1fr) 220px", gap: "12px", alignItems: "end" };
+const bulkListStyle: CSSProperties = { display: "grid", gap: "10px", maxHeight: "56vh", overflowY: "auto", paddingRight: "4px" };
+const bulkRowStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) 180px", gap: "14px", alignItems: "center", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.inputBackground, padding: "12px 14px" };
+const bulkAmountInputStyle: CSSProperties = { ...inputStyle, width: "100%" };
+const emptyInlineStyle: CSSProperties = { margin: 0, color: colors.muted, fontWeight: 750 };
 const monthGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "12px" };
 const monthFieldStyle: CSSProperties = { ...fieldStyle, border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.inputBackground, padding: "12px" };
 const disabledMonthFieldStyle: CSSProperties = { ...monthFieldStyle, opacity: 0.58 };

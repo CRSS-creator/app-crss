@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { PDFDocument, PDFFont, rgb } from "pdf-lib";
+import { PDFDocument, PDFFont, PDFPage, rgb } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 
 export const runtime = "nodejs";
@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
 
   const { data: client, error: clientError } = await auth.admin
     .from("klienci")
-    .select("id, nazwa, nip, status_klienta")
+    .select("id, nazwa, nip, status_klienta, czynny_vat, vat_ue")
     .eq("id", payload.clientId)
     .single();
 
@@ -57,15 +57,19 @@ export async function POST(request: NextRequest) {
   const register = await ensureAmlRegister(auth.admin, client.id);
   const checks: OfficialCheck[] = [];
 
-  const vatCheck = await verifyVatWhitelist(nip);
-  checks.push(vatCheck);
+  const checksVat = Boolean(client.czynny_vat);
+  const checksVies = Boolean(client.vat_ue);
+  const vatCheck = checksVat
+    ? await verifyVatWhitelist(nip)
+    : skippedCheck("Biała Lista VAT MF", "Pominięto, bo klient jest oznaczony jako zwolniony z VAT.");
+  if (checksVat) checks.push(vatCheck);
 
   const vatSubject = getVatSubject(vatCheck);
   const krsNumber = normalizeKrs(String(vatSubject?.krs || ""));
   const regonNumber = String(vatSubject?.regon || "").trim() || null;
   const requestId = String((vatCheck.details as { requestId?: unknown }).requestId || "").trim() || null;
 
-  checks.push(await verifyVies(nip));
+  if (checksVies) checks.push(await verifyVies(nip));
   checks.push(krsNumber ? await verifyKrs(krsNumber) : skippedCheck("KRS", "Brak numeru KRS w danych z Białej Listy VAT."));
   checks.push(skippedCheck("CEIDG", "Oficjalne API CEIDG wymaga skonfigurowanego dostępu. Źródło przygotowane do dopięcia po dodaniu klucza."));
   checks.push(skippedCheck("GUS REGON", "Oficjalne API GUS BIR wymaga klucza API. Źródło przygotowane do dopięcia po dodaniu klucza."));
@@ -105,8 +109,8 @@ export async function POST(request: NextRequest) {
       wynik: result,
       zrodla: checks.map((check) => ({ source: check.source, status: check.status, label: check.label })),
       dane: { checks },
-      vat_status: vatCheck.status === "ok" ? String(vatSubject?.statusVat || "sprawdzono") : vatCheck.status,
-      vies_status: statusForSource(checks, "VIES"),
+      vat_status: checksVat ? (vatCheck.status === "ok" ? String(vatSubject?.statusVat || "sprawdzono") : vatCheck.status) : "nie_dotyczy",
+      vies_status: checksVies ? statusForSource(checks, "VIES") : "nie_dotyczy",
       krs_status: statusForSource(checks, "KRS"),
       pep_status: "do_weryfikacji_formularzem",
       sankcje_status: "do_dopiecia",
@@ -352,6 +356,125 @@ function errorMessage(error: unknown) {
 }
 
 async function buildAmlReportPdf(input: {
+  clientName: string;
+  nip: string;
+  requesterName: string;
+  createdAt: Date;
+  checks: OfficialCheck[];
+  result: string;
+}) {
+  const doc = await PDFDocument.create();
+  doc.registerFontkit(fontkit);
+  const font = await doc.embedFont(readFontBytes(), { subset: true });
+  let page = doc.addPage([595, 842]);
+  let y = 768;
+  const margin = 42;
+  const contentWidth = 511;
+  const navy = rgb(0.07, 0.17, 0.39);
+  const text = rgb(0.04, 0.12, 0.25);
+  const muted = rgb(0.32, 0.38, 0.5);
+  const border = rgb(0.80, 0.84, 0.90);
+  const soft = rgb(0.96, 0.98, 1);
+
+  const ensurePage = (height = 60) => {
+    if (y - height >= 58) return;
+    drawFooter(page, font);
+    page = doc.addPage([595, 842]);
+    y = 768;
+    drawHeaderMark(page, font);
+  };
+
+  const draw = (value: string, size = 10, x = margin, color = text, maxChars = 86) => {
+    const lines = wrapText(value, maxChars);
+    for (const line of lines) {
+      ensurePage(size + 12);
+      page.drawText(line, { x, y, size, font, color });
+      y -= size + 5;
+    }
+  };
+
+  drawHeaderMark(page, font);
+  page.drawText("Raport weryfikacji AML", { x: margin, y: 710, size: 22, font, color: navy });
+  page.drawText("CRSS Sp. z o.o., ul. Szewska 1/5, 63-100 Śrem", { x: margin, y: 688, size: 9, font, color: muted });
+  y = 652;
+
+  drawInfoGrid(page, font, [
+    ["Klient", input.clientName],
+    ["NIP", input.nip],
+    ["Wykonał", input.requesterName],
+    ["Data", input.createdAt.toLocaleString("pl-PL")],
+    ["Wynik", resultLabel(input.result)],
+  ], margin, y, contentWidth);
+  y -= 118;
+
+  draw("Źródła oficjalne", 16, margin, navy, 60);
+  y -= 8;
+
+  input.checks.forEach((check, index) => {
+    ensurePage(88);
+    const cardHeight = Math.max(70, 48 + wrapText(check.label, 72).length * 12);
+    page.drawRectangle({ x: margin, y: y - cardHeight + 16, width: contentWidth, height: cardHeight, color: soft, borderColor: border, borderWidth: 1 });
+    page.drawText(`${index + 1}. ${check.source}`, { x: margin + 14, y, size: 11, font, color: navy });
+    page.drawText(statusLabel(check.status), { x: margin + contentWidth - 94, y, size: 9, font, color: statusColor(check.status) });
+    y -= 18;
+    draw(check.label, 10, margin + 14, text, 74);
+    const summary = summarizeDetails(check.details);
+    if (summary) draw(summary, 8.5, margin + 14, muted, 92);
+    y -= 14;
+  });
+
+  drawFooter(page, font);
+  const bytes = await doc.save();
+  return Buffer.from(bytes);
+}
+
+function drawHeaderMark(page: PDFPage, font: PDFFont) {
+  const navy = rgb(0.07, 0.17, 0.39);
+  page.drawRectangle({ x: 42, y: 744, width: 80, height: 48, borderColor: navy, borderWidth: 1.6 });
+  page.drawLine({ start: { x: 42, y: 792 }, end: { x: 78, y: 792 }, thickness: 5, color: navy });
+  page.drawLine({ start: { x: 122, y: 744 }, end: { x: 86, y: 744 }, thickness: 5, color: navy });
+  page.drawText("CRSS", { x: 56, y: 760, size: 18, font, color: navy });
+}
+
+function drawInfoGrid(page: PDFPage, font: PDFFont, items: string[][], x: number, y: number, width: number) {
+  const boxWidth = (width - 16) / 2;
+  items.forEach(([label, value], index) => {
+    const column = index % 2;
+    const row = Math.floor(index / 2);
+    const boxX = x + column * (boxWidth + 16);
+    const boxY = y - row * 36;
+    page.drawRectangle({ x: boxX, y: boxY - 26, width: boxWidth, height: 30, color: rgb(0.96, 0.98, 1), borderColor: rgb(0.80, 0.84, 0.90), borderWidth: 1 });
+    page.drawText(label.toUpperCase(), { x: boxX + 10, y: boxY - 7, size: 6.8, font, color: rgb(0.32, 0.38, 0.5) });
+    page.drawText(String(value || "-").slice(0, 48), { x: boxX + 10, y: boxY - 20, size: 9, font, color: rgb(0.04, 0.12, 0.25) });
+  });
+}
+
+function drawFooter(page: PDFPage, font: PDFFont) {
+  page.drawLine({ start: { x: 42, y: 38 }, end: { x: 553, y: 38 }, thickness: 0.7, color: rgb(0.80, 0.84, 0.90) });
+  page.drawText("Raport wygenerowany w module AML aplikacji CRSS", { x: 42, y: 24, size: 8, font, color: rgb(0.32, 0.38, 0.5) });
+}
+
+function resultLabel(result: string) {
+  if (result === "pozytywna") return "Pozytywna";
+  if (result === "wymaga_analizy") return "Wymaga analizy";
+  return result;
+}
+
+function statusLabel(status: OfficialCheck["status"]) {
+  if (status === "ok") return "OK";
+  if (status === "warning") return "UWAGA";
+  if (status === "error") return "BŁĄD";
+  return "POMINIĘTO";
+}
+
+function statusColor(status: OfficialCheck["status"]) {
+  if (status === "ok") return rgb(0.09, 0.55, 0.25);
+  if (status === "warning") return rgb(0.73, 0.42, 0);
+  if (status === "error") return rgb(0.78, 0.10, 0.10);
+  return rgb(0.32, 0.38, 0.5);
+}
+
+async function buildAmlReportPdfLegacy(input: {
   clientName: string;
   nip: string;
   requesterName: string;

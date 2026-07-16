@@ -378,7 +378,8 @@ function RodoContent() {
           </div>
         </div>
         <div data-rodo-print-meta style={printMetaStyle}>
-          Wydrukował: {printInfo?.userName || currentUserName} · {formatPrintDateTime(printInfo?.printedAt)}
+          <div>CRSS Sp. z o.o., ul. Szewska 1/5, 63-100 Śrem</div>
+          <div>Wydrukował: {printInfo?.userName || currentUserName} · {formatPrintDateTime(printInfo?.printedAt)}</div>
         </div>
 
         {loading ? <div style={emptyStyle}>Ładowanie umów...</div> : filteredContracts.length === 0 ? <div style={emptyStyle}>Brak umów powierzenia do wyświetlenia.</div> : (
@@ -527,7 +528,8 @@ function RodoAdditionalRegister({ definition, currentUserName }: { definition: R
           </div>
         </div>
         <div data-rodo-print-meta style={printMetaStyle}>
-          Wydrukował: {printInfo?.userName || currentUserName} | {formatPrintDateTime(printInfo?.printedAt)}
+          <div>CRSS Sp. z o.o., ul. Szewska 1/5, 63-100 Śrem</div>
+          <div>Wydrukował: {printInfo?.userName || currentUserName} · {formatPrintDateTime(printInfo?.printedAt)}</div>
         </div>
 
         {loading ? <div style={emptyStyle}>Ładowanie rejestru...</div> : filteredRecords.length === 0 ? <div style={emptyStyle}>{definition.emptyLabel}</div> : (

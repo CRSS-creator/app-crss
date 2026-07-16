@@ -94,6 +94,7 @@ function LimitsContent() {
   const availableClients = clients.filter((client) => !registers.some((register) => register.typ === activeType && register.klient_id === client.id));
   const isVatRegister = activeType === "vat";
   const isAutomaticRegister = activeType === "vat" || activeType === "wnt";
+  const showExemptionStatus = activeType !== "wnt";
 
   async function handleAddClient() {
     if (!clientToAdd) return;
@@ -183,7 +184,7 @@ function LimitsContent() {
                 <thead>
                   <tr>
                     <Th>Klient</Th>
-                    <Th>Status zwolnienia</Th>
+                    {showExemptionStatus && <Th>Status zwolnienia</Th>}
                     <Th>Wpis w tym miesiącu</Th>
                     <Th>Wykorzystano w roku</Th>
                     <Th>Pozostało</Th>
@@ -200,7 +201,7 @@ function LimitsContent() {
                           <strong style={clientNameStyle}>{row.client?.nazwa || "Klient bez nazwy"}</strong>
                           <span style={clientMetaStyle}>{row.client?.nip || "Brak NIP"} · {caregiverLabel(row.client)}</span>
                         </Td>
-                        <Td>{exemptionStatusLabel(row.register.status_zwolnienia)}</Td>
+                        {showExemptionStatus && <Td>{exemptionStatusLabel(row.register.status_zwolnienia)}</Td>}
                         <Td><MonthlyStatus done={currentMonthDone} /></Td>
                         <Td>
                           <strong style={amountStyle}>{formatMoney(usage.used)}</strong>

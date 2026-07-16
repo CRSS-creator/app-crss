@@ -806,7 +806,7 @@ function buildStages(
   ];
 
   if (shouldShowClientCard(client, accountingContract)) {
-    stages.push(buildManualStage("client_card", "Dane organizacyjne klienta potrzebne do rozpoczęcia obsługi w biurze.", recordByKey.client_card, undefined, undefined, "Wyślij e-mail", undefined, primaryOwnerResponsible, latestClientCardRequestInfo(onboardingHistory, profilesById)));
+    stages.push(buildManualStage("client_card", "Dane organizacyjne klienta potrzebne do rozpoczęcia obsługi w biurze.", recordByKey.client_card, undefined, undefined, "Wyślij e-mail", undefined, caregiverResponsible, latestClientCardRequestInfo(onboardingHistory, profilesById)));
   }
 
   stages.push(

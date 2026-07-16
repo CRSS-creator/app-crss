@@ -311,11 +311,13 @@ function RodoContent() {
     setLoading(false);
   }
 
+  const sortedContracts = useMemo(() => [...contracts].sort(compareCreatedAtDesc), [contracts]);
+  const contractOrdinals = useMemo(() => {
+    return new Map(sortedContracts.map((contract, index) => [contract.id, contractRegisterOrdinal(index, sortedContracts.length)]));
+  }, [sortedContracts]);
   const filteredContracts = useMemo(() => {
-    return contracts
-      .filter((contract) => statusFilter === "Wszystkie" || contract.status === statusFilter)
-      .sort(compareContractNumbersDesc);
-  }, [contracts, statusFilter]);
+    return sortedContracts.filter((contract) => statusFilter === "Wszystkie" || contract.status === statusFilter);
+  }, [sortedContracts, statusFilter]);
   const signedCount = contracts.filter((contract) => contract.status === "podpisana").length;
   const pendingCount = contracts.filter((contract) => contract.status === "wygenerowana" || contract.status === "wyslana_do_podpisu").length;
 
@@ -401,9 +403,9 @@ function RodoContent() {
                 </tr>
               </thead>
               <tbody>
-                {filteredContracts.map((contract, index) => (
+                {filteredContracts.map((contract) => (
                   <tr key={contract.id} style={rowStyle}>
-                    <Td>{contractRegisterOrdinal(index, filteredContracts.length)}</Td>
+                    <Td>{contractOrdinals.get(contract.id) || "-"}</Td>
                     <Td strong>{contract.numer_umowy || "Bez numeru"}</Td>
                     <Td>{contract.nazwa_klienta}</Td>
                     <Td>{contract.nip || "-"}</Td>
@@ -474,15 +476,19 @@ function RodoAdditionalRegister({ definition, currentUserName }: { definition: R
   }
 
   const statusOptions = useMemo(() => [{ value: "Wszystkie", label: "Wszystkie statusy" }, ...definition.statusOptions], [definition.statusOptions]);
+  const sortedRecords = useMemo(() => [...records].sort(compareCreatedAtDesc), [records]);
+  const recordOrdinals = useMemo(() => {
+    return new Map(sortedRecords.map((record, index) => [record.id, registerOrdinal(index, sortedRecords.length)]));
+  }, [sortedRecords]);
   const filteredRecords = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
-    return records.filter((record) => {
+    return sortedRecords.filter((record) => {
       const status = String(getRecordValue(record, "status") || "");
       const matchesStatus = statusFilter === "Wszystkie" || status === statusFilter;
       const matchesText = !normalizedSearch || definition.columns.some((column) => String(getRecordValue(record, column.key) || "").toLowerCase().includes(normalizedSearch));
       return matchesStatus && matchesText;
     });
-  }, [records, definition.columns, search, statusFilter]);
+  }, [sortedRecords, definition.columns, search, statusFilter]);
 
   const activeCount = records.filter((record) => {
     const status = String(getRecordValue(record, "status") || "");
@@ -548,9 +554,9 @@ function RodoAdditionalRegister({ definition, currentUserName }: { definition: R
                 </tr>
               </thead>
               <tbody>
-                {filteredRecords.map((record, index) => (
+                {filteredRecords.map((record) => (
                   <tr key={record.id} style={rowStyle}>
-                    <Td>{index + 1}</Td>
+                    <Td>{recordOrdinals.get(record.id) || "-"}</Td>
                     {definition.columns.map((column) => (
                       <Td key={column.key}>
                         {column.key === "status" ? (
@@ -1075,29 +1081,16 @@ function fetchRodoProfiles() {
     .order("full_name", { ascending: true });
 }
 
-function compareContractNumbersDesc(a: RodoProcessingContract, b: RodoProcessingContract) {
-  const aParts = extractContractNumberParts(a.numer_umowy);
-  const bParts = extractContractNumberParts(b.numer_umowy);
-
-  if (aParts.year !== bParts.year) return bParts.year - aParts.year;
-  if (aParts.month !== bParts.month) return bParts.month - aParts.month;
-  if (aParts.number !== bParts.number) return bParts.number - aParts.number;
-
+function compareCreatedAtDesc(a: { created_at: string }, b: { created_at: string }) {
   return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-}
-
-function extractContractNumberParts(value: string | null) {
-  const match = value?.match(/^(\d+)\/RODO\/(\d{1,2})\/(\d{4})$/i);
-
-  return {
-    number: match ? Number(match[1]) : 0,
-    month: match ? Number(match[2]) : 0,
-    year: match ? Number(match[3]) : 0,
-  };
 }
 
 function contractRegisterOrdinal(index: number, visibleCount: number) {
   return RODO_CONTRACT_REGISTER_START + visibleCount - 1 - index;
+}
+
+function registerOrdinal(index: number, visibleCount: number) {
+  return visibleCount - index;
 }
 
 function emptyToNull(value: string) {

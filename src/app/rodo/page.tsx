@@ -27,7 +27,7 @@ import {
   type RodoRegisterKind,
   type RodoRegisterPayload,
 } from "@/lib/rodoRegistersService";
-import { X } from "lucide-react";
+import { CalendarDays, X } from "lucide-react";
 
 type Client = {
   id: string;
@@ -649,12 +649,25 @@ function RegisterFieldControl({ field, value, onChange }: { field: RegisterField
     return <EditableSelect label={field.label} value={value} onChange={onChange} options={field.options || []} />;
   }
 
+  if (field.type === "date" || field.type === "datetime-local") {
+    return (
+      <label style={editableRowStyle}>
+        <span>{field.label}</span>
+        <DatePickerInput
+          mode={field.type}
+          value={value}
+          onChange={onChange}
+        />
+      </label>
+    );
+  }
+
   return (
     <label style={editableRowStyle}>
       <span>{field.label}</span>
       <input
         type={field.type || "text"}
-        value={field.type === "datetime-local" ? toDateTimeLocalValue(value) : value}
+        value={value}
         onChange={(event) => onChange(event.target.value)}
         style={inputStyle}
       />
@@ -1211,7 +1224,56 @@ function FileRow({ label, fileName, onOpen, onDownload, onDelete, deleting }: { 
   );
 }
 
+function DatePickerInput({ value, onChange, mode = "date" }: { value: string; onChange: (value: string) => void; mode?: "date" | "datetime-local" }) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const shownValue = mode === "datetime-local" ? toDateTimeLocalValue(value) : value;
+
+  function openPicker() {
+    const input = inputRef.current as (HTMLInputElement & { showPicker?: () => void }) | null;
+    if (!input) return;
+    if (typeof input.showPicker === "function") {
+      input.showPicker();
+      return;
+    }
+    input.focus();
+  }
+
+  return (
+    <div style={datePickerShellStyle} onClick={openPicker}>
+      <input
+        ref={inputRef}
+        data-rodo-date-input
+        type={mode}
+        value={shownValue}
+        onChange={(event) => onChange(event.target.value)}
+        style={datePickerInputStyle}
+      />
+      <button
+        type="button"
+        aria-label="Wybierz datę"
+        style={datePickerButtonStyle}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          openPicker();
+        }}
+      >
+        <CalendarDays size={17} strokeWidth={2.3} />
+      </button>
+    </div>
+  );
+}
+
 function EditableInput({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (value: string) => void; type?: "text" | "email" | "date" }) {
+  if (type === "date") {
+    return (
+      <label style={editableRowStyle}>
+        <span>{label}</span>
+        <DatePickerInput value={value} onChange={onChange} />
+      </label>
+    );
+  }
+
   return <label style={editableRowStyle}><span>{label}</span><input type={type} value={value} onChange={(event) => onChange(event.target.value)} style={inputStyle} /></label>;
 }
 
@@ -1310,10 +1372,24 @@ const suggestionEmptyStyle: CSSProperties = { padding: "10px", color: colors.mut
 const clearButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.navy, padding: "9px 11px", fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" };
 const textareaRowStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "8px", color: colors.muted, fontWeight: 700 };
 const inputStyle: CSSProperties = { width: "100%", border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "10px 12px", background: colors.inputBackground, color: colors.text, fontWeight: 650, outline: "none" };
+const datePickerShellStyle: CSSProperties = { position: "relative", width: "100%", minHeight: "42px", display: "flex", alignItems: "center", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, overflow: "hidden" };
+const datePickerInputStyle: CSSProperties = { width: "100%", minHeight: "42px", border: "none", borderRadius: radius.input, padding: "10px 46px 10px 12px", background: "transparent", color: colors.text, fontWeight: 650, outline: "none", font: "inherit" };
+const datePickerButtonStyle: CSSProperties = { position: "absolute", right: "8px", top: "50%", transform: "translateY(-50%)", width: "30px", height: "30px", border: `1px solid ${colors.border}`, borderRadius: "10px", background: colors.white, color: colors.navy, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 };
 const textareaStyle: CSSProperties = { ...inputStyle, resize: "vertical", minHeight: "96px", lineHeight: 1.6 };
 const screenHiddenStyle = `
   [data-screen-hidden="true"] {
     display: none;
+  }
+  [data-rodo-date-input] {
+    color-scheme: light;
+  }
+  [data-rodo-date-input]::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 0;
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
   }
   @media print {
     [data-screen-hidden="true"] {

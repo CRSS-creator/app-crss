@@ -14,6 +14,8 @@ const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const AML_REPORT_BUCKET = "crm-umowy";
 const GUS_REGON_API_KEY = process.env.GUS_REGON_API_KEY;
 const GUS_REGON_API_URL = process.env.GUS_REGON_API_URL || "https://wyszukiwarkaregon.stat.gov.pl/wsBIR/UslugaBIRzewnPubl.svc";
+const CEIDG_API_TOKEN = process.env.CEIDG_API_TOKEN;
+const CEIDG_API_URL = process.env.CEIDG_API_URL || "https://dane.biznes.gov.pl/api/ceidg/v3/firmy";
 
 type VerifyPayload = {
   clientId?: string;
@@ -30,6 +32,13 @@ type OfficialCheck = {
   status: "ok" | "warning" | "error" | "skipped" | "confirmed";
   label: string;
   details: Record<string, unknown>;
+};
+
+type PkdCode = {
+  kod: string;
+  nazwa: string | null;
+  przewazajace: boolean;
+  zrodlo: string;
 };
 
 export async function POST(request: NextRequest) {
@@ -74,6 +83,9 @@ export async function POST(request: NextRequest) {
     : confirmedCheck("VAT-UE", "Weryfikacja potwierdzona: klient nie jest oznaczony jako podatnik VAT-UE.")
   );
 
+  const ceidgCheck = await verifyCeidg(nip);
+  checks.push(ceidgCheck);
+
   const regonCheck = await verifyGusRegon(nip);
   checks.push(regonCheck);
 
@@ -84,17 +96,19 @@ export async function POST(request: NextRequest) {
     ? await verifyKrs(krsNumber)
     : skippedCheck("KRS", "Brak numeru KRS w danych z Białej Listy VAT i REGON.");
   checks.push(krsCheck);
-  checks.push(skippedCheck("CEIDG", "Oficjalne API CEIDG wymaga skonfigurowanego dostępu. Źródło przygotowane do dopięcia po dodaniu klucza."));
   checks.push(skippedCheck("Listy sankcyjne", "Weryfikacja sankcyjna zostanie dopięta do oficjalnego źródła list sankcyjnych w kolejnym kroku."));
   checks.push(skippedCheck("PEP", "Nie ma jednego publicznego oficjalnego API PEP. Status PEP pozostaje do weryfikacji formularzem i oświadczeniem."));
 
   const result = summarizeResult(checks);
   const now = new Date();
+  const pkdCodes = collectPkdCodes(ceidgCheck, krsCheck);
   const registryDetails = buildRegistryDetails({
     nip,
     vatSubject,
     regonSubject,
     krsCheck,
+    ceidgCheck,
+    pkdCodes,
     checks,
     checkedAt: now,
   });
@@ -129,7 +143,7 @@ export async function POST(request: NextRequest) {
       status: "wykonana",
       wynik: result,
       zrodla: checks.map((check) => ({ source: check.source, status: check.status, label: check.label })),
-      dane: { checks, dane_rejestrowe: registryDetails, beneficjenci_rzeczywisci: beneficialOwners },
+      dane: { checks, dane_rejestrowe: registryDetails, beneficjenci_rzeczywisci: beneficialOwners, kody_pkd: pkdCodes },
       vat_status: checksVat ? (vatCheck.status === "ok" ? String(vatSubject?.statusVat || "sprawdzono") : vatCheck.status) : "potwierdzono_zwolnienie",
       vies_status: checksVies ? statusForSource(checks, "VIES") : "potwierdzono_brak_vat_ue",
       krs_status: statusForSource(checks, "KRS"),
@@ -165,6 +179,7 @@ export async function POST(request: NextRequest) {
       gus_status: statusForSource(checks, "GUS REGON"),
       krs_status: statusForSource(checks, "KRS"),
       crbr_status: "do_weryfikacji",
+      kody_pkd: pkdCodes,
       updated_at: now.toISOString(),
     })
     .eq("id", register.id);
@@ -181,6 +196,7 @@ export async function POST(request: NextRequest) {
       sources: checks.map((check) => ({ source: check.source, status: check.status, label: check.label })),
       dane_rejestrowe: registryDetails,
       beneficjenci_rzeczywisci: beneficialOwners,
+      kody_pkd: pkdCodes,
       pdf_path: storagePath,
     },
     created_by: auth.requesterId,
@@ -337,6 +353,36 @@ async function verifyKrs(krs: string): Promise<OfficialCheck> {
   return { source: "KRS Ministerstwa Sprawiedliwości", status: "warning", label: "Nie znaleziono odpisu KRS dla numeru z Białej Listy VAT.", details: { krs: paddedKrs } };
 }
 
+async function verifyCeidg(nip: string): Promise<OfficialCheck> {
+  if (!CEIDG_API_TOKEN) {
+    return skippedCheck("CEIDG", "Dodaj sekret CEIDG_API_TOKEN, aby uruchomić automatyczne pobieranie danych i kodów PKD z CEIDG.");
+  }
+
+  const url = `${CEIDG_API_URL}?nip=${encodeURIComponent(nip)}`;
+  try {
+    const response = await fetch(url, {
+      headers: {
+        accept: "application/json",
+        authorization: `Bearer ${CEIDG_API_TOKEN}`,
+      },
+    });
+    const data = await response.json().catch(() => null);
+    if (!response.ok) {
+      return { source: "CEIDG", status: "error", label: "Nie udało się pobrać danych z API CEIDG.", details: { httpStatus: response.status, data, url } };
+    }
+
+    const companies = extractCeidgCompanies(data);
+    return {
+      source: "CEIDG",
+      status: companies.length > 0 ? "ok" : "warning",
+      label: companies.length > 0 ? "Podmiot odnaleziony w CEIDG." : "Brak podmiotu w CEIDG dla podanego NIP.",
+      details: { companies, data, checkedAt: new Date().toISOString(), url },
+    };
+  } catch (error) {
+    return { source: "CEIDG", status: "error", label: "Błąd połączenia z API CEIDG.", details: { message: errorMessage(error), url } };
+  }
+}
+
 async function verifyGusRegon(nip: string): Promise<OfficialCheck> {
   if (!GUS_REGON_API_KEY) {
     return skippedCheck("GUS REGON", "Dodaj sekret GUS_REGON_API_KEY, aby uruchomić automatyczną weryfikację w rejestrze REGON.");
@@ -447,15 +493,104 @@ function getRegonSubject(check: OfficialCheck) {
   return details.record || null;
 }
 
+function extractCeidgCompanies(data: unknown) {
+  const root = data && typeof data === "object" ? data as Record<string, unknown> : {};
+  const candidates = [root.firmy, root.data, root.items, root.results, root.result];
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) return candidate as Array<Record<string, unknown>>;
+  }
+  return [];
+}
+
+function collectPkdCodes(...checks: OfficialCheck[]): PkdCode[] {
+  const codes = new Map<string, PkdCode>();
+
+  for (const check of checks) {
+    const source = check.source.includes("KRS") ? "KRS" : check.source;
+    const extracted = extractPkdCodes(check.details, source);
+    for (const item of extracted) {
+      const key = `${item.zrodlo}:${item.kod}`;
+      const existing = codes.get(key);
+      codes.set(key, {
+        kod: item.kod,
+        nazwa: existing?.nazwa || item.nazwa,
+        przewazajace: Boolean(existing?.przewazajace || item.przewazajace),
+        zrodlo: item.zrodlo,
+      });
+    }
+  }
+
+  return [...codes.values()].sort((first, second) => {
+    if (first.przewazajace !== second.przewazajace) return first.przewazajace ? -1 : 1;
+    return first.kod.localeCompare(second.kod, "pl");
+  });
+}
+
+function extractPkdCodes(value: unknown, source: string, inPkdNode = false): PkdCode[] {
+  if (typeof value === "string") {
+    return inPkdNode ? pkdCodesFromText(value, source) : [];
+  }
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => extractPkdCodes(item, source, inPkdNode));
+  }
+  if (!value || typeof value !== "object") return [];
+
+  const record = value as Record<string, unknown>;
+  const hasPkdKey = Object.keys(record).some((key) => key.toLowerCase().includes("pkd"));
+  const pkdRecord = inPkdNode || hasPkdKey;
+  const directCode = firstText(record, ["kod", "kodPkd", "kod_pkd", "pkd", "code"]);
+  const directName = firstText(record, ["nazwa", "opis", "opisPkd", "name"]);
+  const mainFlag = Boolean(record.przewazajace || record.przeważające || record.glowne || record.główne || record.main);
+  const directCodes = pkdRecord && directCode
+    ? [{ kod: formatPkdCode(directCode), nazwa: directName, przewazajace: mainFlag, zrodlo: source }]
+    : [];
+
+  const nestedCodes = Object.entries(record).flatMap(([key, item]) => {
+    const childInPkd = pkdRecord || key.toLowerCase().includes("pkd") || key.toLowerCase().includes("dzialalnosci");
+    return extractPkdCodes(item, source, childInPkd);
+  });
+
+  return [...directCodes, ...nestedCodes].filter((item) => item.kod !== "");
+}
+
+function pkdCodesFromText(value: string, source: string): PkdCode[] {
+  const matches = [...value.toUpperCase().matchAll(/\b(\d{2})[.\s-]?(\d{2})(?:[.\s-]?([A-Z]))?\b/g)];
+  return matches.map((match) => ({
+    kod: formatPkdCode(`${match[1]}${match[2]}${match[3] || ""}`),
+    nazwa: null,
+    przewazajace: false,
+    zrodlo: source,
+  }));
+}
+
+function firstText(record: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "number") return String(value);
+  }
+  return null;
+}
+
+function formatPkdCode(value: string) {
+  const compact = value.toUpperCase().replace(/[^0-9A-Z]/g, "");
+  const match = compact.match(/^(\d{2})(\d{2})([A-Z])?$/);
+  if (!match) return value.trim();
+  return match[3] ? `${match[1]}.${match[2]}.${match[3]}` : `${match[1]}.${match[2]}`;
+}
+
 function buildRegistryDetails(input: {
   nip: string;
   vatSubject: Record<string, unknown> | null;
   regonSubject: Record<string, string> | null;
   krsCheck: OfficialCheck;
+  ceidgCheck: OfficialCheck;
+  pkdCodes: PkdCode[];
   checks: OfficialCheck[];
   checkedAt: Date;
 }) {
   const krsDetails = input.krsCheck.details as { krs?: string; register?: string; data?: unknown; url?: string };
+  const ceidgDetails = input.ceidgCheck.details as { companies?: unknown[]; url?: string };
 
   return {
     updatedAt: input.checkedAt.toISOString(),
@@ -469,8 +604,14 @@ function buildRegistryDetails(input: {
       vies: statusForSource(input.checks, "VIES"),
       regon: statusForSource(input.checks, "GUS REGON"),
       krs: statusForSource(input.checks, "KRS"),
+      ceidg: statusForSource(input.checks, "CEIDG"),
       crbr: "do_weryfikacji",
     },
+    kodyPkd: input.pkdCodes,
+    ceidg: input.ceidgCheck.status === "ok" ? {
+      liczbaWpisow: Array.isArray(ceidgDetails.companies) ? ceidgDetails.companies.length : 0,
+      url: ceidgDetails.url || null,
+    } : null,
     gusRegon: input.regonSubject ? {
       nazwa: input.regonSubject.Nazwa || null,
       regon: input.regonSubject.Regon || null,

@@ -20,6 +20,7 @@ export type AmlRegisterRecord = {
   gus_status: string | null;
   krs_status: string | null;
   crbr_status: string | null;
+  kody_pkd: Array<Record<string, unknown>>;
   uwagi: string | null;
 };
 

@@ -315,6 +315,7 @@ function RegistryDetails({ register }: { register: AmlRegisterRecord | null }) {
   const krs = asRecord(registry.krs);
   const vat = asRecord(registry.bialaListaVat);
   const owners = Array.isArray(register?.beneficjenci_rzeczywisci) ? register.beneficjenci_rzeczywisci : [];
+  const pkdCodes = Array.isArray(register?.kody_pkd) ? register.kody_pkd : [];
 
   return (
     <section style={detailsSectionStyle}>
@@ -346,6 +347,20 @@ function RegistryDetails({ register }: { register: AmlRegisterRecord | null }) {
             <Definition label="Status VAT" value={asText(vat.statusVat)} />
             <Definition label="Beneficjenci" value={owners.length > 0 ? asText(owners[0]?.label || owners[0]?.status) : "Do weryfikacji"} />
             <Definition label="Status CRBR" value={register.crbr_status ? registerStatusText(register.crbr_status) : "Do weryfikacji"} />
+          </div>
+          <div style={registryPanelWideStyle}>
+            <h4 style={registryTitleStyle}>Kody PKD do formularza wstępnego</h4>
+            {pkdCodes.length > 0 ? (
+              <div style={pkdListStyle}>
+                {pkdCodes.map((pkd, index) => (
+                  <span key={`${asText(pkd.kod)}-${index}`} style={pkdBadgeStyle}>
+                    {asText(pkd.kod)}{pkd.przewazajace ? " · przeważające" : ""}{pkd.zrodlo ? ` · ${asText(pkd.zrodlo)}` : ""}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p style={emptySmallStyle}>Brak zapisanych kodów PKD.</p>
+            )}
           </div>
         </div>
       )}
@@ -684,10 +699,13 @@ const detailsSectionStyle: CSSProperties = { padding: "24px 30px", borderTop: `1
 const detailsTitleStyle: CSSProperties = { margin: "0 0 16px", color: colors.navy, fontSize: "20px" };
 const registryGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "12px" };
 const registryPanelStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "16px", background: colors.inputBackground };
+const registryPanelWideStyle: CSSProperties = { ...registryPanelStyle, gridColumn: "1 / -1" };
 const registryTitleStyle: CSSProperties = { margin: "0 0 12px", color: colors.navy, fontSize: "15px" };
 const definitionStyle: CSSProperties = { display: "grid", gridTemplateColumns: "92px 1fr", gap: "10px", padding: "8px 0", borderTop: `1px solid ${colors.border}` };
 const definitionLabelStyle: CSSProperties = { color: colors.muted, fontSize: "12px", fontWeight: 850, textTransform: "uppercase" };
 const definitionValueStyle: CSSProperties = { color: colors.text, fontSize: "13px", lineHeight: 1.45, overflowWrap: "anywhere" };
+const pkdListStyle: CSSProperties = { display: "flex", flexWrap: "wrap", gap: "8px" };
+const pkdBadgeStyle: CSSProperties = { display: "inline-flex", minHeight: "30px", alignItems: "center", padding: "6px 10px", borderRadius: radius.badge, background: "rgba(23, 59, 115, 0.08)", color: colors.navy, fontSize: "12px", fontWeight: 850 };
 const emptySmallStyle: CSSProperties = { margin: 0, color: colors.muted, fontWeight: 750 };
 const listStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "12px" };
 const verificationItemStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "16px", display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "flex-start" };

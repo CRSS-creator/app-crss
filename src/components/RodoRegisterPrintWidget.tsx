@@ -132,7 +132,7 @@ function injectPrintStyles() {
       [data-printable-rodo-register="true"] th:nth-child(1),
       [data-printable-rodo-register="true"] td:nth-child(1) {
         font-size: 7pt !important;
-        font-weight: 600 !important;
+        font-weight: 400 !important;
       }
 
       [data-printable-rodo-register="true"] table[data-rodo-contract-table="true"] th:nth-child(1),

@@ -130,8 +130,8 @@ const INCIDENT_STATUS_OPTIONS = [
 
 const AUTHORIZED_PERSON_STATUS_OPTIONS = [
   { value: "aktywne", label: "Aktywne" },
-  { value: "wygasle", label: "Wygasle" },
-  { value: "cofniete", label: "Cofniete" },
+  { value: "wygasle", label: "Wygasłe" },
+  { value: "cofniete", label: "Cofnięte" },
 ];
 
 const RISK_OPTIONS = [
@@ -402,7 +402,7 @@ function RodoContent() {
               <tbody>
                 {filteredContracts.map((contract, index) => (
                   <tr key={contract.id} style={rowStyle}>
-                    <Td strong>{contractRegisterOrdinal(index, filteredContracts.length)}</Td>
+                    <Td>{contractRegisterOrdinal(index, filteredContracts.length)}</Td>
                     <Td strong>{contract.numer_umowy || "Bez numeru"}</Td>
                     <Td>{contract.nazwa_klienta}</Td>
                     <Td>{contract.nip || "-"}</Td>
@@ -543,7 +543,7 @@ function RodoAdditionalRegister({ definition, currentUserName }: { definition: R
               <tbody>
                 {filteredRecords.map((record, index) => (
                   <tr key={record.id} style={rowStyle}>
-                    <Td strong>{index + 1}</Td>
+                    <Td>{index + 1}</Td>
                     {definition.columns.map((column) => (
                       <Td key={column.key}>{formatRegisterValue(record, column)}</Td>
                     ))}

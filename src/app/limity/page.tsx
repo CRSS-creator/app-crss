@@ -63,6 +63,7 @@ function LimitsContent() {
   const [detailsRegisterId, setDetailsRegisterId] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [clientToAdd, setClientToAdd] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -88,6 +89,7 @@ function LimitsContent() {
   }
 
   const rows = useMemo(() => buildRows(activeType, clients, registers, monthlyRecords), [activeType, clients, registers, monthlyRecords]);
+  const filteredRows = useMemo(() => filterRows(rows, searchTerm), [rows, searchTerm]);
   const detailsRow = rows.find((row) => row.register.id === detailsRegisterId) || null;
   const availableClients = clients.filter((client) => !registers.some((register) => register.typ === activeType && register.klient_id === client.id));
   const isVatRegister = activeType === "vat";
@@ -111,6 +113,7 @@ function LimitsContent() {
     setDetailsRegisterId(null);
     setShowAddForm(false);
     setClientToAdd("");
+    setSearchTerm("");
   }
 
   return (
@@ -140,11 +143,20 @@ function LimitsContent() {
               <h2 style={sectionTitleStyle}>{activeTabLabel(activeType)}</h2>
               <p style={sectionHintStyle}>{registerHint(activeType)}</p>
             </div>
-            {!isAutomaticRegister && (
-              <button type="button" onClick={() => setShowAddForm((value) => !value)} style={primaryButtonStyle}>
-                <Plus size={18} /> Dodaj klienta
-              </button>
-            )}
+            <div style={sectionActionsStyle}>
+              <input
+                type="search"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Szukaj klienta, NIP, opiekuna lub statusu"
+                style={searchInputStyle}
+              />
+              {!isAutomaticRegister && (
+                <button type="button" onClick={() => setShowAddForm((value) => !value)} style={primaryButtonStyle}>
+                  <Plus size={18} /> Dodaj klienta
+                </button>
+              )}
+            </div>
           </div>
 
           {showAddForm && !isAutomaticRegister && (
@@ -163,6 +175,8 @@ function LimitsContent() {
             <p style={emptyStyle}>Ładowanie limitów...</p>
           ) : rows.length === 0 ? (
             <p style={emptyStyle}>{emptyRegisterText(activeType)}</p>
+          ) : filteredRows.length === 0 ? (
+            <p style={emptyStyle}>Brak wyników dla wpisanej frazy.</p>
           ) : (
             <div style={tableWrapStyle}>
               <table style={tableStyle}>
@@ -177,7 +191,7 @@ function LimitsContent() {
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((row) => {
+                  {filteredRows.map((row) => {
                     const usage = calculateUsage(row.register, row.monthly);
                     const currentMonthDone = hasMonthlyEntry(row.monthly, year);
                     return (
@@ -369,6 +383,24 @@ function buildRows(type: LimitType, clients: Client[], registers: LimitRegisterR
     .sort((first, second) => String(first.client?.nazwa || "").localeCompare(String(second.client?.nazwa || ""), "pl"));
 }
 
+function filterRows(rows: LimitRow[], searchTerm: string) {
+  const query = searchTerm.trim().toLowerCase();
+  if (!query) return rows;
+
+  return rows.filter((row) => {
+    const values = [
+      row.client?.nazwa,
+      row.client?.nip,
+      row.client?.email,
+      row.client?.telefon,
+      caregiverLabel(row.client),
+      exemptionStatusLabel(row.register.status_zwolnienia),
+    ];
+
+    return values.some((value) => String(value || "").toLowerCase().includes(query));
+  });
+}
+
 function calculateUsage(register: LimitRegisterRecord, monthly: LimitMonthlyRecord[]) {
   const limit = toNumber(register.limit_roczny);
   const used = monthly.reduce((sum, item) => sum + toNumber(item.kwota), 0);
@@ -471,6 +503,8 @@ const cardStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderR
 const sectionHeaderStyle: CSSProperties = { padding: "22px 24px", borderBottom: `1px solid ${colors.border}`, display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "flex-start" };
 const sectionTitleStyle: CSSProperties = { margin: 0, fontSize: "22px", color: colors.navy };
 const sectionHintStyle: CSSProperties = { margin: "6px 0 0", color: colors.muted, fontSize: "14px" };
+const sectionActionsStyle: CSSProperties = { display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" };
+const searchInputStyle: CSSProperties = { width: "min(360px, 100%)", minHeight: "42px", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.text, padding: "0 14px", fontSize: "14px", fontWeight: 750, outline: "none" };
 const primaryButtonStyle: CSSProperties = { minHeight: "42px", padding: "0 16px", border: "none", borderRadius: radius.button, background: colors.red, color: colors.white, fontWeight: 850, display: "inline-flex", alignItems: "center", gap: "8px", cursor: "pointer" };
 const smallPrimaryButtonStyle: CSSProperties = { ...primaryButtonStyle, minHeight: "40px" };
 const addFormStyle: CSSProperties = { display: "grid", gridTemplateColumns: "1fr auto", gap: "10px", padding: "14px 24px", borderBottom: `1px solid ${colors.border}`, background: colors.inputBackground };

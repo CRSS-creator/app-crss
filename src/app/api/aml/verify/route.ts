@@ -12,6 +12,8 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const AML_REPORT_BUCKET = "crm-umowy";
+const GUS_REGON_API_KEY = process.env.GUS_REGON_API_KEY;
+const GUS_REGON_API_URL = process.env.GUS_REGON_API_URL || "https://wyszukiwarkaregon.stat.gov.pl/wsBIR/UslugaBIRzewnPubl.svc";
 
 type VerifyPayload = {
   clientId?: string;
@@ -65,22 +67,38 @@ export async function POST(request: NextRequest) {
   checks.push(vatCheck);
 
   const vatSubject = getVatSubject(vatCheck);
-  const krsNumber = normalizeKrs(String(vatSubject?.krs || ""));
-  const regonNumber = String(vatSubject?.regon || "").trim() || null;
   const requestId = String((vatCheck.details as { requestId?: unknown }).requestId || "").trim() || null;
 
   checks.push(checksVies
     ? await verifyVies(nip)
     : confirmedCheck("VAT-UE", "Weryfikacja potwierdzona: klient nie jest oznaczony jako podatnik VAT-UE.")
   );
-  checks.push(krsNumber ? await verifyKrs(krsNumber) : skippedCheck("KRS", "Brak numeru KRS w danych z Białej Listy VAT."));
+
+  const regonCheck = await verifyGusRegon(nip);
+  checks.push(regonCheck);
+
+  const regonSubject = getRegonSubject(regonCheck);
+  const regonNumber = String(vatSubject?.regon || regonSubject?.Regon || "").trim() || null;
+  const krsNumber = normalizeKrs(String(vatSubject?.krs || regonSubject?.Krs || ""));
+  const krsCheck = krsNumber
+    ? await verifyKrs(krsNumber)
+    : skippedCheck("KRS", "Brak numeru KRS w danych z Białej Listy VAT i REGON.");
+  checks.push(krsCheck);
   checks.push(skippedCheck("CEIDG", "Oficjalne API CEIDG wymaga skonfigurowanego dostępu. Źródło przygotowane do dopięcia po dodaniu klucza."));
-  checks.push(skippedCheck("GUS REGON", "Oficjalne API GUS BIR wymaga klucza API. Źródło przygotowane do dopięcia po dodaniu klucza."));
   checks.push(skippedCheck("Listy sankcyjne", "Weryfikacja sankcyjna zostanie dopięta do oficjalnego źródła list sankcyjnych w kolejnym kroku."));
   checks.push(skippedCheck("PEP", "Nie ma jednego publicznego oficjalnego API PEP. Status PEP pozostaje do weryfikacji formularzem i oświadczeniem."));
 
   const result = summarizeResult(checks);
   const now = new Date();
+  const registryDetails = buildRegistryDetails({
+    nip,
+    vatSubject,
+    regonSubject,
+    krsCheck,
+    checks,
+    checkedAt: now,
+  });
+  const beneficialOwners = buildBeneficialOwnersDetails(now);
   const reportName = buildReportFileName(client.nazwa, nip, now);
   const pdf = await buildAmlReportPdf({
     clientName: client.nazwa || "Klient bez nazwy",
@@ -111,7 +129,7 @@ export async function POST(request: NextRequest) {
       status: "wykonana",
       wynik: result,
       zrodla: checks.map((check) => ({ source: check.source, status: check.status, label: check.label })),
-      dane: { checks },
+      dane: { checks, dane_rejestrowe: registryDetails, beneficjenci_rzeczywisci: beneficialOwners },
       vat_status: checksVat ? (vatCheck.status === "ok" ? String(vatSubject?.statusVat || "sprawdzono") : vatCheck.status) : "potwierdzono_zwolnienie",
       vies_status: checksVies ? statusForSource(checks, "VIES") : "potwierdzono_brak_vat_ue",
       krs_status: statusForSource(checks, "KRS"),
@@ -140,6 +158,13 @@ export async function POST(request: NextRequest) {
       ostatnia_weryfikacja_id: verification.id,
       pep_status: "do_weryfikacji_formularzem",
       sankcje_status: "do_dopiecia",
+      dane_rejestrowe: registryDetails,
+      beneficjenci_rzeczywisci: beneficialOwners,
+      numer_regon: regonNumber,
+      numer_krs: krsNumber || null,
+      gus_status: statusForSource(checks, "GUS REGON"),
+      krs_status: statusForSource(checks, "KRS"),
+      crbr_status: "do_weryfikacji",
       updated_at: now.toISOString(),
     })
     .eq("id", register.id);
@@ -154,6 +179,8 @@ export async function POST(request: NextRequest) {
       status: nextStatus,
       wynik: result,
       sources: checks.map((check) => ({ source: check.source, status: check.status, label: check.label })),
+      dane_rejestrowe: registryDetails,
+      beneficjenci_rzeczywisci: beneficialOwners,
       pdf_path: storagePath,
     },
     created_by: auth.requesterId,
@@ -310,6 +337,79 @@ async function verifyKrs(krs: string): Promise<OfficialCheck> {
   return { source: "KRS Ministerstwa Sprawiedliwości", status: "warning", label: "Nie znaleziono odpisu KRS dla numeru z Białej Listy VAT.", details: { krs: paddedKrs } };
 }
 
+async function verifyGusRegon(nip: string): Promise<OfficialCheck> {
+  if (!GUS_REGON_API_KEY) {
+    return skippedCheck("GUS REGON", "Dodaj sekret GUS_REGON_API_KEY, aby uruchomić automatyczną weryfikację w rejestrze REGON.");
+  }
+
+  let sessionId: string | null = null;
+  try {
+    const loginResponse = await gusSoapRequest("Zaloguj", `
+      <ns:Zaloguj>
+        <ns:pKluczUzytkownika>${escapeXml(GUS_REGON_API_KEY)}</ns:pKluczUzytkownika>
+      </ns:Zaloguj>
+    `);
+    sessionId = readXmlTag(loginResponse, "ZalogujResult");
+
+    if (!sessionId) {
+      return { source: "GUS REGON", status: "error", label: "Nie udało się zalogować do API GUS BIR.", details: { checkedAt: new Date().toISOString() } };
+    }
+
+    const searchResponse = await gusSoapRequest("DaneSzukajPodmioty", `
+      <ns:DaneSzukajPodmioty>
+        <ns:pParametryWyszukiwania>
+          <dat:Nip>${escapeXml(nip)}</dat:Nip>
+        </ns:pParametryWyszukiwania>
+      </ns:DaneSzukajPodmioty>
+    `, sessionId);
+    const resultXml = decodeXmlEntities(readXmlTag(searchResponse, "DaneSzukajPodmiotyResult") || "");
+    const records = parseGusRecords(resultXml);
+    const firstRecord = records[0] || null;
+
+    return {
+      source: "GUS REGON",
+      status: firstRecord ? "ok" : "warning",
+      label: firstRecord ? "Podmiot odnaleziony w rejestrze REGON." : "Nie odnaleziono podmiotu w rejestrze REGON dla podanego NIP.",
+      details: { record: firstRecord, records, checkedAt: new Date().toISOString(), url: GUS_REGON_API_URL },
+    };
+  } catch (error) {
+    return { source: "GUS REGON", status: "error", label: "Błąd połączenia z API GUS BIR.", details: { message: errorMessage(error), checkedAt: new Date().toISOString(), url: GUS_REGON_API_URL } };
+  } finally {
+    if (sessionId) {
+      await gusSoapRequest("Wyloguj", `
+        <ns:Wyloguj>
+          <ns:pIdentyfikatorSesji>${escapeXml(sessionId)}</ns:pIdentyfikatorSesji>
+        </ns:Wyloguj>
+      `, sessionId).catch(() => null);
+    }
+  }
+}
+
+async function gusSoapRequest(action: "Zaloguj" | "DaneSzukajPodmioty" | "Wyloguj", body: string, sessionId?: string) {
+  const soapAction = `http://CIS/BIR/PUBL/2014/07/IUslugaBIRzewnPubl/${action}`;
+  const envelope = `<?xml version="1.0" encoding="UTF-8"?>
+<soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope" xmlns:ns="http://CIS/BIR/PUBL/2014/07" xmlns:dat="http://CIS/BIR/PUBL/2014/07/DataContract">
+  <soap:Header xmlns:wsa="http://www.w3.org/2005/08/addressing">
+    <wsa:To>${escapeXml(GUS_REGON_API_URL)}</wsa:To>
+    <wsa:Action>${soapAction}</wsa:Action>
+  </soap:Header>
+  <soap:Body>${body}</soap:Body>
+</soap:Envelope>`;
+
+  const headers: Record<string, string> = {
+    "Content-Type": `application/soap+xml; charset=utf-8; action="${soapAction}"`,
+    Accept: "application/soap+xml",
+  };
+  if (sessionId) headers.sid = sessionId;
+
+  const response = await fetch(GUS_REGON_API_URL, { method: "POST", headers, body: envelope });
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(`GUS BIR HTTP ${response.status}: ${text.slice(0, 300)}`);
+  }
+  return text;
+}
+
 function skippedCheck(source: string, label: string): OfficialCheck {
   return { source, status: "skipped", label, details: { checkedAt: new Date().toISOString() } };
 }
@@ -329,9 +429,91 @@ function statusForSource(checks: OfficialCheck[], source: string) {
   return check?.status || "nie_sprawdzono";
 }
 
+function statusForAnySource(checks: OfficialCheck[], sources: string[]) {
+  for (const source of sources) {
+    const check = checks.find((item) => item.source.toLowerCase().includes(source.toLowerCase()));
+    if (check) return check.status;
+  }
+  return "nie_sprawdzono";
+}
+
 function getVatSubject(check: OfficialCheck) {
   const details = check.details as { subject?: Record<string, unknown> };
   return details.subject || null;
+}
+
+function getRegonSubject(check: OfficialCheck) {
+  const details = check.details as { record?: Record<string, string> | null };
+  return details.record || null;
+}
+
+function buildRegistryDetails(input: {
+  nip: string;
+  vatSubject: Record<string, unknown> | null;
+  regonSubject: Record<string, string> | null;
+  krsCheck: OfficialCheck;
+  checks: OfficialCheck[];
+  checkedAt: Date;
+}) {
+  const krsDetails = input.krsCheck.details as { krs?: string; register?: string; data?: unknown; url?: string };
+
+  return {
+    updatedAt: input.checkedAt.toISOString(),
+    identyfikatory: {
+      nip: input.nip,
+      regon: String(input.vatSubject?.regon || input.regonSubject?.Regon || "") || null,
+      krs: String(input.vatSubject?.krs || input.regonSubject?.Krs || krsDetails.krs || "") || null,
+    },
+    statusy: {
+      vat: statusForAnySource(input.checks, ["Status VAT", "Biała Lista VAT"]),
+      vies: statusForSource(input.checks, "VIES"),
+      regon: statusForSource(input.checks, "GUS REGON"),
+      krs: statusForSource(input.checks, "KRS"),
+      crbr: "do_weryfikacji",
+    },
+    gusRegon: input.regonSubject ? {
+      nazwa: input.regonSubject.Nazwa || null,
+      regon: input.regonSubject.Regon || null,
+      nip: input.regonSubject.Nip || null,
+      krs: input.regonSubject.Krs || null,
+      typ: input.regonSubject.Typ || null,
+      statusNip: input.regonSubject.StatusNip || null,
+      wojewodztwo: input.regonSubject.Wojewodztwo || null,
+      powiat: input.regonSubject.Powiat || null,
+      gmina: input.regonSubject.Gmina || null,
+      miejscowosc: input.regonSubject.Miejscowosc || null,
+      kodPocztowy: input.regonSubject.KodPocztowy || null,
+      ulica: input.regonSubject.Ulica || null,
+      nrNieruchomosci: input.regonSubject.NrNieruchomosci || null,
+      nrLokalu: input.regonSubject.NrLokalu || null,
+      dataZakonczeniaDzialalnosci: input.regonSubject.DataZakonczeniaDzialalnosci || null,
+    } : null,
+    krs: input.krsCheck.status === "ok" ? {
+      numer: krsDetails.krs || null,
+      rejestr: krsDetails.register || null,
+      pobranoOdpis: true,
+      url: krsDetails.url || null,
+      dane: krsDetails.data || null,
+    } : null,
+    bialaListaVat: input.vatSubject ? {
+      nazwa: input.vatSubject.name || null,
+      statusVat: input.vatSubject.statusVat || null,
+      regon: input.vatSubject.regon || null,
+      krs: input.vatSubject.krs || null,
+      adresSiedziby: input.vatSubject.residenceAddress || null,
+      adresDzialalnosci: input.vatSubject.workingAddress || null,
+      rachunki: Array.isArray(input.vatSubject.accountNumbers) ? input.vatSubject.accountNumbers : [],
+    } : null,
+  };
+}
+
+function buildBeneficialOwnersDetails(checkedAt: Date) {
+  return [{
+    source: "CRBR",
+    status: "do_weryfikacji",
+    label: "Miejsce przygotowane pod zapis beneficjentów rzeczywistych po podłączeniu oficjalnego źródła CRBR albo po ręcznej weryfikacji.",
+    checkedAt: checkedAt.toISOString(),
+  }];
 }
 
 function normalizeNip(value: unknown) {
@@ -343,9 +525,30 @@ function normalizeKrs(value: string) {
 }
 
 function readXmlTag(xml: string, tag: string) {
-  const pattern = new RegExp(`<(?:\\\\w+:)?${tag}>([\\\\s\\\\S]*?)</(?:\\\\w+:)?${tag}>`, "i");
+  const pattern = new RegExp(`<(?:\\w+:)?${tag}>([\\s\\S]*?)</(?:\\w+:)?${tag}>`, "i");
   const match = xml.match(pattern);
   return match?.[1]?.replace(/<!\\[CDATA\\[|\\]\\]>/g, "").trim() || null;
+}
+
+function parseGusRecords(xml: string) {
+  const records = [...xml.matchAll(/<dane>([\s\S]*?)<\/dane>/gi)];
+  return records.map((recordMatch) => {
+    const recordXml = recordMatch[1] || "";
+    const record: Record<string, string> = {};
+    for (const fieldMatch of recordXml.matchAll(/<([A-Za-z0-9_]+)>([\s\S]*?)<\/\1>/g)) {
+      record[fieldMatch[1]] = decodeXmlEntities(fieldMatch[2] || "").trim();
+    }
+    return record;
+  });
+}
+
+function decodeXmlEntities(value: string) {
+  return value
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, "\"")
+    .replace(/&apos;/g, "'");
 }
 
 function escapeXml(value: string) {

@@ -266,6 +266,8 @@ function AmlDetailsModal({
           <InfoBox label="Następna weryfikacja" value={formatDate(row.register?.nastepna_weryfikacja_at)} />
         </div>
 
+        <RegistryDetails register={row.register} />
+
         <section style={detailsSectionStyle}>
           <h3 style={detailsTitleStyle}>Weryfikacje i raporty</h3>
           {row.verifications.length === 0 ? (
@@ -303,6 +305,51 @@ function AmlDetailsModal({
         </section>
       </aside>
     </div>
+  );
+}
+
+function RegistryDetails({ register }: { register: AmlRegisterRecord | null }) {
+  const registry = asRecord(register?.dane_rejestrowe);
+  const identifiers = asRecord(registry.identyfikatory);
+  const gus = asRecord(registry.gusRegon);
+  const krs = asRecord(registry.krs);
+  const vat = asRecord(registry.bialaListaVat);
+  const owners = Array.isArray(register?.beneficjenci_rzeczywisci) ? register.beneficjenci_rzeczywisci : [];
+
+  return (
+    <section style={detailsSectionStyle}>
+      <h3 style={detailsTitleStyle}>Dane rejestrowe podmiotu</h3>
+      {!register?.dane_rejestrowe || Object.keys(registry).length === 0 ? (
+        <p style={emptySmallStyle}>Brak zapisanych danych rejestrowych. Uruchom weryfikację AML, aby je uzupełnić.</p>
+      ) : (
+        <div style={registryGridStyle}>
+          <div style={registryPanelStyle}>
+            <h4 style={registryTitleStyle}>Identyfikatory</h4>
+            <Definition label="NIP" value={asText(identifiers.nip)} />
+            <Definition label="REGON" value={asText(identifiers.regon || register.numer_regon)} />
+            <Definition label="KRS" value={asText(identifiers.krs || register.numer_krs)} />
+          </div>
+          <div style={registryPanelStyle}>
+            <h4 style={registryTitleStyle}>GUS REGON</h4>
+            <Definition label="Status" value={sourceStatusLabel(register.gus_status || "")} />
+            <Definition label="Nazwa" value={asText(gus.nazwa)} />
+            <Definition label="Adres" value={formatAddress(gus)} />
+          </div>
+          <div style={registryPanelStyle}>
+            <h4 style={registryTitleStyle}>KRS</h4>
+            <Definition label="Status" value={sourceStatusLabel(register.krs_status || "")} />
+            <Definition label="Rejestr" value={asText(krs.rejestr)} />
+            <Definition label="Odpis" value={krs.pobranoOdpis ? "Pobrany z API MS" : "-"} />
+          </div>
+          <div style={registryPanelStyle}>
+            <h4 style={registryTitleStyle}>VAT i beneficjenci</h4>
+            <Definition label="Status VAT" value={asText(vat.statusVat)} />
+            <Definition label="Beneficjenci" value={owners.length > 0 ? asText(owners[0]?.label || owners[0]?.status) : "Do weryfikacji"} />
+            <Definition label="Status CRBR" value={register.crbr_status ? registerStatusText(register.crbr_status) : "Do weryfikacji"} />
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -552,12 +599,36 @@ function InfoBox({ label, value }: { label: string; value: string }) {
   );
 }
 
+function Definition({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={definitionStyle}>
+      <span style={definitionLabelStyle}>{label}</span>
+      <strong style={definitionValueStyle}>{value || "-"}</strong>
+    </div>
+  );
+}
+
 function Th({ children }: { children: React.ReactNode }) {
   return <th style={thStyle}>{children}</th>;
 }
 
 function Td({ children }: { children: React.ReactNode }) {
   return <td style={tdStyle}>{children}</td>;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function asText(value: unknown) {
+  if (value === null || value === undefined || value === "") return "-";
+  return String(value);
+}
+
+function formatAddress(record: Record<string, unknown>) {
+  const street = [record.ulica, record.nrNieruchomosci, record.nrLokalu ? `/${record.nrLokalu}` : ""].filter(Boolean).join(" ");
+  const city = [record.kodPocztowy, record.miejscowosc].filter(Boolean).join(" ");
+  return [street, city].filter(Boolean).join(", ") || "-";
 }
 
 const pageStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "22px" };
@@ -611,6 +682,12 @@ const infoLabelStyle: CSSProperties = { display: "block", color: colors.muted, f
 const infoValueStyle: CSSProperties = { display: "block", marginTop: "8px", color: colors.navy, fontSize: "14px" };
 const detailsSectionStyle: CSSProperties = { padding: "24px 30px", borderTop: `1px solid ${colors.border}` };
 const detailsTitleStyle: CSSProperties = { margin: "0 0 16px", color: colors.navy, fontSize: "20px" };
+const registryGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "12px" };
+const registryPanelStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "16px", background: colors.inputBackground };
+const registryTitleStyle: CSSProperties = { margin: "0 0 12px", color: colors.navy, fontSize: "15px" };
+const definitionStyle: CSSProperties = { display: "grid", gridTemplateColumns: "92px 1fr", gap: "10px", padding: "8px 0", borderTop: `1px solid ${colors.border}` };
+const definitionLabelStyle: CSSProperties = { color: colors.muted, fontSize: "12px", fontWeight: 850, textTransform: "uppercase" };
+const definitionValueStyle: CSSProperties = { color: colors.text, fontSize: "13px", lineHeight: 1.45, overflowWrap: "anywhere" };
 const emptySmallStyle: CSSProperties = { margin: 0, color: colors.muted, fontWeight: 750 };
 const listStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "12px" };
 const verificationItemStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "16px", display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "flex-start" };

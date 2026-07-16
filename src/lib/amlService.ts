@@ -13,6 +13,13 @@ export type AmlRegisterRecord = {
   ostatnia_weryfikacja_by: string | null;
   ostatnia_weryfikacja_id: string | null;
   nastepna_weryfikacja_at: string | null;
+  dane_rejestrowe: Record<string, unknown>;
+  beneficjenci_rzeczywisci: Array<Record<string, unknown>>;
+  numer_regon: string | null;
+  numer_krs: string | null;
+  gus_status: string | null;
+  krs_status: string | null;
+  crbr_status: string | null;
   uwagi: string | null;
 };
 

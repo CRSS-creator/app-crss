@@ -810,7 +810,7 @@ function buildStages(
   }
 
   stages.push(
-    buildManualStage("powers", "Instrukcje i pełnomocnictwa dotyczące ZUS oraz US.", recordByKey.powers, undefined, undefined, "Wyślij instrukcje e-mailem", undefined, adminResponsible, latestInstructionInfo(onboardingHistory, profilesById)),
+    buildManualStage("powers", "Instrukcje i pełnomocnictwa dotyczące ZUS oraz US.", recordByKey.powers, undefined, undefined, "Wyślij instrukcje e-mailem", undefined, caregiverResponsible, latestInstructionInfo(onboardingHistory, profilesById)),
     {
       ...buildManualStage(
         "wfirma_account",

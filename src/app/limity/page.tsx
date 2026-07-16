@@ -91,6 +91,7 @@ function LimitsContent() {
   const selectedRow = rows.find((row) => row.register.id === selectedRegisterId) || rows[0] || null;
   const availableClients = clients.filter((client) => !registers.some((register) => register.typ === activeType && register.klient_id === client.id));
   const isVatRegister = activeType === "vat";
+  const isAutomaticRegister = activeType === "vat" || activeType === "wnt";
 
   async function handleAddClient() {
     if (!clientToAdd) return;
@@ -138,16 +139,16 @@ function LimitsContent() {
           <div style={sectionHeaderStyle}>
             <div>
               <h2 style={sectionTitleStyle}>{activeTabLabel(activeType)}</h2>
-              <p style={sectionHintStyle}>{isVatRegister ? "Klienci zwolnieni z VAT są dodawani automatycznie. Szczegóły służą do uzupełnienia miesięcy." : "Lista klientów dodanych do tego limitu. Szczegóły służą do uzupełnienia limitu rocznego i miesięcy."}</p>
+              <p style={sectionHintStyle}>{registerHint(activeType)}</p>
             </div>
-            {!isVatRegister && (
+            {!isAutomaticRegister && (
               <button type="button" onClick={() => setShowAddForm((value) => !value)} style={primaryButtonStyle}>
                 <Plus size={18} /> Dodaj klienta
               </button>
             )}
           </div>
 
-          {showAddForm && !isVatRegister && (
+          {showAddForm && !isAutomaticRegister && (
             <div style={addFormStyle}>
               <select value={clientToAdd} onChange={(event) => setClientToAdd(event.target.value)} style={selectStyle}>
                 <option value="">Wybierz klienta</option>
@@ -162,7 +163,7 @@ function LimitsContent() {
           {loading ? (
             <p style={emptyStyle}>Ładowanie limitów...</p>
           ) : rows.length === 0 ? (
-            <p style={emptyStyle}>{isVatRegister ? "Brak klientów zwolnionych z VAT." : "Brak klientów w tym limicie. Dodaj pierwszego klienta przyciskiem powyżej."}</p>
+            <p style={emptyStyle}>{emptyRegisterText(activeType)}</p>
           ) : (
             <div style={listStyle}>
               {rows.map((row) => {
@@ -311,6 +312,18 @@ function monthValueMap(monthly: LimitMonthlyRecord[]) {
 
 function activeTabLabel(type: LimitType) {
   return LIMIT_TABS.find((tab) => tab.value === type)?.label || type;
+}
+
+function registerHint(type: LimitType) {
+  if (type === "vat") return "Klienci zwolnieni z VAT są dodawani automatycznie. Szczegóły służą do uzupełnienia miesięcy.";
+  if (type === "wnt") return "Klienci bez VAT i z rejestracją VAT-UE są dodawani automatycznie. Szczegóły służą do uzupełnienia limitu i miesięcy.";
+  return "Lista klientów dodanych do tego limitu. Szczegóły służą do uzupełnienia limitu rocznego i miesięcy.";
+}
+
+function emptyRegisterText(type: LimitType) {
+  if (type === "vat") return "Brak klientów zwolnionych z VAT.";
+  if (type === "wnt") return "Brak klientów bez VAT z rejestracją VAT-UE.";
+  return "Brak klientów w tym limicie. Dodaj pierwszego klienta przyciskiem powyżej.";
 }
 
 function caregiverLabel(client: Client | null) {

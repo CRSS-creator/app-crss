@@ -336,6 +336,7 @@ function RodoContent() {
 
   return (
     <>
+      <style>{screenHiddenStyle}</style>
       <section style={headerStyle}>
         <div>
           <p style={eyebrowStyle}>RODO</p>
@@ -392,8 +393,8 @@ function RodoContent() {
                   <Th>Siedziba klienta</Th>
                   <Th>Umowa główna</Th>
                   <Th>Zakres</Th>
-                  <Th>Data podpisania</Th>
-                  <Th>Wygaśnięcie</Th>
+                  <th data-screen-hidden="true" style={thStyle}>Data podpisania</th>
+                  <th data-screen-hidden="true" style={thStyle}>Wygaśnięcie</th>
                   <th data-print-hidden="true" style={thStyle}>Status umowy</th>
                   <th data-print-hidden="true" style={thStyle}>Szczegóły</th>
                 </tr>
@@ -408,8 +409,8 @@ function RodoContent() {
                     <Td>{contract.siedziba || "-"}</Td>
                     <Td>{contract.crm_umowy?.numer_umowy || "Brak powiązania"}</Td>
                     <Td>{contract.zakres_powierzenia || "zgodnie z zawartą umową główną"}</Td>
-                    <Td>{formatDate(contract.podpisana_at)}</Td>
-                    <Td>{formatContractExpiration(contract.data_wygasniecia)}</Td>
+                    <td data-screen-hidden="true" style={tdStyle}>{formatDate(contract.podpisana_at)}</td>
+                    <td data-screen-hidden="true" style={tdStyle}>{formatContractExpiration(contract.data_wygasniecia)}</td>
                     <td data-print-hidden="true" style={tdStyle}><StatusBadge status={contract.status} /></td>
                     <td data-print-hidden="true" style={tdStyle}><button style={secondaryButtonStyle} onClick={() => setSelectedContract(contract)}>Szczegóły</button></td>
                   </tr>
@@ -1310,6 +1311,16 @@ const clearButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, 
 const textareaRowStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "8px", color: colors.muted, fontWeight: 700 };
 const inputStyle: CSSProperties = { width: "100%", border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "10px 12px", background: colors.inputBackground, color: colors.text, fontWeight: 650, outline: "none" };
 const textareaStyle: CSSProperties = { ...inputStyle, resize: "vertical", minHeight: "96px", lineHeight: 1.6 };
+const screenHiddenStyle = `
+  [data-screen-hidden="true"] {
+    display: none;
+  }
+  @media print {
+    [data-screen-hidden="true"] {
+      display: table-cell !important;
+    }
+  }
+`;
 const fileRowStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "12px", display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", marginTop: "10px" };
 const fileInfoStyle: CSSProperties = { display: "flex", flexWrap: "wrap", gap: "4px", alignItems: "baseline", minWidth: 0 };
 const fileActionsStyle: CSSProperties = { display: "flex", gap: "8px", alignItems: "center", flexShrink: 0 };

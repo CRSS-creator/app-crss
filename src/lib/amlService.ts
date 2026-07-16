@@ -1,0 +1,116 @@
+import { supabase } from "@/lib/supabaseClient";
+
+export type AmlRegisterRecord = {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  klient_id: string;
+  status: string;
+  poziom_ryzyka: string | null;
+  pep_status: string | null;
+  sankcje_status: string | null;
+  ostatnia_weryfikacja_at: string | null;
+  ostatnia_weryfikacja_by: string | null;
+  ostatnia_weryfikacja_id: string | null;
+  nastepna_weryfikacja_at: string | null;
+  uwagi: string | null;
+};
+
+export type AmlVerificationRecord = {
+  id: string;
+  created_at: string;
+  klient_id: string;
+  aml_rejestr_id: string | null;
+  wykonana_by: string | null;
+  status: string;
+  wynik: string;
+  zrodla: Array<Record<string, unknown>>;
+  dane: Record<string, unknown>;
+  vat_status: string | null;
+  vies_status: string | null;
+  krs_status: string | null;
+  pep_status: string | null;
+  sankcje_status: string | null;
+  numer_krs: string | null;
+  numer_regon: string | null;
+  identyfikator_zapytania: string | null;
+  pdf_path: string | null;
+  pdf_name: string | null;
+};
+
+export type AmlHistoryRecord = {
+  id: string;
+  created_at: string;
+  klient_id: string;
+  aml_rejestr_id: string | null;
+  aml_weryfikacja_id: string | null;
+  akcja: string;
+  opis: string;
+  zmiany: Record<string, unknown>;
+  created_by: string | null;
+};
+
+export async function fetchAmlRegisters() {
+  return supabase
+    .from("aml_rejestr_klientow")
+    .select("*")
+    .order("created_at", { ascending: false });
+}
+
+export async function fetchAmlVerifications() {
+  return supabase
+    .from("aml_weryfikacje")
+    .select("*")
+    .order("created_at", { ascending: false });
+}
+
+export async function fetchAmlHistory() {
+  return supabase
+    .from("aml_historia")
+    .select("*")
+    .order("created_at", { ascending: false });
+}
+
+export async function verifyClientAml(clientId: string) {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
+  if (!token) return { data: null, error: new Error("Brak aktywnej sesji użytkownika.") };
+
+  const response = await fetch("/api/aml/verify", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ clientId }),
+  });
+
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    return { data: null, error: new Error(body?.error || "Nie udało się wykonać weryfikacji AML.") };
+  }
+
+  return { data: body?.verification || null, error: null };
+}
+
+export async function getAmlReportUrl(verificationId: string) {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
+  if (!token) return { data: null, error: new Error("Brak aktywnej sesji użytkownika.") };
+
+  const response = await fetch("/api/aml/report-url", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ verificationId }),
+  });
+
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    return { data: null, error: new Error(body?.error || "Nie udało się pobrać linku do raportu AML.") };
+  }
+
+  return { data: body as { url: string; fileName: string }, error: null };
+}

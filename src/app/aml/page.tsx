@@ -1,13 +1,23 @@
 "use client";
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import Link from "next/link";
-import { ClipboardCheck, FileSearch, Send, ShieldCheck } from "lucide-react";
+import { ClipboardCheck, Download, Eye, FileSearch, History, Send, ShieldCheck, X } from "lucide-react";
 import AccessGuard from "@/components/AccessGuard";
 import AppLayout from "@/components/AppLayout";
 import { colors, radius, shadow } from "@/app/design";
+import {
+  fetchAmlHistory,
+  fetchAmlRegisters,
+  fetchAmlVerifications,
+  getAmlReportUrl,
+  verifyClientAml,
+  type AmlHistoryRecord,
+  type AmlRegisterRecord,
+  type AmlVerificationRecord,
+} from "@/lib/amlService";
 import { fetchClients } from "@/lib/clientService";
 import { fetchOnboardingStages, statusLabel, type OnboardingStageRecord } from "@/lib/onboardingService";
+import { supabase } from "@/lib/supabaseClient";
 
 type CaregiverProfile = {
   full_name: string | null;
@@ -27,9 +37,18 @@ type Client = {
   profiles?: CaregiverProfile | CaregiverProfile[] | null;
 };
 
+type Profile = {
+  id: string;
+  full_name: string | null;
+  email: string | null;
+};
+
 type AmlRow = {
   client: Client;
   stage: OnboardingStageRecord | null;
+  register: AmlRegisterRecord | null;
+  verifications: AmlVerificationRecord[];
+  history: AmlHistoryRecord[];
 };
 
 export default function AmlPage() {
@@ -45,31 +64,67 @@ export default function AmlPage() {
 function AmlContent() {
   const [clients, setClients] = useState<Client[]>([]);
   const [stages, setStages] = useState<OnboardingStageRecord[]>([]);
+  const [registers, setRegisters] = useState<AmlRegisterRecord[]>([]);
+  const [verifications, setVerifications] = useState<AmlVerificationRecord[]>([]);
+  const [history, setHistory] = useState<AmlHistoryRecord[]>([]);
+  const [profilesById, setProfilesById] = useState<Record<string, Profile>>({});
   const [loading, setLoading] = useState(true);
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  const [verifyingClientId, setVerifyingClientId] = useState<string | null>(null);
 
   useEffect(() => {
-    async function loadData() {
-      setLoading(true);
-      const [clientsResult, stagesResult] = await Promise.all([
-        fetchClients(),
-        fetchOnboardingStages(),
-      ]);
-
-      if (clientsResult.error) console.error("Błąd pobierania klientów AML:", clientsResult.error);
-      if (stagesResult.error) console.error("Błąd pobierania etapów AML z onboardingu:", stagesResult.error);
-
-      setClients(clientsResult.error ? [] : ((clientsResult.data || []) as unknown as Client[]));
-      setStages(stagesResult.error ? [] : ((stagesResult.data || []) as OnboardingStageRecord[]));
-      setLoading(false);
-    }
-
     void loadData();
   }, []);
 
-  const rows = useMemo(() => buildRows(clients, stages), [clients, stages]);
-  const waitingCount = rows.filter((row) => !row.stage || row.stage.status === "do_wykonania").length;
-  const inProgressCount = rows.filter((row) => row.stage?.status === "w_toku").length;
-  const doneCount = rows.filter((row) => isDoneStage(row.stage)).length;
+  async function loadData() {
+    setLoading(true);
+    const [clientsResult, stagesResult, registersResult, verificationsResult, historyResult, profilesResult] = await Promise.all([
+      fetchClients(),
+      fetchOnboardingStages(),
+      fetchAmlRegisters(),
+      fetchAmlVerifications(),
+      fetchAmlHistory(),
+      supabase.from("profiles").select("id, full_name, email"),
+    ]);
+
+    if (clientsResult.error) console.error("Błąd pobierania klientów AML:", clientsResult.error);
+    if (stagesResult.error) console.error("Błąd pobierania etapów AML z onboardingu:", stagesResult.error);
+    if (registersResult.error) console.error("Błąd pobierania rejestru AML:", registersResult.error);
+    if (verificationsResult.error) console.error("Błąd pobierania weryfikacji AML:", verificationsResult.error);
+    if (historyResult.error) console.error("Błąd pobierania historii AML:", historyResult.error);
+    if (profilesResult.error) console.error("Błąd pobierania użytkowników AML:", profilesResult.error);
+
+    setClients(clientsResult.error ? [] : ((clientsResult.data || []) as unknown as Client[]));
+    setStages(stagesResult.error ? [] : ((stagesResult.data || []) as OnboardingStageRecord[]));
+    setRegisters(registersResult.error ? [] : ((registersResult.data || []) as AmlRegisterRecord[]));
+    setVerifications(verificationsResult.error ? [] : ((verificationsResult.data || []) as AmlVerificationRecord[]));
+    setHistory(historyResult.error ? [] : ((historyResult.data || []) as AmlHistoryRecord[]));
+    setProfilesById(indexProfiles((profilesResult.data || []) as Profile[]));
+    setLoading(false);
+  }
+
+  const rows = useMemo(
+    () => buildRows(clients, stages, registers, verifications, history),
+    [clients, stages, registers, verifications, history]
+  );
+  const selectedRow = rows.find((row) => row.client.id === selectedClientId) || null;
+  const waitingCount = rows.filter((row) => !row.register?.ostatnia_weryfikacja_at).length;
+  const requiresAnalysisCount = rows.filter((row) => row.register?.status === "wymaga_analizy").length;
+  const verifiedCount = rows.filter((row) => row.register?.status === "zweryfikowano_automatycznie").length;
+
+  async function handleVerify(row: AmlRow) {
+    setVerifyingClientId(row.client.id);
+    const result = await verifyClientAml(row.client.id);
+    setVerifyingClientId(null);
+
+    if (result.error) {
+      alert(result.error.message);
+      return;
+    }
+
+    await loadData();
+    setSelectedClientId(row.client.id);
+  }
 
   return (
     <div style={pageStyle}>
@@ -77,16 +132,14 @@ function AmlContent() {
         <div>
           <p style={eyebrowStyle}>AML</p>
           <h1 style={titleStyle}>Rejestr klientów AML</h1>
-          <p style={subtitleStyle}>
-            Lista jest zasilana automatycznie klientami, którzy są aktualnie w onboardingu.
-          </p>
+          <p style={subtitleStyle}>Lista jest zasilana automatycznie klientami, którzy są aktualnie w onboardingu.</p>
         </div>
       </header>
 
       <section style={statsGridStyle} aria-label="Podsumowanie AML">
-        <StatCard icon={<FileSearch size={22} />} label="Do weryfikacji AML" value={waitingCount} tone="warning" />
-        <StatCard icon={<ShieldCheck size={22} />} label="W trakcie" value={inProgressCount} tone="info" />
-        <StatCard icon={<ClipboardCheck size={22} />} label="Oznaczone jako gotowe" value={doneCount} tone="success" />
+        <StatCard icon={<FileSearch size={22} />} label="Do weryfikacji" value={waitingCount} tone="warning" />
+        <StatCard icon={<ShieldCheck size={22} />} label="Wymaga analizy" value={requiresAnalysisCount} tone="info" />
+        <StatCard icon={<ClipboardCheck size={22} />} label="Zweryfikowano automatycznie" value={verifiedCount} tone="success" />
       </section>
 
       <section style={workflowStyle} aria-label="Proces AML">
@@ -100,7 +153,7 @@ function AmlContent() {
         <div style={sectionHeaderStyle}>
           <div>
             <h2 style={sectionTitleStyle}>Podmioty z onboardingu</h2>
-            <p style={sectionHintStyle}>Na tym etapie pokazujemy klientów ze statusem „Onboarding”.</p>
+            <p style={sectionHintStyle}>Szczegóły otwierają pełną historię AML i zapisane raporty weryfikacji.</p>
           </div>
         </div>
 
@@ -118,7 +171,8 @@ function AmlContent() {
                   <Th>NIP</Th>
                   <Th>Opiekun</Th>
                   <Th>Etap AML</Th>
-                  <Th>Następny krok</Th>
+                  <Th>Status rejestru</Th>
+                  <Th>Ostatnia weryfikacja</Th>
                   <Th>Szczegóły</Th>
                 </tr>
               </thead>
@@ -132,14 +186,13 @@ function AmlContent() {
                     </Td>
                     <Td>{row.client.nip || "-"}</Td>
                     <Td>{caregiverLabel(row.client)}</Td>
+                    <Td><span style={stageBadgeStyle(row.stage)}>{stageStatusLabel(row.stage)}</span></Td>
+                    <Td><span style={registerBadgeStyle(row.register)}>{registerStatusLabel(row.register)}</span></Td>
+                    <Td>{formatDateTime(row.register?.ostatnia_weryfikacja_at)}</Td>
                     <Td>
-                      <span style={stageBadgeStyle(row.stage)}>{stageStatusLabel(row.stage)}</span>
-                    </Td>
-                    <Td>{nextStepLabel(row.stage)}</Td>
-                    <Td>
-                      <Link href={`/onboarding?client=${row.client.id}`} style={detailsLinkStyle}>
-                        Onboarding
-                      </Link>
+                      <button type="button" onClick={() => setSelectedClientId(row.client.id)} style={detailsButtonStyle}>
+                        Szczegóły
+                      </button>
                     </Td>
                   </tr>
                 ))}
@@ -148,29 +201,175 @@ function AmlContent() {
           </div>
         )}
       </section>
+
+      {selectedRow && (
+        <AmlDetailsModal
+          row={selectedRow}
+          profilesById={profilesById}
+          verifying={verifyingClientId === selectedRow.client.id}
+          onVerify={() => void handleVerify(selectedRow)}
+          onClose={() => setSelectedClientId(null)}
+        />
+      )}
     </div>
   );
 }
 
-function buildRows(clients: Client[], stages: OnboardingStageRecord[]): AmlRow[] {
-  const amlStagesByClient = new Map(
-    stages
-      .filter((stage) => stage.etap === "aml")
-      .map((stage) => [stage.klient_id, stage])
+function AmlDetailsModal({
+  row,
+  profilesById,
+  verifying,
+  onVerify,
+  onClose,
+}: {
+  row: AmlRow;
+  profilesById: Record<string, Profile>;
+  verifying: boolean;
+  onVerify: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div style={modalBackdropStyle}>
+      <aside style={modalStyle}>
+        <div style={modalHeaderStyle}>
+          <div>
+            <p style={eyebrowStyle}>Szczegóły AML</p>
+            <h2 style={modalTitleStyle}>{row.client.nazwa || "Klient bez nazwy"}</h2>
+            <p style={sectionHintStyle}>NIP: {row.client.nip || "-"} · Opiekun: {caregiverLabel(row.client)}</p>
+          </div>
+          <button type="button" onClick={onClose} style={iconButtonStyle} aria-label="Zamknij">
+            <X size={22} />
+          </button>
+        </div>
+
+        <div style={modalActionsStyle}>
+          <button type="button" onClick={onVerify} disabled={verifying} style={primaryButtonStyle}>
+            <FileSearch size={18} />
+            {verifying ? "Trwa weryfikacja..." : "Zweryfikuj AML"}
+          </button>
+        </div>
+
+        <div style={modalGridStyle}>
+          <InfoBox label="Status rejestru" value={registerStatusLabel(row.register)} />
+          <InfoBox label="Ostatnia weryfikacja" value={formatDateTime(row.register?.ostatnia_weryfikacja_at)} />
+          <InfoBox label="Wykonał" value={profileLabel(row.register?.ostatnia_weryfikacja_by, profilesById)} />
+          <InfoBox label="Następna weryfikacja" value={formatDate(row.register?.nastepna_weryfikacja_at)} />
+        </div>
+
+        <section style={detailsSectionStyle}>
+          <h3 style={detailsTitleStyle}>Weryfikacje i raporty</h3>
+          {row.verifications.length === 0 ? (
+            <p style={emptySmallStyle}>Brak wykonanej weryfikacji AML.</p>
+          ) : (
+            <div style={listStyle}>
+              {row.verifications.map((verification) => (
+                <VerificationItem key={verification.id} verification={verification} profilesById={profilesById} />
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section style={detailsSectionStyle}>
+          <h3 style={detailsTitleStyle}>Pełna historia zmian</h3>
+          {row.history.length === 0 ? (
+            <p style={emptySmallStyle}>Brak historii AML dla tego klienta.</p>
+          ) : (
+            <div style={historyListStyle}>
+              {row.history.map((entry) => (
+                <div key={entry.id} style={historyItemStyle}>
+                  <div style={historyIconStyle}><History size={16} /></div>
+                  <div>
+                    <div style={historyMetaStyle}>
+                      {formatDateTime(entry.created_at)} · {profileLabel(entry.created_by, profilesById)}
+                    </div>
+                    <strong style={historyActionStyle}>{historyActionLabel(entry.akcja)}</strong>
+                    <p style={historyDescriptionStyle}>{entry.opis}</p>
+                    <pre style={changesStyle}>{formatChanges(entry.zmiany)}</pre>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </aside>
+    </div>
   );
+}
+
+function VerificationItem({ verification, profilesById }: { verification: AmlVerificationRecord; profilesById: Record<string, Profile> }) {
+  async function openReport() {
+    const result = await getAmlReportUrl(verification.id);
+    if (result.error || !result.data?.url) {
+      alert(result.error?.message || "Nie udało się otworzyć raportu AML.");
+      return;
+    }
+    window.open(result.data.url, "_blank", "noopener,noreferrer");
+  }
+
+  async function downloadReport() {
+    const result = await getAmlReportUrl(verification.id);
+    if (result.error || !result.data?.url) {
+      alert(result.error?.message || "Nie udało się pobrać raportu AML.");
+      return;
+    }
+    const link = document.createElement("a");
+    link.href = result.data.url;
+    link.download = result.data.fileName || verification.pdf_name || "raport_aml.pdf";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }
+
+  return (
+    <article style={verificationItemStyle}>
+      <div>
+        <strong style={verificationTitleStyle}>{formatDateTime(verification.created_at)} · {verificationResultLabel(verification.wynik)}</strong>
+        <p style={verificationMetaStyle}>Wykonał: {profileLabel(verification.wykonana_by, profilesById)}</p>
+        <div style={sourceGridStyle}>
+          {(verification.zrodla || []).map((source, index) => (
+            <span key={`${verification.id}-${index}`} style={sourceBadgeStyle(String(source.status || ""))}>
+              {String(source.source || "Źródło")} · {sourceStatusLabel(String(source.status || ""))}
+            </span>
+          ))}
+        </div>
+      </div>
+      <div style={reportButtonsStyle}>
+        <button type="button" onClick={() => void openReport()} style={smallButtonStyle}><Eye size={16} /> Podgląd</button>
+        <button type="button" onClick={() => void downloadReport()} style={smallButtonStyle}><Download size={16} /> Pobierz</button>
+      </div>
+    </article>
+  );
+}
+
+function buildRows(
+  clients: Client[],
+  stages: OnboardingStageRecord[],
+  registers: AmlRegisterRecord[],
+  verifications: AmlVerificationRecord[],
+  history: AmlHistoryRecord[]
+): AmlRow[] {
+  const amlStagesByClient = new Map(stages.filter((stage) => stage.etap === "aml").map((stage) => [stage.klient_id, stage]));
+  const registersByClient = new Map(registers.map((register) => [register.klient_id, register]));
 
   return clients
     .filter((client) => String(client.status_klienta || "").toLowerCase() === "onboarding")
     .map((client) => ({
       client,
       stage: amlStagesByClient.get(client.id) || null,
+      register: registersByClient.get(client.id) || null,
+      verifications: verifications.filter((verification) => verification.klient_id === client.id),
+      history: history.filter((entry) => entry.klient_id === client.id),
     }))
     .sort((first, second) => {
-      const firstDone = isDoneStage(first.stage) ? 1 : 0;
-      const secondDone = isDoneStage(second.stage) ? 1 : 0;
-      if (firstDone !== secondDone) return firstDone - secondDone;
+      const firstDate = first.register?.ostatnia_weryfikacja_at || "";
+      const secondDate = second.register?.ostatnia_weryfikacja_at || "";
+      if (firstDate !== secondDate) return secondDate.localeCompare(firstDate);
       return String(first.client.nazwa || "").localeCompare(String(second.client.nazwa || ""), "pl");
     });
+}
+
+function indexProfiles(profiles: Profile[]) {
+  return Object.fromEntries(profiles.map((profile) => [profile.id, profile]));
 }
 
 function caregiverLabel(client: Client) {
@@ -183,16 +382,58 @@ function stageStatusLabel(stage: OnboardingStageRecord | null) {
   return statusLabel(stage.status);
 }
 
-function nextStepLabel(stage: OnboardingStageRecord | null) {
-  if (!stage || stage.status === "do_wykonania") return "Uruchom weryfikację AML";
-  if (stage.status === "w_toku") return "Dokończ weryfikację AML";
-  if (stage.status === "zablokowane") return "Wyjaśnij blokadę";
-  if (isDoneStage(stage)) return "Etap AML zakończony w onboardingu";
-  return "Sprawdź etap AML";
-}
-
 function isDoneStage(stage: OnboardingStageRecord | null) {
   return stage?.status === "gotowe" || stage?.status === "papierowo" || stage?.status === "nowy_podmiot";
+}
+
+function registerStatusLabel(register: AmlRegisterRecord | null) {
+  if (!register) return "Do weryfikacji";
+  if (register.status === "zweryfikowano_automatycznie") return "Zweryfikowano automatycznie";
+  if (register.status === "wymaga_analizy") return "Wymaga analizy";
+  if (register.status === "formularz_wyslany") return "Formularz wysłany";
+  if (register.status === "formularz_odebrany") return "Formularz odebrany";
+  if (register.status === "zatwierdzone") return "Zatwierdzone";
+  return "Do weryfikacji";
+}
+
+function verificationResultLabel(result: string) {
+  if (result === "pozytywna") return "Weryfikacja pozytywna";
+  if (result === "wymaga_analizy") return "Wymaga analizy";
+  return result || "Wykonana";
+}
+
+function sourceStatusLabel(status: string) {
+  if (status === "ok") return "OK";
+  if (status === "warning") return "Uwaga";
+  if (status === "error") return "Błąd";
+  if (status === "skipped") return "Do dopięcia";
+  return status || "-";
+}
+
+function historyActionLabel(action: string) {
+  if (action === "automatyczna_weryfikacja_aml") return "Automatyczna weryfikacja AML";
+  return action.replace(/_/g, " ");
+}
+
+function profileLabel(id: string | null | undefined, profilesById: Record<string, Profile>) {
+  if (!id) return "-";
+  const profile = profilesById[id];
+  return profile?.full_name || profile?.email || "Nieustalony użytkownik";
+}
+
+function formatDateTime(value: string | null | undefined) {
+  if (!value) return "-";
+  return new Date(value).toLocaleString("pl-PL", { dateStyle: "short", timeStyle: "short" });
+}
+
+function formatDate(value: string | null | undefined) {
+  if (!value) return "-";
+  return new Date(value).toLocaleDateString("pl-PL");
+}
+
+function formatChanges(value: Record<string, unknown>) {
+  if (!value || Object.keys(value).length === 0) return "Brak szczegółów zmian.";
+  return JSON.stringify(value, null, 2);
 }
 
 function stageBadgeStyle(stage: OnboardingStageRecord | null): CSSProperties {
@@ -200,6 +441,21 @@ function stageBadgeStyle(stage: OnboardingStageRecord | null): CSSProperties {
   if (stage?.status === "w_toku") return { ...badgeStyle, background: "rgba(37, 99, 235, 0.12)", color: colors.info };
   if (stage?.status === "zablokowane") return { ...badgeStyle, background: "rgba(220, 38, 38, 0.12)", color: colors.danger };
   return { ...badgeStyle, background: "rgba(245, 158, 11, 0.14)", color: "#9a5b00" };
+}
+
+function registerBadgeStyle(register: AmlRegisterRecord | null): CSSProperties {
+  if (register?.status === "zweryfikowano_automatycznie" || register?.status === "zatwierdzone") {
+    return { ...badgeStyle, background: "rgba(22, 163, 74, 0.12)", color: colors.success };
+  }
+  if (register?.status === "wymaga_analizy") return { ...badgeStyle, background: "rgba(220, 38, 38, 0.12)", color: colors.danger };
+  return { ...badgeStyle, background: "rgba(245, 158, 11, 0.14)", color: "#9a5b00" };
+}
+
+function sourceBadgeStyle(status: string): CSSProperties {
+  if (status === "ok") return { ...sourceBadgeBaseStyle, background: "rgba(22, 163, 74, 0.12)", color: colors.success };
+  if (status === "warning") return { ...sourceBadgeBaseStyle, background: "rgba(245, 158, 11, 0.14)", color: "#9a5b00" };
+  if (status === "error") return { ...sourceBadgeBaseStyle, background: "rgba(220, 38, 38, 0.12)", color: colors.danger };
+  return { ...sourceBadgeBaseStyle, background: "rgba(100, 116, 139, 0.12)", color: colors.muted };
 }
 
 function StatCard({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: number; tone: "warning" | "info" | "success" }) {
@@ -224,6 +480,15 @@ function WorkflowStep({ icon, title }: { icon: React.ReactNode; title: string })
   );
 }
 
+function InfoBox({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={infoBoxStyle}>
+      <span style={infoLabelStyle}>{label}</span>
+      <strong style={infoValueStyle}>{value}</strong>
+    </div>
+  );
+}
+
 function Th({ children }: { children: React.ReactNode }) {
   return <th style={thStyle}>{children}</th>;
 }
@@ -232,214 +497,58 @@ function Td({ children }: { children: React.ReactNode }) {
   return <td style={tdStyle}>{children}</td>;
 }
 
-const pageStyle: CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  gap: "22px",
-};
-
-const headerStyle: CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: "24px",
-  alignItems: "flex-start",
-};
-
-const eyebrowStyle: CSSProperties = {
-  margin: "0 0 8px",
-  fontSize: "13px",
-  fontWeight: 850,
-  letterSpacing: "0.08em",
-  color: colors.red,
-  textTransform: "uppercase",
-};
-
-const titleStyle: CSSProperties = {
-  margin: 0,
-  fontSize: "34px",
-  lineHeight: 1.15,
-  color: colors.navy,
-};
-
-const subtitleStyle: CSSProperties = {
-  margin: "10px 0 0",
-  maxWidth: "720px",
-  color: colors.muted,
-  fontSize: "16px",
-  lineHeight: 1.55,
-};
-
-const statsGridStyle: CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-  gap: "14px",
-};
-
-const statCardStyle: CSSProperties = {
-  minHeight: "92px",
-  border: `1px solid ${colors.border}`,
-  borderRadius: radius.card,
-  background: colors.card,
-  boxShadow: shadow.soft,
-  padding: "20px",
-  display: "flex",
-  alignItems: "center",
-  gap: "16px",
-};
-
-const statIconStyle: CSSProperties = {
-  width: "44px",
-  height: "44px",
-  borderRadius: radius.button,
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-};
-
-const statValueStyle: CSSProperties = {
-  fontSize: "28px",
-  lineHeight: 1,
-  fontWeight: 850,
-  color: colors.navy,
-};
-
-const statLabelStyle: CSSProperties = {
-  marginTop: "6px",
-  color: colors.muted,
-  fontWeight: 750,
-  fontSize: "13px",
-};
-
-const workflowStyle: CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-  gap: "10px",
-};
-
-const workflowStepStyle: CSSProperties = {
-  minHeight: "58px",
-  display: "flex",
-  alignItems: "center",
-  gap: "10px",
-  padding: "12px 14px",
-  border: `1px solid ${colors.border}`,
-  borderRadius: radius.button,
-  background: colors.card,
-  color: colors.navy,
-  fontWeight: 800,
-  fontSize: "13px",
-};
-
-const workflowIconStyle: CSSProperties = {
-  width: "34px",
-  height: "34px",
-  borderRadius: radius.button,
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  background: "rgba(23, 59, 115, 0.08)",
-  color: colors.navy,
-  flex: "0 0 auto",
-};
-
-const cardStyle: CSSProperties = {
-  border: `1px solid ${colors.border}`,
-  borderRadius: radius.card,
-  background: colors.card,
-  boxShadow: shadow.card,
-  overflow: "hidden",
-};
-
-const sectionHeaderStyle: CSSProperties = {
-  padding: "24px 28px",
-  borderBottom: `1px solid ${colors.border}`,
-};
-
-const sectionTitleStyle: CSSProperties = {
-  margin: 0,
-  fontSize: "22px",
-  color: colors.navy,
-};
-
-const sectionHintStyle: CSSProperties = {
-  margin: "6px 0 0",
-  color: colors.muted,
-  fontSize: "14px",
-};
-
-const tableWrapStyle: CSSProperties = {
-  width: "100%",
-  overflowX: "auto",
-};
-
-const tableStyle: CSSProperties = {
-  width: "100%",
-  minWidth: "980px",
-  borderCollapse: "collapse",
-};
-
-const thStyle: CSSProperties = {
-  padding: "16px 18px",
-  textAlign: "left",
-  fontSize: "12px",
-  color: colors.text,
-  textTransform: "uppercase",
-  letterSpacing: "0.08em",
-  borderBottom: `1px solid ${colors.border}`,
-  whiteSpace: "nowrap",
-};
-
-const tdStyle: CSSProperties = {
-  padding: "18px",
-  borderBottom: `1px solid ${colors.border}`,
-  color: colors.text,
-  verticalAlign: "middle",
-  fontSize: "15px",
-};
-
-const clientNameStyle: CSSProperties = {
-  display: "block",
-  color: colors.navy,
-  fontWeight: 850,
-  lineHeight: 1.35,
-};
-
-const clientMetaStyle: CSSProperties = {
-  display: "block",
-  marginTop: "5px",
-  color: colors.muted,
-  fontSize: "13px",
-};
-
-const badgeStyle: CSSProperties = {
-  display: "inline-flex",
-  minHeight: "30px",
-  alignItems: "center",
-  justifyContent: "center",
-  padding: "6px 12px",
-  borderRadius: radius.badge,
-  fontSize: "13px",
-  fontWeight: 850,
-  whiteSpace: "nowrap",
-};
-
-const detailsLinkStyle: CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  minHeight: "40px",
-  padding: "0 16px",
-  borderRadius: radius.button,
-  border: `1px solid ${colors.border}`,
-  color: colors.navy,
-  textDecoration: "none",
-  fontWeight: 850,
-  background: colors.white,
-};
-
-const emptyStyle: CSSProperties = {
-  margin: 0,
-  padding: "34px 28px",
-  color: colors.muted,
-  fontWeight: 750,
-};
+const pageStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "22px" };
+const headerStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "24px", alignItems: "flex-start" };
+const eyebrowStyle: CSSProperties = { margin: "0 0 8px", fontSize: "13px", fontWeight: 850, letterSpacing: "0.08em", color: colors.red, textTransform: "uppercase" };
+const titleStyle: CSSProperties = { margin: 0, fontSize: "34px", lineHeight: 1.15, color: colors.navy };
+const subtitleStyle: CSSProperties = { margin: "10px 0 0", maxWidth: "720px", color: colors.muted, fontSize: "16px", lineHeight: 1.55 };
+const statsGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "14px" };
+const statCardStyle: CSSProperties = { minHeight: "92px", border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.card, boxShadow: shadow.soft, padding: "20px", display: "flex", alignItems: "center", gap: "16px" };
+const statIconStyle: CSSProperties = { width: "44px", height: "44px", borderRadius: radius.button, display: "inline-flex", alignItems: "center", justifyContent: "center" };
+const statValueStyle: CSSProperties = { fontSize: "28px", lineHeight: 1, fontWeight: 850, color: colors.navy };
+const statLabelStyle: CSSProperties = { marginTop: "6px", color: colors.muted, fontWeight: 750, fontSize: "13px" };
+const workflowStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "10px" };
+const workflowStepStyle: CSSProperties = { minHeight: "58px", display: "flex", alignItems: "center", gap: "10px", padding: "12px 14px", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.card, color: colors.navy, fontWeight: 800, fontSize: "13px" };
+const workflowIconStyle: CSSProperties = { width: "34px", height: "34px", borderRadius: radius.button, display: "inline-flex", alignItems: "center", justifyContent: "center", background: "rgba(23, 59, 115, 0.08)", color: colors.navy, flex: "0 0 auto" };
+const cardStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.card, boxShadow: shadow.card, overflow: "hidden" };
+const sectionHeaderStyle: CSSProperties = { padding: "24px 28px", borderBottom: `1px solid ${colors.border}` };
+const sectionTitleStyle: CSSProperties = { margin: 0, fontSize: "22px", color: colors.navy };
+const sectionHintStyle: CSSProperties = { margin: "6px 0 0", color: colors.muted, fontSize: "14px" };
+const tableWrapStyle: CSSProperties = { width: "100%", overflowX: "auto" };
+const tableStyle: CSSProperties = { width: "100%", minWidth: "1100px", borderCollapse: "collapse" };
+const thStyle: CSSProperties = { padding: "16px 18px", textAlign: "left", fontSize: "12px", color: colors.text, textTransform: "uppercase", letterSpacing: "0.08em", borderBottom: `1px solid ${colors.border}`, whiteSpace: "nowrap" };
+const tdStyle: CSSProperties = { padding: "18px", borderBottom: `1px solid ${colors.border}`, color: colors.text, verticalAlign: "middle", fontSize: "15px" };
+const clientNameStyle: CSSProperties = { display: "block", color: colors.navy, fontWeight: 850, lineHeight: 1.35 };
+const clientMetaStyle: CSSProperties = { display: "block", marginTop: "5px", color: colors.muted, fontSize: "13px" };
+const badgeStyle: CSSProperties = { display: "inline-flex", minHeight: "30px", alignItems: "center", justifyContent: "center", padding: "6px 12px", borderRadius: radius.badge, fontSize: "13px", fontWeight: 850, whiteSpace: "nowrap" };
+const detailsButtonStyle: CSSProperties = { minHeight: "40px", padding: "0 16px", borderRadius: radius.button, border: `1px solid ${colors.border}`, color: colors.navy, fontWeight: 850, background: colors.white, cursor: "pointer" };
+const emptyStyle: CSSProperties = { margin: 0, padding: "34px 28px", color: colors.muted, fontWeight: 750 };
+const modalBackdropStyle: CSSProperties = { position: "fixed", inset: 0, zIndex: 60, background: "rgba(15, 23, 42, 0.38)", display: "flex", justifyContent: "flex-end", padding: "24px" };
+const modalStyle: CSSProperties = { width: "min(1180px, calc(100vw - 48px))", maxHeight: "calc(100vh - 48px)", overflowY: "auto", borderRadius: radius.card, background: colors.white, boxShadow: "0 32px 90px rgba(15, 23, 42, 0.28)", border: `1px solid ${colors.border}` };
+const modalHeaderStyle: CSSProperties = { position: "sticky", top: 0, zIndex: 2, background: colors.white, display: "flex", justifyContent: "space-between", gap: "20px", padding: "26px 30px", borderBottom: `1px solid ${colors.border}` };
+const modalTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "28px" };
+const iconButtonStyle: CSSProperties = { width: "44px", height: "44px", borderRadius: radius.button, border: `1px solid ${colors.border}`, background: colors.white, color: colors.navy, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer" };
+const modalActionsStyle: CSSProperties = { padding: "20px 30px", borderBottom: `1px solid ${colors.border}` };
+const primaryButtonStyle: CSSProperties = { minHeight: "46px", padding: "0 18px", border: "none", borderRadius: radius.button, background: colors.red, color: colors.white, fontWeight: 850, display: "inline-flex", alignItems: "center", gap: "10px", cursor: "pointer" };
+const modalGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "12px", padding: "22px 30px" };
+const infoBoxStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "14px", background: colors.inputBackground };
+const infoLabelStyle: CSSProperties = { display: "block", color: colors.muted, fontSize: "12px", fontWeight: 800, textTransform: "uppercase" };
+const infoValueStyle: CSSProperties = { display: "block", marginTop: "8px", color: colors.navy, fontSize: "14px" };
+const detailsSectionStyle: CSSProperties = { padding: "24px 30px", borderTop: `1px solid ${colors.border}` };
+const detailsTitleStyle: CSSProperties = { margin: "0 0 16px", color: colors.navy, fontSize: "20px" };
+const emptySmallStyle: CSSProperties = { margin: 0, color: colors.muted, fontWeight: 750 };
+const listStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "12px" };
+const verificationItemStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "16px", display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "flex-start" };
+const verificationTitleStyle: CSSProperties = { color: colors.navy, fontSize: "15px" };
+const verificationMetaStyle: CSSProperties = { margin: "6px 0 12px", color: colors.muted, fontSize: "13px", fontWeight: 700 };
+const sourceGridStyle: CSSProperties = { display: "flex", flexWrap: "wrap", gap: "8px" };
+const sourceBadgeBaseStyle: CSSProperties = { display: "inline-flex", padding: "6px 10px", borderRadius: radius.badge, fontSize: "12px", fontWeight: 850 };
+const reportButtonsStyle: CSSProperties = { display: "flex", gap: "8px", flexWrap: "wrap", justifyContent: "flex-end" };
+const smallButtonStyle: CSSProperties = { minHeight: "36px", padding: "0 12px", borderRadius: radius.button, border: `1px solid ${colors.border}`, background: colors.white, color: colors.navy, fontWeight: 850, display: "inline-flex", alignItems: "center", gap: "8px", cursor: "pointer" };
+const historyListStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "14px" };
+const historyItemStyle: CSSProperties = { display: "grid", gridTemplateColumns: "34px 1fr", gap: "12px", border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "14px" };
+const historyIconStyle: CSSProperties = { width: "34px", height: "34px", borderRadius: radius.button, display: "inline-flex", alignItems: "center", justifyContent: "center", background: "rgba(23, 59, 115, 0.08)", color: colors.navy };
+const historyMetaStyle: CSSProperties = { color: colors.muted, fontSize: "12px", fontWeight: 800 };
+const historyActionStyle: CSSProperties = { display: "block", marginTop: "4px", color: colors.navy };
+const historyDescriptionStyle: CSSProperties = { margin: "6px 0 8px", color: colors.text, lineHeight: 1.5 };
+const changesStyle: CSSProperties = { margin: 0, padding: "10px", borderRadius: radius.button, background: colors.inputBackground, color: colors.muted, fontSize: "12px", overflowX: "auto", whiteSpace: "pre-wrap" };

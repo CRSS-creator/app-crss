@@ -19,6 +19,14 @@ import {
   type RodoProcessingContract,
   type RodoProcessingContractStatus,
 } from "@/lib/rodoProcessingContractService";
+import {
+  createRodoRegisterRecord,
+  fetchRodoRegisterRecords,
+  updateRodoRegisterRecord,
+  type RodoAdditionalRegisterRecord,
+  type RodoRegisterKind,
+  type RodoRegisterPayload,
+} from "@/lib/rodoRegistersService";
 import { X } from "lucide-react";
 
 type Client = {
@@ -58,6 +66,36 @@ type RodoDraft = {
   uwagi: string;
 };
 
+type ActiveRodoRegister = "contracts" | RodoRegisterKind;
+
+type RegisterColumn = {
+  key: string;
+  label: string;
+  width?: string;
+  format?: (value: string | null | undefined) => string;
+};
+
+type RegisterField = {
+  key: string;
+  label: string;
+  type?: "text" | "date" | "datetime-local" | "textarea" | "select";
+  required?: boolean;
+  options?: { value: string; label: string }[];
+};
+
+type RegisterDefinition = {
+  kind: RodoRegisterKind;
+  title: string;
+  addLabel: string;
+  emptyLabel: string;
+  defaultStatus: string;
+  primaryField: string;
+  dateField: string;
+  statusOptions: { value: string; label: string }[];
+  columns: RegisterColumn[];
+  fields: RegisterField[];
+};
+
 const STATUS_OPTIONS: { value: RodoProcessingContractStatus; label: string }[] = [
   { value: "szkic", label: "Szkic" },
   { value: "wygenerowana", label: "Wygenerowana" },
@@ -66,6 +104,149 @@ const STATUS_OPTIONS: { value: RodoProcessingContractStatus; label: string }[] =
   { value: "anulowana", label: "Anulowana" },
 ];
 const STATUS_FILTER_OPTIONS = [{ value: "Wszystkie", label: "Wszystkie statusy" }, ...STATUS_OPTIONS];
+
+const RODO_REGISTER_TABS: { value: ActiveRodoRegister; label: string }[] = [
+  { value: "contracts", label: "Umowy powierzenia" },
+  { value: "changes", label: "Zmiany i przeglady" },
+  { value: "incidents", label: "Incydenty i naruszenia" },
+  { value: "authorizedPersons", label: "Osoby upowaznione" },
+];
+
+const CHANGE_STATUS_OPTIONS = [
+  { value: "planowane", label: "Planowane" },
+  { value: "wykonane", label: "Wykonane" },
+  { value: "wymaga_dzialania", label: "Wymaga dzialania" },
+  { value: "anulowane", label: "Anulowane" },
+];
+
+const INCIDENT_STATUS_OPTIONS = [
+  { value: "nowe", label: "Nowe" },
+  { value: "w_analizie", label: "W analizie" },
+  { value: "zgloszone", label: "Zgloszone" },
+  { value: "zamkniete", label: "Zamkniete" },
+];
+
+const AUTHORIZED_PERSON_STATUS_OPTIONS = [
+  { value: "aktywne", label: "Aktywne" },
+  { value: "wygasle", label: "Wygasle" },
+  { value: "cofniete", label: "Cofniete" },
+];
+
+const RISK_OPTIONS = [
+  { value: "", label: "Nieustalone" },
+  { value: "brak_ryzyka", label: "Brak ryzyka" },
+  { value: "ryzyko", label: "Ryzyko" },
+  { value: "wysokie_ryzyko", label: "Wysokie ryzyko" },
+];
+
+const UODO_OPTIONS = [
+  { value: "", label: "W analizie" },
+  { value: "nie_dotyczy", label: "Nie dotyczy" },
+  { value: "nie_zgloszono", label: "Nie zgloszono" },
+  { value: "zgloszono", label: "Zgloszono" },
+];
+
+const REGISTER_DEFINITIONS: Record<RodoRegisterKind, RegisterDefinition> = {
+  changes: {
+    kind: "changes",
+    title: "Rejestr zmian i przegladow",
+    addLabel: "Dodaj wpis",
+    emptyLabel: "Brak wpisow w rejestrze zmian i przegladow.",
+    defaultStatus: "planowane",
+    primaryField: "opis_skrocony",
+    dateField: "data_wpisu",
+    statusOptions: CHANGE_STATUS_OPTIONS,
+    columns: [
+      { key: "data_wpisu", label: "Data", width: "10%", format: formatDate },
+      { key: "obszar", label: "Obszar", width: "15%" },
+      { key: "rodzaj", label: "Rodzaj", width: "13%" },
+      { key: "opis_skrocony", label: "Opis skrocony", width: "28%" },
+      { key: "osoba_odpowiedzialna", label: "Odpowiedzialny", width: "18%" },
+      { key: "status", label: "Status", width: "11%", format: (value) => optionLabel(CHANGE_STATUS_OPTIONS, value) },
+    ],
+    fields: [
+      { key: "data_wpisu", label: "Data", type: "date" },
+      { key: "obszar", label: "Obszar" },
+      { key: "rodzaj", label: "Rodzaj" },
+      { key: "opis_skrocony", label: "Opis skrocony", required: true },
+      { key: "osoba_odpowiedzialna", label: "Osoba odpowiedzialna" },
+      { key: "status", label: "Status", type: "select", options: CHANGE_STATUS_OPTIONS },
+      { key: "powod", label: "Powod zmiany", type: "textarea" },
+      { key: "wynik", label: "Wynik przegladu", type: "textarea" },
+      { key: "nastepny_przeglad", label: "Nastepny przeglad", type: "date" },
+      { key: "pelny_opis", label: "Pelny opis", type: "textarea" },
+      { key: "uwagi", label: "Uwagi", type: "textarea" },
+    ],
+  },
+  incidents: {
+    kind: "incidents",
+    title: "Rejestr incydentow i naruszen",
+    addLabel: "Dodaj zdarzenie",
+    emptyLabel: "Brak wpisow w rejestrze incydentow i naruszen.",
+    defaultStatus: "nowe",
+    primaryField: "opis_skrocony",
+    dateField: "data_wykrycia",
+    statusOptions: INCIDENT_STATUS_OPTIONS,
+    columns: [
+      { key: "data_wykrycia", label: "Data wykrycia", width: "12%", format: formatDate },
+      { key: "typ", label: "Typ", width: "12%" },
+      { key: "opis_skrocony", label: "Opis skrocony", width: "30%" },
+      { key: "ryzyko", label: "Ryzyko", width: "13%", format: (value) => optionLabel(RISK_OPTIONS, value) },
+      { key: "zgloszenie_uodo", label: "UODO", width: "14%", format: (value) => optionLabel(UODO_OPTIONS, value) },
+      { key: "status", label: "Status", width: "12%", format: (value) => optionLabel(INCIDENT_STATUS_OPTIONS, value) },
+    ],
+    fields: [
+      { key: "data_wykrycia", label: "Data wykrycia", type: "date" },
+      { key: "typ", label: "Typ" },
+      { key: "opis_skrocony", label: "Opis skrocony", required: true },
+      { key: "ryzyko", label: "Ryzyko", type: "select", options: RISK_OPTIONS },
+      { key: "zgloszenie_uodo", label: "Zgloszenie UODO", type: "select", options: UODO_OPTIONS },
+      { key: "status", label: "Status", type: "select", options: INCIDENT_STATUS_OPTIONS },
+      { key: "data_zdarzenia", label: "Data zdarzenia", type: "date" },
+      { key: "kategorie_danych", label: "Kategorie danych", type: "textarea" },
+      { key: "liczba_osob", label: "Liczba osob" },
+      { key: "skutki", label: "Skutki", type: "textarea" },
+      { key: "decyzja", label: "Decyzja", type: "textarea" },
+      { key: "termin_72h", label: "Termin 72h", type: "datetime-local" },
+      { key: "data_zgloszenia", label: "Data zgloszenia", type: "datetime-local" },
+      { key: "osoby_zawiadomione", label: "Zawiadomienie osob", type: "textarea" },
+      { key: "dzialania_naprawcze", label: "Dzialania naprawcze", type: "textarea" },
+      { key: "osoba_prowadzaca", label: "Osoba prowadzaca" },
+      { key: "uwagi", label: "Uwagi", type: "textarea" },
+    ],
+  },
+  authorizedPersons: {
+    kind: "authorizedPersons",
+    title: "Rejestr osob upowaznionych",
+    addLabel: "Dodaj osobe",
+    emptyLabel: "Brak wpisow w rejestrze osob upowaznionych.",
+    defaultStatus: "aktywne",
+    primaryField: "imie_nazwisko",
+    dateField: "data_nadania",
+    statusOptions: AUTHORIZED_PERSON_STATUS_OPTIONS,
+    columns: [
+      { key: "imie_nazwisko", label: "Imie i nazwisko", width: "18%" },
+      { key: "rola_stanowisko", label: "Rola / stanowisko", width: "15%" },
+      { key: "zakres_upowaznienia", label: "Zakres", width: "22%" },
+      { key: "systemy_obszary", label: "Systemy / obszary", width: "18%" },
+      { key: "data_nadania", label: "Nadanie", width: "10%", format: formatDate },
+      { key: "data_cofniecia", label: "Cofniecie", width: "10%", format: formatDate },
+      { key: "status", label: "Status", width: "9%", format: (value) => optionLabel(AUTHORIZED_PERSON_STATUS_OPTIONS, value) },
+    ],
+    fields: [
+      { key: "imie_nazwisko", label: "Imie i nazwisko", required: true },
+      { key: "rola_stanowisko", label: "Rola / stanowisko" },
+      { key: "zakres_upowaznienia", label: "Zakres upowaznienia", type: "textarea" },
+      { key: "systemy_obszary", label: "Systemy / obszary danych", type: "textarea" },
+      { key: "data_nadania", label: "Data nadania", type: "date" },
+      { key: "data_cofniecia", label: "Data cofniecia", type: "date" },
+      { key: "status", label: "Status", type: "select", options: AUTHORIZED_PERSON_STATUS_OPTIONS },
+      { key: "nadajacy", label: "Nadajacy upowaznienie" },
+      { key: "podstawa_nadania", label: "Podstawa nadania", type: "textarea" },
+      { key: "uwagi", label: "Uwagi", type: "textarea" },
+    ],
+  },
+};
 
 export default function RodoPage() {
   return (
@@ -78,6 +259,7 @@ export default function RodoPage() {
 }
 
 function RodoContent() {
+  const [activeRegister, setActiveRegister] = useState<ActiveRodoRegister>("contracts");
   const [contracts, setContracts] = useState<RodoProcessingContract[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [accountingContracts, setAccountingContracts] = useState<CrmContract[]>([]);
@@ -153,10 +335,28 @@ function RodoContent() {
       <section style={headerStyle}>
         <div>
           <p style={eyebrowStyle}>RODO</p>
-          <h1 style={titleStyle}>Umowy powierzenia</h1>
+          <h1 style={titleStyle}>Rejestry RODO</h1>
         </div>
-        <button style={primaryButtonStyle} onClick={() => setCreatingContract(true)}>Dodaj umowę</button>
       </section>
+
+      <nav style={tabsStyle} aria-label="Rejestry RODO">
+        {RODO_REGISTER_TABS.map((tab) => (
+          <button
+            key={tab.value}
+            type="button"
+            style={activeRegister === tab.value ? activeTabStyle : tabStyle}
+            onClick={() => setActiveRegister(tab.value)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </nav>
+
+      {activeRegister === "contracts" ? (
+        <>
+          <section style={headerActionsOnlyStyle}>
+            <button style={primaryButtonStyle} onClick={() => setCreatingContract(true)}>Dodaj umowe</button>
+          </section>
 
       <section style={summaryGridStyle}>
         <SummaryCard label="Wszystkie umowy" value={contracts.length} />
@@ -164,7 +364,7 @@ function RodoContent() {
         <SummaryCard label="Do podpisu" value={pendingCount} />
       </section>
 
-      <section style={cardStyle}>
+      <section data-rodo-print-section="true" style={cardStyle}>
         <div style={tableHeaderStyle}>
           <h2 style={sectionTitleStyle}>Rejestr umów powierzenia przetwarzania danych osobowych</h2>
           <div style={tableActionsStyle}>
@@ -188,7 +388,7 @@ function RodoContent() {
                   <Th>Umowa główna</Th>
                   <Th>Zakres</Th>
                   <Th>Status umowy</Th>
-                  <Th>Szczegóły</Th>
+                  <th data-print-hidden="true" style={thStyle}>Szczegoly</th>
                 </tr>
               </thead>
               <tbody>
@@ -201,7 +401,7 @@ function RodoContent() {
                     <Td>{contract.crm_umowy?.numer_umowy || "Brak powiązania"}</Td>
                     <Td>{contract.zakres_powierzenia || "zgodnie z zawartą umową główną"}</Td>
                     <Td><StatusBadge status={contract.status} /></Td>
-                    <Td><button style={secondaryButtonStyle} onClick={() => setSelectedContract(contract)}>Szczegóły</button></Td>
+                    <td data-print-hidden="true" style={tdStyle}><button style={secondaryButtonStyle} onClick={() => setSelectedContract(contract)}>Szczegoly</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -223,7 +423,231 @@ function RodoContent() {
           onSaved={handleSaved}
         />
       )}
+        </>
+      ) : (
+        <RodoAdditionalRegister
+          definition={REGISTER_DEFINITIONS[activeRegister]}
+          currentUserName={currentUserName}
+        />
+      )}
     </>
+  );
+}
+
+function RodoAdditionalRegister({ definition, currentUserName }: { definition: RegisterDefinition; currentUserName: string }) {
+  const [records, setRecords] = useState<RodoAdditionalRegisterRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [statusFilter, setStatusFilter] = useState("Wszystkie");
+  const [search, setSearch] = useState("");
+  const [selectedRecord, setSelectedRecord] = useState<RodoAdditionalRegisterRecord | null>(null);
+  const [creatingRecord, setCreatingRecord] = useState(false);
+  const [printInfo, setPrintInfo] = useState<PrintInfo | null>(null);
+
+  useEffect(() => {
+    void loadRecords();
+    // loadRecords depends on the active definition and is intentionally refreshed when the register changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [definition.kind]);
+
+  async function loadRecords() {
+    setLoading(true);
+    const result = await fetchRodoRegisterRecords(definition.kind);
+    if (result.error) {
+      console.error("Blad pobierania rejestru RODO:", result.error);
+      setRecords([]);
+    } else {
+      setRecords((result.data || []) as RodoAdditionalRegisterRecord[]);
+    }
+    setLoading(false);
+  }
+
+  const statusOptions = useMemo(() => [{ value: "Wszystkie", label: "Wszystkie statusy" }, ...definition.statusOptions], [definition.statusOptions]);
+  const filteredRecords = useMemo(() => {
+    const normalizedSearch = search.trim().toLowerCase();
+    return records.filter((record) => {
+      const status = String(getRecordValue(record, "status") || "");
+      const matchesStatus = statusFilter === "Wszystkie" || status === statusFilter;
+      const matchesText = !normalizedSearch || definition.columns.some((column) => String(getRecordValue(record, column.key) || "").toLowerCase().includes(normalizedSearch));
+      return matchesStatus && matchesText;
+    });
+  }, [records, definition.columns, search, statusFilter]);
+
+  const activeCount = records.filter((record) => {
+    const status = String(getRecordValue(record, "status") || "");
+    return !["zamkniete", "wykonane", "wygasle", "cofniete", "anulowane"].includes(status);
+  }).length;
+
+  function handlePrintRegister() {
+    setPrintInfo({
+      userName: currentUserName,
+      printedAt: new Date().toISOString(),
+    });
+
+    window.requestAnimationFrame(() => window.print());
+  }
+
+  function handleSaved(record: RodoAdditionalRegisterRecord) {
+    setCreatingRecord(false);
+    setSelectedRecord(record);
+    void loadRecords();
+  }
+
+  return (
+    <>
+      <section style={summaryGridStyle}>
+        <SummaryCard label="Wszystkie wpisy" value={records.length} />
+        <SummaryCard label="Aktywne / otwarte" value={activeCount} />
+        <SummaryCard label="Widoczne w filtrze" value={filteredRecords.length} />
+      </section>
+
+      <section data-rodo-print-section="true" style={cardStyle}>
+        <div style={tableHeaderStyle}>
+          <h2 style={sectionTitleStyle}>{definition.title}</h2>
+          <div style={tableActionsStyle}>
+            <button style={primarySmallButtonStyle} type="button" onClick={() => setCreatingRecord(true)}>{definition.addLabel}</button>
+            <button style={secondaryButtonStyle} type="button" onClick={handlePrintRegister}>Drukuj rejestr</button>
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Szukaj"
+              style={searchInputStyle}
+            />
+            <AppSelect style={filterStyle} value={statusFilter} options={statusOptions} onChange={setStatusFilter} />
+          </div>
+        </div>
+        <div data-rodo-print-meta style={printMetaStyle}>
+          Wydrukowal: {printInfo?.userName || currentUserName} | {formatPrintDateTime(printInfo?.printedAt)}
+        </div>
+
+        {loading ? <div style={emptyStyle}>Ladowanie rejestru...</div> : filteredRecords.length === 0 ? <div style={emptyStyle}>{definition.emptyLabel}</div> : (
+          <div style={tableWrapperStyle}>
+            <table style={tableStyle}>
+              <thead>
+                <tr>
+                  <Th>Lp.</Th>
+                  {definition.columns.map((column) => <Th key={column.key}>{column.label}</Th>)}
+                  <th data-print-hidden="true" style={thStyle}>Szczegoly</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredRecords.map((record, index) => (
+                  <tr key={record.id} style={rowStyle}>
+                    <Td strong>{index + 1}</Td>
+                    {definition.columns.map((column) => (
+                      <Td key={column.key}>{formatRegisterValue(record, column)}</Td>
+                    ))}
+                    <td data-print-hidden="true" style={tdStyle}><button style={secondaryButtonStyle} onClick={() => setSelectedRecord(record)}>Szczegoly</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {(creatingRecord || selectedRecord) && (
+        <RodoRegisterDrawer
+          definition={definition}
+          record={selectedRecord}
+          onClose={() => {
+            setCreatingRecord(false);
+            setSelectedRecord(null);
+          }}
+          onSaved={handleSaved}
+        />
+      )}
+    </>
+  );
+}
+
+function RodoRegisterDrawer({ definition, record, onClose, onSaved }: { definition: RegisterDefinition; record: RodoAdditionalRegisterRecord | null; onClose: () => void; onSaved: (record: RodoAdditionalRegisterRecord) => void }) {
+  const [draft, setDraft] = useState<RodoRegisterPayload>(() => createRegisterDraft(definition, record));
+  const [saving, setSaving] = useState(false);
+
+  function updateDraft(key: string, value: string) {
+    setDraft((current) => ({ ...current, [key]: value }));
+  }
+
+  async function saveRecord() {
+    const requiredField = definition.fields.find((field) => field.required);
+    if (requiredField && !String(draft[requiredField.key] || "").trim()) {
+      alert(`Uzupelnij pole: ${requiredField.label}.`);
+      return;
+    }
+
+    setSaving(true);
+    const payload = normalizeRegisterPayload(definition, draft);
+    const result = record
+      ? await updateRodoRegisterRecord(definition.kind, record.id, payload)
+      : await createRodoRegisterRecord(definition.kind, payload);
+    setSaving(false);
+
+    if (result.error || !result.data) {
+      console.error("Blad zapisu rejestru RODO:", result.error);
+      alert("Nie udalo sie zapisac wpisu.");
+      return;
+    }
+
+    onSaved(result.data as RodoAdditionalRegisterRecord);
+  }
+
+  return (
+    <div style={drawerOverlayStyle} onClick={onClose}>
+      <aside style={drawerStyle} onClick={(event) => event.stopPropagation()}>
+        <div style={drawerHeaderStyle}>
+          <div>
+            <p style={eyebrowStyle}>{record ? "Szczegoly wpisu" : "Nowy wpis"}</p>
+            <h2 style={drawerTitleStyle}>{String(draft[definition.primaryField] || definition.title)}</h2>
+          </div>
+          <button style={closeButtonStyle} onClick={onClose}><X size={20} /></button>
+        </div>
+
+        <div style={drawerActionsStyle}>
+          <button style={primarySmallButtonStyle} onClick={() => void saveRecord()} disabled={saving}>{saving ? "Zapisywanie..." : "Zapisz"}</button>
+        </div>
+
+        <div style={drawerContentStyle}>
+          <FormSection title="Dane wpisu">
+            {definition.fields.map((field) => (
+              <RegisterFieldControl
+                key={field.key}
+                field={field}
+                value={String(draft[field.key] || "")}
+                onChange={(value) => updateDraft(field.key, value)}
+              />
+            ))}
+          </FormSection>
+
+          {record && (
+            <FormSection title="Historia">
+              <div style={auditBoxStyle}>Wpis utworzono {formatDateTime(record.created_at)}. Ostatnia zmiana: {formatDateTime(record.updated_at)}.</div>
+            </FormSection>
+          )}
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+function RegisterFieldControl({ field, value, onChange }: { field: RegisterField; value: string; onChange: (value: string) => void }) {
+  if (field.type === "textarea") {
+    return <EditableTextarea label={field.label} value={value} onChange={onChange} />;
+  }
+
+  if (field.type === "select") {
+    return <EditableSelect label={field.label} value={value} onChange={onChange} options={field.options || []} />;
+  }
+
+  return (
+    <label style={editableRowStyle}>
+      <span>{field.label}</span>
+      <input
+        type={field.type || "text"}
+        value={field.type === "datetime-local" ? toDateTimeLocalValue(value) : value}
+        onChange={(event) => onChange(event.target.value)}
+        style={inputStyle}
+      />
+    </label>
   );
 }
 
@@ -690,6 +1114,45 @@ function matchesSearch(option: SearchOption, search: string) {
   return `${option.label} ${option.description || ""}`.toLowerCase().includes(normalizedSearch);
 }
 
+function getRecordValue(record: RodoAdditionalRegisterRecord, key: string) {
+  return (record as unknown as Record<string, string | null | undefined>)[key];
+}
+
+function formatRegisterValue(record: RodoAdditionalRegisterRecord, column: RegisterColumn) {
+  const value = getRecordValue(record, column.key);
+  if (column.format) return column.format(value);
+  return value || "-";
+}
+
+function optionLabel(options: { value: string; label: string }[], value: string | null | undefined) {
+  return options.find((option) => option.value === (value || ""))?.label || value || "-";
+}
+
+function createRegisterDraft(definition: RegisterDefinition, record: RodoAdditionalRegisterRecord | null): RodoRegisterPayload {
+  return definition.fields.reduce<RodoRegisterPayload>((draft, field) => {
+    const rawValue = record ? getRecordValue(record, field.key) : null;
+    if (!record && field.key === "status") draft[field.key] = definition.defaultStatus;
+    else if (!record && field.key === definition.dateField) draft[field.key] = new Date().toISOString().slice(0, 10);
+    else draft[field.key] = rawValue ? String(rawValue) : "";
+    return draft;
+  }, {});
+}
+
+function normalizeRegisterPayload(definition: RegisterDefinition, draft: RodoRegisterPayload) {
+  return definition.fields.reduce<RodoRegisterPayload>((payload, field) => {
+    const value = String(draft[field.key] || "").trim();
+    payload[field.key] = value || null;
+    return payload;
+  }, {});
+}
+
+function toDateTimeLocalValue(value: string) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toISOString().slice(0, 16);
+}
+
 function StatusBadge({ status }: { status: RodoProcessingContractStatus }) {
   const palette: Record<RodoProcessingContractStatus, CSSProperties> = {
     szkic: { background: "#eef2f7", color: colors.navy },
@@ -780,9 +1243,12 @@ function Th({ children }: { children: ReactNode }) { return <th style={thStyle}>
 function Td({ children, strong }: { children: ReactNode; strong?: boolean }) { return <td style={{ ...tdStyle, fontWeight: strong ? 800 : 500 }}>{children}</td>; }
 
 const headerStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "24px", alignItems: "flex-start", marginBottom: "28px" };
+const headerActionsOnlyStyle: CSSProperties = { display: "flex", justifyContent: "flex-end", marginBottom: "18px" };
 const eyebrowStyle: CSSProperties = { color: colors.red, fontWeight: 800, margin: "0 0 8px" };
 const titleStyle: CSSProperties = { fontSize: "42px", lineHeight: 1.05, margin: 0, color: colors.navy };
-const subtitleStyle: CSSProperties = { maxWidth: "780px", fontSize: "17px", lineHeight: 1.7, color: colors.muted, marginTop: "14px" };
+const tabsStyle: CSSProperties = { display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "22px", borderBottom: `1px solid ${colors.border}`, paddingBottom: "10px" };
+const tabStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.navy, padding: "11px 14px", fontWeight: 850, cursor: "pointer" };
+const activeTabStyle: CSSProperties = { ...tabStyle, background: colors.navy, color: colors.white, borderColor: colors.navy };
 const primaryButtonStyle: CSSProperties = { border: "none", borderRadius: radius.button, padding: "14px 18px", minHeight: "46px", background: colors.red, color: colors.white, fontWeight: 800, cursor: "pointer", textAlign: "center" };
 const primarySmallButtonStyle: CSSProperties = { ...primaryButtonStyle, padding: "11px 15px", minHeight: "42px" };
 const secondaryButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "10px 14px", minHeight: "42px", background: colors.white, color: colors.navy, fontWeight: 800, cursor: "pointer", textAlign: "center" };
@@ -795,6 +1261,7 @@ const tableActionsStyle: CSSProperties = { display: "flex", alignItems: "center"
 const sectionTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "24px" };
 const printMetaStyle: CSSProperties = { display: "none" };
 const filterStyle: CSSProperties = { width: "190px", flex: "0 0 190px", border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "10px 14px", background: colors.card, color: colors.text, fontWeight: 700 };
+const searchInputStyle: CSSProperties = { width: "220px", flex: "0 0 220px", border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "10px 14px", background: colors.card, color: colors.text, fontWeight: 700 };
 const tableWrapperStyle: CSSProperties = { overflowX: "auto" };
 const tableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse" };
 const thStyle: CSSProperties = { textAlign: "left", padding: "14px 16px", color: colors.muted, fontSize: "13px", textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: `1px solid ${colors.border}` };

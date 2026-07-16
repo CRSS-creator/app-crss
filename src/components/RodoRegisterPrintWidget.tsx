@@ -31,9 +31,11 @@ function applyPrintSetup() {
   const page = document.querySelector<HTMLElement>('[data-active-page="rodo"]');
   if (!page) return;
 
-  const registerTitle = Array.from(page.querySelectorAll<HTMLHeadingElement>("h2"))
-    .find((heading) => heading.textContent?.trim() === "Rejestr umów powierzenia przetwarzania danych osobowych");
-  const registerSection = registerTitle?.closest<HTMLElement>("section");
+  page.querySelectorAll<HTMLElement>("[data-printable-rodo-register]").forEach((section) => {
+    delete section.dataset.printableRodoRegister;
+  });
+
+  const registerSection = page.querySelector<HTMLElement>('[data-rodo-print-section="true"]');
   if (!registerSection) return;
 
   registerSection.dataset.printableRodoRegister = "true";
@@ -78,7 +80,8 @@ function injectPrintStyles() {
 
       [data-printable-rodo-register="true"] button,
       [data-printable-rodo-register="true"] select,
-      [data-printable-rodo-register="true"] input {
+      [data-printable-rodo-register="true"] input,
+      [data-printable-rodo-register="true"] [data-print-hidden="true"] {
         display: none !important;
       }
 
@@ -140,8 +143,6 @@ function injectPrintStyles() {
       [data-printable-rodo-register="true"] td:nth-child(6) { width: 22% !important; }
       [data-printable-rodo-register="true"] th:nth-child(7),
       [data-printable-rodo-register="true"] td:nth-child(7) { width: 8% !important; }
-      [data-printable-rodo-register="true"] th:nth-child(8),
-      [data-printable-rodo-register="true"] td:nth-child(8) { display: none !important; }
     }
   `;
 

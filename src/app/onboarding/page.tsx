@@ -209,10 +209,6 @@ function OnboardingContent() {
   const currentRole = (currentUserRole || "").toLowerCase();
   const canAssignCaregiver = currentRole === "manager" || currentRole === "owner";
 
-  useEffect(() => {
-    setNotesDraft(selectedRow?.onboardingNotes || "");
-  }, [selectedRow?.client.id, selectedRow?.onboardingNotes]);
-
   async function handleStageStatusChange(stage: OnboardingStage, status: OnboardingStageStatus) {
     if (!stage.record) return;
     setSavingStageId(stage.record.id);
@@ -464,6 +460,12 @@ function OnboardingContent() {
     await loadData();
   }
 
+  function openClientDetails(row: OnboardingRow) {
+    setSelectedClientId(row.client.id);
+    setHistoryOpen(false);
+    setNotesDraft(row.onboardingNotes || "");
+  }
+
   function openHistory() {
     setHistoryOpen(true);
     window.setTimeout(() => {
@@ -522,7 +524,7 @@ function OnboardingContent() {
                     <Td><StagePill stage={row.stages[0]} /></Td>
                     <Td><StagePill stage={row.stages[1]} /></Td>
                     <Td><StagePill stage={row.stages[2]} /></Td>
-                    <Td><button style={secondaryButtonStyle} onClick={() => { setSelectedClientId(row.client.id); setHistoryOpen(false); }}>Szczegóły</button></Td>
+                    <Td><button style={secondaryButtonStyle} onClick={() => openClientDetails(row)}>Szczegóły</button></Td>
                   </tr>
                 ))}
               </tbody>
@@ -774,6 +776,7 @@ function buildStages(
     return acc;
   }, {});
   const ownerResponsible = profileByRoleLabel(profilesById, "owner", "Do przypisania");
+  const primaryOwnerResponsible = profileByEmailOrRoleLabel(profilesById, "biuro@crss.com.pl", "owner", ownerResponsible);
   const adminResponsible = profileByRoleLabel(profilesById, "admin", "Do przypisania");
   const caregiverResponsible = caregiverLabel(client);
 
@@ -799,11 +802,11 @@ function buildStages(
       responsibleLabel: ownerResponsible,
       record: recordByKey.rodo,
     },
-    buildManualStage("aml", "Do obsługi w module AML. Onboarding pokazuje status wykonania etapu.", recordByKey.aml, "/aml", "Przejdź do AML", undefined, undefined, adminResponsible),
+    buildManualStage("aml", "Do obsługi w module AML. Onboarding pokazuje status wykonania etapu.", recordByKey.aml, "/aml", "Przejdź do AML", undefined, undefined, primaryOwnerResponsible),
   ];
 
   if (shouldShowClientCard(client, accountingContract)) {
-    stages.push(buildManualStage("client_card", "Dane organizacyjne klienta potrzebne do rozpoczęcia obsługi w biurze.", recordByKey.client_card, undefined, undefined, "Wyślij e-mail", undefined, adminResponsible, latestClientCardRequestInfo(onboardingHistory, profilesById)));
+    stages.push(buildManualStage("client_card", "Dane organizacyjne klienta potrzebne do rozpoczęcia obsługi w biurze.", recordByKey.client_card, undefined, undefined, "Wyślij e-mail", undefined, primaryOwnerResponsible, latestClientCardRequestInfo(onboardingHistory, profilesById)));
   }
 
   stages.push(
@@ -817,7 +820,7 @@ function buildStages(
         undefined,
         "Wyślij powiadomienie",
         undefined,
-        adminResponsible,
+        primaryOwnerResponsible,
         latestWfirmaAccountNotificationInfo(onboardingHistory, profilesById)
       ),
       descriptionNote: "Wraz z powiadomieniem o utworzeniu konta wysyłana jest instrukcja integracji KSeF z wFirmą.",
@@ -1059,6 +1062,12 @@ function profileByRoleLabel(profilesById: Record<string, Profile>, role: string,
   const normalizedRole = role.toLowerCase();
   const profile = Object.values(profilesById).find((item) => (item.role || "").toLowerCase() === normalizedRole && item.aktywne !== false);
   return profile?.full_name || profile?.email || fallback;
+}
+
+function profileByEmailOrRoleLabel(profilesById: Record<string, Profile>, email: string, role: string, fallback: string) {
+  const normalizedEmail = email.toLowerCase();
+  const profile = Object.values(profilesById).find((item) => (item.email || "").toLowerCase() === normalizedEmail && item.aktywne !== false);
+  return profile?.full_name || profile?.email || profileByRoleLabel(profilesById, role, fallback);
 }
 
 function caregiverLabel(client: Client) {

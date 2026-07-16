@@ -25,6 +25,12 @@ export type LimitMonthlyRecord = {
   updated_by: string | null;
 };
 
+const DEFAULT_ANNUAL_LIMITS: Record<LimitType, number> = {
+  vat: 240000,
+  wnt: 0,
+  kasa_fiskalna: 0,
+};
+
 export async function fetchLimitRegisters() {
   return supabase
     .from("limity_rejestry")
@@ -47,7 +53,7 @@ export async function addClientToLimit(clientId: string, type: LimitType) {
     .insert({
       klient_id: clientId,
       typ: type,
-      limit_roczny: 0,
+      limit_roczny: DEFAULT_ANNUAL_LIMITS[type],
       created_by: userId,
       updated_by: userId,
     })

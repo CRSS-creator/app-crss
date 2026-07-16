@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { Plus, Save, X } from "lucide-react";
+import { Plus, Save } from "lucide-react";
 import AccessGuard from "@/components/AccessGuard";
 import AppLayout from "@/components/AppLayout";
 import { colors, radius, shadow } from "@/app/design";
@@ -90,7 +90,6 @@ function LimitsContent() {
   const rows = useMemo(() => buildRows(activeType, clients, registers, monthlyRecords), [activeType, clients, registers, monthlyRecords]);
   const selectedRow = rows.find((row) => row.register.id === selectedRegisterId) || rows[0] || null;
   const availableClients = clients.filter((client) => !registers.some((register) => register.typ === activeType && register.klient_id === client.id));
-  const summary = buildSummary(rows);
 
   async function handleAddClient() {
     if (!clientToAdd) return;
@@ -133,18 +132,12 @@ function LimitsContent() {
         ))}
       </nav>
 
-      <section style={statsGridStyle}>
-        <StatCard label="Klienci w limicie" value={rows.length} />
-        <StatCard label="Łączne wykorzystanie" value={formatMoney(summary.used)} />
-        <StatCard label="Średnie wypełnienie" value={`${summary.percent.toFixed(0)}%`} />
-      </section>
-
       <section style={layoutStyle}>
         <div style={cardStyle}>
           <div style={sectionHeaderStyle}>
             <div>
               <h2 style={sectionTitleStyle}>{activeTabLabel(activeType)}</h2>
-              <p style={sectionHintStyle}>Lista klientów dodanych do tego limitu i aktualne wykorzystanie roczne.</p>
+              <p style={sectionHintStyle}>Lista klientów dodanych do tego limitu. Szczegóły służą do uzupełnienia limitu rocznego i miesięcy.</p>
             </div>
             <button type="button" onClick={() => setShowAddForm((value) => !value)} style={primaryButtonStyle}>
               <Plus size={18} /> Dodaj klienta
@@ -181,10 +174,6 @@ function LimitsContent() {
                       <strong style={percentStyle}>{usage.percent.toFixed(0)}%</strong>
                     </div>
                     <ProgressBar percent={usage.percent} />
-                    <div style={rowBottomStyle}>
-                      <span>{formatMoney(usage.used)} wykorzystane</span>
-                      <span>{formatMoney(usage.remaining)} pozostało</span>
-                    </div>
                   </button>
                 );
               })}
@@ -205,7 +194,6 @@ function LimitsContent() {
 }
 
 function LimitDetails({ row, year, onSaved }: { row: LimitRow; year: number; onSaved: () => void }) {
-  const usage = calculateUsage(row.register, row.monthly);
   const [annualLimit, setAnnualLimit] = useState(String(toNumber(row.register.limit_roczny)));
   const [notes, setNotes] = useState(row.register.uwagi || "");
   const [monthValues, setMonthValues] = useState<Record<number, string>>(() => monthValueMap(row.monthly));
@@ -262,18 +250,6 @@ function LimitDetails({ row, year, onSaved }: { row: LimitRow; year: number; onS
           </label>
         </div>
 
-        <div style={summaryBoxStyle}>
-          <div style={summaryTopStyle}>
-            <strong>{usage.percent.toFixed(1)}% limitu</strong>
-            <span>{formatMoney(usage.used)} / {formatMoney(usage.limit)}</span>
-          </div>
-          <ProgressBar percent={usage.percent} />
-          <div style={summaryFooterStyle}>
-            <span>Pozostało: {formatMoney(usage.remaining)}</span>
-            <span>Status: {usageStatusLabel(usage.percent)}</span>
-          </div>
-        </div>
-
         <div style={monthGridStyle}>
           {MONTHS.map((monthName, index) => {
             const month = index + 1;
@@ -304,15 +280,6 @@ function ProgressBar({ percent }: { percent: number }) {
   );
 }
 
-function StatCard({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div style={statCardStyle}>
-      <span style={statLabelStyle}>{label}</span>
-      <strong style={statValueStyle}>{value}</strong>
-    </div>
-  );
-}
-
 function buildRows(type: LimitType, clients: Client[], registers: LimitRegisterRecord[], monthlyRecords: LimitMonthlyRecord[]) {
   return registers
     .filter((register) => register.typ === type)
@@ -324,18 +291,11 @@ function buildRows(type: LimitType, clients: Client[], registers: LimitRegisterR
     .sort((first, second) => String(first.client?.nazwa || "").localeCompare(String(second.client?.nazwa || ""), "pl"));
 }
 
-function buildSummary(rows: LimitRow[]) {
-  const used = rows.reduce((sum, row) => sum + calculateUsage(row.register, row.monthly).used, 0);
-  const limit = rows.reduce((sum, row) => sum + toNumber(row.register.limit_roczny), 0);
-  return { used, limit, percent: limit > 0 ? (used / limit) * 100 : 0 };
-}
-
 function calculateUsage(register: LimitRegisterRecord, monthly: LimitMonthlyRecord[]) {
   const limit = toNumber(register.limit_roczny);
   const used = monthly.reduce((sum, item) => sum + toNumber(item.kwota), 0);
-  const remaining = Math.max(0, limit - used);
   const percent = limit > 0 ? (used / limit) * 100 : 0;
-  return { limit, used, remaining, percent };
+  return { percent };
 }
 
 function monthValueMap(monthly: LimitMonthlyRecord[]) {
@@ -364,20 +324,10 @@ function parseAmount(value: string) {
   return toNumber(value);
 }
 
-function formatMoney(value: number) {
-  return value.toLocaleString("pl-PL", { style: "currency", currency: "PLN" });
-}
-
 function progressColor(percent: number) {
   if (percent >= 100) return colors.danger;
   if (percent >= 80) return colors.warning;
   return colors.success;
-}
-
-function usageStatusLabel(percent: number) {
-  if (percent >= 100) return "limit wykorzystany";
-  if (percent >= 80) return "blisko limitu";
-  return "w normie";
 }
 
 const pageStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "22px" };
@@ -390,10 +340,6 @@ const yearInputStyle: CSSProperties = { width: "92px", minHeight: "38px", border
 const tabsStyle: CSSProperties = { display: "flex", gap: "10px", flexWrap: "wrap" };
 const tabStyle: CSSProperties = { minHeight: "42px", padding: "0 18px", borderRadius: radius.button, border: `1px solid ${colors.border}`, background: colors.card, color: colors.navy, fontWeight: 850, cursor: "pointer" };
 const activeTabStyle: CSSProperties = { ...tabStyle, background: colors.navy, color: colors.white, borderColor: colors.navy };
-const statsGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "14px" };
-const statCardStyle: CSSProperties = { minHeight: "92px", border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.card, boxShadow: shadow.soft, padding: "20px" };
-const statLabelStyle: CSSProperties = { display: "block", color: colors.muted, fontSize: "13px", fontWeight: 800 };
-const statValueStyle: CSSProperties = { display: "block", marginTop: "10px", color: colors.navy, fontSize: "26px" };
 const layoutStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(420px, 0.95fr) minmax(560px, 1.25fr)", gap: "18px", alignItems: "start" };
 const cardStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.card, boxShadow: shadow.card, overflow: "hidden" };
 const sectionHeaderStyle: CSSProperties = { padding: "22px 24px", borderBottom: `1px solid ${colors.border}`, display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "flex-start" };
@@ -411,7 +357,6 @@ const rowTopStyle: CSSProperties = { display: "flex", justifyContent: "space-bet
 const clientNameStyle: CSSProperties = { display: "block", color: colors.navy, fontSize: "15px", lineHeight: 1.35 };
 const clientMetaStyle: CSSProperties = { display: "block", marginTop: "4px", color: colors.muted, fontSize: "12px", fontWeight: 750 };
 const percentStyle: CSSProperties = { color: colors.navy, fontSize: "18px" };
-const rowBottomStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "12px", marginTop: "8px", color: colors.muted, fontSize: "12px", fontWeight: 800 };
 const progressTrackStyle: CSSProperties = { width: "100%", height: "10px", borderRadius: radius.badge, background: "rgba(100, 116, 139, 0.16)", overflow: "hidden" };
 const progressFillStyle: CSSProperties = { height: "100%", borderRadius: radius.badge, transition: "width 0.2s ease" };
 const detailsBodyStyle: CSSProperties = { padding: "22px 24px", display: "flex", flexDirection: "column", gap: "18px" };
@@ -419,8 +364,5 @@ const annualGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "
 const fieldStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "8px" };
 const fieldLabelStyle: CSSProperties = { color: colors.muted, fontSize: "12px", fontWeight: 850, textTransform: "uppercase" };
 const inputStyle: CSSProperties = { minHeight: "42px", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.text, padding: "0 12px", fontSize: "14px", fontWeight: 750 };
-const summaryBoxStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "16px", background: colors.inputBackground };
-const summaryTopStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "12px", marginBottom: "12px", color: colors.navy };
-const summaryFooterStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "12px", marginTop: "10px", color: colors.muted, fontSize: "13px", fontWeight: 800 };
 const monthGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "12px" };
 const monthFieldStyle: CSSProperties = { ...fieldStyle, border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.inputBackground, padding: "12px" };

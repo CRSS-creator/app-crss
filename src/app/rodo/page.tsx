@@ -107,23 +107,23 @@ const STATUS_FILTER_OPTIONS = [{ value: "Wszystkie", label: "Wszystkie statusy" 
 
 const RODO_REGISTER_TABS: { value: ActiveRodoRegister; label: string }[] = [
   { value: "contracts", label: "Umowy powierzenia" },
-  { value: "changes", label: "Zmiany i przeglady" },
+  { value: "changes", label: "Zmiany i przeglądy" },
   { value: "incidents", label: "Incydenty i naruszenia" },
-  { value: "authorizedPersons", label: "Osoby upowaznione" },
+  { value: "authorizedPersons", label: "Osoby upoważnione" },
 ];
 
 const CHANGE_STATUS_OPTIONS = [
   { value: "planowane", label: "Planowane" },
   { value: "wykonane", label: "Wykonane" },
-  { value: "wymaga_dzialania", label: "Wymaga dzialania" },
+  { value: "wymaga_dzialania", label: "Wymaga działania" },
   { value: "anulowane", label: "Anulowane" },
 ];
 
 const INCIDENT_STATUS_OPTIONS = [
   { value: "nowe", label: "Nowe" },
   { value: "w_analizie", label: "W analizie" },
-  { value: "zgloszone", label: "Zgloszone" },
-  { value: "zamkniete", label: "Zamkniete" },
+  { value: "zgloszone", label: "Zgłoszone" },
+  { value: "zamkniete", label: "Zamknięte" },
 ];
 
 const AUTHORIZED_PERSON_STATUS_OPTIONS = [
@@ -142,16 +142,16 @@ const RISK_OPTIONS = [
 const UODO_OPTIONS = [
   { value: "", label: "W analizie" },
   { value: "nie_dotyczy", label: "Nie dotyczy" },
-  { value: "nie_zgloszono", label: "Nie zgloszono" },
-  { value: "zgloszono", label: "Zgloszono" },
+  { value: "nie_zgloszono", label: "Nie zgłoszono" },
+  { value: "zgloszono", label: "Zgłoszono" },
 ];
 
 const REGISTER_DEFINITIONS: Record<RodoRegisterKind, RegisterDefinition> = {
   changes: {
     kind: "changes",
-    title: "Rejestr zmian i przegladow",
+    title: "Rejestr zmian i przeglądów",
     addLabel: "Dodaj wpis",
-    emptyLabel: "Brak wpisow w rejestrze zmian i przegladow.",
+    emptyLabel: "Brak wpisów w rejestrze zmian i przeglądów.",
     defaultStatus: "planowane",
     primaryField: "opis_skrocony",
     dateField: "data_wpisu",
@@ -160,7 +160,7 @@ const REGISTER_DEFINITIONS: Record<RodoRegisterKind, RegisterDefinition> = {
       { key: "data_wpisu", label: "Data", width: "10%", format: formatDate },
       { key: "obszar", label: "Obszar", width: "15%" },
       { key: "rodzaj", label: "Rodzaj", width: "13%" },
-      { key: "opis_skrocony", label: "Opis skrocony", width: "28%" },
+      { key: "opis_skrocony", label: "Opis skrócony", width: "28%" },
       { key: "osoba_odpowiedzialna", label: "Odpowiedzialny", width: "18%" },
       { key: "status", label: "Status", width: "11%", format: (value) => optionLabel(CHANGE_STATUS_OPTIONS, value) },
     ],
@@ -168,21 +168,21 @@ const REGISTER_DEFINITIONS: Record<RodoRegisterKind, RegisterDefinition> = {
       { key: "data_wpisu", label: "Data", type: "date" },
       { key: "obszar", label: "Obszar" },
       { key: "rodzaj", label: "Rodzaj" },
-      { key: "opis_skrocony", label: "Opis skrocony", required: true },
+      { key: "opis_skrocony", label: "Opis skrócony", required: true },
       { key: "osoba_odpowiedzialna", label: "Osoba odpowiedzialna" },
       { key: "status", label: "Status", type: "select", options: CHANGE_STATUS_OPTIONS },
-      { key: "powod", label: "Powod zmiany", type: "textarea" },
-      { key: "wynik", label: "Wynik przegladu", type: "textarea" },
-      { key: "nastepny_przeglad", label: "Nastepny przeglad", type: "date" },
-      { key: "pelny_opis", label: "Pelny opis", type: "textarea" },
+      { key: "powod", label: "Powód zmiany", type: "textarea" },
+      { key: "wynik", label: "Wynik przeglądu", type: "textarea" },
+      { key: "nastepny_przeglad", label: "Następny przegląd", type: "date" },
+      { key: "pelny_opis", label: "Pełny opis", type: "textarea" },
       { key: "uwagi", label: "Uwagi", type: "textarea" },
     ],
   },
   incidents: {
     kind: "incidents",
-    title: "Rejestr incydentow i naruszen",
+    title: "Rejestr incydentów i naruszeń",
     addLabel: "Dodaj zdarzenie",
-    emptyLabel: "Brak wpisow w rejestrze incydentow i naruszen.",
+    emptyLabel: "Brak wpisów w rejestrze incydentów i naruszeń.",
     defaultStatus: "nowe",
     primaryField: "opis_skrocony",
     dateField: "data_wykrycia",
@@ -190,7 +190,7 @@ const REGISTER_DEFINITIONS: Record<RodoRegisterKind, RegisterDefinition> = {
     columns: [
       { key: "data_wykrycia", label: "Data wykrycia", width: "12%", format: formatDate },
       { key: "typ", label: "Typ", width: "12%" },
-      { key: "opis_skrocony", label: "Opis skrocony", width: "30%" },
+      { key: "opis_skrocony", label: "Opis skrócony", width: "30%" },
       { key: "ryzyko", label: "Ryzyko", width: "13%", format: (value) => optionLabel(RISK_OPTIONS, value) },
       { key: "zgloszenie_uodo", label: "UODO", width: "14%", format: (value) => optionLabel(UODO_OPTIONS, value) },
       { key: "status", label: "Status", width: "12%", format: (value) => optionLabel(INCIDENT_STATUS_OPTIONS, value) },
@@ -198,50 +198,52 @@ const REGISTER_DEFINITIONS: Record<RodoRegisterKind, RegisterDefinition> = {
     fields: [
       { key: "data_wykrycia", label: "Data wykrycia", type: "date" },
       { key: "typ", label: "Typ" },
-      { key: "opis_skrocony", label: "Opis skrocony", required: true },
+      { key: "opis_skrocony", label: "Opis skrócony", required: true },
       { key: "ryzyko", label: "Ryzyko", type: "select", options: RISK_OPTIONS },
-      { key: "zgloszenie_uodo", label: "Zgloszenie UODO", type: "select", options: UODO_OPTIONS },
+      { key: "zgloszenie_uodo", label: "Zgłoszenie UODO", type: "select", options: UODO_OPTIONS },
       { key: "status", label: "Status", type: "select", options: INCIDENT_STATUS_OPTIONS },
       { key: "data_zdarzenia", label: "Data zdarzenia", type: "date" },
       { key: "kategorie_danych", label: "Kategorie danych", type: "textarea" },
-      { key: "liczba_osob", label: "Liczba osob" },
+      { key: "liczba_osob", label: "Liczba osób" },
       { key: "skutki", label: "Skutki", type: "textarea" },
       { key: "decyzja", label: "Decyzja", type: "textarea" },
       { key: "termin_72h", label: "Termin 72h", type: "datetime-local" },
-      { key: "data_zgloszenia", label: "Data zgloszenia", type: "datetime-local" },
-      { key: "osoby_zawiadomione", label: "Zawiadomienie osob", type: "textarea" },
-      { key: "dzialania_naprawcze", label: "Dzialania naprawcze", type: "textarea" },
-      { key: "osoba_prowadzaca", label: "Osoba prowadzaca" },
+      { key: "data_zgloszenia", label: "Data zgłoszenia", type: "datetime-local" },
+      { key: "osoby_zawiadomione", label: "Zawiadomienie osób", type: "textarea" },
+      { key: "dzialania_naprawcze", label: "Działania naprawcze", type: "textarea" },
+      { key: "osoba_prowadzaca", label: "Osoba prowadząca" },
       { key: "uwagi", label: "Uwagi", type: "textarea" },
     ],
   },
   authorizedPersons: {
     kind: "authorizedPersons",
-    title: "Rejestr osob upowaznionych",
-    addLabel: "Dodaj osobe",
-    emptyLabel: "Brak wpisow w rejestrze osob upowaznionych.",
+    title: "Rejestr osób upoważnionych",
+    addLabel: "Dodaj osobę",
+    emptyLabel: "Brak wpisów w rejestrze osób upoważnionych.",
     defaultStatus: "aktywne",
     primaryField: "imie_nazwisko",
     dateField: "data_nadania",
     statusOptions: AUTHORIZED_PERSON_STATUS_OPTIONS,
     columns: [
-      { key: "imie_nazwisko", label: "Imie i nazwisko", width: "18%" },
-      { key: "rola_stanowisko", label: "Rola / stanowisko", width: "15%" },
-      { key: "zakres_upowaznienia", label: "Zakres", width: "22%" },
-      { key: "systemy_obszary", label: "Systemy / obszary", width: "18%" },
-      { key: "data_nadania", label: "Nadanie", width: "10%", format: formatDate },
-      { key: "data_cofniecia", label: "Cofniecie", width: "10%", format: formatDate },
+      { key: "numer_upowaznienia", label: "Nr upoważnienia", width: "13%" },
+      { key: "imie_nazwisko", label: "Imię i nazwisko", width: "16%" },
+      { key: "rola_stanowisko", label: "Rola / stanowisko", width: "14%" },
+      { key: "zakres_upowaznienia", label: "Zakres", width: "19%" },
+      { key: "systemy_obszary", label: "Systemy / obszary", width: "16%" },
+      { key: "data_nadania", label: "Nadanie", width: "9%", format: formatDate },
+      { key: "data_cofniecia", label: "Cofnięcie", width: "9%", format: formatDate },
       { key: "status", label: "Status", width: "9%", format: (value) => optionLabel(AUTHORIZED_PERSON_STATUS_OPTIONS, value) },
     ],
     fields: [
-      { key: "imie_nazwisko", label: "Imie i nazwisko", required: true },
+      { key: "numer_upowaznienia", label: "Numer upoważnienia" },
+      { key: "imie_nazwisko", label: "Imię i nazwisko", required: true },
       { key: "rola_stanowisko", label: "Rola / stanowisko" },
-      { key: "zakres_upowaznienia", label: "Zakres upowaznienia", type: "textarea" },
+      { key: "zakres_upowaznienia", label: "Zakres upoważnienia", type: "textarea" },
       { key: "systemy_obszary", label: "Systemy / obszary danych", type: "textarea" },
       { key: "data_nadania", label: "Data nadania", type: "date" },
-      { key: "data_cofniecia", label: "Data cofniecia", type: "date" },
+      { key: "data_cofniecia", label: "Data cofnięcia", type: "date" },
       { key: "status", label: "Status", type: "select", options: AUTHORIZED_PERSON_STATUS_OPTIONS },
-      { key: "nadajacy", label: "Nadajacy upowaznienie" },
+      { key: "nadajacy", label: "Nadający upoważnienie" },
       { key: "podstawa_nadania", label: "Podstawa nadania", type: "textarea" },
       { key: "uwagi", label: "Uwagi", type: "textarea" },
     ],
@@ -355,7 +357,7 @@ function RodoContent() {
       {activeRegister === "contracts" ? (
         <>
           <section style={headerActionsOnlyStyle}>
-            <button style={primaryButtonStyle} onClick={() => setCreatingContract(true)}>Dodaj umowe</button>
+            <button style={primaryButtonStyle} onClick={() => setCreatingContract(true)}>Dodaj umowę</button>
           </section>
 
       <section style={summaryGridStyle}>
@@ -388,7 +390,7 @@ function RodoContent() {
                   <Th>Umowa główna</Th>
                   <Th>Zakres</Th>
                   <Th>Status umowy</Th>
-                  <th data-print-hidden="true" style={thStyle}>Szczegoly</th>
+                  <th data-print-hidden="true" style={thStyle}>Szczegóły</th>
                 </tr>
               </thead>
               <tbody>
@@ -401,7 +403,7 @@ function RodoContent() {
                     <Td>{contract.crm_umowy?.numer_umowy || "Brak powiązania"}</Td>
                     <Td>{contract.zakres_powierzenia || "zgodnie z zawartą umową główną"}</Td>
                     <Td><StatusBadge status={contract.status} /></Td>
-                    <td data-print-hidden="true" style={tdStyle}><button style={secondaryButtonStyle} onClick={() => setSelectedContract(contract)}>Szczegoly</button></td>
+                    <td data-print-hidden="true" style={tdStyle}><button style={secondaryButtonStyle} onClick={() => setSelectedContract(contract)}>Szczegóły</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -516,17 +518,17 @@ function RodoAdditionalRegister({ definition, currentUserName }: { definition: R
           </div>
         </div>
         <div data-rodo-print-meta style={printMetaStyle}>
-          Wydrukowal: {printInfo?.userName || currentUserName} | {formatPrintDateTime(printInfo?.printedAt)}
+          Wydrukował: {printInfo?.userName || currentUserName} | {formatPrintDateTime(printInfo?.printedAt)}
         </div>
 
-        {loading ? <div style={emptyStyle}>Ladowanie rejestru...</div> : filteredRecords.length === 0 ? <div style={emptyStyle}>{definition.emptyLabel}</div> : (
+        {loading ? <div style={emptyStyle}>Ładowanie rejestru...</div> : filteredRecords.length === 0 ? <div style={emptyStyle}>{definition.emptyLabel}</div> : (
           <div style={tableWrapperStyle}>
             <table style={tableStyle}>
               <thead>
                 <tr>
                   <Th>Lp.</Th>
                   {definition.columns.map((column) => <Th key={column.key}>{column.label}</Th>)}
-                  <th data-print-hidden="true" style={thStyle}>Szczegoly</th>
+                  <th data-print-hidden="true" style={thStyle}>Szczegóły</th>
                 </tr>
               </thead>
               <tbody>
@@ -536,7 +538,7 @@ function RodoAdditionalRegister({ definition, currentUserName }: { definition: R
                     {definition.columns.map((column) => (
                       <Td key={column.key}>{formatRegisterValue(record, column)}</Td>
                     ))}
-                    <td data-print-hidden="true" style={tdStyle}><button style={secondaryButtonStyle} onClick={() => setSelectedRecord(record)}>Szczegoly</button></td>
+                    <td data-print-hidden="true" style={tdStyle}><button style={secondaryButtonStyle} onClick={() => setSelectedRecord(record)}>Szczegóły</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -571,7 +573,7 @@ function RodoRegisterDrawer({ definition, record, onClose, onSaved }: { definiti
   async function saveRecord() {
     const requiredField = definition.fields.find((field) => field.required);
     if (requiredField && !String(draft[requiredField.key] || "").trim()) {
-      alert(`Uzupelnij pole: ${requiredField.label}.`);
+      alert(`Uzupełnij pole: ${requiredField.label}.`);
       return;
     }
 
@@ -584,7 +586,7 @@ function RodoRegisterDrawer({ definition, record, onClose, onSaved }: { definiti
 
     if (result.error || !result.data) {
       console.error("Blad zapisu rejestru RODO:", result.error);
-      alert("Nie udalo sie zapisac wpisu.");
+      alert("Nie udało się zapisać wpisu.");
       return;
     }
 
@@ -596,7 +598,7 @@ function RodoRegisterDrawer({ definition, record, onClose, onSaved }: { definiti
       <aside style={drawerStyle} onClick={(event) => event.stopPropagation()}>
         <div style={drawerHeaderStyle}>
           <div>
-            <p style={eyebrowStyle}>{record ? "Szczegoly wpisu" : "Nowy wpis"}</p>
+            <p style={eyebrowStyle}>{record ? "Szczegóły wpisu" : "Nowy wpis"}</p>
             <h2 style={drawerTitleStyle}>{String(draft[definition.primaryField] || definition.title)}</h2>
           </div>
           <button style={closeButtonStyle} onClick={onClose}><X size={20} /></button>

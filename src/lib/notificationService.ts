@@ -59,13 +59,18 @@ export async function createDueRodoReviewNotifications() {
   return supabase.rpc("create_due_rodo_review_notifications");
 }
 
+export async function createDueOnboardingCompletionNotifications() {
+  return supabase.rpc("create_due_onboarding_completion_notifications");
+}
+
 export async function createDueNotifications() {
-  const [taskResult, crmFollowUpResult, recurringTaskResult, clientCardResult, rodoReviewResult] = await Promise.all([
+  const [taskResult, crmFollowUpResult, recurringTaskResult, clientCardResult, rodoReviewResult, onboardingCompletionResult] = await Promise.all([
     createDueTaskNotifications(),
     createDueCrmFollowUpNotifications(),
     createDueRecurringTaskNotifications(),
     createDueClientCardNotifications(),
     createDueRodoReviewNotifications(),
+    createDueOnboardingCompletionNotifications(),
   ]);
 
   return {
@@ -75,8 +80,15 @@ export async function createDueNotifications() {
       recurringTaskNotifications: recurringTaskResult.data || 0,
       clientCardNotifications: clientCardResult.data || 0,
       rodoReviewNotifications: rodoReviewResult.data || 0,
+      onboardingCompletionNotifications: onboardingCompletionResult.data || 0,
     },
-    error: taskResult.error || crmFollowUpResult.error || recurringTaskResult.error || clientCardResult.error || rodoReviewResult.error,
+    error:
+      taskResult.error ||
+      crmFollowUpResult.error ||
+      recurringTaskResult.error ||
+      clientCardResult.error ||
+      rodoReviewResult.error ||
+      onboardingCompletionResult.error,
   };
 }
 

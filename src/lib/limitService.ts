@@ -28,7 +28,7 @@ export type LimitMonthlyRecord = {
 
 const DEFAULT_ANNUAL_LIMITS: Record<LimitType, number> = {
   vat: 240000,
-  wnt: 0,
+  wnt: 50000,
   kasa_fiskalna: 0,
 };
 

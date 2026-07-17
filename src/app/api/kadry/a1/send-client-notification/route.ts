@@ -32,6 +32,13 @@ type A1Row = {
   } | null;
 };
 
+type A1MonthlyRevenueRow = {
+  rok: number;
+  miesiac: number;
+  przychod_krajowy: number | string | null;
+  przychod_zagraniczny: number | string | null;
+};
+
 export async function POST(request: NextRequest) {
   const auth = await getAuthorizedServerUser(request, ALLOWED_ROLES, "Brak uprawnień do wysyłki powiadomienia A1.");
   if (auth.error) return auth.error;
@@ -107,9 +114,18 @@ export async function POST(request: NextRequest) {
     .select("full_name,email")
     .eq("id", auth.requesterId)
     .maybeSingle();
+  const { data: lastMonthlyRevenue } = await auth.admin
+    .from("kadry_a1_przychody_miesieczne")
+    .select("rok,miesiac,przychod_krajowy,przychod_zagraniczny")
+    .eq("a1_id", row.id)
+    .order("rok", { ascending: false })
+    .order("miesiac", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const monthlySummary = buildMonthlySummary(lastMonthlyRevenue as A1MonthlyRevenueRow | null);
   const subject = `Rozliczenie A1 - ${client.nazwa || "CRSS"}`;
-  const message = buildPlainMessage(row, client.nazwa);
-  const html = buildHtmlMessage(row, client.nazwa);
+  const message = buildPlainMessage(row, client.nazwa, monthlySummary);
+  const html = buildHtmlMessage(row, client.nazwa, monthlySummary);
   const failed: string[] = [];
 
   for (const recipientEmail of recipientEmails) {
@@ -124,6 +140,11 @@ export async function POST(request: NextRequest) {
         a1Id: row.id,
         a1StartDate: row.data_uzyskania_a1,
         a1EndDate: row.data_konca_a1,
+        a1LastCompletedMonth: monthlySummary.monthLabel,
+        a1DomesticRevenue: monthlySummary.domesticRevenue,
+        a1ForeignRevenue: monthlySummary.foreignRevenue,
+        a1TotalRevenue: monthlySummary.totalRevenue,
+        a1ForeignRevenuePercent: monthlySummary.foreignRevenuePercent,
         recipientEmail,
         subject,
         message,
@@ -157,6 +178,11 @@ export async function POST(request: NextRequest) {
       event: "payroll_a1_client_notification_requested",
       a1_start_date: row.data_uzyskania_a1,
       a1_end_date: row.data_konca_a1,
+      last_completed_month: monthlySummary.monthLabel,
+      domestic_revenue: monthlySummary.domesticRevenue,
+      foreign_revenue: monthlySummary.foreignRevenue,
+      total_revenue: monthlySummary.totalRevenue,
+      foreign_revenue_percent: monthlySummary.foreignRevenuePercent,
       client_name: client.nazwa,
       client_nip: client.nip,
     },
@@ -174,22 +200,54 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({ ok: true, sentAt: new Date().toISOString(), recipients: recipientEmails, history });
 }
 
-function buildPlainMessage(a1: A1Row, clientName: string | null | undefined) {
+type MonthlySummary = {
+  monthLabel: string | null;
+  domesticRevenue: number;
+  foreignRevenue: number;
+  totalRevenue: number;
+  foreignRevenuePercent: number;
+};
+
+function buildPlainMessage(a1: A1Row, clientName: string | null | undefined, monthlySummary: MonthlySummary) {
+  const monthlyText = monthlySummary.monthLabel
+    ? `Obecnie struktura za ${monthlySummary.monthLabel} wygląda następująco:
+- przychody razem: ${formatMoney(monthlySummary.totalRevenue)}
+- przychody zagraniczne: ${formatMoney(monthlySummary.foreignRevenue)}
+- udział przychodów zagranicznych: ${formatPercent(monthlySummary.foreignRevenuePercent)}`
+    : "Obecnie nie mamy jeszcze uzupełnionego miesiąca przychodów dla tego zaświadczenia A1.";
+
   return `Dzień dobry,
 
-w związku z końcem okresu A1${clientName ? ` dla ${clientName}` : ""} prosimy o przekazanie informacji potrzebnych do rozliczenia przychodów krajowych i zagranicznych.
+informujemy, że w dniu ${formatDate(a1.data_konca_a1)} kończy się zaświadczenie A1 wydane przez ZUS${clientName ? ` dla ${clientName}` : ""}.
 
-Okres A1:
-- data uzyskania: ${formatDate(a1.data_uzyskania_a1)}
-- data końca: ${formatDate(a1.data_konca_a1)}
+Aby zaświadczenie mogło zostać rozliczone, w trakcie jego trwania udział przychodów zagranicznych w całości przychodów nie może przekraczać 75%.
 
-Prosimy o przesłanie danych do opiekuna.
+${monthlyText}
+
+Prosimy o zachowanie odpowiedniego udziału przychodów na dzień końca ważności zaświadczenia.
 
 Pozdrawiamy serdecznie,
 Zespół CRSS`;
 }
 
-function buildHtmlMessage(a1: A1Row, clientName: string | null | undefined) {
+function buildHtmlMessage(a1: A1Row, clientName: string | null | undefined, monthlySummary: MonthlySummary) {
+  const monthlyHtml = monthlySummary.monthLabel
+    ? `
+      <p style="margin:0 0 12px 0;">Obecnie struktura za <strong>${escapeHtml(monthlySummary.monthLabel)}</strong> wygląda następująco:</p>
+      <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;margin:0 0 18px 0;">
+        <tr>
+          <th align="left" style="border:1px solid #c9d6e8;padding:10px;font-weight:700;">Przychody razem</th>
+          <th align="left" style="border:1px solid #c9d6e8;padding:10px;font-weight:700;">Przychody zagraniczne</th>
+          <th align="left" style="border:1px solid #c9d6e8;padding:10px;font-weight:700;">Udział zagranicznych</th>
+        </tr>
+        <tr>
+          <td style="border:1px solid #c9d6e8;padding:10px;">${escapeHtml(formatMoney(monthlySummary.totalRevenue))}</td>
+          <td style="border:1px solid #c9d6e8;padding:10px;">${escapeHtml(formatMoney(monthlySummary.foreignRevenue))}</td>
+          <td style="border:1px solid #c9d6e8;padding:10px;"><strong>${escapeHtml(formatPercent(monthlySummary.foreignRevenuePercent))}</strong></td>
+        </tr>
+      </table>`
+    : `<p style="margin:0 0 18px 0;">Obecnie nie mamy jeszcze uzupełnionego miesiąca przychodów dla tego zaświadczenia A1.</p>`;
+
   return `
 <div style="margin:0;padding:0;background:#f6f8fb;font-family:Arial,sans-serif;color:#173b73;">
   <div style="max-width:640px;margin:0 auto;padding:28px 18px;">
@@ -198,7 +256,8 @@ function buildHtmlMessage(a1: A1Row, clientName: string | null | undefined) {
         <img src="${APP_URL}/logo-crss-mail.png?v=6" alt="CRSS" width="180" style="display:block;width:180px;max-width:180px;height:auto;border:0;outline:none;text-decoration:none;">
       </div>
       <p style="margin:0 0 16px 0;">Dzień dobry,</p>
-      <p style="margin:0 0 16px 0;">w związku z końcem okresu A1${clientName ? ` dla <strong>${escapeHtml(clientName)}</strong>` : ""} prosimy o przekazanie informacji potrzebnych do rozliczenia przychodów krajowych i zagranicznych.</p>
+      <p style="margin:0 0 16px 0;">informujemy, że w dniu <strong>${escapeHtml(formatDate(a1.data_konca_a1))}</strong> kończy się zaświadczenie A1 wydane przez ZUS${clientName ? ` dla <strong>${escapeHtml(clientName)}</strong>` : ""}.</p>
+      <p style="margin:0 0 16px 0;">Aby zaświadczenie mogło zostać rozliczone, w trakcie jego trwania udział przychodów zagranicznych w całości przychodów nie może przekraczać <strong>75%</strong>.</p>
       <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;margin:0 0 18px 0;">
         <tr>
           <th align="left" style="border:1px solid #c9d6e8;padding:10px;font-weight:700;">Data uzyskania A1</th>
@@ -209,7 +268,8 @@ function buildHtmlMessage(a1: A1Row, clientName: string | null | undefined) {
           <td style="border:1px solid #c9d6e8;padding:10px;">${escapeHtml(formatDate(a1.data_konca_a1))}</td>
         </tr>
       </table>
-      <p style="margin:0 0 16px 0;">Prosimy o przesłanie danych do opiekuna.</p>
+      ${monthlyHtml}
+      <p style="margin:0 0 16px 0;">Prosimy o zachowanie odpowiedniego udziału przychodów na dzień końca ważności zaświadczenia.</p>
       <p style="margin:24px 0 0 0;">Pozdrawiamy serdecznie,<br><strong>Zespół CRSS</strong></p>
     </div>
     <p style="margin:18px 4px 0;color:#7a8598;font-size:13px;">Wiadomość wysłana automatycznie.</p>
@@ -217,8 +277,40 @@ function buildHtmlMessage(a1: A1Row, clientName: string | null | undefined) {
 </div>`.trim();
 }
 
+function buildMonthlySummary(row: A1MonthlyRevenueRow | null): MonthlySummary {
+  const domesticRevenue = toNumber(row?.przychod_krajowy);
+  const foreignRevenue = toNumber(row?.przychod_zagraniczny);
+  const totalRevenue = domesticRevenue + foreignRevenue;
+  const foreignRevenuePercent = totalRevenue > 0 ? (foreignRevenue / totalRevenue) * 100 : 0;
+
+  return {
+    monthLabel: row ? formatMonth(row.rok, row.miesiac) : null,
+    domesticRevenue,
+    foreignRevenue,
+    totalRevenue,
+    foreignRevenuePercent,
+  };
+}
+
+function toNumber(value: number | string | null | undefined) {
+  const parsed = Number(String(value ?? 0).replace(",", "."));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatMonth(year: number, month: number) {
+  return new Intl.DateTimeFormat("pl-PL", { month: "long", year: "numeric" }).format(new Date(year, month - 1, 1, 12));
+}
+
 function formatDate(value: string | null) {
   return value ? new Intl.DateTimeFormat("pl-PL").format(new Date(`${value}T12:00:00`)) : "do ustalenia";
+}
+
+function formatMoney(value: number) {
+  return `${new Intl.NumberFormat("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)} zł`;
+}
+
+function formatPercent(value: number) {
+  return `${new Intl.NumberFormat("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)}%`;
 }
 
 function escapeHtml(value: string) {

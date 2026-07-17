@@ -231,7 +231,7 @@ function buildHtmlMessage(contract: PayrollContractRow, clientName: string | nul
         </tr>
         <tr>
           <td style="border:1px solid #c9d6e8;padding:10px;">${escapeHtml(payrollDateKindLabel(dateKind))}</td>
-          <td style="border:1px solid #c9d6e8;padding:10px;">${escapeHtml(person)}</td>
+          <td style="border:1px solid #c9d6e8;padding:10px;"><strong>${escapeHtml(person)}</strong></td>
           <td style="border:1px solid #c9d6e8;padding:10px;">${escapeHtml(contract.numer_umowy || "")}</td>
           <td style="border:1px solid #c9d6e8;padding:10px;">${escapeHtml(date)}</td>
           <td style="border:1px solid #c9d6e8;padding:10px;">${escapeHtml(request)}</td>
@@ -246,7 +246,7 @@ function buildHtmlMessage(contract: PayrollContractRow, clientName: string | nul
 
 function requestText(dateKind: string) {
   if (dateKind === "contract_end") return "Prosimy o informację, czy przygotować nową umowę, przedłużyć obecną, czy nie będą Państwo kontynuować współpracy.";
-  if (dateKind === "student_card_expiry") return "Prosimy o przesłanie skanu nowej legitymacji lub poprzedniej, z przedłużonym terminem ważności, bezpośrednio do opiekuna.";
+  if (dateKind === "student_card_expiry") return "Prosimy o przesłanie skanu nowej legitymacji lub poprzedniej, z przedłużonym terminem ważności, do opiekuna.";
   if (dateKind === "medical_exam_expiry") return "W celu uzyskania skierowania na badanie prosimy skontaktować się z opiekunem.";
   return "Prosimy o dostarczenie dokumentacji przeprowadzenia szkolenia. W razie potrzeby współpracujemy ze specjalistą ds. BHP, a opiekun może przekazać Państwu dane kontaktowe.";
 }

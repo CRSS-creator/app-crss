@@ -225,7 +225,7 @@ function PayrollContractNotificationTable({ notification }: { notification: AppN
             {items.map((item, index) => (
               <tr key={`${item.date_kind || "term"}-${item.contract_number || index}`}>
                 <td style={payrollTdStyle}>{payrollDateKindLabel(stringMeta(item.date_kind))}</td>
-                <td style={payrollTdStyle}>{stringMeta(item.employee_name) || ""}</td>
+                <td style={payrollTdStyle}><strong>{stringMeta(item.employee_name) || ""}</strong></td>
                 <td style={payrollTdStyle}>{stringMeta(item.contract_number) || ""}</td>
                 <td style={payrollTdStyle}>{formatDateOnly(stringMeta(item.due_date))}</td>
                 <td style={payrollTdStyle}>{stringMeta(item.client_request) || ""}</td>

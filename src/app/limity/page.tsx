@@ -226,7 +226,7 @@ function LimitsContent() {
                   <tr>
                     <Th>Klient</Th>
                     {showExemptionStatus && <Th>Status zwolnienia</Th>}
-                    <Th>Wpis w tym miesiącu</Th>
+                    <Th>Wpis za poprzedni miesiąc</Th>
                     <Th>Wykorzystano w roku</Th>
                     <Th>Pozostało</Th>
                     <Th>Szczegóły</Th>
@@ -235,7 +235,7 @@ function LimitsContent() {
                 <tbody>
                   {filteredRows.map((row) => {
                     const usage = calculateUsage(row.register, row.monthly);
-                    const currentMonthDone = hasMonthlyEntry(row.monthly, year);
+                    const previousMonthDone = hasMonthlyEntry(row.monthly, year);
                     return (
                       <tr key={row.register.id}>
                         <Td>
@@ -243,7 +243,7 @@ function LimitsContent() {
                           <span style={clientMetaStyle}>{row.client?.nip || "Brak NIP"} · {caregiverLabel(row.client)}</span>
                         </Td>
                         {showExemptionStatus && <Td>{exemptionStatusLabel(row.register.status_zwolnienia)}</Td>}
-                        <Td><MonthlyStatus done={currentMonthDone} /></Td>
+                        <Td><MonthlyStatus done={previousMonthDone} /></Td>
                         <Td>
                           <strong style={amountStyle}>{formatMoney(usage.used)}</strong>
                           <ProgressBar percent={usage.percent} />
@@ -286,10 +286,8 @@ function LimitsContent() {
 
 function BulkMonthlyEntryModal({ rows, year, type, onClose, onSaved }: { rows: LimitRow[]; year: number; type: LimitType; onClose: () => void; onSaved: () => void }) {
   const caregiverOptions = useMemo(() => buildCaregiverOptions(rows), [rows]);
-  const now = new Date();
-  const currentMonth = now.getFullYear() === year ? now.getMonth() + 1 : 1;
   const [caregiverKeyValue, setCaregiverKeyValue] = useState(caregiverOptions[0]?.key || "");
-  const [month, setMonth] = useState(currentMonth);
+  const [month, setMonth] = useState(defaultEntryMonthForYear(year));
   const [values, setValues] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const selectedRows = useMemo(() => rows.filter((row) => caregiverKey(row.client) === caregiverKeyValue), [rows, caregiverKeyValue]);
@@ -634,9 +632,20 @@ function calculateUsage(register: LimitRegisterRecord, monthly: LimitMonthlyReco
 }
 
 function hasMonthlyEntry(monthly: LimitMonthlyRecord[], year: number) {
+  const targetMonth = defaultEntryMonthForYear(year);
+  return monthly.some((record) => record.miesiac === targetMonth);
+}
+
+function defaultEntryMonthForYear(year: number) {
   const now = new Date();
-  const currentMonth = now.getFullYear() === year ? now.getMonth() + 1 : 12;
-  return monthly.some((record) => record.miesiac === currentMonth);
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1;
+  const reportingYear = currentMonth === 1 ? currentYear - 1 : currentYear;
+  const reportingMonth = currentMonth === 1 ? 12 : currentMonth - 1;
+
+  if (year === reportingYear) return reportingMonth;
+  if (year < reportingYear) return 12;
+  return 1;
 }
 
 function monthValueMap(monthly: LimitMonthlyRecord[]) {

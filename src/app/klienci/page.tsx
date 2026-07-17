@@ -60,6 +60,7 @@ type Client = {
   abonament: number | null;
   model_fakturowania: string | null;
   czynny_vat: boolean | null;
+  vat_okres_rozliczeniowy: string | null;
   vat_ue: boolean | null;
   schemat_zus: string | null;
   limit_dokumentow: number | null;
@@ -90,6 +91,7 @@ type ClientDraft = {
   model_fakturowania: string;
   opiekun_id: string;
   czynny_vat: boolean;
+  vat_okres_rozliczeniowy: string;
   vat_ue: boolean;
   schemat_zus: string;
   limit_dokumentow: string;
@@ -160,6 +162,11 @@ const LUMP_SUM_RATE_OPTIONS = [
   { value: "14%", label: "14%" },
   { value: "15%", label: "15%" },
   { value: "17%", label: "17%" },
+];
+
+const VAT_SETTLEMENT_PERIOD_OPTIONS = [
+  { value: "miesieczny", label: "Miesięczny" },
+  { value: "kwartalny", label: "Kwartalny" },
 ];
 
 const EMPTY_FILTER = "Wszystkie";
@@ -679,6 +686,7 @@ function ClientDrawer({
       adres_dzialalnosci: draft.adres_dzialalnosci.trim() || null,
       osoba_kontaktowa: draft.osoba_kontaktowa.trim() || null,
       czynny_vat: draft.czynny_vat,
+      vat_okres_rozliczeniowy: draft.czynny_vat ? draft.vat_okres_rozliczeniowy : "miesieczny",
       vat_ue: draft.vat_ue,
       schemat_zus: isDraftJdg ? draft.schemat_zus.trim() || null : null,
       limit_dokumentow: draft.limit_dokumentow
@@ -914,8 +922,19 @@ function ClientDrawer({
                 <EditableCheckbox
                   label="Czynny VAT"
                   checked={draft.czynny_vat}
-                  onChange={(value) => updateDraft("czynny_vat", value)}
+                  onChange={(value) => {
+                    updateDraft("czynny_vat", value);
+                    if (!value) updateDraft("vat_okres_rozliczeniowy", "miesieczny");
+                  }}
                 />
+                {draft.czynny_vat && (
+                  <EditableSelect
+                    label="Okres rozliczeniowy VAT"
+                    value={draft.vat_okres_rozliczeniowy}
+                    onChange={(value) => updateDraft("vat_okres_rozliczeniowy", value)}
+                    options={VAT_SETTLEMENT_PERIOD_OPTIONS}
+                  />
+                )}
                 <EditableCheckbox
                   label="VAT UE"
                   checked={draft.vat_ue}
@@ -944,6 +963,12 @@ function ClientDrawer({
                   label="Czynny VAT"
                   value={client.czynny_vat ? "Tak" : "Nie"}
                 />
+                {client.czynny_vat && (
+                  <InfoRow
+                    label="Okres rozliczeniowy VAT"
+                    value={vatSettlementPeriodLabel(client.vat_okres_rozliczeniowy)}
+                  />
+                )}
                 <InfoRow label="VAT UE" value={client.vat_ue ? "Tak" : "Nie"} />
                 {isClientJdg && <InfoRow label="Schemat ZUS" value={client.schemat_zus} />}
               </>
@@ -1211,6 +1236,7 @@ function CreateClientDrawer({
     model_fakturowania: "z_dolu",
     opiekun_id: "",
     czynny_vat: false,
+    vat_okres_rozliczeniowy: "miesieczny",
     vat_ue: false,
     schemat_zus: "",
     limit_dokumentow: "",
@@ -1276,6 +1302,7 @@ function CreateClientDrawer({
         : null,
       opiekun_id: draft.opiekun_id || null,
       czynny_vat: draft.czynny_vat,
+      vat_okres_rozliczeniowy: draft.czynny_vat ? draft.vat_okres_rozliczeniowy : "miesieczny",
       vat_ue: draft.vat_ue,
       schemat_zus: isJdg ? draft.schemat_zus.trim() || null : null,
       limit_dokumentow: draft.limit_dokumentow
@@ -1453,8 +1480,20 @@ function CreateClientDrawer({
   <EditableCheckbox
     label="Czynny VAT"
     checked={draft.czynny_vat}
-    onChange={(v) => updateDraft("czynny_vat", v)}
+    onChange={(v) => {
+      updateDraft("czynny_vat", v);
+      if (!v) updateDraft("vat_okres_rozliczeniowy", "miesieczny");
+    }}
   />
+
+  {draft.czynny_vat && (
+    <EditableSelect
+      label="Okres rozliczeniowy VAT"
+      value={draft.vat_okres_rozliczeniowy}
+      onChange={(v) => updateDraft("vat_okres_rozliczeniowy", v)}
+      options={VAT_SETTLEMENT_PERIOD_OPTIONS}
+    />
+  )}
 
   <EditableCheckbox
     label="VAT UE"
@@ -1641,6 +1680,7 @@ function createDraft(client: Client): ClientDraft {
     model_fakturowania: client.model_fakturowania || "z_dolu",
     opiekun_id: client.opiekun_id || "",
     czynny_vat: Boolean(client.czynny_vat),
+    vat_okres_rozliczeniowy: client.vat_okres_rozliczeniowy === "kwartalny" ? "kwartalny" : "miesieczny",
     vat_ue: Boolean(client.vat_ue),
     schemat_zus: client.schemat_zus || "",
     limit_dokumentow:
@@ -1704,6 +1744,10 @@ function billingModelLabel(value: string | null | undefined) {
     BILLING_MODEL_OPTIONS.find((option) => option.value === value)?.label ||
     "Z dołu"
   );
+}
+
+function vatSettlementPeriodLabel(value: string | null | undefined) {
+  return value === "kwartalny" ? "Kwartalny" : "Miesięczny";
 }
 
 function isJdgLegalForm(value: string) {

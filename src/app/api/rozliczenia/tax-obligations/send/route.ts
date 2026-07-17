@@ -126,6 +126,14 @@ function formatPeriod(period: string) {
   return new Intl.DateTimeFormat("pl-PL", { month: "long", year: "numeric" }).format(new Date(`${period.slice(0, 7)}-01T12:00:00`));
 }
 
+function formatQuarterPeriod(period: string) {
+  const date = new Date(`${period.slice(0, 7)}-01T12:00:00`);
+  const quarter = Math.floor(date.getMonth() / 3) + 1;
+  const romanQuarter = ["I", "II", "III", "IV"][quarter - 1] || String(quarter);
+
+  return `${romanQuarter} kwartał ${date.getFullYear()}`;
+}
+
 function formatDate(date: string | null) {
   return date ? new Intl.DateTimeFormat("pl-PL", { day: "numeric", month: "long", year: "numeric" }).format(new Date(`${date}T12:00:00`)) : null;
 }
@@ -169,6 +177,7 @@ function toSmsText(value: string | null | undefined) {
 function buildEmailHtml(input: {
   clientName: string | null;
   periodLabel: string;
+  isQuarterPeriod: boolean;
   obligations: Array<{ name: string; amountLabel: string | null; dueDateLabel: string | null }>;
   caregiverName: string | null;
   caregiverEmail: string | null;
@@ -205,7 +214,7 @@ function buildEmailHtml(input: {
           </div>
           <p style="margin:0 0 18px;font-size:16px;line-height:1.7;">Dzień dobry,</p>
           <p style="margin:0 0 22px;font-size:16px;line-height:1.7;">
-            przekazujemy informacje o zobowiązaniach publicznoprawnych za miesiąc <strong>${escapeHtml(input.periodLabel)}</strong>${input.clientName ? ` dla <strong>${escapeHtml(input.clientName)}</strong>` : ""}.
+            przekazujemy informacje o zobowiązaniach publicznoprawnych ${input.isQuarterPeriod ? "za" : "za miesiąc"} <strong>${escapeHtml(input.periodLabel)}</strong>${input.clientName ? ` dla <strong>${escapeHtml(input.clientName)}</strong>` : ""}.
           </p>
           <div style="background:#eef3fb;border:1px solid #c9d6e8;border-radius:16px;padding:18px 20px;margin:0 0 22px;">
             <div style="margin:0 0 12px;color:#43516a;font-size:13px;font-weight:800;">Zobowiązania do zapłaty</div>
@@ -225,10 +234,12 @@ function buildEmailHtml(input: {
 function buildSmsMessage(input: {
   clientName: string | null;
   periodLabel: string;
+  isQuarterPeriod: boolean;
   obligations: Array<{ name: string; amountLabel: string | null; dueDateLabel: string | null }>;
 }) {
+  const periodPrefix = input.isQuarterPeriod ? "za" : "za miesiac";
   const items = input.obligations
-    .map((obligation) => `zobowiazanie ${toSmsText(obligation.name)} za miesiac ${toSmsText(input.periodLabel)} w kwocie ${toSmsText(obligation.amountLabel || "kwota do uzupelnienia")}`)
+    .map((obligation) => `zobowiazanie ${toSmsText(obligation.name)} ${periodPrefix} ${toSmsText(input.periodLabel)} w kwocie ${toSmsText(obligation.amountLabel || "kwota do uzupelnienia")}`)
     .join("; ");
 
   return `Dzien dobry, do zaplaty z ${toSmsText(input.clientName || "firmy")} ${items}. Pozdrawiamy, CRSS Sp. z o.o.`;
@@ -267,6 +278,7 @@ export async function POST(request: NextRequest) {
         nip,
         email,
         telefon,
+        vat_okres_rozliczeniowy,
         opiekun_id,
         profiles!klienci_opiekun_id_fkey (
           full_name,
@@ -331,7 +343,6 @@ export async function POST(request: NextRequest) {
 
   const caregiver = Array.isArray(client.profiles) ? client.profiles[0] : client.profiles;
   const channelLabel = payload.channel === "email" ? "e-mail" : "SMS";
-  const periodLabel = formatPeriod(settlement.okres);
   const preparedObligations = readyObligations.map((obligation) => ({
     id: obligation.id,
     type: obligation.typ,
@@ -341,10 +352,15 @@ export async function POST(request: NextRequest) {
     dueDate: adjustToNextPolishBusinessDay(obligation.termin_platnosci),
     dueDateLabel: formatDate(adjustToNextPolishBusinessDay(obligation.termin_platnosci)),
   }));
+  const isQuarterVatNotice =
+    client.vat_okres_rozliczeniowy === "kwartalny" &&
+    preparedObligations.some((obligation) => obligation.type === "VAT");
+  const periodLabel = isQuarterVatNotice ? formatQuarterPeriod(settlement.okres) : formatPeriod(settlement.okres);
   const subject = `Zobowiązania publicznoprawne za ${periodLabel}${client.nazwa ? ` - ${client.nazwa}` : ""}`;
   const messageHtml = buildEmailHtml({
     clientName: client.nazwa,
     periodLabel,
+    isQuarterPeriod: isQuarterVatNotice,
     obligations: preparedObligations,
     caregiverName: caregiver?.full_name || null,
     caregiverEmail: caregiver?.email || null,
@@ -352,6 +368,7 @@ export async function POST(request: NextRequest) {
   const smsMessage = buildSmsMessage({
     clientName: client.nazwa,
     periodLabel,
+    isQuarterPeriod: isQuarterVatNotice,
     obligations: preparedObligations,
   });
 

@@ -563,7 +563,7 @@ function SettlementDrawer({ settlement, progress, recurringTasks, recurringTimeE
             <section style={drawerSectionStyle}>
               <h3 style={drawerSectionTitleStyle}>Zadania cykliczne</h3>
               <ProgressBadge progress={progress.progress} done={progress.done_tasks} total={progress.total_tasks} large />
-              <div style={clientContextStyle}><span>Forma prawna: <strong>{client?.forma_prawna || "Brak"}</strong></span><span>Opodatkowanie: <strong>{client?.forma_opodatkowania || "Brak"}</strong></span><span>VAT: <strong>{client?.czynny_vat ? "czynny" : "nie"}</strong></span><span>VAT-UE: <strong>{client?.vat_ue ? "tak" : "nie"}</strong></span><span>Kadry: <strong>{client?.obsluga_kadrowa ? "tak" : "nie"}</strong></span></div>
+              <div style={clientContextStyle}><span>Forma prawna: <strong>{client?.forma_prawna || "Brak"}</strong></span><span>Opodatkowanie: <strong>{client?.forma_opodatkowania || "Brak"}</strong></span><span>VAT: <strong>{client?.czynny_vat ? "czynny" : "nie"}</strong></span>{client?.czynny_vat && <span>Okres VAT: <strong>{vatSettlementPeriodLabel(client.vat_okres_rozliczeniowy)}</strong></span>}<span>VAT-UE: <strong>{client?.vat_ue ? "tak" : "nie"}</strong></span><span>Kadry: <strong>{client?.obsluga_kadrowa ? "tak" : "nie"}</strong></span></div>
               <div style={recurringListStyle}>
                 {recurringTasks.length === 0 ? <div style={emptyStateStyle}>Brak zadań cyklicznych dla tego klienta.</div> : recurringTasks.map((task) => {
                   const activeTimer = activeTimers.find((entry) => entry.zadanie_cykliczne_id === task.zadanie_cykliczne_id && entry.klient_id === client?.id && entry.miesiac_rozliczeniowy === settlement.okres);
@@ -727,6 +727,7 @@ function currentMonthInput() {
   const month = today.getMonth() === 0 ? 12 : today.getMonth();
   return `${year}-${String(month).padStart(2, "0")}`;
 }
+function vatSettlementPeriodLabel(value: string | null | undefined) { return value === "kwartalny" ? "kwartalny" : "miesięczny"; }
 function formatMonth(value: string) { return new Intl.DateTimeFormat("pl-PL", { month: "long", year: "numeric" }).format(new Date(`${value}-01T12:00:00`)); }
 function formatDate(value: string | null) { return value ? new Intl.DateTimeFormat("pl-PL").format(new Date(`${value}T12:00:00`)) : "Do ustalenia"; }
 function formatDuration(totalSeconds: number) {

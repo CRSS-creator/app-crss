@@ -24,6 +24,7 @@ type SettlementClient = {
   forma_prawna: string | null;
   forma_opodatkowania: string | null;
   czynny_vat: boolean | null;
+  vat_okres_rozliczeniowy: string | null;
   vat_ue: boolean | null;
   obsluga_kadrowa: boolean | null;
   profiles?: SettlementClientProfile | SettlementClientProfile[] | null;
@@ -80,6 +81,7 @@ const SETTLEMENT_SELECT = `
     forma_prawna,
     forma_opodatkowania,
     czynny_vat,
+    vat_okres_rozliczeniowy,
     vat_ue,
     obsluga_kadrowa,
     profiles!klienci_opiekun_id_fkey (

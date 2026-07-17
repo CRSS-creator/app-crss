@@ -158,6 +158,7 @@ export async function POST(request: NextRequest) {
         html,
         caregiverName: caregiver?.full_name || null,
         caregiverEmail: caregiver?.email || null,
+        replyToEmail: caregiver?.email || null,
         requestedByName: caregiver?.full_name || caregiver?.email || null,
         appUrl: APP_URL,
       }),

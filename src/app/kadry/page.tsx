@@ -17,7 +17,10 @@ import {
 import {
   addClientToPayrollA1,
   fetchPayrollA1Records,
+  fetchPayrollA1MonthlyRevenues,
   updatePayrollA1Record,
+  upsertPayrollA1MonthlyRevenue,
+  type PayrollA1MonthlyRevenue,
   type PayrollA1Record,
 } from "@/lib/payrollA1Service";
 
@@ -55,13 +58,20 @@ type ContractDraft = {
 type A1Draft = {
   data_uzyskania_a1: string;
   data_konca_a1: string;
-  procent_przychodow_zagranicznych: string;
   uwagi: string;
 };
 
 type A1Row = {
   record: PayrollA1Record;
   client: PayrollClient | null;
+  monthly: PayrollA1MonthlyRevenue[];
+};
+
+type A1Totals = {
+  krajowy: number;
+  zagraniczny: number;
+  razem: number;
+  procentZagraniczny: number;
 };
 
 const PAYROLL_TABS: PayrollTabDefinition[] = [
@@ -91,6 +101,7 @@ function PayrollContent() {
   const [clients, setClients] = useState<PayrollClient[]>([]);
   const [contracts, setContracts] = useState<PayrollContract[]>([]);
   const [a1Records, setA1Records] = useState<PayrollA1Record[]>([]);
+  const [a1MonthlyRevenues, setA1MonthlyRevenues] = useState<PayrollA1MonthlyRevenue[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [a1AddSearch, setA1AddSearch] = useState("");
@@ -102,10 +113,11 @@ function PayrollContent() {
   useEffect(() => {
     async function loadData() {
       setLoading(true);
-      const [clientsResult, contractsResult, a1Result] = await Promise.all([
+      const [clientsResult, contractsResult, a1Result, a1MonthlyResult] = await Promise.all([
         fetchClients(),
         fetchPayrollContracts(),
         fetchPayrollA1Records(),
+        fetchPayrollA1MonthlyRevenues(),
       ]);
 
       if (clientsResult.error) {
@@ -129,6 +141,13 @@ function PayrollContent() {
         setA1Records((a1Result.data || []) as PayrollA1Record[]);
       }
 
+      if (a1MonthlyResult.error) {
+        console.error("Błąd pobierania przychodów A1:", a1MonthlyResult.error);
+        setA1MonthlyRevenues([]);
+      } else {
+        setA1MonthlyRevenues((a1MonthlyResult.data || []) as PayrollA1MonthlyRevenue[]);
+      }
+
       setLoading(false);
     }
 
@@ -144,7 +163,7 @@ function PayrollContent() {
     () => filterClients(payrollClients, searchTerm),
     [payrollClients, searchTerm]
   );
-  const a1Rows = useMemo(() => buildA1Rows(a1Records, clients), [a1Records, clients]);
+  const a1Rows = useMemo(() => buildA1Rows(a1Records, clients, a1MonthlyRevenues), [a1Records, clients, a1MonthlyRevenues]);
   const filteredA1Rows = useMemo(() => filterA1Rows(a1Rows, searchTerm), [a1Rows, searchTerm]);
   const availableA1Clients = useMemo(
     () => clients.filter((client) => !a1Records.some((record) => record.klient_id === client.id)),
@@ -178,6 +197,14 @@ function PayrollContent() {
 
   function handleA1Updated(record: PayrollA1Record) {
     setA1Records((current) => current.map((item) => item.id === record.id ? record : item));
+  }
+
+  function handleA1MonthlyUpdated(revenue: PayrollA1MonthlyRevenue) {
+    setA1MonthlyRevenues((current) => {
+      const exists = current.some((item) => item.id === revenue.id || (item.a1_id === revenue.a1_id && item.rok === revenue.rok && item.miesiac === revenue.miesiac));
+      if (!exists) return [...current, revenue];
+      return current.map((item) => item.id === revenue.id || (item.a1_id === revenue.a1_id && item.rok === revenue.rok && item.miesiac === revenue.miesiac) ? revenue : item);
+    });
   }
 
   return (
@@ -312,6 +339,7 @@ function PayrollContent() {
           row={selectedA1Row}
           onClose={() => setSelectedA1RecordId(null)}
           onUpdated={handleA1Updated}
+          onMonthlyUpdated={handleA1MonthlyUpdated}
         />
       )}
     </div>
@@ -407,7 +435,7 @@ function A1Table({
               <Td>{caregiverLabel(row.client)}</Td>
               <Td>{formatDate(row.record.data_uzyskania_a1)}</Td>
               <Td>{formatDate(row.record.data_konca_a1)}</Td>
-              <Td align="center"><A1PercentBadge value={row.record.procent_przychodow_zagranicznych} /></Td>
+              <Td align="center"><A1PercentBadge value={calculateA1Totals(row.monthly).procentZagraniczny} /></Td>
               <Td align="center">
                 <button type="button" style={detailsButtonStyle} onClick={() => onDetails(row.record.id)}>
                   Szczegóły
@@ -425,40 +453,62 @@ function A1DetailsModal({
   row,
   onClose,
   onUpdated,
+  onMonthlyUpdated,
 }: {
   row: A1Row;
   onClose: () => void;
   onUpdated: (record: PayrollA1Record) => void;
+  onMonthlyUpdated: (revenue: PayrollA1MonthlyRevenue) => void;
 }) {
   const [draft, setDraft] = useState<A1Draft>(() => createA1Draft(row.record));
+  const [monthValues, setMonthValues] = useState<Record<string, { krajowy: string; zagraniczny: string }>>(() => a1MonthValueMap(row.monthly));
   const [saving, setSaving] = useState(false);
+  const months = a1MonthsBetween(draft.data_uzyskania_a1, draft.data_konca_a1);
+  const totals = calculateA1TotalsFromValues(monthValues);
 
   function updateDraft<K extends keyof A1Draft>(key: K, value: A1Draft[K]) {
     setDraft((current) => ({ ...current, [key]: value }));
   }
 
   async function saveA1() {
-    const percent = Number(draft.procent_przychodow_zagranicznych.replace(",", "."));
-    if (!Number.isFinite(percent) || percent < 0 || percent > 100) {
-      alert("Procent przychodów zagranicznych musi być liczbą od 0 do 100.");
-      return;
-    }
-
     setSaving(true);
     const result = await updatePayrollA1Record(row.record.id, {
       data_uzyskania_a1: emptyToNull(draft.data_uzyskania_a1),
       data_konca_a1: emptyToNull(draft.data_konca_a1),
-      procent_przychodow_zagranicznych: percent,
+      procent_przychodow_zagranicznych: totals.procentZagraniczny,
       uwagi: emptyToNull(draft.uwagi),
     });
-    setSaving(false);
 
     if (result.error) {
       console.error("Błąd zapisu A1:", result.error);
       alert("Nie udało się zapisać szczegółów A1.");
+      setSaving(false);
       return;
     }
 
+    for (const month of months) {
+      const values = monthValues[a1MonthKey(month.year, month.month)] || { krajowy: "", zagraniczny: "" };
+      if (!hasTypedMonthlyValue(values.krajowy) && !hasTypedMonthlyValue(values.zagraniczny)) continue;
+
+      const monthlyResult = await upsertPayrollA1MonthlyRevenue({
+        a1_id: row.record.id,
+        rok: month.year,
+        miesiac: month.month,
+        przychod_krajowy: parseAmount(values.krajowy),
+        przychod_zagraniczny: parseAmount(values.zagraniczny),
+      });
+
+      if (monthlyResult.error) {
+        console.error("Błąd zapisu przychodów A1:", monthlyResult.error);
+        alert("Nie udało się zapisać przychodów miesięcznych A1.");
+        setSaving(false);
+        return;
+      }
+
+      onMonthlyUpdated(monthlyResult.data as PayrollA1MonthlyRevenue);
+    }
+
+    setSaving(false);
     onUpdated(result.data as PayrollA1Record);
     onClose();
   }
@@ -482,19 +532,73 @@ function A1DetailsModal({
             <div style={formGridStyle}>
               <Field label="Data uzyskania A1"><input type="date" style={inputStyle} value={draft.data_uzyskania_a1} onChange={(event) => updateDraft("data_uzyskania_a1", event.target.value)} /></Field>
               <Field label="Data końca A1"><input type="date" style={inputStyle} value={draft.data_konca_a1} onChange={(event) => updateDraft("data_konca_a1", event.target.value)} /></Field>
-              <Field label="% przychodów zagranicznych"><input type="number" min="0" max="100" step="0.01" style={inputStyle} value={draft.procent_przychodow_zagranicznych} onChange={(event) => updateDraft("procent_przychodow_zagranicznych", event.target.value)} /></Field>
-              <Field label="Status"><div style={readonlyFieldStyle}><A1PercentBadge value={draft.procent_przychodow_zagranicznych} /></div></Field>
             </div>
             <label style={{ ...fieldStyle, marginTop: "14px" }}>
               <span style={fieldLabelStyle}>Uwagi</span>
               <textarea style={textareaStyle} value={draft.uwagi} onChange={(event) => updateDraft("uwagi", event.target.value)} />
             </label>
-            <div style={formActionsStyle}>
-              <button type="button" style={primaryButtonStyle} onClick={saveA1} disabled={saving}>
-                {saving ? "Zapisywanie..." : "Zapisz szczegóły"}
-              </button>
-            </div>
           </section>
+
+          <section style={summaryGridStyle}>
+            <SummaryTile label="Przychód krajowy" value={formatMoney(totals.krajowy)} />
+            <SummaryTile label="Przychód zagraniczny" value={formatMoney(totals.zagraniczny)} />
+            <SummaryTile label="Przychód razem" value={formatMoney(totals.razem)} />
+            <SummaryTile label="% zagranicznych" value={<A1PercentBadge value={totals.procentZagraniczny} />} />
+          </section>
+
+          <section style={contractsSectionStyle}>
+            {months.length === 0 ? (
+              <p style={emptyStyle}>Uzupełnij datę uzyskania A1 i datę końca A1, aby wygenerować miesiące.</p>
+            ) : (
+              <div style={tableWrapStyle}>
+                <table style={a1MonthlyTableStyle}>
+                  <thead>
+                    <tr>
+                      <Th>Miesiąc</Th>
+                      <Th>Przychód krajowy</Th>
+                      <Th>Przychód zagraniczny</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {months.map((month) => {
+                      const key = a1MonthKey(month.year, month.month);
+                      const values = monthValues[key] || { krajowy: "", zagraniczny: "" };
+
+                      return (
+                        <tr key={key}>
+                          <Td><strong>{month.label}</strong></Td>
+                          <Td>
+                            <input
+                              value={values.krajowy}
+                              onChange={(event) => setMonthValues((current) => ({ ...current, [key]: { ...values, krajowy: event.target.value } }))}
+                              inputMode="decimal"
+                              placeholder="0,00"
+                              style={inputStyle}
+                            />
+                          </Td>
+                          <Td>
+                            <input
+                              value={values.zagraniczny}
+                              onChange={(event) => setMonthValues((current) => ({ ...current, [key]: { ...values, zagraniczny: event.target.value } }))}
+                              inputMode="decimal"
+                              placeholder="0,00"
+                              style={inputStyle}
+                            />
+                          </Td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+
+          <div style={formActionsStyle}>
+            <button type="button" style={primaryButtonStyle} onClick={saveA1} disabled={saving}>
+              {saving ? "Zapisywanie..." : "Zapisz szczegóły"}
+            </button>
+          </div>
         </div>
       </section>
     </div>
@@ -686,6 +790,10 @@ function YesNoBadge({ value }: { value: boolean }) {
   return <span style={value ? yesBadgeStyle : noBadgeStyle}>{value ? "tak" : "nie"}</span>;
 }
 
+function SummaryTile({ label, value }: { label: string; value: React.ReactNode }) {
+  return <div style={summaryTileStyle}><span>{label}</span><strong>{value}</strong></div>;
+}
+
 function A1PercentBadge({ value }: { value: number | string }) {
   const percent = Number(String(value || 0).replace(",", "."));
   const safePercent = Number.isFinite(percent) ? percent : 0;
@@ -719,7 +827,6 @@ function createA1Draft(record: PayrollA1Record): A1Draft {
   return {
     data_uzyskania_a1: record.data_uzyskania_a1 || "",
     data_konca_a1: record.data_konca_a1 || "",
-    procent_przychodow_zagranicznych: String(record.procent_przychodow_zagranicznych ?? 0),
     uwagi: record.uwagi || "",
   };
 }
@@ -753,10 +860,11 @@ function filterClients(clients: PayrollClient[], searchTerm: string) {
   ].some((value) => String(value || "").toLowerCase().includes(normalized)));
 }
 
-function buildA1Rows(records: PayrollA1Record[], clients: PayrollClient[]): A1Row[] {
+function buildA1Rows(records: PayrollA1Record[], clients: PayrollClient[], monthly: PayrollA1MonthlyRevenue[]): A1Row[] {
   return records.map((record) => ({
     record,
     client: clients.find((client) => client.id === record.klient_id) || null,
+    monthly: monthly.filter((item) => item.a1_id === record.id),
   }));
 }
 
@@ -793,6 +901,85 @@ function formatPercent(value: number) {
   return `${new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 2 }).format(value)}%`;
 }
 
+function formatMoney(value: number) {
+  return new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN" }).format(value);
+}
+
+function parseAmount(value: string) {
+  const normalized = value.replace(/\s/g, "").replace(",", ".");
+  const amount = Number(normalized);
+  return Number.isFinite(amount) && amount > 0 ? amount : 0;
+}
+
+function hasTypedMonthlyValue(value: string | undefined) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function toNumber(value: number | string | null | undefined) {
+  const numberValue = Number(String(value ?? 0).replace(",", "."));
+  return Number.isFinite(numberValue) ? numberValue : 0;
+}
+
+function a1MonthKey(year: number, month: number) {
+  return `${year}-${String(month).padStart(2, "0")}`;
+}
+
+function a1MonthValueMap(monthly: PayrollA1MonthlyRevenue[]) {
+  return monthly.reduce<Record<string, { krajowy: string; zagraniczny: string }>>((values, item) => {
+    values[a1MonthKey(item.rok, item.miesiac)] = {
+      krajowy: toNumber(item.przychod_krajowy) ? String(item.przychod_krajowy) : "",
+      zagraniczny: toNumber(item.przychod_zagraniczny) ? String(item.przychod_zagraniczny) : "",
+    };
+    return values;
+  }, {});
+}
+
+function a1MonthsBetween(startDate: string, endDate: string) {
+  if (!startDate || !endDate) return [];
+  const start = new Date(`${startDate}T12:00:00`);
+  const end = new Date(`${endDate}T12:00:00`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) return [];
+
+  const formatter = new Intl.DateTimeFormat("pl-PL", { month: "long", year: "numeric" });
+  const months: { year: number; month: number; label: string }[] = [];
+  const cursor = new Date(start.getFullYear(), start.getMonth(), 1, 12);
+  const endCursor = new Date(end.getFullYear(), end.getMonth(), 1, 12);
+
+  while (cursor <= endCursor) {
+    months.push({
+      year: cursor.getFullYear(),
+      month: cursor.getMonth() + 1,
+      label: formatter.format(cursor),
+    });
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+
+  return months;
+}
+
+function calculateA1Totals(monthly: PayrollA1MonthlyRevenue[]): A1Totals {
+  const krajowy = monthly.reduce((sum, item) => sum + toNumber(item.przychod_krajowy), 0);
+  const zagraniczny = monthly.reduce((sum, item) => sum + toNumber(item.przychod_zagraniczny), 0);
+  return buildA1Totals(krajowy, zagraniczny);
+}
+
+function calculateA1TotalsFromValues(values: Record<string, { krajowy: string; zagraniczny: string }>): A1Totals {
+  const entries = Object.values(values);
+  const krajowy = entries.reduce((sum, item) => sum + parseAmount(item.krajowy), 0);
+  const zagraniczny = entries.reduce((sum, item) => sum + parseAmount(item.zagraniczny), 0);
+  return buildA1Totals(krajowy, zagraniczny);
+}
+
+function buildA1Totals(krajowy: number, zagraniczny: number): A1Totals {
+  const razem = krajowy + zagraniczny;
+  return {
+    krajowy,
+    zagraniczny,
+    razem,
+    procentZagraniczny: razem > 0 ? (zagraniczny / razem) * 100 : 0,
+  };
+}
+
 function tabHint(tab: PayrollTab) {
   if (tab === "kadry") return "Klienci z zaznaczoną obsługą kadrową.";
   if (tab === "a1") return "Obsługa zaświadczeń A1.";
@@ -827,6 +1014,7 @@ const emptyInlineStyle: CSSProperties = { margin: 0, color: colors.muted, fontWe
 const tableWrapStyle: CSSProperties = { width: "100%", overflowX: "auto" };
 const tableStyle: CSSProperties = { width: "100%", minWidth: "980px", borderCollapse: "collapse" };
 const detailsTableStyle: CSSProperties = { width: "100%", minWidth: "1240px", borderCollapse: "collapse" };
+const a1MonthlyTableStyle: CSSProperties = { width: "100%", minWidth: "760px", borderCollapse: "collapse" };
 const thStyle: CSSProperties = { padding: "14px 18px", textAlign: "left", fontSize: "12px", color: colors.text, textTransform: "uppercase", letterSpacing: "0.08em", borderBottom: `1px solid ${colors.border}`, whiteSpace: "nowrap" };
 const tdStyle: CSSProperties = { padding: "16px 18px", borderBottom: `1px solid ${colors.border}`, color: colors.text, verticalAlign: "middle", fontSize: "14px" };
 const centeredThStyle: CSSProperties = { ...thStyle, textAlign: "center" };
@@ -851,6 +1039,8 @@ const primaryButtonStyle: CSSProperties = { minHeight: "42px", padding: "0 16px"
 const smallPrimaryButtonStyle: CSSProperties = { ...primaryButtonStyle, minHeight: "44px", alignSelf: "start" };
 const secondaryButtonStyle: CSSProperties = { minHeight: "42px", padding: "0 14px", borderRadius: radius.button, border: `1px solid ${colors.border}`, background: colors.white, color: colors.navy, fontWeight: 850, cursor: "pointer" };
 const formBoxStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.inputBackground, padding: "18px" };
+const summaryGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "12px" };
+const summaryTileStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, padding: "14px", display: "flex", flexDirection: "column", gap: "8px", color: colors.muted, fontSize: "12px", fontWeight: 850, textTransform: "uppercase" };
 const formHeaderStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", marginBottom: "16px" };
 const formTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "18px" };
 const formGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "14px" };
@@ -858,7 +1048,6 @@ const formActionsStyle: CSSProperties = { display: "flex", justifyContent: "flex
 const fieldStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "8px" };
 const fieldLabelStyle: CSSProperties = { color: colors.muted, fontSize: "12px", fontWeight: 850, textTransform: "uppercase" };
 const inputStyle: CSSProperties = { minHeight: "42px", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.text, padding: "0 12px", fontSize: "14px", fontWeight: 750 };
-const readonlyFieldStyle: CSSProperties = { ...inputStyle, display: "flex", alignItems: "center", background: colors.inputBackground };
 const textareaStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.text, padding: "12px", minHeight: "96px", resize: "vertical", fontSize: "14px", fontWeight: 700, fontFamily: "inherit" };
 const disabledInputStyle: CSSProperties = { ...inputStyle, background: "rgba(226, 232, 240, 0.72)", color: colors.muted, cursor: "not-allowed" };
 const checkboxFieldStyle: CSSProperties = { minHeight: "42px", display: "flex", alignItems: "center", gap: "8px", color: colors.navy, fontSize: "14px", fontWeight: 850 };

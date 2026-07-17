@@ -155,19 +155,27 @@ function LimitsContent() {
               <p style={sectionHintStyle}>{registerHint(activeType)}</p>
             </div>
             <div style={sectionActionsStyle}>
-              <input
-                type="search"
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Szukaj klienta, NIP, opiekuna lub statusu"
-                style={searchInputStyle}
-              />
               {!isAutomaticRegister && (
                 <button type="button" onClick={() => setShowAddForm((value) => !value)} style={primaryButtonStyle}>
                   <Plus size={18} /> Dodaj klienta
                 </button>
               )}
             </div>
+          </div>
+
+          <div style={searchRowStyle}>
+            <input
+              type="search"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Szukaj klienta, NIP, opiekuna lub statusu"
+              style={searchInputStyle}
+            />
+            {searchTerm && (
+              <button type="button" style={clearSearchButtonStyle} onClick={() => setSearchTerm("")}>
+                Wyczyść
+              </button>
+            )}
           </div>
 
           {showAddForm && !isAutomaticRegister && (
@@ -774,7 +782,9 @@ const sectionHeaderStyle: CSSProperties = { padding: "22px 24px", borderBottom: 
 const sectionTitleStyle: CSSProperties = { margin: 0, fontSize: "22px", color: colors.navy };
 const sectionHintStyle: CSSProperties = { margin: "6px 0 0", color: colors.muted, fontSize: "14px" };
 const sectionActionsStyle: CSSProperties = { display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" };
-const searchInputStyle: CSSProperties = { width: "min(360px, 100%)", minHeight: "42px", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.text, padding: "0 14px", fontSize: "14px", fontWeight: 750, outline: "none" };
+const searchRowStyle: CSSProperties = { display: "flex", alignItems: "center", gap: "12px", padding: "0 24px 18px", borderBottom: `1px solid ${colors.border}` };
+const searchInputStyle: CSSProperties = { width: "100%", border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "13px 16px", background: colors.inputBackground, color: colors.text, fontSize: "15px", fontWeight: 650, outline: "none" };
+const clearSearchButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "12px 14px", background: colors.white, color: colors.navy, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" };
 const primaryButtonStyle: CSSProperties = { minHeight: "42px", padding: "0 16px", border: "none", borderRadius: radius.button, background: colors.red, color: colors.white, fontWeight: 850, display: "inline-flex", alignItems: "center", gap: "8px", cursor: "pointer" };
 const smallPrimaryButtonStyle: CSSProperties = { ...primaryButtonStyle, minHeight: "40px" };
 const addFormStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: "12px", padding: "16px 24px", borderBottom: `1px solid ${colors.border}`, background: colors.inputBackground, alignItems: "start" };

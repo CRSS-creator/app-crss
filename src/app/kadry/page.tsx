@@ -147,7 +147,10 @@ function PayrollContent() {
             <h2 style={sectionTitleStyle}>{tab.label}</h2>
             <p style={sectionHintStyle}>{tabHint(activeTab)}</p>
           </div>
-          {activeTab === "kadry" && (
+        </div>
+
+        {activeTab === "kadry" && (
+          <div style={searchRowStyle}>
             <input
               type="search"
               value={searchTerm}
@@ -155,8 +158,13 @@ function PayrollContent() {
               placeholder="Szukaj klienta, NIP, opiekuna"
               style={searchInputStyle}
             />
-          )}
-        </div>
+            {searchTerm && (
+              <button type="button" style={clearSearchButtonStyle} onClick={() => setSearchTerm("")}>
+                Wyczyść
+              </button>
+            )}
+          </div>
+        )}
 
         {activeTab === "kadry" ? (
           <PayrollClientsTable
@@ -487,7 +495,9 @@ const cardStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderR
 const sectionHeaderStyle: CSSProperties = { padding: "22px 24px", borderBottom: `1px solid ${colors.border}`, display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "flex-start" };
 const sectionTitleStyle: CSSProperties = { margin: 0, fontSize: "22px", color: colors.navy };
 const sectionHintStyle: CSSProperties = { margin: "6px 0 0", color: colors.muted, fontSize: "14px" };
-const searchInputStyle: CSSProperties = { width: "min(360px, 100%)", minHeight: "42px", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.text, padding: "0 14px", fontSize: "14px", fontWeight: 750, outline: "none" };
+const searchRowStyle: CSSProperties = { display: "flex", alignItems: "center", gap: "12px", padding: "0 24px 18px", borderBottom: `1px solid ${colors.border}` };
+const searchInputStyle: CSSProperties = { width: "100%", flex: "1 1 auto", minWidth: 0, border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "13px 16px", background: colors.inputBackground, color: colors.text, fontSize: "15px", fontWeight: 650, outline: "none" };
+const clearSearchButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "12px 14px", background: colors.white, color: colors.navy, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" };
 const emptyStateStyle: CSSProperties = { minHeight: "220px", padding: "28px 24px", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", gap: "8px", color: colors.muted, fontWeight: 750, textAlign: "center" };
 const emptyStyle: CSSProperties = { margin: 0, padding: "28px 24px", color: colors.muted, fontWeight: 750 };
 const emptyInlineStyle: CSSProperties = { margin: 0, color: colors.muted, fontWeight: 750 };

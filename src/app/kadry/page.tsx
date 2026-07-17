@@ -527,7 +527,7 @@ function A1DetailsModal({
           </button>
         </div>
 
-        <div style={modalBodyStyle}>
+        <div style={a1ModalBodyStyle}>
           <section style={formBoxStyle}>
             <div style={formGridStyle}>
               <DateField label="Data uzyskania A1" value={draft.data_uzyskania_a1} onChange={(value) => updateDraft("data_uzyskania_a1", value)} />
@@ -594,11 +594,11 @@ function A1DetailsModal({
             )}
           </section>
 
-          <div style={formActionsStyle}>
-            <button type="button" style={primaryButtonStyle} onClick={saveA1} disabled={saving}>
-              {saving ? "Zapisywanie..." : "Zapisz szczegóły"}
-            </button>
-          </div>
+        </div>
+        <div style={stickyModalFooterStyle}>
+          <button type="button" style={primaryButtonStyle} onClick={saveA1} disabled={saving}>
+            {saving ? "Zapisywanie..." : "Zapisz szczegóły"}
+          </button>
         </div>
       </section>
     </div>
@@ -1129,6 +1129,8 @@ const modalTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize
 const modalSubtitleStyle: CSSProperties = { margin: "8px 0 0", color: colors.muted, fontSize: "13px", fontWeight: 750 };
 const modalActionsStyle: CSSProperties = { display: "flex", gap: "10px", alignItems: "center" };
 const modalBodyStyle: CSSProperties = { padding: "22px 24px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "18px" };
+const a1ModalBodyStyle: CSSProperties = { ...modalBodyStyle, flex: "1 1 auto", minHeight: 0, paddingBottom: "24px" };
+const stickyModalFooterStyle: CSSProperties = { flex: "0 0 auto", display: "flex", justifyContent: "flex-end", padding: "16px 24px 22px", borderTop: `1px solid ${colors.border}`, background: colors.white };
 const iconButtonStyle: CSSProperties = { width: "42px", height: "42px", borderRadius: radius.button, border: `1px solid ${colors.border}`, background: colors.white, color: colors.navy, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer" };
 const primaryButtonStyle: CSSProperties = { minHeight: "42px", padding: "0 16px", border: "none", borderRadius: radius.button, background: colors.red, color: colors.white, fontWeight: 850, display: "inline-flex", alignItems: "center", gap: "8px", cursor: "pointer" };
 const smallPrimaryButtonStyle: CSSProperties = { ...primaryButtonStyle, minHeight: "44px", alignSelf: "start" };

@@ -14,6 +14,12 @@ import {
   type PayrollContractPayload,
   type PayrollContractType,
 } from "@/lib/payrollContractService";
+import {
+  addClientToPayrollA1,
+  fetchPayrollA1Records,
+  updatePayrollA1Record,
+  type PayrollA1Record,
+} from "@/lib/payrollA1Service";
 
 type PayrollTab = "kadry" | "a1" | "zus_przedsiebiorcy";
 
@@ -46,6 +52,18 @@ type ContractDraft = {
   legitymacja_studencka_wazna_do: string;
 };
 
+type A1Draft = {
+  data_uzyskania_a1: string;
+  data_konca_a1: string;
+  procent_przychodow_zagranicznych: string;
+  uwagi: string;
+};
+
+type A1Row = {
+  record: PayrollA1Record;
+  client: PayrollClient | null;
+};
+
 const PAYROLL_TABS: PayrollTabDefinition[] = [
   { value: "kadry", label: "Kadry" },
   { value: "a1", label: "A1" },
@@ -72,16 +90,22 @@ function PayrollContent() {
   const [activeTab, setActiveTab] = useState<PayrollTab>("kadry");
   const [clients, setClients] = useState<PayrollClient[]>([]);
   const [contracts, setContracts] = useState<PayrollContract[]>([]);
+  const [a1Records, setA1Records] = useState<PayrollA1Record[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [a1AddSearch, setA1AddSearch] = useState("");
+  const [a1ClientToAdd, setA1ClientToAdd] = useState("");
+  const [showA1AddForm, setShowA1AddForm] = useState(false);
   const [selectedClient, setSelectedClient] = useState<PayrollClient | null>(null);
+  const [selectedA1RecordId, setSelectedA1RecordId] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadData() {
       setLoading(true);
-      const [clientsResult, contractsResult] = await Promise.all([
+      const [clientsResult, contractsResult, a1Result] = await Promise.all([
         fetchClients(),
         fetchPayrollContracts(),
+        fetchPayrollA1Records(),
       ]);
 
       if (clientsResult.error) {
@@ -96,6 +120,13 @@ function PayrollContent() {
         setContracts([]);
       } else {
         setContracts((contractsResult.data || []) as PayrollContract[]);
+      }
+
+      if (a1Result.error) {
+        console.error("Błąd pobierania A1:", a1Result.error);
+        setA1Records([]);
+      } else {
+        setA1Records((a1Result.data || []) as PayrollA1Record[]);
       }
 
       setLoading(false);
@@ -113,11 +144,40 @@ function PayrollContent() {
     () => filterClients(payrollClients, searchTerm),
     [payrollClients, searchTerm]
   );
+  const a1Rows = useMemo(() => buildA1Rows(a1Records, clients), [a1Records, clients]);
+  const filteredA1Rows = useMemo(() => filterA1Rows(a1Rows, searchTerm), [a1Rows, searchTerm]);
+  const availableA1Clients = useMemo(
+    () => clients.filter((client) => !a1Records.some((record) => record.klient_id === client.id)),
+    [clients, a1Records]
+  );
+  const filteredA1Clients = useMemo(() => filterClients(availableA1Clients, a1AddSearch), [availableA1Clients, a1AddSearch]);
+  const selectedA1ClientToAdd = availableA1Clients.find((client) => client.id === a1ClientToAdd) || null;
+  const selectedA1Row = selectedA1RecordId ? a1Rows.find((row) => row.record.id === selectedA1RecordId) || null : null;
   const selectedContracts = selectedClient ? contractsByClient[selectedClient.id] || [] : [];
   const tab = PAYROLL_TABS.find((item) => item.value === activeTab) || PAYROLL_TABS[0];
 
   function handleContractCreated(contract: PayrollContract) {
     setContracts((current) => [...current, contract].sort(sortContracts));
+  }
+
+  async function handleAddA1Client() {
+    if (!a1ClientToAdd) return;
+
+    const result = await addClientToPayrollA1(a1ClientToAdd);
+    if (result.error) {
+      console.error("Błąd dodawania klienta do A1:", result.error);
+      alert("Nie udało się dodać klienta do A1.");
+      return;
+    }
+
+    setA1Records((current) => [result.data as PayrollA1Record, ...current]);
+    setA1ClientToAdd("");
+    setA1AddSearch("");
+    setShowA1AddForm(false);
+  }
+
+  function handleA1Updated(record: PayrollA1Record) {
+    setA1Records((current) => current.map((item) => item.id === record.id ? record : item));
   }
 
   return (
@@ -148,9 +208,14 @@ function PayrollContent() {
             <h2 style={sectionTitleStyle}>{tab.label}</h2>
             <p style={sectionHintStyle}>{tabHint(activeTab)}</p>
           </div>
+          {activeTab === "a1" && (
+            <button type="button" onClick={() => setShowA1AddForm((value) => !value)} style={primaryButtonStyle}>
+              <Plus size={18} /> Dodaj klienta
+            </button>
+          )}
         </div>
 
-        {activeTab === "kadry" && (
+        {(activeTab === "kadry" || activeTab === "a1") && (
           <div style={searchRowStyle}>
             <input
               type="search"
@@ -167,12 +232,61 @@ function PayrollContent() {
           </div>
         )}
 
+        {activeTab === "a1" && showA1AddForm && (
+          <div style={addFormStyle}>
+            <div style={clientPickerStyle}>
+              <input
+                type="search"
+                value={a1AddSearch}
+                onChange={(event) => {
+                  setA1AddSearch(event.target.value);
+                  setA1ClientToAdd("");
+                }}
+                placeholder="Wpisz nazwę klienta lub NIP"
+                style={clientPickerInputStyle}
+              />
+              {selectedA1ClientToAdd && (
+                <div style={selectedClientStyle}>
+                  Wybrano: <strong>{selectedA1ClientToAdd.nazwa || "Klient bez nazwy"}</strong>
+                </div>
+              )}
+              <div style={clientPickerListStyle}>
+                {filteredA1Clients.length === 0 ? (
+                  <div style={clientPickerEmptyStyle}>Brak klientów do dodania.</div>
+                ) : (
+                  filteredA1Clients.slice(0, 8).map((client) => (
+                    <button
+                      key={client.id}
+                      type="button"
+                      onClick={() => {
+                        setA1ClientToAdd(client.id);
+                        setA1AddSearch(`${client.nazwa || "Klient bez nazwy"}${client.nip ? ` (${client.nip})` : ""}`);
+                      }}
+                      style={a1ClientToAdd === client.id ? activeClientOptionStyle : clientOptionStyle}
+                    >
+                      <strong>{client.nazwa || "Klient bez nazwy"}</strong>
+                      <span>{client.nip || "Brak NIP"} · {caregiverLabel(client)}</span>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+            <button type="button" onClick={() => void handleAddA1Client()} disabled={!a1ClientToAdd} style={smallPrimaryButtonStyle}>Dodaj</button>
+          </div>
+        )}
+
         {activeTab === "kadry" ? (
           <PayrollClientsTable
             clients={filteredClients}
             contractsByClient={contractsByClient}
             loading={loading}
             onDetails={setSelectedClient}
+          />
+        ) : activeTab === "a1" ? (
+          <A1Table
+            rows={filteredA1Rows}
+            loading={loading}
+            onDetails={(recordId) => setSelectedA1RecordId(recordId)}
           />
         ) : (
           <div style={emptyStateStyle}>
@@ -188,6 +302,14 @@ function PayrollContent() {
           contracts={selectedContracts}
           onClose={() => setSelectedClient(null)}
           onContractCreated={handleContractCreated}
+        />
+      )}
+
+      {selectedA1Row && (
+        <A1DetailsModal
+          row={selectedA1Row}
+          onClose={() => setSelectedA1RecordId(null)}
+          onUpdated={handleA1Updated}
         />
       )}
     </div>
@@ -244,6 +366,135 @@ function PayrollClientsTable({
           })}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function A1Table({
+  rows,
+  loading,
+  onDetails,
+}: {
+  rows: A1Row[];
+  loading: boolean;
+  onDetails: (recordId: string) => void;
+}) {
+  if (loading) return <p style={emptyStyle}>Ładowanie klientów A1...</p>;
+  if (rows.length === 0) return <p style={emptyStyle}>Brak klientów dodanych do A1.</p>;
+
+  return (
+    <div style={tableWrapStyle}>
+      <table style={tableStyle}>
+        <thead>
+          <tr>
+            <Th>Klient</Th>
+            <Th>Opiekun</Th>
+            <Th>Data uzyskania A1</Th>
+            <Th>Data końca A1</Th>
+            <Th align="center">% przychodów zagranicznych</Th>
+            <Th align="center">Szczegóły</Th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.record.id}>
+              <Td>
+                <strong style={clientNameStyle}>{row.client?.nazwa || "Klient bez nazwy"}</strong>
+                <span style={clientMetaStyle}>{row.client?.nip || "Brak NIP"}</span>
+              </Td>
+              <Td>{caregiverLabel(row.client)}</Td>
+              <Td>{formatDate(row.record.data_uzyskania_a1)}</Td>
+              <Td>{formatDate(row.record.data_konca_a1)}</Td>
+              <Td align="center"><A1PercentBadge value={row.record.procent_przychodow_zagranicznych} /></Td>
+              <Td align="center">
+                <button type="button" style={detailsButtonStyle} onClick={() => onDetails(row.record.id)}>
+                  Szczegóły
+                </button>
+              </Td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function A1DetailsModal({
+  row,
+  onClose,
+  onUpdated,
+}: {
+  row: A1Row;
+  onClose: () => void;
+  onUpdated: (record: PayrollA1Record) => void;
+}) {
+  const [draft, setDraft] = useState<A1Draft>(() => createA1Draft(row.record));
+  const [saving, setSaving] = useState(false);
+
+  function updateDraft<K extends keyof A1Draft>(key: K, value: A1Draft[K]) {
+    setDraft((current) => ({ ...current, [key]: value }));
+  }
+
+  async function saveA1() {
+    const percent = Number(draft.procent_przychodow_zagranicznych.replace(",", "."));
+    if (!Number.isFinite(percent) || percent < 0 || percent > 100) {
+      alert("Procent przychodów zagranicznych musi być liczbą od 0 do 100.");
+      return;
+    }
+
+    setSaving(true);
+    const result = await updatePayrollA1Record(row.record.id, {
+      data_uzyskania_a1: emptyToNull(draft.data_uzyskania_a1),
+      data_konca_a1: emptyToNull(draft.data_konca_a1),
+      procent_przychodow_zagranicznych: percent,
+      uwagi: emptyToNull(draft.uwagi),
+    });
+    setSaving(false);
+
+    if (result.error) {
+      console.error("Błąd zapisu A1:", result.error);
+      alert("Nie udało się zapisać szczegółów A1.");
+      return;
+    }
+
+    onUpdated(result.data as PayrollA1Record);
+    onClose();
+  }
+
+  return (
+    <div style={modalOverlayStyle} onClick={onClose}>
+      <section style={detailsModalStyle} onClick={(event) => event.stopPropagation()}>
+        <div style={modalHeaderStyle}>
+          <div>
+            <p style={eyebrowStyle}>Szczegóły A1</p>
+            <h2 style={modalTitleStyle}>{row.client?.nazwa || "Klient bez nazwy"}</h2>
+            <p style={modalSubtitleStyle}>NIP: {row.client?.nip || "Brak"} · {caregiverLabel(row.client)}</p>
+          </div>
+          <button type="button" style={iconButtonStyle} onClick={onClose} aria-label="Zamknij">
+            <X size={20} />
+          </button>
+        </div>
+
+        <div style={modalBodyStyle}>
+          <section style={formBoxStyle}>
+            <div style={formGridStyle}>
+              <Field label="Data uzyskania A1"><input type="date" style={inputStyle} value={draft.data_uzyskania_a1} onChange={(event) => updateDraft("data_uzyskania_a1", event.target.value)} /></Field>
+              <Field label="Data końca A1"><input type="date" style={inputStyle} value={draft.data_konca_a1} onChange={(event) => updateDraft("data_konca_a1", event.target.value)} /></Field>
+              <Field label="% przychodów zagranicznych"><input type="number" min="0" max="100" step="0.01" style={inputStyle} value={draft.procent_przychodow_zagranicznych} onChange={(event) => updateDraft("procent_przychodow_zagranicznych", event.target.value)} /></Field>
+              <Field label="Status"><div style={readonlyFieldStyle}><A1PercentBadge value={draft.procent_przychodow_zagranicznych} /></div></Field>
+            </div>
+            <label style={{ ...fieldStyle, marginTop: "14px" }}>
+              <span style={fieldLabelStyle}>Uwagi</span>
+              <textarea style={textareaStyle} value={draft.uwagi} onChange={(event) => updateDraft("uwagi", event.target.value)} />
+            </label>
+            <div style={formActionsStyle}>
+              <button type="button" style={primaryButtonStyle} onClick={saveA1} disabled={saving}>
+                {saving ? "Zapisywanie..." : "Zapisz szczegóły"}
+              </button>
+            </div>
+          </section>
+        </div>
+      </section>
     </div>
   );
 }
@@ -433,6 +684,12 @@ function YesNoBadge({ value }: { value: boolean }) {
   return <span style={value ? yesBadgeStyle : noBadgeStyle}>{value ? "tak" : "nie"}</span>;
 }
 
+function A1PercentBadge({ value }: { value: number | string }) {
+  const percent = Number(String(value || 0).replace(",", "."));
+  const safePercent = Number.isFinite(percent) ? percent : 0;
+  return <span style={safePercent <= 75 ? a1OkBadgeStyle : a1WarningBadgeStyle}>{formatPercent(safePercent)}</span>;
+}
+
 function Th({ children, align = "left" }: { children: React.ReactNode; align?: "left" | "center" }) {
   return <th style={align === "center" ? centeredThStyle : thStyle}>{children}</th>;
 }
@@ -453,6 +710,15 @@ function createEmptyDraft(): ContractDraft {
     badania_lekarskie_wazne_do: "",
     szkolenie_bhp_wazne_do: "",
     legitymacja_studencka_wazna_do: "",
+  };
+}
+
+function createA1Draft(record: PayrollA1Record): A1Draft {
+  return {
+    data_uzyskania_a1: record.data_uzyskania_a1 || "",
+    data_konca_a1: record.data_konca_a1 || "",
+    procent_przychodow_zagranicznych: String(record.procent_przychodow_zagranicznych ?? 0),
+    uwagi: record.uwagi || "",
   };
 }
 
@@ -485,8 +751,27 @@ function filterClients(clients: PayrollClient[], searchTerm: string) {
   ].some((value) => String(value || "").toLowerCase().includes(normalized)));
 }
 
-function caregiverLabel(client: PayrollClient) {
-  const profile = Array.isArray(client.profiles) ? client.profiles[0] : client.profiles;
+function buildA1Rows(records: PayrollA1Record[], clients: PayrollClient[]): A1Row[] {
+  return records.map((record) => ({
+    record,
+    client: clients.find((client) => client.id === record.klient_id) || null,
+  }));
+}
+
+function filterA1Rows(rows: A1Row[], searchTerm: string) {
+  const normalized = searchTerm.trim().toLowerCase();
+  if (!normalized) return rows;
+
+  return rows.filter((row) => [
+    row.client?.nazwa,
+    row.client?.nip,
+    row.client?.email,
+    caregiverLabel(row.client),
+  ].some((value) => String(value || "").toLowerCase().includes(normalized)));
+}
+
+function caregiverLabel(client: PayrollClient | null | undefined) {
+  const profile = Array.isArray(client?.profiles) ? client.profiles[0] : client?.profiles;
   return profile?.full_name || profile?.email || "Brak opiekuna";
 }
 
@@ -500,6 +785,10 @@ function formatDate(value: string | null) {
 
 function emptyToNull(value: string) {
   return value.trim() ? value.trim() : null;
+}
+
+function formatPercent(value: number) {
+  return `${new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 2 }).format(value)}%`;
 }
 
 function tabHint(tab: PayrollTab) {
@@ -522,6 +811,14 @@ const sectionHintStyle: CSSProperties = { margin: "6px 0 0", color: colors.muted
 const searchRowStyle: CSSProperties = { display: "flex", alignItems: "center", gap: "12px", padding: "18px 24px 18px" };
 const searchInputStyle: CSSProperties = { width: "100%", flex: "1 1 auto", minWidth: 0, border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "13px 16px", background: colors.inputBackground, color: colors.text, fontSize: "15px", fontWeight: 650, outline: "none" };
 const clearSearchButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "12px 14px", background: colors.white, color: colors.navy, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" };
+const addFormStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: "12px", padding: "0 24px 18px", alignItems: "start" };
+const clientPickerStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "8px" };
+const clientPickerInputStyle: CSSProperties = { ...searchInputStyle, background: colors.white };
+const selectedClientStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "10px 12px", color: colors.navy, background: colors.inputBackground, fontSize: "13px", fontWeight: 750 };
+const clientPickerListStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "8px" };
+const clientPickerEmptyStyle: CSSProperties = { color: colors.muted, fontWeight: 750, padding: "10px 0" };
+const clientOptionStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, padding: "12px", textAlign: "left", display: "flex", flexDirection: "column", gap: "4px", cursor: "pointer" };
+const activeClientOptionStyle: CSSProperties = { ...clientOptionStyle, borderColor: colors.navy, background: "#f8fbff" };
 const emptyStateStyle: CSSProperties = { minHeight: "220px", padding: "28px 24px", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", gap: "8px", color: colors.muted, fontWeight: 750, textAlign: "center" };
 const emptyStyle: CSSProperties = { margin: 0, padding: "28px 24px", color: colors.muted, fontWeight: 750 };
 const emptyInlineStyle: CSSProperties = { margin: 0, color: colors.muted, fontWeight: 750 };
@@ -536,9 +833,12 @@ const clientNameStyle: CSSProperties = { display: "block", color: colors.navy, f
 const clientMetaStyle: CSSProperties = { display: "block", marginTop: "4px", color: colors.muted, fontSize: "12px", fontWeight: 750 };
 const yesBadgeStyle: CSSProperties = { display: "inline-flex", alignItems: "center", justifyContent: "center", minHeight: "28px", minWidth: "48px", padding: "4px 10px", borderRadius: radius.badge, background: "rgba(22, 163, 74, 0.12)", color: colors.success, fontSize: "12px", fontWeight: 900, textTransform: "uppercase" };
 const noBadgeStyle: CSSProperties = { ...yesBadgeStyle, background: "rgba(239, 68, 68, 0.12)", color: colors.red };
+const a1OkBadgeStyle: CSSProperties = { ...yesBadgeStyle, minWidth: "64px" };
+const a1WarningBadgeStyle: CSSProperties = { ...a1OkBadgeStyle, background: "rgba(239, 68, 68, 0.12)", color: colors.red };
 const detailsButtonStyle: CSSProperties = { minHeight: "38px", padding: "0 14px", borderRadius: radius.button, border: `1px solid ${colors.border}`, background: colors.white, color: colors.navy, fontWeight: 850, cursor: "pointer" };
 const modalOverlayStyle: CSSProperties = { position: "fixed", inset: 0, zIndex: 60, background: "rgba(15, 23, 42, 0.38)", display: "flex", justifyContent: "center", alignItems: "flex-start", padding: "28px", overflowY: "auto" };
 const wideModalStyle: CSSProperties = { width: "min(1380px, calc(100vw - 56px))", maxHeight: "calc(100vh - 56px)", borderRadius: radius.card, background: colors.white, border: `1px solid ${colors.border}`, boxShadow: "0 32px 90px rgba(15, 23, 42, 0.28)", overflow: "hidden", display: "flex", flexDirection: "column" };
+const detailsModalStyle: CSSProperties = { width: "min(980px, calc(100vw - 56px))", maxHeight: "calc(100vh - 56px)", borderRadius: radius.card, background: colors.white, border: `1px solid ${colors.border}`, boxShadow: "0 32px 90px rgba(15, 23, 42, 0.28)", overflow: "hidden", display: "flex", flexDirection: "column" };
 const modalHeaderStyle: CSSProperties = { padding: "22px 24px", borderBottom: `1px solid ${colors.border}`, display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "flex-start" };
 const modalTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "26px", lineHeight: 1.2 };
 const modalSubtitleStyle: CSSProperties = { margin: "8px 0 0", color: colors.muted, fontSize: "13px", fontWeight: 750 };
@@ -546,6 +846,7 @@ const modalActionsStyle: CSSProperties = { display: "flex", gap: "10px", alignIt
 const modalBodyStyle: CSSProperties = { padding: "22px 24px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "18px" };
 const iconButtonStyle: CSSProperties = { width: "42px", height: "42px", borderRadius: radius.button, border: `1px solid ${colors.border}`, background: colors.white, color: colors.navy, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer" };
 const primaryButtonStyle: CSSProperties = { minHeight: "42px", padding: "0 16px", border: "none", borderRadius: radius.button, background: colors.red, color: colors.white, fontWeight: 850, display: "inline-flex", alignItems: "center", gap: "8px", cursor: "pointer" };
+const smallPrimaryButtonStyle: CSSProperties = { ...primaryButtonStyle, minHeight: "44px", alignSelf: "start" };
 const secondaryButtonStyle: CSSProperties = { minHeight: "42px", padding: "0 14px", borderRadius: radius.button, border: `1px solid ${colors.border}`, background: colors.white, color: colors.navy, fontWeight: 850, cursor: "pointer" };
 const formBoxStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.inputBackground, padding: "18px" };
 const formHeaderStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", marginBottom: "16px" };
@@ -555,6 +856,8 @@ const formActionsStyle: CSSProperties = { display: "flex", justifyContent: "flex
 const fieldStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "8px" };
 const fieldLabelStyle: CSSProperties = { color: colors.muted, fontSize: "12px", fontWeight: 850, textTransform: "uppercase" };
 const inputStyle: CSSProperties = { minHeight: "42px", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.text, padding: "0 12px", fontSize: "14px", fontWeight: 750 };
+const readonlyFieldStyle: CSSProperties = { ...inputStyle, display: "flex", alignItems: "center", background: colors.inputBackground };
+const textareaStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.text, padding: "12px", minHeight: "96px", resize: "vertical", fontSize: "14px", fontWeight: 700, fontFamily: "inherit" };
 const disabledInputStyle: CSSProperties = { ...inputStyle, background: "rgba(226, 232, 240, 0.72)", color: colors.muted, cursor: "not-allowed" };
 const checkboxFieldStyle: CSSProperties = { minHeight: "42px", display: "flex", alignItems: "center", gap: "8px", color: colors.navy, fontSize: "14px", fontWeight: 850 };
 const checkboxInputStyle: CSSProperties = { width: "16px", height: "16px", margin: 0, accentColor: colors.navy };

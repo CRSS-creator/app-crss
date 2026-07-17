@@ -703,7 +703,18 @@ function InvoicesContent() {
                                 aria-label={`Zaznacz powiadomienie dla ${invoice.numer || invoice.kontrahent_nazwa}`}
                               />
                             </Td>
-                            <Td strong style={invoiceNumberCellStyle}>{invoiceNumberLabel(invoice)}<Small>{invoice.numer ? "Numer z wFirmy" : "Po wysłaniu do wFirmy"}</Small></Td>
+                            <Td strong style={invoiceNumberCellStyle}>
+                              <span style={invoiceNumberRowStyle}>
+                                {invoiceNumberLabel(invoice)}
+                                {overdueReminderSentCount(invoice) > 0 ? (
+                                  <span style={overdueReminderSentIconStyle} title={`Wysłano powiadomień: ${overdueReminderSentCount(invoice)}`}>
+                                    <Mail size={13} />
+                                    <span style={overdueReminderSentCountStyle}>{overdueReminderSentCount(invoice)}</span>
+                                  </span>
+                                ) : null}
+                              </span>
+                              <Small>{invoice.numer ? "Numer z wFirmy" : "Po wysłaniu do wFirmy"}</Small>
+                            </Td>
                             <Td>{invoice.kontrahent_nazwa}<Small>{invoice.kontrahent_nip || invoice.klienci?.nazwa || "Brak NIP"}</Small></Td>
                             <Td>{invoice.data_wystawienia ? formatDate(invoice.data_wystawienia) : "Po wysłaniu"}</Td>
                             <Td>{invoice.termin_platnosci ? formatDate(invoice.termin_platnosci) : "Brak"}</Td>
@@ -1070,6 +1081,10 @@ function invoiceMailSent(invoice: Invoice) {
   return invoiceMailHistory(invoice).some((entry) => entry.status === "wyslane" && entry.notification_type !== "overdue_notification");
 }
 
+function overdueReminderSentCount(invoice: Invoice) {
+  return invoiceMailHistory(invoice).filter((entry) => entry.status === "wyslane" && entry.notification_type === "overdue_notification").length;
+}
+
 function invoiceNumberLabel(invoice: Invoice) {
   return invoice.numer || "Czeka na numer";
 }
@@ -1191,6 +1206,8 @@ const tdStyle: CSSProperties = { padding: "13px 10px", borderBottom: `1px solid 
 const invoiceNumberCellStyle: CSSProperties = { minWidth: "128px", whiteSpace: "nowrap", fontSize: "15px", lineHeight: 1.2, fontVariantNumeric: "tabular-nums" };
 const invoiceNumberRowStyle: CSSProperties = { display: "inline-flex", alignItems: "center", gap: "7px", minWidth: 0 };
 const mailSentIconStyle: CSSProperties = { display: "inline-flex", alignItems: "center", justifyContent: "center", width: "24px", height: "20px", borderRadius: radius.badge, background: "#dcfce7", color: colors.success };
+const overdueReminderSentIconStyle: CSSProperties = { ...mailSentIconStyle, width: "auto", minWidth: "24px", gap: "3px", padding: "0 6px" };
+const overdueReminderSentCountStyle: CSSProperties = { fontSize: "10px", fontWeight: 900, lineHeight: 1 };
 const amountCellStyle: CSSProperties = { whiteSpace: "nowrap", minWidth: "118px", fontSize: "15px", fontVariantNumeric: "tabular-nums" };
 const rowStyle: CSSProperties = { background: colors.white };
 const pendingInvoiceRowStyle: CSSProperties = { background: "#fff8e7" };

@@ -40,6 +40,7 @@ type ContractDraft = {
   numer_umowy: string;
   data_poczatku: string;
   data_konca: string;
+  umowa_na_czas_nieokreslony: boolean;
   badania_lekarskie_wazne_do: string;
   szkolenie_bhp_wazne_do: string;
   legitymacja_studencka_wazna_do: string;
@@ -263,7 +264,11 @@ function PayrollDetailsModal({
   const [saving, setSaving] = useState(false);
 
   function updateDraft<K extends keyof ContractDraft>(key: K, value: ContractDraft[K]) {
-    setDraft((current) => ({ ...current, [key]: value }));
+    setDraft((current) => ({
+      ...current,
+      [key]: value,
+      ...(key === "umowa_na_czas_nieokreslony" && value === true ? { data_konca: "" } : {}),
+    }));
   }
 
   async function saveContract() {
@@ -280,7 +285,8 @@ function PayrollDetailsModal({
       typ_umowy: draft.typ_umowy,
       numer_umowy: emptyToNull(draft.numer_umowy),
       data_poczatku: emptyToNull(draft.data_poczatku),
-      data_konca: emptyToNull(draft.data_konca),
+      data_konca: draft.typ_umowy === "umowa_o_prace" && draft.umowa_na_czas_nieokreslony ? null : emptyToNull(draft.data_konca),
+      umowa_na_czas_nieokreslony: draft.typ_umowy === "umowa_o_prace" ? draft.umowa_na_czas_nieokreslony : false,
       badania_lekarskie_wazne_do: draft.typ_umowy === "umowa_o_prace" ? emptyToNull(draft.badania_lekarskie_wazne_do) : null,
       szkolenie_bhp_wazne_do: draft.typ_umowy === "umowa_o_prace" ? emptyToNull(draft.szkolenie_bhp_wazne_do) : null,
       legitymacja_studencka_wazna_do: draft.typ_umowy === "student" ? emptyToNull(draft.legitymacja_studencka_wazna_do) : null,
@@ -334,9 +340,26 @@ function PayrollDetailsModal({
                 </Field>
                 <Field label="Numer umowy"><input style={inputStyle} value={draft.numer_umowy} onChange={(event) => updateDraft("numer_umowy", event.target.value)} /></Field>
                 <Field label="Data początku"><input type="date" style={inputStyle} value={draft.data_poczatku} onChange={(event) => updateDraft("data_poczatku", event.target.value)} /></Field>
-                <Field label="Data końca"><input type="date" style={inputStyle} value={draft.data_konca} onChange={(event) => updateDraft("data_konca", event.target.value)} /></Field>
+                <Field label="Data końca">
+                  <input
+                    type="date"
+                    style={draft.typ_umowy === "umowa_o_prace" && draft.umowa_na_czas_nieokreslony ? disabledInputStyle : inputStyle}
+                    value={draft.data_konca}
+                    disabled={draft.typ_umowy === "umowa_o_prace" && draft.umowa_na_czas_nieokreslony}
+                    onChange={(event) => updateDraft("data_konca", event.target.value)}
+                  />
+                </Field>
                 {draft.typ_umowy === "umowa_o_prace" && (
                   <>
+                    <label style={checkboxFieldStyle}>
+                      <input
+                        type="checkbox"
+                        checked={draft.umowa_na_czas_nieokreslony}
+                        onChange={(event) => updateDraft("umowa_na_czas_nieokreslony", event.target.checked)}
+                        style={checkboxInputStyle}
+                      />
+                      Umowa na czas nieokreślony
+                    </label>
                     <Field label="Badania lekarskie ważne do"><input type="date" style={inputStyle} value={draft.badania_lekarskie_wazne_do} onChange={(event) => updateDraft("badania_lekarskie_wazne_do", event.target.value)} /></Field>
                     <Field label="Szkolenie BHP ważne do"><input type="date" style={inputStyle} value={draft.szkolenie_bhp_wazne_do} onChange={(event) => updateDraft("szkolenie_bhp_wazne_do", event.target.value)} /></Field>
                   </>
@@ -380,7 +403,7 @@ function PayrollDetailsModal({
                         <Td>{contractTypeLabel(contract.typ_umowy)}</Td>
                         <Td>{contract.numer_umowy || "-"}</Td>
                         <Td>{formatDate(contract.data_poczatku)}</Td>
-                        <Td>{formatDate(contract.data_konca)}</Td>
+                        <Td>{contract.typ_umowy === "umowa_o_prace" && contract.umowa_na_czas_nieokreslony ? "czas nieokreślony" : formatDate(contract.data_konca)}</Td>
                         <Td>{contract.typ_umowy === "umowa_o_prace" ? formatDate(contract.badania_lekarskie_wazne_do) : "-"}</Td>
                         <Td>{contract.typ_umowy === "umowa_o_prace" ? formatDate(contract.szkolenie_bhp_wazne_do) : "-"}</Td>
                         <Td>{contract.typ_umowy === "student" ? formatDate(contract.legitymacja_studencka_wazna_do) : "-"}</Td>
@@ -426,6 +449,7 @@ function createEmptyDraft(): ContractDraft {
     numer_umowy: "",
     data_poczatku: "",
     data_konca: "",
+    umowa_na_czas_nieokreslony: false,
     badania_lekarskie_wazne_do: "",
     szkolenie_bhp_wazne_do: "",
     legitymacja_studencka_wazna_do: "",
@@ -531,4 +555,7 @@ const formActionsStyle: CSSProperties = { display: "flex", justifyContent: "flex
 const fieldStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "8px" };
 const fieldLabelStyle: CSSProperties = { color: colors.muted, fontSize: "12px", fontWeight: 850, textTransform: "uppercase" };
 const inputStyle: CSSProperties = { minHeight: "42px", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.text, padding: "0 12px", fontSize: "14px", fontWeight: 750 };
+const disabledInputStyle: CSSProperties = { ...inputStyle, background: "rgba(226, 232, 240, 0.72)", color: colors.muted, cursor: "not-allowed" };
+const checkboxFieldStyle: CSSProperties = { minHeight: "42px", display: "flex", alignItems: "center", gap: "8px", color: colors.navy, fontSize: "14px", fontWeight: 850 };
+const checkboxInputStyle: CSSProperties = { width: "16px", height: "16px", margin: 0, accentColor: colors.navy };
 const contractsSectionStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.card, padding: "0", overflow: "hidden" };

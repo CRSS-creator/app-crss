@@ -13,6 +13,7 @@ export type PayrollContract = {
   numer_umowy: string | null;
   data_poczatku: string | null;
   data_konca: string | null;
+  umowa_na_czas_nieokreslony: boolean;
   badania_lekarskie_wazne_do: string | null;
   szkolenie_bhp_wazne_do: string | null;
   legitymacja_studencka_wazna_do: string | null;
@@ -26,6 +27,7 @@ export type PayrollContractPayload = {
   numer_umowy?: string | null;
   data_poczatku?: string | null;
   data_konca?: string | null;
+  umowa_na_czas_nieokreslony?: boolean;
   badania_lekarskie_wazne_do?: string | null;
   szkolenie_bhp_wazne_do?: string | null;
   legitymacja_studencka_wazna_do?: string | null;

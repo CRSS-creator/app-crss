@@ -85,6 +85,7 @@ type ClientRow = {
   czynny_vat: boolean | null;
   vat_ue: boolean | null;
   obsluga_kadrowa: boolean | null;
+  ma_a1?: boolean | null;
   opiekun_id: string | null;
 };
 
@@ -115,6 +116,7 @@ type TemplateDraft = {
   vatMode: VatMode;
   vatUeMode: VatUeMode;
   payrollMode: PayrollMode;
+  requiresA1: boolean;
   czestotliwosc: FrequencyMode;
   miesiac_roczny: string;
   dzien_miesiaca: string;
@@ -133,6 +135,7 @@ const emptyDraft: TemplateDraft = {
   vatMode: "any",
   vatUeMode: "any",
   payrollMode: "any",
+  requiresA1: false,
   czestotliwosc: "miesieczne",
   miesiac_roczny: "3",
   dzien_miesiaca: "10",
@@ -190,19 +193,22 @@ function SettingsContent({ role }: { role: UserRole | null }) {
 
   async function loadSettings() {
     setLoading(true);
-    const [templatesResult, clientsResult, usersResult, taxHistoryResult] = await Promise.all([
+    const [templatesResult, clientsResult, usersResult, taxHistoryResult, a1Result] = await Promise.all([
       fetchRecurringTaskTemplates(),
       fetchClients(),
       supabase.from("profiles").select("id, full_name, email, role").order("full_name", { ascending: true }),
       supabase.from("zobowiazania_wysylki_historia").select("*").order("created_at", { ascending: false }).limit(250),
+      supabase.from("kadry_a1").select("klient_id"),
     ]);
 
     if (templatesResult.error) console.error("Błąd pobierania szablonów:", templatesResult.error);
     if (clientsResult.error) console.error("Błąd pobierania klientów:", clientsResult.error);
     if (usersResult.error) console.error("Błąd pobierania użytkowników:", usersResult.error);
+    if (a1Result.error) console.error("Błąd pobierania listy A1:", a1Result.error);
 
+    const a1ClientIds = new Set((a1Result.data || []).map((row) => row.klient_id));
     setTemplates((templatesResult.data || []) as RecurringTask[]);
-    setClients((clientsResult.data || []) as ClientRow[]);
+    setClients(((clientsResult.data || []) as ClientRow[]).map((client) => ({ ...client, ma_a1: a1ClientIds.has(client.id) })));
     setUsers((usersResult.data || []) as UserProfile[]);
     setTaxHistory((taxHistoryResult.data || []) as TaxObligationHistoryRow[]);
     setLoading(false);
@@ -224,6 +230,7 @@ function SettingsContent({ role }: { role: UserRole | null }) {
       wymaga_czynnego_vat: hasClientSelection ? null : vatModeToValue(draft.vatMode),
       wymaga_vat_ue: hasClientSelection ? null : vatUeModeToValue(draft.vatUeMode),
       wymaga_obslugi_kadrowej: hasClientSelection ? null : payrollModeToValue(draft.payrollMode),
+      wymaga_a1: hasClientSelection ? null : draft.requiresA1 ? true : null,
       czestotliwosc: draft.czestotliwosc,
       miesiac_roczny: annualMonth,
       dzien_miesiaca: day,
@@ -278,6 +285,7 @@ function SettingsContent({ role }: { role: UserRole | null }) {
       vatMode: valueToVatMode(template.wymaga_czynnego_vat),
       vatUeMode: valueToVatUeMode(template.wymaga_vat_ue),
       payrollMode: valueToPayrollMode(template.wymaga_obslugi_kadrowej),
+      requiresA1: template.wymaga_a1 === true,
       czestotliwosc: template.czestotliwosc || "miesieczne",
       miesiac_roczny: String(template.miesiac_roczny || 3),
       dzien_miesiaca: String(template.dzien_miesiaca || 10),
@@ -554,6 +562,18 @@ function TemplatesTab({ templates, clients, users, draft, loading, saving, setDr
             <Field label="VAT-UE"><AppSelect style={inputStyle} disabled={draft.klient_ids.length > 0} value={draft.vatUeMode} options={VAT_UE_OPTIONS} onChange={(value) => setDraft((current) => ({ ...current, vatUeMode: value as VatUeMode }))} /></Field>
             <Field label="Kadry"><AppSelect style={inputStyle} disabled={draft.klient_ids.length > 0} value={draft.payrollMode} options={PAYROLL_OPTIONS} onChange={(value) => setDraft((current) => ({ ...current, payrollMode: value as PayrollMode }))} /></Field>
           </div>
+          <div style={a1FilterStyle}>
+            <span style={labelStyle}>A1</span>
+            <label style={a1CheckboxStyle}>
+              <input
+                type="checkbox"
+                disabled={draft.klient_ids.length > 0}
+                checked={draft.requiresA1}
+                onChange={(event) => setDraft((current) => ({ ...current, requiresA1: event.target.checked }))}
+              />
+              <span>Tylko podmioty z listy A1</span>
+            </label>
+          </div>
         </div>
       </div>
 
@@ -790,6 +810,8 @@ const clientPillStyle: CSSProperties = { display: "inline-flex", alignItems: "ce
 const pillRemoveStyle: CSSProperties = { border: "none", background: "transparent", color: colors.navy, cursor: "pointer", fontWeight: 900, fontSize: "15px", lineHeight: 1 };
 const templateSidePanelStyle: CSSProperties = { gridColumn: "3 / -1", display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "12px", alignSelf: "stretch" };
 const templateVatGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "12px" };
+const a1FilterStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, padding: "10px 12px", display: "flex", flexDirection: "column", gap: "8px" };
+const a1CheckboxStyle: CSSProperties = { display: "flex", alignItems: "center", gap: "8px", color: colors.text, fontWeight: 750, fontSize: "13px" };
 const buttonRowStyle: CSSProperties = { display: "flex", gap: "10px", marginBottom: "18px", flexWrap: "wrap" };
 const primaryButtonStyle: CSSProperties = { border: "none", borderRadius: radius.button, background: colors.red, color: colors.white, padding: "11px 15px", minHeight: "42px", fontWeight: 850, cursor: "pointer", whiteSpace: "nowrap" };
 const secondaryButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.navy, padding: "9px 12px", fontWeight: 850, cursor: "pointer", whiteSpace: "nowrap" };

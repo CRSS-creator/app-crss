@@ -13,6 +13,7 @@ export type RecurringTask = {
   wymaga_czynnego_vat: boolean | null;
   wymaga_vat_ue: boolean | null;
   wymaga_obslugi_kadrowej: boolean | null;
+  wymaga_a1: boolean | null;
   czestotliwosc: "miesieczne" | "roczne";
   miesiac_roczny: number | null;
   dzien_miesiaca: number;
@@ -57,6 +58,7 @@ export type RecurringTaskPayload = {
   wymaga_czynnego_vat?: boolean | null;
   wymaga_vat_ue?: boolean | null;
   wymaga_obslugi_kadrowej?: boolean | null;
+  wymaga_a1?: boolean | null;
   czestotliwosc?: "miesieczne" | "roczne";
   miesiac_roczny?: number | null;
   dzien_miesiaca: number;
@@ -72,6 +74,7 @@ export type RecurringTaskClientContext = {
   czynny_vat?: boolean | null;
   vat_ue?: boolean | null;
   obsluga_kadrowa?: boolean | null;
+  ma_a1?: boolean | null;
 };
 
 const RECURRING_TASK_SELECT = `
@@ -204,8 +207,9 @@ export function recurringTaskMatchesClient(task: RecurringTask, client: Recurrin
   const vatMatch = task.wymaga_czynnego_vat === null || task.wymaga_czynnego_vat === undefined || task.wymaga_czynnego_vat === Boolean(client?.czynny_vat);
   const vatUeMatch = task.wymaga_vat_ue === null || task.wymaga_vat_ue === undefined || task.wymaga_vat_ue === Boolean(client?.vat_ue);
   const payrollMatch = task.wymaga_obslugi_kadrowej === null || task.wymaga_obslugi_kadrowej === undefined || task.wymaga_obslugi_kadrowej === Boolean(client?.obsluga_kadrowa);
+  const a1Match = task.wymaga_a1 === null || task.wymaga_a1 === undefined || task.wymaga_a1 === Boolean(client?.ma_a1);
 
-  return legalMatch && taxMatch && vatMatch && payrollMatch && vatUeMatch;
+  return legalMatch && taxMatch && vatMatch && payrollMatch && vatUeMatch && a1Match;
 }
 
 export function recurringScopeLabel(task: RecurringTask) {
@@ -215,12 +219,14 @@ export function recurringScopeLabel(task: RecurringTask) {
   const vatLabel = task.wymaga_czynnego_vat === true ? "czynny VAT" : task.wymaga_czynnego_vat === false ? "bez VAT" : null;
   const vatUeLabel = task.wymaga_vat_ue === true ? "VAT-UE" : task.wymaga_vat_ue === false ? "bez VAT-UE" : null;
   const payrollLabel = task.wymaga_obslugi_kadrowej === true ? "kadry" : task.wymaga_obslugi_kadrowej === false ? "bez kadr" : null;
+  const a1Label = task.wymaga_a1 === true ? "A1" : null;
   return [
     legalForms.length ? legalForms.join(", ") : "każda forma",
     taxationForms.length ? taxationForms.join(", ") : "każde opodatkowanie",
     vatLabel,
     vatUeLabel,
     payrollLabel,
+    a1Label,
   ].filter(Boolean).join(" · ");
 }
 

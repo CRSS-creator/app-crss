@@ -251,7 +251,9 @@ function PayrollContent() {
                 </div>
               )}
               <div style={clientPickerListStyle}>
-                {filteredA1Clients.length === 0 ? (
+                {!a1AddSearch.trim() ? (
+                  <div style={clientPickerEmptyStyle}>Wpisz pierwszą literę, żeby wyszukać klienta.</div>
+                ) : filteredA1Clients.length === 0 ? (
                   <div style={clientPickerEmptyStyle}>Brak klientów do dodania.</div>
                 ) : (
                   filteredA1Clients.slice(0, 8).map((client) => (
@@ -813,12 +815,12 @@ const searchInputStyle: CSSProperties = { width: "100%", flex: "1 1 auto", minWi
 const clearSearchButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "12px 14px", background: colors.white, color: colors.navy, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" };
 const addFormStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: "12px", padding: "0 24px 18px", alignItems: "start" };
 const clientPickerStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "8px" };
-const clientPickerInputStyle: CSSProperties = { ...searchInputStyle, background: colors.white };
-const selectedClientStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "10px 12px", color: colors.navy, background: colors.inputBackground, fontSize: "13px", fontWeight: 750 };
-const clientPickerListStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "8px" };
-const clientPickerEmptyStyle: CSSProperties = { color: colors.muted, fontWeight: 750, padding: "10px 0" };
-const clientOptionStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, padding: "12px", textAlign: "left", display: "flex", flexDirection: "column", gap: "4px", cursor: "pointer" };
-const activeClientOptionStyle: CSSProperties = { ...clientOptionStyle, borderColor: colors.navy, background: "#f8fbff" };
+const clientPickerInputStyle: CSSProperties = { minHeight: "42px", border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "0 14px", color: colors.navy, fontWeight: 750, background: colors.white, outline: "none" };
+const selectedClientStyle: CSSProperties = { color: colors.muted, fontSize: "12px", fontWeight: 800 };
+const clientPickerListStyle: CSSProperties = { display: "grid", gap: "6px", maxHeight: "310px", overflowY: "auto" };
+const clientPickerEmptyStyle: CSSProperties = { border: `1px dashed ${colors.border}`, borderRadius: radius.button, color: colors.muted, padding: "12px", fontWeight: 750 };
+const clientOptionStyle: CSSProperties = { width: "100%", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.text, padding: "10px 12px", display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", textAlign: "left", cursor: "pointer" };
+const activeClientOptionStyle: CSSProperties = { ...clientOptionStyle, borderColor: colors.navy, background: "rgba(23, 59, 115, 0.08)" };
 const emptyStateStyle: CSSProperties = { minHeight: "220px", padding: "28px 24px", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", gap: "8px", color: colors.muted, fontWeight: 750, textAlign: "center" };
 const emptyStyle: CSSProperties = { margin: 0, padding: "28px 24px", color: colors.muted, fontWeight: 750 };
 const emptyInlineStyle: CSSProperties = { margin: 0, color: colors.muted, fontWeight: 750 };

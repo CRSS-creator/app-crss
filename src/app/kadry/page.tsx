@@ -16,10 +16,13 @@ import {
 } from "@/lib/payrollContractService";
 import {
   addClientToPayrollA1,
+  fetchPayrollA1NotificationHistory,
   fetchPayrollA1Records,
   fetchPayrollA1MonthlyRevenues,
+  sendPayrollA1ClientNotification,
   updatePayrollA1Record,
   upsertPayrollA1MonthlyRevenue,
+  type PayrollA1NotificationHistory,
   type PayrollA1MonthlyRevenue,
   type PayrollA1Record,
 } from "@/lib/payrollA1Service";
@@ -468,6 +471,10 @@ function A1DetailsModal({
   const [draft, setDraft] = useState<A1Draft>(() => createA1Draft(row.record));
   const [monthValues, setMonthValues] = useState<Record<string, { krajowy: string; zagraniczny: string }>>(() => a1MonthValueMap(row.monthly));
   const [saving, setSaving] = useState(false);
+  const [sendingClientNotification, setSendingClientNotification] = useState(false);
+  const [showA1History, setShowA1History] = useState(false);
+  const [a1History, setA1History] = useState<PayrollA1NotificationHistory[]>([]);
+  const [a1HistoryLoading, setA1HistoryLoading] = useState(false);
   const months = a1MonthsBetween(draft.data_uzyskania_a1, draft.data_konca_a1);
   const visibleMonths = [...months].reverse();
   const totals = calculateA1TotalsFromValues(monthValues);
@@ -518,6 +525,46 @@ function A1DetailsModal({
     onClose();
   }
 
+  async function sendA1ClientNotification() {
+    if (!row.client?.email) {
+      alert("Klient nie ma uzupełnionego adresu e-mail.");
+      return;
+    }
+
+    setSendingClientNotification(true);
+    const result = await sendPayrollA1ClientNotification(row.record.id);
+    setSendingClientNotification(false);
+
+    if (result.error) {
+      alert(result.error.message);
+      return;
+    }
+
+    const history = Array.isArray(result.data?.history) ? result.data.history as PayrollA1NotificationHistory[] : [];
+    if (history.length > 0) {
+      setA1History((current) => [...history, ...current]);
+    }
+    alert("Powiadomienie A1 zostało przekazane do wysyłki.");
+  }
+
+  async function toggleA1History() {
+    const nextValue = !showA1History;
+    setShowA1History(nextValue);
+    if (!nextValue || a1History.length > 0) return;
+
+    setA1HistoryLoading(true);
+    const result = await fetchPayrollA1NotificationHistory(row.record.id);
+    if (result.error) {
+      console.error("Błąd pobierania historii powiadomień A1:", result.error);
+      alert("Nie udało się pobrać historii powiadomień A1.");
+      setA1HistoryLoading(false);
+      return;
+    }
+
+    setA1History((result.data || []) as PayrollA1NotificationHistory[]);
+    setA1HistoryLoading(false);
+  }
+
   return (
     <div style={modalOverlayStyle} onClick={onClose}>
       <section style={a1DetailsModalStyle} onClick={(event) => event.stopPropagation()}>
@@ -533,6 +580,10 @@ function A1DetailsModal({
         </div>
 
         <div style={a1ModalBodyStyle}>
+          {showA1History && (
+            <A1NotificationHistoryPanel history={a1History} loading={a1HistoryLoading} />
+          )}
+
           <section style={formBoxStyle}>
             <div style={formGridStyle}>
               <DateField label="Data uzyskania A1" value={draft.data_uzyskania_a1} onChange={(value) => updateDraft("data_uzyskania_a1", value)} />
@@ -597,12 +648,56 @@ function A1DetailsModal({
 
         </div>
         <div style={stickyModalFooterStyle}>
+          <button type="button" style={secondaryButtonStyle} onClick={() => void toggleA1History()}>
+            Historia powiadomień
+          </button>
+          <button type="button" style={secondaryButtonStyle} onClick={() => void sendA1ClientNotification()} disabled={sendingClientNotification}>
+            {sendingClientNotification ? "Wysyłanie..." : "Wyślij powiadomienie do klienta"}
+          </button>
           <button type="button" style={primaryButtonStyle} onClick={saveA1} disabled={saving}>
             {saving ? "Zapisywanie..." : "Zapisz szczegóły"}
           </button>
         </div>
       </section>
     </div>
+  );
+}
+
+function A1NotificationHistoryPanel({ history, loading }: { history: PayrollA1NotificationHistory[]; loading: boolean }) {
+  return (
+    <section style={historyPanelStyle}>
+      <div style={formHeaderStyle}>
+        <h3 style={formTitleStyle}>Historia powiadomień A1</h3>
+      </div>
+      {loading ? (
+        <p style={emptyInlineStyle}>Ładowanie historii powiadomień...</p>
+      ) : history.length === 0 ? (
+        <p style={emptyInlineStyle}>Brak powiadomień A1 wysłanych do klienta.</p>
+      ) : (
+        <div style={tableWrapStyle}>
+          <table style={historyTableStyle}>
+            <thead>
+              <tr>
+                <Th>Data wysyłki</Th>
+                <Th>Odbiorca</Th>
+                <Th>Temat</Th>
+                <Th>Wysłał</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {history.map((entry) => (
+                <tr key={entry.id}>
+                  <Td>{formatDateTime(entry.created_at)}</Td>
+                  <Td>{entry.recipient_email}</Td>
+                  <Td>{entry.subject}</Td>
+                  <Td>{entry.sent_by_name || entry.sent_by_email || "-"}</Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -1244,7 +1339,7 @@ const modalSubtitleStyle: CSSProperties = { margin: "8px 0 0", color: colors.mut
 const modalActionsStyle: CSSProperties = { display: "flex", gap: "10px", alignItems: "center" };
 const modalBodyStyle: CSSProperties = { padding: "22px 24px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "18px" };
 const a1ModalBodyStyle: CSSProperties = { ...modalBodyStyle, flex: "1 1 auto", minHeight: 0, paddingBottom: "24px" };
-const stickyModalFooterStyle: CSSProperties = { flex: "0 0 auto", display: "flex", justifyContent: "flex-end", padding: "16px 24px 22px", borderTop: `1px solid ${colors.border}`, background: colors.white };
+const stickyModalFooterStyle: CSSProperties = { flex: "0 0 auto", display: "flex", justifyContent: "flex-end", gap: "10px", padding: "16px 24px 22px", borderTop: `1px solid ${colors.border}`, background: colors.white, flexWrap: "wrap" };
 const iconButtonStyle: CSSProperties = { width: "42px", height: "42px", borderRadius: radius.button, border: `1px solid ${colors.border}`, background: colors.white, color: colors.navy, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer" };
 const primaryButtonStyle: CSSProperties = { minHeight: "42px", padding: "0 16px", border: "none", borderRadius: radius.button, background: colors.red, color: colors.white, fontWeight: 850, display: "inline-flex", alignItems: "center", gap: "8px", cursor: "pointer" };
 const smallPrimaryButtonStyle: CSSProperties = { ...primaryButtonStyle, minHeight: "44px", alignSelf: "start" };

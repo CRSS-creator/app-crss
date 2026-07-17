@@ -112,3 +112,35 @@ export async function markAllNotificationsRead() {
     .update({ status: "read", read_at: new Date().toISOString() })
     .eq("status", "unread");
 }
+
+export async function sendPayrollNotificationClientEmail(notificationId: string) {
+  const sessionResult = await supabase.auth.getSession();
+  const token = sessionResult.data.session?.access_token;
+
+  if (!token) {
+    return { data: null, error: new Error("Brak aktywnej sesji.") };
+  }
+
+  try {
+    const response = await fetch("/api/kadry/notifications/send-client-email", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ notificationId }),
+    });
+
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) {
+      return { data: null, error: new Error(payload?.error || "Nie udało się wysłać maila do klienta.") };
+    }
+
+    return { data: payload, error: null };
+  } catch (error) {
+    return {
+      data: null,
+      error: error instanceof Error ? error : new Error("Nie udało się połączyć z wysyłką maila."),
+    };
+  }
+}

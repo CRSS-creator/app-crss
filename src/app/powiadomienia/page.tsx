@@ -9,6 +9,7 @@ import {
   fetchNotifications,
   markAllNotificationsRead,
   markNotificationRead,
+  sendPayrollNotificationClientEmail,
   type AppNotification,
 } from "@/lib/notificationService";
 
@@ -28,6 +29,8 @@ function NotificationsContent() {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<NotificationFilter>("unread");
+  const [expandedNotificationIds, setExpandedNotificationIds] = useState<string[]>([]);
+  const [sendingPayrollEmailId, setSendingPayrollEmailId] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadNotifications() {
@@ -52,6 +55,43 @@ function NotificationsContent() {
   async function markAllRead() {
     await markAllNotificationsRead();
     setNotifications((current) => current.map((item) => ({ ...item, status: "read", read_at: item.read_at || new Date().toISOString() })));
+  }
+
+  function toggleDetails(notificationId: string) {
+    setExpandedNotificationIds((current) =>
+      current.includes(notificationId)
+        ? current.filter((id) => id !== notificationId)
+        : [...current, notificationId]
+    );
+  }
+
+  async function sendClientEmail(notification: AppNotification) {
+    setSendingPayrollEmailId(notification.id);
+    const result = await sendPayrollNotificationClientEmail(notification.id);
+    setSendingPayrollEmailId(null);
+
+    if (result.error) {
+      window.alert(result.error.message);
+      return;
+    }
+
+    const sentAt = typeof result.data?.sentAt === "string" ? result.data.sentAt : new Date().toISOString();
+    const recipients = Array.isArray(result.data?.recipients) ? result.data.recipients : [];
+    setNotifications((current) =>
+      current.map((item) =>
+        item.id === notification.id
+          ? {
+              ...item,
+              metadata: {
+                ...item.metadata,
+                client_email_sent_at: sentAt,
+                client_email_recipients: recipients,
+              },
+            }
+          : item
+      )
+    );
+    window.alert("Mail do klienta został przekazany do wysyłki.");
   }
 
   const unreadCount = notifications.filter((notification) => notification.status === "unread").length;
@@ -95,19 +135,23 @@ function NotificationsContent() {
               const isCrmFollowUpNotification = notification.type === "crm_follow_up_due";
               const isRecurringTaskNotification = notification.type === "recurring_task_due_today";
               const isPayrollContractNotification = notification.type === "payroll_contract_expiry";
+              const detailsExpanded = expandedNotificationIds.includes(notification.id);
+              const clientEmailSent = isPayrollContractNotification && payrollClientEmailSent(notification);
               return (
                 <article key={notification.id} style={notification.status === "unread" ? unreadItemStyle : itemStyle}>
                   <div style={itemHeaderStyle}>
                     <div>
                       <div style={itemTitleStyle}>{notification.title}</div>
-                      {notification.body && <p style={itemBodyStyle}>{notification.body}</p>}
+                      {isPayrollContractNotification ? (
+                        <p style={itemBodyStyle}>{payrollShortBody(notification)}</p>
+                      ) : notification.body && <p style={itemBodyStyle}>{notification.body}</p>}
                     </div>
                     <div style={itemMetaStyle}>
                       <span style={priorityBadgeStyle(notification.priority)}>{priorityLabel(notification.priority)}</span>
                       <span>{formatDateTime(notification.created_at)}</span>
                     </div>
                   </div>
-                  {isPayrollContractNotification && <PayrollContractNotificationTable notification={notification} />}
+                  {isPayrollContractNotification && detailsExpanded && <PayrollContractNotificationTable notification={notification} />}
                   <div style={itemActionsStyle}>
                     {publicToken && (
                       <a style={secondaryButtonStyle} href={`/oferta/${publicToken}`} target="_blank" rel="noreferrer">Otwórz propozycję</a>
@@ -115,7 +159,22 @@ function NotificationsContent() {
                     {isTaskNotification && <a style={secondaryButtonStyle} href="/zadania">Otwórz zadania</a>}
                     {isCrmFollowUpNotification && <a style={secondaryButtonStyle} href="/crm">Otwórz CRM</a>}
                     {isRecurringTaskNotification && <a style={secondaryButtonStyle} href="/rozliczenia">Otwórz rozliczenia</a>}
-                    {isPayrollContractNotification && <a style={secondaryButtonStyle} href="/kadry">Otwórz Kadry</a>}
+                    {isPayrollContractNotification && (
+                      <>
+                        <button type="button" style={secondaryButtonStyle} onClick={() => toggleDetails(notification.id)}>
+                          {detailsExpanded ? "Ukryj szczegóły" : "Szczegóły"}
+                        </button>
+                        <button
+                          type="button"
+                          style={clientEmailSent || !notification.related_id ? disabledButtonStyle : secondaryButtonStyle}
+                          onClick={() => sendClientEmail(notification)}
+                          disabled={clientEmailSent || !notification.related_id || sendingPayrollEmailId === notification.id}
+                        >
+                          {clientEmailSent ? "Mail wysłany" : sendingPayrollEmailId === notification.id ? "Wysyłanie..." : "Wyślij mail do klienta"}
+                        </button>
+                        <a style={secondaryButtonStyle} href="/kadry">Otwórz Kadry</a>
+                      </>
+                    )}
                     {notification.status === "unread" && <button style={primaryButtonStyle} onClick={() => markRead(notification)}>Przeczytane</button>}
                   </div>
                 </article>
@@ -145,7 +204,7 @@ function PayrollContractNotificationTable({ notification }: { notification: AppN
 
   return (
     <div style={payrollNoticeBoxStyle}>
-      <div style={payrollNoticeTitleStyle}>Pozycja do kontaktu z klientem</div>
+      <div style={payrollNoticeTitleStyle}>Szczegóły terminu</div>
       <div style={payrollTableWrapStyle}>
         <table style={payrollTableStyle}>
           <thead>
@@ -173,6 +232,21 @@ function PayrollContractNotificationTable({ notification }: { notification: AppN
       {request && <p style={payrollRequestStyle}>Informacja do klienta: {request}</p>}
     </div>
   );
+}
+
+function payrollShortBody(notification: AppNotification) {
+  const metadata = notification.metadata || {};
+  const clientName = stringMeta(metadata.client_name) || "klienta bez nazwy";
+  const employeeName = stringMeta(metadata.employee_name);
+  const dateKind = payrollDateKindLabel(stringMeta(metadata.date_kind)).toLowerCase();
+  const dueDate = formatDateOnly(stringMeta(metadata.due_date));
+  const personPart = employeeName ? ` (${employeeName})` : "";
+
+  return `U klienta ${clientName} kończy się: ${dateKind}${personPart}. Termin: ${dueDate}.`;
+}
+
+function payrollClientEmailSent(notification: AppNotification) {
+  return Boolean(stringMeta(notification.metadata?.client_email_sent_at));
 }
 
 function stringMeta(value: unknown) {
@@ -258,3 +332,4 @@ const payrollMetaStyle: React.CSSProperties = { display: "block", marginTop: "4p
 const payrollRequestStyle: React.CSSProperties = { margin: 0, padding: "12px 14px", color: colors.text, lineHeight: 1.55, fontSize: "13px", fontWeight: 750 };
 const primaryButtonStyle: React.CSSProperties = { border: "none", borderRadius: radius.button, padding: "10px 14px", minHeight: "42px", background: colors.red, color: colors.white, fontWeight: 800, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", textAlign: "center" };
 const secondaryButtonStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "10px 14px", minHeight: "42px", background: colors.white, color: colors.navy, fontWeight: 800, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", textAlign: "center", textDecoration: "none" };
+const disabledButtonStyle: React.CSSProperties = { ...secondaryButtonStyle, color: colors.muted, background: colors.inputBackground, cursor: "not-allowed", opacity: 0.75 };

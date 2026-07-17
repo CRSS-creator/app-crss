@@ -1,11 +1,19 @@
 "use client";
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { X } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import AccessGuard from "@/components/AccessGuard";
 import AppLayout from "@/components/AppLayout";
+import AppSelect from "@/components/AppSelect";
 import { colors, radius, shadow } from "@/app/design";
-import { fetchClients, updateClient } from "@/lib/clientService";
+import { fetchClients } from "@/lib/clientService";
+import {
+  createPayrollContract,
+  fetchPayrollContracts,
+  type PayrollContract,
+  type PayrollContractPayload,
+  type PayrollContractType,
+} from "@/lib/payrollContractService";
 
 type PayrollTab = "kadry" | "a1" | "zus_przedsiebiorcy";
 
@@ -21,17 +29,32 @@ type PayrollClient = {
   email: string | null;
   telefon: string | null;
   obsluga_kadrowa: boolean | null;
-  kadry_umowy_o_prace: boolean | null;
-  kadry_umowy_cywilnoprawne: boolean | null;
-  kadry_studenci: boolean | null;
   opiekun_id: string | null;
   profiles?: { full_name: string | null; email: string | null } | { full_name: string | null; email: string | null }[] | null;
+};
+
+type ContractDraft = {
+  imie: string;
+  nazwisko: string;
+  typ_umowy: PayrollContractType;
+  numer_umowy: string;
+  data_poczatku: string;
+  data_konca: string;
+  badania_lekarskie_wazne_do: string;
+  szkolenie_bhp_wazne_do: string;
+  legitymacja_studencka_wazna_do: string;
 };
 
 const PAYROLL_TABS: PayrollTabDefinition[] = [
   { value: "kadry", label: "Kadry" },
   { value: "a1", label: "A1" },
   { value: "zus_przedsiebiorcy", label: "ZUS Przedsiębiorcy" },
+];
+
+const CONTRACT_TYPE_OPTIONS: { value: PayrollContractType; label: string }[] = [
+  { value: "umowa_o_prace", label: "Umowa o pracę" },
+  { value: "umowa_cywilnoprawna", label: "Umowa cywilnoprawna" },
+  { value: "student", label: "Student" },
 ];
 
 export default function PayrollPage() {
@@ -47,39 +70,53 @@ export default function PayrollPage() {
 function PayrollContent() {
   const [activeTab, setActiveTab] = useState<PayrollTab>("kadry");
   const [clients, setClients] = useState<PayrollClient[]>([]);
+  const [contracts, setContracts] = useState<PayrollContract[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedClient, setSelectedClient] = useState<PayrollClient | null>(null);
 
   useEffect(() => {
-    async function loadClients() {
+    async function loadData() {
       setLoading(true);
-      const result = await fetchClients();
-      if (result.error) {
-        console.error("Błąd pobierania klientów kadrowych:", result.error);
+      const [clientsResult, contractsResult] = await Promise.all([
+        fetchClients(),
+        fetchPayrollContracts(),
+      ]);
+
+      if (clientsResult.error) {
+        console.error("Błąd pobierania klientów kadrowych:", clientsResult.error);
         setClients([]);
       } else {
-        setClients((result.data || []) as unknown as PayrollClient[]);
+        setClients((clientsResult.data || []) as unknown as PayrollClient[]);
       }
+
+      if (contractsResult.error) {
+        console.error("Błąd pobierania umów kadrowych:", contractsResult.error);
+        setContracts([]);
+      } else {
+        setContracts((contractsResult.data || []) as PayrollContract[]);
+      }
+
       setLoading(false);
     }
 
-    void loadClients();
+    void loadData();
   }, []);
 
   const payrollClients = useMemo(
     () => clients.filter((client) => client.obsluga_kadrowa),
     [clients]
   );
+  const contractsByClient = useMemo(() => groupContractsByClient(contracts), [contracts]);
   const filteredClients = useMemo(
     () => filterClients(payrollClients, searchTerm),
     [payrollClients, searchTerm]
   );
+  const selectedContracts = selectedClient ? contractsByClient[selectedClient.id] || [] : [];
   const tab = PAYROLL_TABS.find((item) => item.value === activeTab) || PAYROLL_TABS[0];
 
-  function handleSaved(client: PayrollClient) {
-    setClients((current) => current.map((item) => (item.id === client.id ? { ...item, ...client } : item)));
-    setSelectedClient((current) => current && current.id === client.id ? { ...current, ...client } : current);
+  function handleContractCreated(contract: PayrollContract) {
+    setContracts((current) => [...current, contract].sort(sortContracts));
   }
 
   return (
@@ -122,7 +159,12 @@ function PayrollContent() {
         </div>
 
         {activeTab === "kadry" ? (
-          <PayrollClientsTable clients={filteredClients} loading={loading} onDetails={setSelectedClient} />
+          <PayrollClientsTable
+            clients={filteredClients}
+            contractsByClient={contractsByClient}
+            loading={loading}
+            onDetails={setSelectedClient}
+          />
         ) : (
           <div style={emptyStateStyle}>
             <strong>{tab.label}</strong>
@@ -132,10 +174,11 @@ function PayrollContent() {
       </section>
 
       {selectedClient && (
-        <PayrollDetailsDrawer
+        <PayrollDetailsModal
           client={selectedClient}
+          contracts={selectedContracts}
           onClose={() => setSelectedClient(null)}
-          onSaved={handleSaved}
+          onContractCreated={handleContractCreated}
         />
       )}
     </div>
@@ -144,10 +187,12 @@ function PayrollContent() {
 
 function PayrollClientsTable({
   clients,
+  contractsByClient,
   loading,
   onDetails,
 }: {
   clients: PayrollClient[];
+  contractsByClient: Record<string, PayrollContract[]>;
   loading: boolean;
   onDetails: (client: PayrollClient) => void;
 }) {
@@ -168,134 +213,193 @@ function PayrollClientsTable({
           </tr>
         </thead>
         <tbody>
-          {clients.map((client) => (
-            <tr key={client.id}>
-              <Td>
-                <strong style={clientNameStyle}>{client.nazwa || "Klient bez nazwy"}</strong>
-                <span style={clientMetaStyle}>{client.nip || "Brak NIP"}</span>
-              </Td>
-              <Td>{caregiverLabel(client)}</Td>
-              <Td align="center"><YesNoBadge value={client.kadry_umowy_o_prace} /></Td>
-              <Td align="center"><YesNoBadge value={client.kadry_umowy_cywilnoprawne} /></Td>
-              <Td align="center"><YesNoBadge value={client.kadry_studenci} /></Td>
-              <Td align="center">
-                <button type="button" style={detailsButtonStyle} onClick={() => onDetails(client)}>
-                  Szczegóły
-                </button>
-              </Td>
-            </tr>
-          ))}
+          {clients.map((client) => {
+            const clientContracts = contractsByClient[client.id] || [];
+            return (
+              <tr key={client.id}>
+                <Td>
+                  <strong style={clientNameStyle}>{client.nazwa || "Klient bez nazwy"}</strong>
+                  <span style={clientMetaStyle}>{client.nip || "Brak NIP"}</span>
+                </Td>
+                <Td>{caregiverLabel(client)}</Td>
+                <Td align="center"><YesNoBadge value={hasContractType(clientContracts, "umowa_o_prace")} /></Td>
+                <Td align="center"><YesNoBadge value={hasContractType(clientContracts, "umowa_cywilnoprawna")} /></Td>
+                <Td align="center"><YesNoBadge value={hasContractType(clientContracts, "student")} /></Td>
+                <Td align="center">
+                  <button type="button" style={detailsButtonStyle} onClick={() => onDetails(client)}>
+                    Szczegóły
+                  </button>
+                </Td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
   );
 }
 
-function PayrollDetailsDrawer({
+function PayrollDetailsModal({
   client,
+  contracts,
   onClose,
-  onSaved,
+  onContractCreated,
 }: {
   client: PayrollClient;
+  contracts: PayrollContract[];
   onClose: () => void;
-  onSaved: (client: PayrollClient) => void;
+  onContractCreated: (contract: PayrollContract) => void;
 }) {
-  const [draft, setDraft] = useState({
-    kadry_umowy_o_prace: Boolean(client.kadry_umowy_o_prace),
-    kadry_umowy_cywilnoprawne: Boolean(client.kadry_umowy_cywilnoprawne),
-    kadry_studenci: Boolean(client.kadry_studenci),
-  });
+  const [showForm, setShowForm] = useState(false);
+  const [draft, setDraft] = useState<ContractDraft>(createEmptyDraft());
   const [saving, setSaving] = useState(false);
 
-  async function saveDetails() {
+  function updateDraft<K extends keyof ContractDraft>(key: K, value: ContractDraft[K]) {
+    setDraft((current) => ({ ...current, [key]: value }));
+  }
+
+  async function saveContract() {
+    if (!draft.imie.trim() || !draft.nazwisko.trim()) {
+      alert("Uzupełnij imię i nazwisko.");
+      return;
+    }
+
     setSaving(true);
-    const result = await updateClient(client.id, draft);
+    const payload: PayrollContractPayload = {
+      klient_id: client.id,
+      imie: draft.imie.trim(),
+      nazwisko: draft.nazwisko.trim(),
+      typ_umowy: draft.typ_umowy,
+      numer_umowy: emptyToNull(draft.numer_umowy),
+      data_poczatku: emptyToNull(draft.data_poczatku),
+      data_konca: emptyToNull(draft.data_konca),
+      badania_lekarskie_wazne_do: draft.typ_umowy === "umowa_o_prace" ? emptyToNull(draft.badania_lekarskie_wazne_do) : null,
+      szkolenie_bhp_wazne_do: draft.typ_umowy === "umowa_o_prace" ? emptyToNull(draft.szkolenie_bhp_wazne_do) : null,
+      legitymacja_studencka_wazna_do: draft.typ_umowy === "student" ? emptyToNull(draft.legitymacja_studencka_wazna_do) : null,
+    };
+
+    const result = await createPayrollContract(payload);
     if (result.error) {
-      console.error("Błąd zapisu szczegółów kadrowych:", result.error);
-      alert("Nie udało się zapisać szczegółów kadrowych.");
+      console.error("Błąd dodawania umowy kadrowej:", result.error);
+      alert("Nie udało się dodać umowy.");
       setSaving(false);
       return;
     }
 
-    onSaved({ ...client, ...draft });
+    onContractCreated(result.data as PayrollContract);
+    setDraft(createEmptyDraft());
+    setShowForm(false);
     setSaving(false);
-    onClose();
   }
 
   return (
-    <div style={drawerOverlayStyle} onClick={onClose}>
-      <aside style={drawerStyle} onClick={(event) => event.stopPropagation()}>
-        <div style={drawerHeaderStyle}>
+    <div style={modalOverlayStyle} onClick={onClose}>
+      <section style={wideModalStyle} onClick={(event) => event.stopPropagation()}>
+        <div style={modalHeaderStyle}>
           <div>
             <p style={eyebrowStyle}>Szczegóły kadrowe</p>
-            <h2 style={drawerTitleStyle}>{client.nazwa || "Klient bez nazwy"}</h2>
-            <p style={drawerSubtitleStyle}>NIP: {client.nip || "Brak"}</p>
+            <h2 style={modalTitleStyle}>{client.nazwa || "Klient bez nazwy"}</h2>
+            <p style={modalSubtitleStyle}>NIP: {client.nip || "Brak"} · {contracts.length} {contracts.length === 1 ? "umowa" : "umów"}</p>
           </div>
-          <button type="button" style={iconButtonStyle} onClick={onClose} aria-label="Zamknij">
-            <X size={20} />
-          </button>
+          <div style={modalActionsStyle}>
+            <button type="button" style={primaryButtonStyle} onClick={() => setShowForm((value) => !value)}>
+              <Plus size={18} /> Dodaj umowę
+            </button>
+            <button type="button" style={iconButtonStyle} onClick={onClose} aria-label="Zamknij">
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
-        <div style={drawerContentStyle}>
-          <section style={detailsSectionStyle}>
-            <h3 style={detailsSectionTitleStyle}>Kadry</h3>
-            <EditableCheckbox
-              label="Umowy o pracę"
-              checked={draft.kadry_umowy_o_prace}
-              onChange={(value) => setDraft((current) => ({ ...current, kadry_umowy_o_prace: value }))}
-            />
-            <EditableCheckbox
-              label="Umowy cywilnoprawne"
-              checked={draft.kadry_umowy_cywilnoprawne}
-              onChange={(value) => setDraft((current) => ({ ...current, kadry_umowy_cywilnoprawne: value }))}
-            />
-            <EditableCheckbox
-              label="Studenci"
-              checked={draft.kadry_studenci}
-              onChange={(value) => setDraft((current) => ({ ...current, kadry_studenci: value }))}
-            />
+        <div style={modalBodyStyle}>
+          {showForm && (
+            <section style={formBoxStyle}>
+              <div style={formHeaderStyle}>
+                <h3 style={formTitleStyle}>Nowa umowa</h3>
+                <button type="button" style={secondaryButtonStyle} onClick={() => setShowForm(false)}>Anuluj</button>
+              </div>
+              <div style={formGridStyle}>
+                <Field label="Imię"><input style={inputStyle} value={draft.imie} onChange={(event) => updateDraft("imie", event.target.value)} /></Field>
+                <Field label="Nazwisko"><input style={inputStyle} value={draft.nazwisko} onChange={(event) => updateDraft("nazwisko", event.target.value)} /></Field>
+                <Field label="Typ umowy">
+                  <AppSelect style={inputStyle} value={draft.typ_umowy} options={CONTRACT_TYPE_OPTIONS} onChange={(value) => updateDraft("typ_umowy", value as PayrollContractType)} />
+                </Field>
+                <Field label="Numer umowy"><input style={inputStyle} value={draft.numer_umowy} onChange={(event) => updateDraft("numer_umowy", event.target.value)} /></Field>
+                <Field label="Data początku"><input type="date" style={inputStyle} value={draft.data_poczatku} onChange={(event) => updateDraft("data_poczatku", event.target.value)} /></Field>
+                <Field label="Data końca"><input type="date" style={inputStyle} value={draft.data_konca} onChange={(event) => updateDraft("data_konca", event.target.value)} /></Field>
+                {draft.typ_umowy === "umowa_o_prace" && (
+                  <>
+                    <Field label="Badania lekarskie ważne do"><input type="date" style={inputStyle} value={draft.badania_lekarskie_wazne_do} onChange={(event) => updateDraft("badania_lekarskie_wazne_do", event.target.value)} /></Field>
+                    <Field label="Szkolenie BHP ważne do"><input type="date" style={inputStyle} value={draft.szkolenie_bhp_wazne_do} onChange={(event) => updateDraft("szkolenie_bhp_wazne_do", event.target.value)} /></Field>
+                  </>
+                )}
+                {draft.typ_umowy === "student" && (
+                  <Field label="Legitymacja studencka ważna do"><input type="date" style={inputStyle} value={draft.legitymacja_studencka_wazna_do} onChange={(event) => updateDraft("legitymacja_studencka_wazna_do", event.target.value)} /></Field>
+                )}
+              </div>
+              <div style={formActionsStyle}>
+                <button type="button" style={primaryButtonStyle} onClick={saveContract} disabled={saving}>
+                  {saving ? "Zapisywanie..." : "Zapisz umowę"}
+                </button>
+              </div>
+            </section>
+          )}
+
+          <section style={contractsSectionStyle}>
+            {contracts.length === 0 ? (
+              <p style={emptyInlineStyle}>Brak dodanych umów kadrowych.</p>
+            ) : (
+              <div style={tableWrapStyle}>
+                <table style={detailsTableStyle}>
+                  <thead>
+                    <tr>
+                      <Th>Imię</Th>
+                      <Th>Nazwisko</Th>
+                      <Th>Typ umowy</Th>
+                      <Th>Numer umowy</Th>
+                      <Th>Data początku</Th>
+                      <Th>Data końca</Th>
+                      <Th>Badania lekarskie</Th>
+                      <Th>Szkolenie BHP</Th>
+                      <Th>Legitymacja studencka</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {contracts.map((contract) => (
+                      <tr key={contract.id}>
+                        <Td>{contract.imie}</Td>
+                        <Td>{contract.nazwisko}</Td>
+                        <Td>{contractTypeLabel(contract.typ_umowy)}</Td>
+                        <Td>{contract.numer_umowy || "-"}</Td>
+                        <Td>{formatDate(contract.data_poczatku)}</Td>
+                        <Td>{formatDate(contract.data_konca)}</Td>
+                        <Td>{contract.typ_umowy === "umowa_o_prace" ? formatDate(contract.badania_lekarskie_wazne_do) : "-"}</Td>
+                        <Td>{contract.typ_umowy === "umowa_o_prace" ? formatDate(contract.szkolenie_bhp_wazne_do) : "-"}</Td>
+                        <Td>{contract.typ_umowy === "student" ? formatDate(contract.legitymacja_studencka_wazna_do) : "-"}</Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </section>
         </div>
-
-        <div style={drawerActionsStyle}>
-          <button type="button" style={secondaryButtonStyle} onClick={onClose}>Anuluj</button>
-          <button type="button" style={primaryButtonStyle} onClick={saveDetails} disabled={saving}>
-            {saving ? "Zapisywanie..." : "Zapisz"}
-          </button>
-        </div>
-      </aside>
+      </section>
     </div>
   );
 }
 
-function EditableCheckbox({
-  label,
-  checked,
-  onChange,
-}: {
-  label: string;
-  checked: boolean;
-  onChange: (value: boolean) => void;
-}) {
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label style={checkboxRowStyle}>
-      <span>{label}</span>
-      <span style={checkboxControlStyle}>
-        <input
-          type="checkbox"
-          checked={checked}
-          onChange={(event) => onChange(event.target.checked)}
-          style={checkboxInputStyle}
-        />
-        {checked ? "Tak" : "Nie"}
-      </span>
+    <label style={fieldStyle}>
+      <span style={fieldLabelStyle}>{label}</span>
+      {children}
     </label>
   );
 }
 
-function YesNoBadge({ value }: { value: boolean | null }) {
-  const active = Boolean(value);
-  return <span style={active ? yesBadgeStyle : noBadgeStyle}>{active ? "tak" : "nie"}</span>;
+function YesNoBadge({ value }: { value: boolean }) {
+  return <span style={value ? yesBadgeStyle : noBadgeStyle}>{value ? "tak" : "nie"}</span>;
 }
 
 function Th({ children, align = "left" }: { children: React.ReactNode; align?: "left" | "center" }) {
@@ -304,6 +408,37 @@ function Th({ children, align = "left" }: { children: React.ReactNode; align?: "
 
 function Td({ children, align = "left" }: { children: React.ReactNode; align?: "left" | "center" }) {
   return <td style={align === "center" ? centeredTdStyle : tdStyle}>{children}</td>;
+}
+
+function createEmptyDraft(): ContractDraft {
+  return {
+    imie: "",
+    nazwisko: "",
+    typ_umowy: "umowa_o_prace",
+    numer_umowy: "",
+    data_poczatku: "",
+    data_konca: "",
+    badania_lekarskie_wazne_do: "",
+    szkolenie_bhp_wazne_do: "",
+    legitymacja_studencka_wazna_do: "",
+  };
+}
+
+function groupContractsByClient(contracts: PayrollContract[]) {
+  return contracts.reduce<Record<string, PayrollContract[]>>((groups, contract) => {
+    groups[contract.klient_id] = [...(groups[contract.klient_id] || []), contract].sort(sortContracts);
+    return groups;
+  }, {});
+}
+
+function sortContracts(first: PayrollContract, second: PayrollContract) {
+  const lastNameCompare = first.nazwisko.localeCompare(second.nazwisko, "pl", { sensitivity: "base" });
+  if (lastNameCompare !== 0) return lastNameCompare;
+  return first.imie.localeCompare(second.imie, "pl", { sensitivity: "base" });
+}
+
+function hasContractType(contracts: PayrollContract[], type: PayrollContractType) {
+  return contracts.some((contract) => contract.typ_umowy === type);
 }
 
 function filterClients(clients: PayrollClient[], searchTerm: string) {
@@ -321,6 +456,18 @@ function filterClients(clients: PayrollClient[], searchTerm: string) {
 function caregiverLabel(client: PayrollClient) {
   const profile = Array.isArray(client.profiles) ? client.profiles[0] : client.profiles;
   return profile?.full_name || profile?.email || "Brak opiekuna";
+}
+
+function contractTypeLabel(type: PayrollContractType) {
+  return CONTRACT_TYPE_OPTIONS.find((option) => option.value === type)?.label || type;
+}
+
+function formatDate(value: string | null) {
+  return value ? new Intl.DateTimeFormat("pl-PL").format(new Date(`${value}T12:00:00`)) : "-";
+}
+
+function emptyToNull(value: string) {
+  return value.trim() ? value.trim() : null;
 }
 
 function tabHint(tab: PayrollTab) {
@@ -343,8 +490,10 @@ const sectionHintStyle: CSSProperties = { margin: "6px 0 0", color: colors.muted
 const searchInputStyle: CSSProperties = { width: "min(360px, 100%)", minHeight: "42px", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.text, padding: "0 14px", fontSize: "14px", fontWeight: 750, outline: "none" };
 const emptyStateStyle: CSSProperties = { minHeight: "220px", padding: "28px 24px", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", gap: "8px", color: colors.muted, fontWeight: 750, textAlign: "center" };
 const emptyStyle: CSSProperties = { margin: 0, padding: "28px 24px", color: colors.muted, fontWeight: 750 };
+const emptyInlineStyle: CSSProperties = { margin: 0, color: colors.muted, fontWeight: 750 };
 const tableWrapStyle: CSSProperties = { width: "100%", overflowX: "auto" };
 const tableStyle: CSSProperties = { width: "100%", minWidth: "980px", borderCollapse: "collapse" };
+const detailsTableStyle: CSSProperties = { width: "100%", minWidth: "1240px", borderCollapse: "collapse" };
 const thStyle: CSSProperties = { padding: "14px 18px", textAlign: "left", fontSize: "12px", color: colors.text, textTransform: "uppercase", letterSpacing: "0.08em", borderBottom: `1px solid ${colors.border}`, whiteSpace: "nowrap" };
 const tdStyle: CSSProperties = { padding: "16px 18px", borderBottom: `1px solid ${colors.border}`, color: colors.text, verticalAlign: "middle", fontSize: "14px" };
 const centeredThStyle: CSSProperties = { ...thStyle, textAlign: "center" };
@@ -354,18 +503,22 @@ const clientMetaStyle: CSSProperties = { display: "block", marginTop: "4px", col
 const yesBadgeStyle: CSSProperties = { display: "inline-flex", alignItems: "center", justifyContent: "center", minHeight: "28px", minWidth: "48px", padding: "4px 10px", borderRadius: radius.badge, background: "rgba(22, 163, 74, 0.12)", color: colors.success, fontSize: "12px", fontWeight: 900, textTransform: "uppercase" };
 const noBadgeStyle: CSSProperties = { ...yesBadgeStyle, background: "rgba(239, 68, 68, 0.12)", color: colors.red };
 const detailsButtonStyle: CSSProperties = { minHeight: "38px", padding: "0 14px", borderRadius: radius.button, border: `1px solid ${colors.border}`, background: colors.white, color: colors.navy, fontWeight: 850, cursor: "pointer" };
-const drawerOverlayStyle: CSSProperties = { position: "fixed", inset: 0, zIndex: 60, background: "rgba(15, 23, 42, 0.35)", display: "flex", justifyContent: "flex-end" };
-const drawerStyle: CSSProperties = { width: "min(520px, 100vw)", height: "100%", background: colors.white, borderLeft: `1px solid ${colors.border}`, boxShadow: "-22px 0 70px rgba(15, 23, 42, 0.22)", display: "flex", flexDirection: "column" };
-const drawerHeaderStyle: CSSProperties = { padding: "24px", borderBottom: `1px solid ${colors.border}`, display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "flex-start" };
-const drawerTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "24px", lineHeight: 1.2 };
-const drawerSubtitleStyle: CSSProperties = { margin: "8px 0 0", color: colors.muted, fontSize: "13px", fontWeight: 750 };
+const modalOverlayStyle: CSSProperties = { position: "fixed", inset: 0, zIndex: 60, background: "rgba(15, 23, 42, 0.38)", display: "flex", justifyContent: "center", alignItems: "flex-start", padding: "28px", overflowY: "auto" };
+const wideModalStyle: CSSProperties = { width: "min(1380px, calc(100vw - 56px))", maxHeight: "calc(100vh - 56px)", borderRadius: radius.card, background: colors.white, border: `1px solid ${colors.border}`, boxShadow: "0 32px 90px rgba(15, 23, 42, 0.28)", overflow: "hidden", display: "flex", flexDirection: "column" };
+const modalHeaderStyle: CSSProperties = { padding: "22px 24px", borderBottom: `1px solid ${colors.border}`, display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "flex-start" };
+const modalTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "26px", lineHeight: 1.2 };
+const modalSubtitleStyle: CSSProperties = { margin: "8px 0 0", color: colors.muted, fontSize: "13px", fontWeight: 750 };
+const modalActionsStyle: CSSProperties = { display: "flex", gap: "10px", alignItems: "center" };
+const modalBodyStyle: CSSProperties = { padding: "22px 24px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "18px" };
 const iconButtonStyle: CSSProperties = { width: "42px", height: "42px", borderRadius: radius.button, border: `1px solid ${colors.border}`, background: colors.white, color: colors.navy, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer" };
-const drawerContentStyle: CSSProperties = { flex: 1, overflowY: "auto", padding: "22px 24px" };
-const detailsSectionStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.card, overflow: "hidden" };
-const detailsSectionTitleStyle: CSSProperties = { margin: 0, padding: "16px 18px", borderBottom: `1px solid ${colors.border}`, color: colors.navy, fontSize: "18px" };
-const checkboxRowStyle: CSSProperties = { minHeight: "58px", padding: "0 18px", borderBottom: `1px solid ${colors.border}`, display: "flex", justifyContent: "space-between", gap: "18px", alignItems: "center", color: colors.text, fontWeight: 850 };
-const checkboxControlStyle: CSSProperties = { display: "inline-flex", alignItems: "center", gap: "8px", color: colors.navy, fontWeight: 850 };
-const checkboxInputStyle: CSSProperties = { width: "16px", height: "16px", accentColor: colors.navy };
-const drawerActionsStyle: CSSProperties = { padding: "16px 24px", borderTop: `1px solid ${colors.border}`, display: "flex", justifyContent: "flex-end", gap: "10px" };
-const primaryButtonStyle: CSSProperties = { minHeight: "42px", padding: "0 16px", border: "none", borderRadius: radius.button, background: colors.red, color: colors.white, fontWeight: 850, cursor: "pointer" };
+const primaryButtonStyle: CSSProperties = { minHeight: "42px", padding: "0 16px", border: "none", borderRadius: radius.button, background: colors.red, color: colors.white, fontWeight: 850, display: "inline-flex", alignItems: "center", gap: "8px", cursor: "pointer" };
 const secondaryButtonStyle: CSSProperties = { minHeight: "42px", padding: "0 14px", borderRadius: radius.button, border: `1px solid ${colors.border}`, background: colors.white, color: colors.navy, fontWeight: 850, cursor: "pointer" };
+const formBoxStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.inputBackground, padding: "18px" };
+const formHeaderStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", marginBottom: "16px" };
+const formTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "18px" };
+const formGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "14px" };
+const formActionsStyle: CSSProperties = { display: "flex", justifyContent: "flex-end", marginTop: "16px" };
+const fieldStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "8px" };
+const fieldLabelStyle: CSSProperties = { color: colors.muted, fontSize: "12px", fontWeight: 850, textTransform: "uppercase" };
+const inputStyle: CSSProperties = { minHeight: "42px", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.text, padding: "0 12px", fontSize: "14px", fontWeight: 750 };
+const contractsSectionStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.card, padding: "0", overflow: "hidden" };

@@ -161,10 +161,10 @@ function PayrollClientsTable({
           <tr>
             <Th>Klient</Th>
             <Th>Opiekun</Th>
-            <Th>Umowy o pracę</Th>
-            <Th>Umowy cywilnoprawne</Th>
-            <Th>Studenci</Th>
-            <Th>Szczegóły</Th>
+            <Th align="center">Umowy o pracę</Th>
+            <Th align="center">Umowy cywilnoprawne</Th>
+            <Th align="center">Studenci</Th>
+            <Th align="center">Szczegóły</Th>
           </tr>
         </thead>
         <tbody>
@@ -175,10 +175,10 @@ function PayrollClientsTable({
                 <span style={clientMetaStyle}>{client.nip || "Brak NIP"}</span>
               </Td>
               <Td>{caregiverLabel(client)}</Td>
-              <Td><YesNoBadge value={client.kadry_umowy_o_prace} /></Td>
-              <Td><YesNoBadge value={client.kadry_umowy_cywilnoprawne} /></Td>
-              <Td><YesNoBadge value={client.kadry_studenci} /></Td>
-              <Td>
+              <Td align="center"><YesNoBadge value={client.kadry_umowy_o_prace} /></Td>
+              <Td align="center"><YesNoBadge value={client.kadry_umowy_cywilnoprawne} /></Td>
+              <Td align="center"><YesNoBadge value={client.kadry_studenci} /></Td>
+              <Td align="center">
                 <button type="button" style={detailsButtonStyle} onClick={() => onDetails(client)}>
                   Szczegóły
                 </button>
@@ -298,12 +298,12 @@ function YesNoBadge({ value }: { value: boolean | null }) {
   return <span style={active ? yesBadgeStyle : noBadgeStyle}>{active ? "tak" : "nie"}</span>;
 }
 
-function Th({ children }: { children: React.ReactNode }) {
-  return <th style={thStyle}>{children}</th>;
+function Th({ children, align = "left" }: { children: React.ReactNode; align?: "left" | "center" }) {
+  return <th style={align === "center" ? centeredThStyle : thStyle}>{children}</th>;
 }
 
-function Td({ children }: { children: React.ReactNode }) {
-  return <td style={tdStyle}>{children}</td>;
+function Td({ children, align = "left" }: { children: React.ReactNode; align?: "left" | "center" }) {
+  return <td style={align === "center" ? centeredTdStyle : tdStyle}>{children}</td>;
 }
 
 function filterClients(clients: PayrollClient[], searchTerm: string) {
@@ -347,6 +347,8 @@ const tableWrapStyle: CSSProperties = { width: "100%", overflowX: "auto" };
 const tableStyle: CSSProperties = { width: "100%", minWidth: "980px", borderCollapse: "collapse" };
 const thStyle: CSSProperties = { padding: "14px 18px", textAlign: "left", fontSize: "12px", color: colors.text, textTransform: "uppercase", letterSpacing: "0.08em", borderBottom: `1px solid ${colors.border}`, whiteSpace: "nowrap" };
 const tdStyle: CSSProperties = { padding: "16px 18px", borderBottom: `1px solid ${colors.border}`, color: colors.text, verticalAlign: "middle", fontSize: "14px" };
+const centeredThStyle: CSSProperties = { ...thStyle, textAlign: "center" };
+const centeredTdStyle: CSSProperties = { ...tdStyle, textAlign: "center" };
 const clientNameStyle: CSSProperties = { display: "block", color: colors.navy, fontSize: "15px", lineHeight: 1.35 };
 const clientMetaStyle: CSSProperties = { display: "block", marginTop: "4px", color: colors.muted, fontSize: "12px", fontWeight: 750 };
 const yesBadgeStyle: CSSProperties = { display: "inline-flex", alignItems: "center", justifyContent: "center", minHeight: "28px", minWidth: "48px", padding: "4px 10px", borderRadius: radius.badge, background: "rgba(22, 163, 74, 0.12)", color: colors.success, fontSize: "12px", fontWeight: 900, textTransform: "uppercase" };

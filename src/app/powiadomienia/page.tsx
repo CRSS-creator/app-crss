@@ -15,6 +15,17 @@ import {
 
 type NotificationFilter = "unread" | "all" | "read";
 
+type PayrollNotificationItem = {
+  client_name?: string;
+  client_nip?: string;
+  employee_name?: string;
+  contract_type?: string;
+  contract_number?: string;
+  date_kind?: string;
+  due_date?: string;
+  client_request?: string;
+};
+
 export default function NotificationsPage() {
   return (
     <AppLayout activePage="powiadomienia">
@@ -193,14 +204,8 @@ function SummaryCard({ label, value }: { label: string; value: string | number }
 
 function PayrollContractNotificationTable({ notification }: { notification: AppNotification }) {
   const metadata = notification.metadata || {};
-  const clientName = stringMeta(metadata.client_name) || "Klient bez nazwy";
-  const clientNip = stringMeta(metadata.client_nip) || "Brak NIP";
-  const employeeName = stringMeta(metadata.employee_name) || "Brak danych";
-  const contractType = payrollContractTypeLabel(stringMeta(metadata.contract_type));
-  const dateKind = payrollDateKindLabel(stringMeta(metadata.date_kind));
-  const contractNumber = stringMeta(metadata.contract_number) || "-";
-  const dueDate = stringMeta(metadata.due_date);
-  const request = stringMeta(metadata.client_request);
+  const items = getPayrollNotificationItems(metadata);
+  const request = items.length === 1 ? stringMeta(items[0].client_request) : null;
 
   return (
     <div style={payrollNoticeBoxStyle}>
@@ -215,17 +220,24 @@ function PayrollContractNotificationTable({ notification }: { notification: AppN
               <th style={payrollThStyle}>Typ</th>
               <th style={payrollThStyle}>Numer</th>
               <th style={payrollThStyle}>Termin</th>
+              <th style={payrollThStyle}>Informacja</th>
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td style={payrollTdStyle}><strong>{clientName}</strong><span style={payrollMetaStyle}>{clientNip}</span></td>
-              <td style={payrollTdStyle}>{employeeName}</td>
-              <td style={payrollTdStyle}>{dateKind}</td>
-              <td style={payrollTdStyle}>{contractType}</td>
-              <td style={payrollTdStyle}>{contractNumber}</td>
-              <td style={payrollTdStyle}>{formatDateOnly(dueDate)}</td>
-            </tr>
+            {items.map((item, index) => (
+              <tr key={`${item.date_kind || "term"}-${item.contract_number || index}`}>
+                <td style={payrollTdStyle}>
+                  <strong>{stringMeta(item.client_name) || "Klient bez nazwy"}</strong>
+                  <span style={payrollMetaStyle}>{stringMeta(item.client_nip) || "Brak NIP"}</span>
+                </td>
+                <td style={payrollTdStyle}>{stringMeta(item.employee_name) || "Brak danych"}</td>
+                <td style={payrollTdStyle}>{payrollDateKindLabel(stringMeta(item.date_kind))}</td>
+                <td style={payrollTdStyle}>{payrollContractTypeLabel(stringMeta(item.contract_type))}</td>
+                <td style={payrollTdStyle}>{stringMeta(item.contract_number) || "-"}</td>
+                <td style={payrollTdStyle}>{formatDateOnly(stringMeta(item.due_date))}</td>
+                <td style={payrollTdStyle}>{stringMeta(item.client_request) || "-"}</td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
@@ -236,6 +248,14 @@ function PayrollContractNotificationTable({ notification }: { notification: AppN
 
 function payrollShortBody(notification: AppNotification) {
   const metadata = notification.metadata || {};
+  const items = getPayrollNotificationItems(metadata);
+  const itemCount = items.length;
+
+  if (itemCount > 1) {
+    const firstClient = stringMeta(items[0].client_name) || "klienta bez nazwy";
+    return `U klienta ${firstClient} kończy się ${itemCount} terminów kadrowych w ciągu najbliższych 3 dni. Lista jest w szczegółach.`;
+  }
+
   const clientName = stringMeta(metadata.client_name) || "klienta bez nazwy";
   const employeeName = stringMeta(metadata.employee_name);
   const dateKind = payrollDateKindLabel(stringMeta(metadata.date_kind)).toLowerCase();
@@ -247,6 +267,24 @@ function payrollShortBody(notification: AppNotification) {
 
 function payrollClientEmailSent(notification: AppNotification) {
   return Boolean(stringMeta(notification.metadata?.client_email_sent_at));
+}
+
+function getPayrollNotificationItems(metadata: Record<string, unknown>): PayrollNotificationItem[] {
+  if (Array.isArray(metadata.expiring_items) && metadata.expiring_items.length > 0) {
+    return metadata.expiring_items
+      .filter((item): item is PayrollNotificationItem => Boolean(item) && typeof item === "object" && !Array.isArray(item));
+  }
+
+  return [{
+    client_name: stringMeta(metadata.client_name) || undefined,
+    client_nip: stringMeta(metadata.client_nip) || undefined,
+    employee_name: stringMeta(metadata.employee_name) || undefined,
+    contract_type: stringMeta(metadata.contract_type) || undefined,
+    contract_number: stringMeta(metadata.contract_number) || undefined,
+    date_kind: stringMeta(metadata.date_kind) || undefined,
+    due_date: stringMeta(metadata.due_date) || undefined,
+    client_request: stringMeta(metadata.client_request) || undefined,
+  }];
 }
 
 function stringMeta(value: unknown) {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { Plus, X } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, Plus, X } from "lucide-react";
 import AccessGuard from "@/components/AccessGuard";
 import AppLayout from "@/components/AppLayout";
 import AppSelect from "@/components/AppSelect";
@@ -530,8 +530,8 @@ function A1DetailsModal({
         <div style={modalBodyStyle}>
           <section style={formBoxStyle}>
             <div style={formGridStyle}>
-              <Field label="Data uzyskania A1"><input type="date" style={inputStyle} value={draft.data_uzyskania_a1} onChange={(event) => updateDraft("data_uzyskania_a1", event.target.value)} /></Field>
-              <Field label="Data końca A1"><input type="date" style={inputStyle} value={draft.data_konca_a1} onChange={(event) => updateDraft("data_konca_a1", event.target.value)} /></Field>
+              <DateField label="Data uzyskania A1" value={draft.data_uzyskania_a1} onChange={(value) => updateDraft("data_uzyskania_a1", value)} />
+              <DateField label="Data końca A1" value={draft.data_konca_a1} onChange={(value) => updateDraft("data_konca_a1", value)} />
             </div>
             <label style={{ ...fieldStyle, marginTop: "14px" }}>
               <span style={fieldLabelStyle}>Uwagi</span>
@@ -786,6 +786,71 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
+function DateField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [viewDate, setViewDate] = useState(() => dateFromInput(value) || new Date());
+  const days = calendarDays(viewDate);
+
+  function changeMonth(delta: number) {
+    setViewDate((current) => new Date(current.getFullYear(), current.getMonth() + delta, 1, 12));
+  }
+
+  function selectDate(date: Date) {
+    onChange(dateToInputValue(date));
+    setViewDate(new Date(date.getFullYear(), date.getMonth(), 1, 12));
+    setOpen(false);
+  }
+
+  return (
+    <div style={fieldStyle}>
+      <span style={fieldLabelStyle}>{label}</span>
+      <div style={datePickerWrapStyle}>
+        <button type="button" style={dateInputButtonStyle} onClick={() => setOpen((current) => !current)}>
+          <span style={value ? dateInputValueStyle : dateInputPlaceholderStyle}>{value ? formatDate(value) : "dd.mm.rrrr"}</span>
+          <CalendarDays size={18} />
+        </button>
+        {open && (
+          <div style={dateCalendarStyle}>
+            <div style={dateCalendarHeaderStyle}>
+              <button type="button" style={dateNavButtonStyle} onClick={() => changeMonth(-1)} aria-label="Poprzedni miesiąc">
+                <ChevronLeft size={18} />
+              </button>
+              <strong>{formatCalendarMonth(viewDate)}</strong>
+              <button type="button" style={dateNavButtonStyle} onClick={() => changeMonth(1)} aria-label="Następny miesiąc">
+                <ChevronRight size={18} />
+              </button>
+            </div>
+            <div style={dateWeekdaysStyle}>
+              {["pon", "wt", "śr", "czw", "pt", "sob", "nie"].map((day) => <span key={day}>{day}</span>)}
+            </div>
+            <div style={dateDaysGridStyle}>
+              {days.map((day) => {
+                const inputValue = dateToInputValue(day.date);
+                const selected = value === inputValue;
+                const muted = day.date.getMonth() !== viewDate.getMonth();
+                return (
+                  <button
+                    key={inputValue}
+                    type="button"
+                    style={selected ? selectedDateDayStyle : muted ? mutedDateDayStyle : dateDayStyle}
+                    onClick={() => selectDate(day.date)}
+                  >
+                    {day.date.getDate()}
+                  </button>
+                );
+              })}
+            </div>
+            <div style={dateCalendarFooterStyle}>
+              <button type="button" style={dateFooterButtonStyle} onClick={() => onChange("")}>Wyczyść</button>
+              <button type="button" style={dateFooterButtonStyle} onClick={() => selectDate(new Date())}>Dzisiaj</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function YesNoBadge({ value }: { value: boolean }) {
   return <span style={value ? yesBadgeStyle : noBadgeStyle}>{value ? "tak" : "nie"}</span>;
 }
@@ -957,6 +1022,36 @@ function a1MonthsBetween(startDate: string, endDate: string) {
   return months;
 }
 
+function dateFromInput(value: string) {
+  if (!value) return null;
+  const date = new Date(`${value}T12:00:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function dateToInputValue(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function calendarDays(viewDate: Date) {
+  const firstDay = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1, 12);
+  const mondayOffset = (firstDay.getDay() + 6) % 7;
+  const start = new Date(firstDay);
+  start.setDate(firstDay.getDate() - mondayOffset);
+
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(start);
+    date.setDate(start.getDate() + index);
+    return { date };
+  });
+}
+
+function formatCalendarMonth(date: Date) {
+  return new Intl.DateTimeFormat("pl-PL", { month: "long", year: "numeric" }).format(date);
+}
+
 function calculateA1Totals(monthly: PayrollA1MonthlyRevenue[]): A1Totals {
   const krajowy = monthly.reduce((sum, item) => sum + toNumber(item.przychod_krajowy), 0);
   const zagraniczny = monthly.reduce((sum, item) => sum + toNumber(item.przychod_zagraniczny), 0);
@@ -1048,6 +1143,20 @@ const formActionsStyle: CSSProperties = { display: "flex", justifyContent: "flex
 const fieldStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "8px" };
 const fieldLabelStyle: CSSProperties = { color: colors.muted, fontSize: "12px", fontWeight: 850, textTransform: "uppercase" };
 const inputStyle: CSSProperties = { minHeight: "42px", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.text, padding: "0 12px", fontSize: "14px", fontWeight: 750 };
+const datePickerWrapStyle: CSSProperties = { position: "relative" };
+const dateInputButtonStyle: CSSProperties = { ...inputStyle, width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", cursor: "pointer", textAlign: "left" };
+const dateInputValueStyle: CSSProperties = { color: colors.text, fontWeight: 800 };
+const dateInputPlaceholderStyle: CSSProperties = { color: colors.muted, fontWeight: 800 };
+const dateCalendarStyle: CSSProperties = { position: "absolute", top: "calc(100% + 8px)", left: 0, zIndex: 80, width: "300px", border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.white, boxShadow: shadow.card, padding: "12px" };
+const dateCalendarHeaderStyle: CSSProperties = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", marginBottom: "10px", color: colors.navy, textTransform: "capitalize" };
+const dateNavButtonStyle: CSSProperties = { width: "34px", height: "34px", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.inputBackground, color: colors.navy, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer" };
+const dateWeekdaysStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "4px", marginBottom: "6px", color: colors.muted, fontSize: "11px", fontWeight: 850, textAlign: "center", textTransform: "uppercase" };
+const dateDaysGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "4px" };
+const dateDayStyle: CSSProperties = { height: "34px", border: "none", borderRadius: radius.button, background: colors.white, color: colors.text, fontWeight: 800, cursor: "pointer" };
+const mutedDateDayStyle: CSSProperties = { ...dateDayStyle, color: colors.muted, background: colors.inputBackground };
+const selectedDateDayStyle: CSSProperties = { ...dateDayStyle, background: colors.navy, color: colors.white };
+const dateCalendarFooterStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "10px", marginTop: "10px", paddingTop: "10px", borderTop: `1px solid ${colors.border}` };
+const dateFooterButtonStyle: CSSProperties = { border: "none", background: "transparent", color: colors.navy, fontWeight: 850, cursor: "pointer", padding: "6px 0" };
 const textareaStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.text, padding: "12px", minHeight: "96px", resize: "vertical", fontSize: "14px", fontWeight: 700, fontFamily: "inherit" };
 const disabledInputStyle: CSSProperties = { ...inputStyle, background: "rgba(226, 232, 240, 0.72)", color: colors.muted, cursor: "not-allowed" };
 const checkboxFieldStyle: CSSProperties = { minHeight: "42px", display: "flex", alignItems: "center", gap: "8px", color: colors.navy, fontSize: "14px", fontWeight: 850 };

@@ -201,20 +201,9 @@ function buildSubject(clientName: string | null | undefined, dateKind: string) {
 function buildPlainMessage(contract: PayrollContractRow, dateKind: string) {
   const person = `${contract.imie} ${contract.nazwisko}`.trim();
   const date = formatDate(dateForKind(contract, dateKind));
+  const contractNumber = contract.numer_umowy ? `, umowa ${contract.numer_umowy}` : "";
 
-  if (dateKind === "contract_end") {
-    return `Dzień dobry,\n\nw dniu ${date} kończy się umowa osoby: ${person}. Prosimy o informację, czy przygotować nową umowę, przedłużyć obecną, czy nie kontynuować współpracy.\n\nPozdrawiamy serdecznie,\nZespół CRSS`;
-  }
-
-  if (dateKind === "student_card_expiry") {
-    return `Dzień dobry,\n\nw dniu ${date} kończy się ważność legitymacji studenckiej osoby: ${person}. Prosimy o dosłanie aktualnej, ważnej legitymacji.\n\nPozdrawiamy serdecznie,\nZespół CRSS`;
-  }
-
-  if (dateKind === "medical_exam_expiry") {
-    return `Dzień dobry,\n\nw dniu ${date} kończy się ważność badań lekarskich osoby: ${person}. Prosimy o dosłanie aktualnych badań lekarskich.\n\nPozdrawiamy serdecznie,\nZespół CRSS`;
-  }
-
-  return `Dzień dobry,\n\nw dniu ${date} kończy się ważność szkolenia BHP osoby: ${person}. Współpracujemy ze specjalistą ds. BHP i w razie potrzeby prosimy o kontakt.\n\nPozdrawiamy serdecznie,\nZespół CRSS`;
+  return `Dzień dobry,\n\nponiżej przekazujemy ważne informacje kadrowe:\n\n- ${payrollDateKindLabel(dateKind)}: ${person}${contractNumber}, data: ${date}.\n  ${requestText(dateKind)}\n\nPozdrawiamy serdecznie,\nZespół CRSS`;
 }
 
 function buildHtmlMessage(contract: PayrollContractRow, clientName: string | null | undefined, dateKind: string) {
@@ -230,18 +219,23 @@ function buildHtmlMessage(contract: PayrollContractRow, clientName: string | nul
         <img src="${APP_URL}/logo-crss-mail.png?v=5" alt="CRSS" width="180" style="display:block;width:180px;max-width:180px;height:auto;border:0;outline:none;text-decoration:none;">
       </div>
       <p style="margin:0 0 16px 0;">Dzień dobry,</p>
-      <p style="margin:0 0 16px 0;">u klienta <strong>${escapeHtml(clientName || "Państwa firmy")}</strong> zbliża się termin kadrowy:</p>
+      <p style="margin:0 0 16px 0;">poniżej przekazujemy ważne informacje kadrowe:</p>
       <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;margin:0 0 18px 0;">
         <tr>
-          <td style="border:1px solid #c9d6e8;padding:10px;font-weight:700;">Osoba</td>
-          <td style="border:1px solid #c9d6e8;padding:10px;">${escapeHtml(person)}</td>
+          <th align="left" style="border:1px solid #c9d6e8;padding:10px;font-weight:700;">Czego dotyczy</th>
+          <th align="left" style="border:1px solid #c9d6e8;padding:10px;font-weight:700;">Pracownik / zleceniobiorca</th>
+          <th align="left" style="border:1px solid #c9d6e8;padding:10px;font-weight:700;">Numer umowy</th>
+          <th align="left" style="border:1px solid #c9d6e8;padding:10px;font-weight:700;">Data</th>
+          <th align="left" style="border:1px solid #c9d6e8;padding:10px;font-weight:700;">Informacja</th>
         </tr>
         <tr>
-          <td style="border:1px solid #c9d6e8;padding:10px;font-weight:700;">Termin</td>
+          <td style="border:1px solid #c9d6e8;padding:10px;">${escapeHtml(payrollDateKindLabel(dateKind))}</td>
+          <td style="border:1px solid #c9d6e8;padding:10px;">${escapeHtml(person)}</td>
+          <td style="border:1px solid #c9d6e8;padding:10px;">${escapeHtml(contract.numer_umowy || "")}</td>
           <td style="border:1px solid #c9d6e8;padding:10px;">${escapeHtml(date)}</td>
+          <td style="border:1px solid #c9d6e8;padding:10px;">${escapeHtml(request)}</td>
         </tr>
       </table>
-      <p style="margin:0 0 16px 0;">${escapeHtml(request)}</p>
       <p style="margin:24px 0 0 0;">Pozdrawiamy serdecznie,<br><strong>Zespół CRSS</strong></p>
     </div>
     <p style="margin:18px 4px 0;color:#7a8598;font-size:13px;">Wiadomość wysłana automatycznie.</p>
@@ -250,10 +244,18 @@ function buildHtmlMessage(contract: PayrollContractRow, clientName: string | nul
 }
 
 function requestText(dateKind: string) {
-  if (dateKind === "contract_end") return "Prosimy o informację, czy przygotować nową umowę, przedłużyć obecną, czy nie kontynuować współpracy.";
-  if (dateKind === "student_card_expiry") return "Prosimy o dosłanie aktualnej, ważnej legitymacji studenckiej.";
-  if (dateKind === "medical_exam_expiry") return "Prosimy o dosłanie aktualnych badań lekarskich.";
-  return "Współpracujemy ze specjalistą ds. BHP i w razie potrzeby prosimy o kontakt.";
+  if (dateKind === "contract_end") return "Prosimy o informację, czy przygotować nową umowę, przedłużyć obecną, czy nie będą Państwo kontynuować współpracy.";
+  if (dateKind === "student_card_expiry") return "Prosimy o przesłanie skanu nowej legitymacji lub poprzedniej, z przedłużonym terminem ważności, bezpośrednio do opiekuna.";
+  if (dateKind === "medical_exam_expiry") return "W celu uzyskania skierowania na badanie prosimy skontaktować się z opiekunem.";
+  return "Prosimy o dostarczenie dokumentacji przeprowadzenia szkolenia. W razie potrzeby współpracujemy ze specjalistą ds. BHP, a opiekun może przekazać Państwu dane kontaktowe.";
+}
+
+function payrollDateKindLabel(dateKind: string) {
+  if (dateKind === "contract_end") return "Koniec umowy";
+  if (dateKind === "student_card_expiry") return "Koniec ważności legitymacji studenckiej";
+  if (dateKind === "medical_exam_expiry") return "Koniec ważności badań lekarskich";
+  if (dateKind === "bhp_training_expiry") return "Koniec ważności szkolenia BHP";
+  return "Termin kadrowy";
 }
 
 function dateForKind(contract: PayrollContractRow, dateKind: string) {

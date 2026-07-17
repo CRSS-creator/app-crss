@@ -218,7 +218,7 @@ function PayrollContractNotificationTable({ notification }: { notification: AppN
               <th style={payrollThStyle}>Pracownik / zleceniobiorca</th>
               <th style={payrollThStyle}>Numer umowy</th>
               <th style={payrollThStyle}>Data</th>
-              <th style={payrollThStyle}>Informacja dla klienta</th>
+              <th style={payrollThStyle}>Informacja</th>
             </tr>
           </thead>
           <tbody>
@@ -289,9 +289,9 @@ function stringMeta(value: unknown) {
 
 function payrollDateKindLabel(value: string | null) {
   if (value === "contract_end") return "Koniec umowy";
-  if (value === "student_card_expiry") return "Legitymacja studencka";
-  if (value === "medical_exam_expiry") return "Badania lekarskie";
-  if (value === "bhp_training_expiry") return "Szkolenie BHP";
+  if (value === "student_card_expiry") return "Koniec ważności legitymacji studenckiej";
+  if (value === "medical_exam_expiry") return "Koniec ważności badań lekarskich";
+  if (value === "bhp_training_expiry") return "Koniec ważności szkolenia BHP";
   return value || "-";
 }
 

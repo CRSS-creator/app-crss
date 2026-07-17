@@ -138,6 +138,7 @@ function PayrollContractNotificationTable({ notification }: { notification: AppN
   const clientNip = stringMeta(metadata.client_nip) || "Brak NIP";
   const employeeName = stringMeta(metadata.employee_name) || "Brak danych";
   const contractType = payrollContractTypeLabel(stringMeta(metadata.contract_type));
+  const dateKind = payrollDateKindLabel(stringMeta(metadata.date_kind));
   const contractNumber = stringMeta(metadata.contract_number) || "-";
   const dueDate = stringMeta(metadata.due_date);
   const request = stringMeta(metadata.client_request);
@@ -151,6 +152,7 @@ function PayrollContractNotificationTable({ notification }: { notification: AppN
             <tr>
               <th style={payrollThStyle}>Klient</th>
               <th style={payrollThStyle}>Osoba</th>
+              <th style={payrollThStyle}>Termin dotyczy</th>
               <th style={payrollThStyle}>Typ</th>
               <th style={payrollThStyle}>Numer</th>
               <th style={payrollThStyle}>Termin</th>
@@ -160,6 +162,7 @@ function PayrollContractNotificationTable({ notification }: { notification: AppN
             <tr>
               <td style={payrollTdStyle}><strong>{clientName}</strong><span style={payrollMetaStyle}>{clientNip}</span></td>
               <td style={payrollTdStyle}>{employeeName}</td>
+              <td style={payrollTdStyle}>{dateKind}</td>
               <td style={payrollTdStyle}>{contractType}</td>
               <td style={payrollTdStyle}>{contractNumber}</td>
               <td style={payrollTdStyle}>{formatDateOnly(dueDate)}</td>
@@ -180,6 +183,14 @@ function payrollContractTypeLabel(value: string | null) {
   if (value === "umowa_o_prace") return "Umowa o pracę";
   if (value === "umowa_cywilnoprawna") return "Umowa cywilnoprawna";
   if (value === "student") return "Student";
+  return value || "-";
+}
+
+function payrollDateKindLabel(value: string | null) {
+  if (value === "contract_end") return "Koniec umowy";
+  if (value === "student_card_expiry") return "Legitymacja studencka";
+  if (value === "medical_exam_expiry") return "Badania lekarskie";
+  if (value === "bhp_training_expiry") return "Szkolenie BHP";
   return value || "-";
 }
 
@@ -240,7 +251,7 @@ const badgeStyle: React.CSSProperties = { display: "inline-flex", borderRadius: 
 const payrollNoticeBoxStyle: React.CSSProperties = { marginTop: "14px", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, overflow: "hidden" };
 const payrollNoticeTitleStyle: React.CSSProperties = { padding: "12px 14px", color: colors.navy, fontSize: "13px", fontWeight: 850, borderBottom: `1px solid ${colors.border}` };
 const payrollTableWrapStyle: React.CSSProperties = { overflowX: "auto" };
-const payrollTableStyle: React.CSSProperties = { width: "100%", minWidth: "760px", borderCollapse: "collapse" };
+const payrollTableStyle: React.CSSProperties = { width: "100%", minWidth: "880px", borderCollapse: "collapse" };
 const payrollThStyle: React.CSSProperties = { padding: "10px 12px", textAlign: "left", fontSize: "11px", color: colors.text, textTransform: "uppercase", letterSpacing: "0.08em", borderBottom: `1px solid ${colors.border}`, whiteSpace: "nowrap" };
 const payrollTdStyle: React.CSSProperties = { padding: "12px", color: colors.text, borderBottom: `1px solid ${colors.border}`, verticalAlign: "top", fontSize: "13px" };
 const payrollMetaStyle: React.CSSProperties = { display: "block", marginTop: "4px", color: colors.muted, fontSize: "12px", fontWeight: 750 };

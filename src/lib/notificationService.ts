@@ -63,14 +63,19 @@ export async function createDueOnboardingCompletionNotifications() {
   return supabase.rpc("create_due_onboarding_completion_notifications");
 }
 
+export async function createDuePayrollContractNotifications() {
+  return supabase.rpc("create_due_payroll_contract_notifications");
+}
+
 export async function createDueNotifications() {
-  const [taskResult, crmFollowUpResult, recurringTaskResult, clientCardResult, rodoReviewResult, onboardingCompletionResult] = await Promise.all([
+  const [taskResult, crmFollowUpResult, recurringTaskResult, clientCardResult, rodoReviewResult, onboardingCompletionResult, payrollContractResult] = await Promise.all([
     createDueTaskNotifications(),
     createDueCrmFollowUpNotifications(),
     createDueRecurringTaskNotifications(),
     createDueClientCardNotifications(),
     createDueRodoReviewNotifications(),
     createDueOnboardingCompletionNotifications(),
+    createDuePayrollContractNotifications(),
   ]);
 
   return {
@@ -81,6 +86,7 @@ export async function createDueNotifications() {
       clientCardNotifications: clientCardResult.data || 0,
       rodoReviewNotifications: rodoReviewResult.data || 0,
       onboardingCompletionNotifications: onboardingCompletionResult.data || 0,
+      payrollContractNotifications: payrollContractResult.data || 0,
     },
     error:
       taskResult.error ||
@@ -88,7 +94,8 @@ export async function createDueNotifications() {
       recurringTaskResult.error ||
       clientCardResult.error ||
       rodoReviewResult.error ||
-      onboardingCompletionResult.error,
+      onboardingCompletionResult.error ||
+      payrollContractResult.error,
   };
 }
 

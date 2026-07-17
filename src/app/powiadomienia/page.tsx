@@ -30,18 +30,18 @@ function NotificationsContent() {
   const [statusFilter, setStatusFilter] = useState<NotificationFilter>("unread");
 
   useEffect(() => {
-    loadNotifications();
-  }, []);
+    async function loadNotifications() {
+      setLoading(true);
+      const dueResult = await createDueNotifications();
+      if (dueResult.error) console.error("Błąd tworzenia bieżących powiadomień:", dueResult.error);
+      const { data, error } = await fetchNotifications();
+      if (error) console.error("Błąd pobierania powiadomień:", error);
+      else setNotifications((data || []) as AppNotification[]);
+      setLoading(false);
+    }
 
-  async function loadNotifications() {
-    setLoading(true);
-    const dueResult = await createDueNotifications();
-    if (dueResult.error) console.error("Błąd tworzenia bieżących powiadomień:", dueResult.error);
-    const { data, error } = await fetchNotifications();
-    if (error) console.error("Błąd pobierania powiadomień:", error);
-    else setNotifications((data || []) as AppNotification[]);
-    setLoading(false);
-  }
+    void loadNotifications();
+  }, []);
 
   async function markRead(notification: AppNotification) {
     if (notification.status === "read") return;
@@ -94,6 +94,7 @@ function NotificationsContent() {
               const isTaskNotification = notification.type === "task_assigned" || notification.type === "task_due_today";
               const isCrmFollowUpNotification = notification.type === "crm_follow_up_due";
               const isRecurringTaskNotification = notification.type === "recurring_task_due_today";
+              const isPayrollContractNotification = notification.type === "payroll_contract_expiry";
               return (
                 <article key={notification.id} style={notification.status === "unread" ? unreadItemStyle : itemStyle}>
                   <div style={itemHeaderStyle}>
@@ -106,6 +107,7 @@ function NotificationsContent() {
                       <span>{formatDateTime(notification.created_at)}</span>
                     </div>
                   </div>
+                  {isPayrollContractNotification && <PayrollContractNotificationTable notification={notification} />}
                   <div style={itemActionsStyle}>
                     {publicToken && (
                       <a style={secondaryButtonStyle} href={`/oferta/${publicToken}`} target="_blank" rel="noreferrer">Otwórz propozycję</a>
@@ -113,6 +115,7 @@ function NotificationsContent() {
                     {isTaskNotification && <a style={secondaryButtonStyle} href="/zadania">Otwórz zadania</a>}
                     {isCrmFollowUpNotification && <a style={secondaryButtonStyle} href="/crm">Otwórz CRM</a>}
                     {isRecurringTaskNotification && <a style={secondaryButtonStyle} href="/rozliczenia">Otwórz rozliczenia</a>}
+                    {isPayrollContractNotification && <a style={secondaryButtonStyle} href="/kadry">Otwórz Kadry</a>}
                     {notification.status === "unread" && <button style={primaryButtonStyle} onClick={() => markRead(notification)}>Przeczytane</button>}
                   </div>
                 </article>
@@ -127,6 +130,61 @@ function NotificationsContent() {
 
 function SummaryCard({ label, value }: { label: string; value: string | number }) {
   return <div style={summaryCardStyle}><span>{label}</span><strong>{value}</strong></div>;
+}
+
+function PayrollContractNotificationTable({ notification }: { notification: AppNotification }) {
+  const metadata = notification.metadata || {};
+  const clientName = stringMeta(metadata.client_name) || "Klient bez nazwy";
+  const clientNip = stringMeta(metadata.client_nip) || "Brak NIP";
+  const employeeName = stringMeta(metadata.employee_name) || "Brak danych";
+  const contractType = payrollContractTypeLabel(stringMeta(metadata.contract_type));
+  const contractNumber = stringMeta(metadata.contract_number) || "-";
+  const dueDate = stringMeta(metadata.due_date);
+  const request = stringMeta(metadata.client_request);
+
+  return (
+    <div style={payrollNoticeBoxStyle}>
+      <div style={payrollNoticeTitleStyle}>Pozycja do kontaktu z klientem</div>
+      <div style={payrollTableWrapStyle}>
+        <table style={payrollTableStyle}>
+          <thead>
+            <tr>
+              <th style={payrollThStyle}>Klient</th>
+              <th style={payrollThStyle}>Osoba</th>
+              <th style={payrollThStyle}>Typ</th>
+              <th style={payrollThStyle}>Numer</th>
+              <th style={payrollThStyle}>Termin</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style={payrollTdStyle}><strong>{clientName}</strong><span style={payrollMetaStyle}>{clientNip}</span></td>
+              <td style={payrollTdStyle}>{employeeName}</td>
+              <td style={payrollTdStyle}>{contractType}</td>
+              <td style={payrollTdStyle}>{contractNumber}</td>
+              <td style={payrollTdStyle}>{formatDateOnly(dueDate)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      {request && <p style={payrollRequestStyle}>Informacja do klienta: {request}</p>}
+    </div>
+  );
+}
+
+function stringMeta(value: unknown) {
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
+function payrollContractTypeLabel(value: string | null) {
+  if (value === "umowa_o_prace") return "Umowa o pracę";
+  if (value === "umowa_cywilnoprawna") return "Umowa cywilnoprawna";
+  if (value === "student") return "Student";
+  return value || "-";
+}
+
+function formatDateOnly(value: string | null) {
+  return value ? new Intl.DateTimeFormat("pl-PL").format(new Date(`${value}T12:00:00`)) : "-";
 }
 
 function getPublicToken(notification: AppNotification) {
@@ -163,7 +221,6 @@ function filterButtonStyle(active: boolean): React.CSSProperties {
 const headerStyle: React.CSSProperties = { display: "flex", justifyContent: "space-between", gap: "20px", alignItems: "flex-start", marginBottom: "28px" };
 const eyebrowStyle: React.CSSProperties = { margin: "0 0 8px", color: colors.red, fontWeight: 800 };
 const titleStyle: React.CSSProperties = { margin: 0, color: colors.navy, fontSize: "42px", lineHeight: 1.05 };
-const subtitleStyle: React.CSSProperties = { maxWidth: "760px", color: colors.muted, fontSize: "17px", lineHeight: 1.7 };
 const summaryGridStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "18px", marginBottom: "24px" };
 const summaryCardStyle: React.CSSProperties = { background: colors.card, border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: "22px", boxShadow: shadow.soft, display: "flex", flexDirection: "column", gap: "10px", color: colors.muted, fontWeight: 800 };
 const cardStyle: React.CSSProperties = { background: colors.card, border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: "24px", boxShadow: shadow.soft };
@@ -180,5 +237,13 @@ const itemBodyStyle: React.CSSProperties = { margin: "6px 0 0", color: colors.te
 const itemMetaStyle: React.CSSProperties = { display: "flex", flexDirection: "column", gap: "8px", alignItems: "flex-end", color: colors.muted, fontSize: "13px", fontWeight: 700 };
 const itemActionsStyle: React.CSSProperties = { display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "14px", flexWrap: "wrap" };
 const badgeStyle: React.CSSProperties = { display: "inline-flex", borderRadius: radius.badge, padding: "6px 10px", background: "rgba(23, 59, 115, 0.10)", color: colors.navy, fontWeight: 850, fontSize: "12px" };
+const payrollNoticeBoxStyle: React.CSSProperties = { marginTop: "14px", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, overflow: "hidden" };
+const payrollNoticeTitleStyle: React.CSSProperties = { padding: "12px 14px", color: colors.navy, fontSize: "13px", fontWeight: 850, borderBottom: `1px solid ${colors.border}` };
+const payrollTableWrapStyle: React.CSSProperties = { overflowX: "auto" };
+const payrollTableStyle: React.CSSProperties = { width: "100%", minWidth: "760px", borderCollapse: "collapse" };
+const payrollThStyle: React.CSSProperties = { padding: "10px 12px", textAlign: "left", fontSize: "11px", color: colors.text, textTransform: "uppercase", letterSpacing: "0.08em", borderBottom: `1px solid ${colors.border}`, whiteSpace: "nowrap" };
+const payrollTdStyle: React.CSSProperties = { padding: "12px", color: colors.text, borderBottom: `1px solid ${colors.border}`, verticalAlign: "top", fontSize: "13px" };
+const payrollMetaStyle: React.CSSProperties = { display: "block", marginTop: "4px", color: colors.muted, fontSize: "12px", fontWeight: 750 };
+const payrollRequestStyle: React.CSSProperties = { margin: 0, padding: "12px 14px", color: colors.text, lineHeight: 1.55, fontSize: "13px", fontWeight: 750 };
 const primaryButtonStyle: React.CSSProperties = { border: "none", borderRadius: radius.button, padding: "10px 14px", minHeight: "42px", background: colors.red, color: colors.white, fontWeight: 800, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", textAlign: "center" };
 const secondaryButtonStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "10px 14px", minHeight: "42px", background: colors.white, color: colors.navy, fontWeight: 800, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", textAlign: "center", textDecoration: "none" };

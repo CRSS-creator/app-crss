@@ -58,7 +58,6 @@ type ContractDraft = {
 type A1Draft = {
   data_uzyskania_a1: string;
   data_konca_a1: string;
-  uwagi: string;
 };
 
 type A1Row = {
@@ -476,7 +475,6 @@ function A1DetailsModal({
       data_uzyskania_a1: emptyToNull(draft.data_uzyskania_a1),
       data_konca_a1: emptyToNull(draft.data_konca_a1),
       procent_przychodow_zagranicznych: totals.procentZagraniczny,
-      uwagi: emptyToNull(draft.uwagi),
     });
 
     if (result.error) {
@@ -533,10 +531,6 @@ function A1DetailsModal({
               <DateField label="Data uzyskania A1" value={draft.data_uzyskania_a1} onChange={(value) => updateDraft("data_uzyskania_a1", value)} />
               <DateField label="Data końca A1" value={draft.data_konca_a1} onChange={(value) => updateDraft("data_konca_a1", value)} />
             </div>
-            <label style={{ ...fieldStyle, marginTop: "14px" }}>
-              <span style={fieldLabelStyle}>Uwagi</span>
-              <textarea style={textareaStyle} value={draft.uwagi} onChange={(event) => updateDraft("uwagi", event.target.value)} />
-            </label>
           </section>
 
           <section style={summaryGridStyle}>
@@ -892,7 +886,6 @@ function createA1Draft(record: PayrollA1Record): A1Draft {
   return {
     data_uzyskania_a1: record.data_uzyskania_a1 || "",
     data_konca_a1: record.data_konca_a1 || "",
-    uwagi: record.uwagi || "",
   };
 }
 
@@ -1159,7 +1152,6 @@ const mutedDateDayStyle: CSSProperties = { ...dateDayStyle, color: colors.muted,
 const selectedDateDayStyle: CSSProperties = { ...dateDayStyle, background: colors.navy, color: colors.white };
 const dateCalendarFooterStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "10px", marginTop: "10px", paddingTop: "10px", borderTop: `1px solid ${colors.border}` };
 const dateFooterButtonStyle: CSSProperties = { border: "none", background: "transparent", color: colors.navy, fontWeight: 850, cursor: "pointer", padding: "6px 0" };
-const textareaStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.text, padding: "12px", minHeight: "96px", resize: "vertical", fontSize: "14px", fontWeight: 700, fontFamily: "inherit" };
 const disabledInputStyle: CSSProperties = { ...inputStyle, background: "rgba(226, 232, 240, 0.72)", color: colors.muted, cursor: "not-allowed" };
 const checkboxFieldStyle: CSSProperties = { minHeight: "42px", display: "flex", alignItems: "center", gap: "8px", color: colors.navy, fontSize: "14px", fontWeight: 850 };
 const checkboxInputStyle: CSSProperties = { width: "16px", height: "16px", margin: 0, accentColor: colors.navy };

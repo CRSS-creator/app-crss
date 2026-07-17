@@ -464,6 +464,7 @@ function A1DetailsModal({
   const [monthValues, setMonthValues] = useState<Record<string, { krajowy: string; zagraniczny: string }>>(() => a1MonthValueMap(row.monthly));
   const [saving, setSaving] = useState(false);
   const months = a1MonthsBetween(draft.data_uzyskania_a1, draft.data_konca_a1);
+  const visibleMonths = [...months].reverse();
   const totals = calculateA1TotalsFromValues(monthValues);
 
   function updateDraft<K extends keyof A1Draft>(key: K, value: A1Draft[K]) {
@@ -545,17 +546,17 @@ function A1DetailsModal({
             {months.length === 0 ? (
               <p style={emptyStyle}>Uzupełnij datę uzyskania A1 i datę końca A1, aby wygenerować miesiące.</p>
             ) : (
-              <div style={tableWrapStyle}>
+              <div style={a1MonthlyScrollStyle}>
                 <table style={a1MonthlyTableStyle}>
                   <thead>
                     <tr>
-                      <Th>Miesiąc</Th>
-                      <Th>Przychód krajowy</Th>
-                      <Th>Przychód zagraniczny</Th>
+                      <Th sticky>Miesiąc</Th>
+                      <Th sticky>Przychód krajowy</Th>
+                      <Th sticky>Przychód zagraniczny</Th>
                     </tr>
                   </thead>
                   <tbody>
-                    {months.map((month) => {
+                    {visibleMonths.map((month) => {
                       const key = a1MonthKey(month.year, month.month);
                       const values = monthValues[key] || { krajowy: "", zagraniczny: "" };
 
@@ -930,8 +931,9 @@ function A1PercentBadge({ value }: { value: number | string }) {
   return <span style={safePercent <= 75 ? a1OkBadgeStyle : a1WarningBadgeStyle}>{formatPercent(safePercent)}</span>;
 }
 
-function Th({ children, align = "left" }: { children: React.ReactNode; align?: "left" | "center" }) {
-  return <th style={align === "center" ? centeredThStyle : thStyle}>{children}</th>;
+function Th({ children, align = "left", sticky = false }: { children: React.ReactNode; align?: "left" | "center"; sticky?: boolean }) {
+  const style = align === "center" ? centeredThStyle : thStyle;
+  return <th style={sticky ? { ...style, position: "sticky", top: 0, zIndex: 1, background: colors.white } : style}>{children}</th>;
 }
 
 function Td({ children, align = "left" }: { children: React.ReactNode; align?: "left" | "center" }) {
@@ -1190,6 +1192,7 @@ const tableWrapStyle: CSSProperties = { width: "100%", overflowX: "auto" };
 const tableStyle: CSSProperties = { width: "100%", minWidth: "980px", borderCollapse: "collapse" };
 const detailsTableStyle: CSSProperties = { width: "100%", minWidth: "1240px", borderCollapse: "collapse" };
 const a1MonthlyTableStyle: CSSProperties = { width: "100%", minWidth: "760px", borderCollapse: "collapse" };
+const a1MonthlyScrollStyle: CSSProperties = { width: "100%", maxHeight: "min(48vh, 520px)", overflow: "auto" };
 const thStyle: CSSProperties = { padding: "14px 18px", textAlign: "left", fontSize: "12px", color: colors.text, textTransform: "uppercase", letterSpacing: "0.08em", borderBottom: `1px solid ${colors.border}`, whiteSpace: "nowrap" };
 const tdStyle: CSSProperties = { padding: "16px 18px", borderBottom: `1px solid ${colors.border}`, color: colors.text, verticalAlign: "middle", fontSize: "14px" };
 const centeredThStyle: CSSProperties = { ...thStyle, textAlign: "center" };

@@ -23,6 +23,7 @@ import {
   type PayrollA1MonthlyRevenue,
   type PayrollA1Record,
 } from "@/lib/payrollA1Service";
+import { fetchPayrollNotificationsForClient, type AppNotification } from "@/lib/notificationService";
 
 type PayrollTab = "kadry" | "a1" | "zus_przedsiebiorcy";
 
@@ -599,6 +600,48 @@ function A1DetailsModal({
   );
 }
 
+function PayrollNotificationHistoryPanel({ notifications, loading }: { notifications: AppNotification[]; loading: boolean }) {
+  return (
+    <section style={historyPanelStyle}>
+      <div style={formHeaderStyle}>
+        <h3 style={formTitleStyle}>Historia powiadomień</h3>
+      </div>
+      {loading ? (
+        <p style={emptyInlineStyle}>Ładowanie historii powiadomień...</p>
+      ) : notifications.length === 0 ? (
+        <p style={emptyInlineStyle}>Brak powiadomień kadrowych dla tego klienta.</p>
+      ) : (
+        <div style={tableWrapStyle}>
+          <table style={historyTableStyle}>
+            <thead>
+              <tr>
+                <Th>Data</Th>
+                <Th>Czego dotyczy</Th>
+                <Th>Pracownik / zleceniobiorca</Th>
+                <Th>Termin</Th>
+                <Th>Status</Th>
+                <Th>Mail do klienta</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {notifications.map((notification) => (
+                <tr key={notification.id}>
+                  <Td>{formatDateTime(notification.created_at)}</Td>
+                  <Td>{payrollDateKindLabel(stringMeta(notification.metadata?.date_kind))}</Td>
+                  <Td>{stringMeta(notification.metadata?.employee_name) || "-"}</Td>
+                  <Td>{formatDate(stringMeta(notification.metadata?.due_date))}</Td>
+                  <Td>{notification.status === "read" ? "Przeczytane" : "Nieprzeczytane"}</Td>
+                  <Td>{stringMeta(notification.metadata?.client_email_sent_at) ? `Wysłano ${formatDateTime(stringMeta(notification.metadata?.client_email_sent_at) || "")}` : "Nie wysłano"}</Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function PayrollDetailsModal({
   client,
   contracts,
@@ -611,6 +654,9 @@ function PayrollDetailsModal({
   onContractCreated: (contract: PayrollContract) => void;
 }) {
   const [showForm, setShowForm] = useState(false);
+  const [showNotificationHistory, setShowNotificationHistory] = useState(false);
+  const [notificationHistory, setNotificationHistory] = useState<AppNotification[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [draft, setDraft] = useState<ContractDraft>(createEmptyDraft());
   const [saving, setSaving] = useState(false);
 
@@ -657,6 +703,24 @@ function PayrollDetailsModal({
     setSaving(false);
   }
 
+  async function toggleNotificationHistory() {
+    const nextValue = !showNotificationHistory;
+    setShowNotificationHistory(nextValue);
+    if (!nextValue || notificationHistory.length > 0) return;
+
+    setHistoryLoading(true);
+    const result = await fetchPayrollNotificationsForClient(client.id);
+    if (result.error) {
+      console.error("Błąd pobierania historii powiadomień kadrowych:", result.error);
+      alert("Nie udało się pobrać historii powiadomień.");
+      setHistoryLoading(false);
+      return;
+    }
+
+    setNotificationHistory((result.data || []) as AppNotification[]);
+    setHistoryLoading(false);
+  }
+
   return (
     <div style={modalOverlayStyle} onClick={onClose}>
       <section style={wideModalStyle} onClick={(event) => event.stopPropagation()}>
@@ -667,6 +731,9 @@ function PayrollDetailsModal({
             <p style={modalSubtitleStyle}>NIP: {client.nip || "Brak"} · {contracts.length} {contracts.length === 1 ? "umowa" : "umów"}</p>
           </div>
           <div style={modalActionsStyle}>
+            <button type="button" style={secondaryButtonStyle} onClick={() => void toggleNotificationHistory()}>
+              Historia powiadomień
+            </button>
             <button type="button" style={primaryButtonStyle} onClick={() => setShowForm((value) => !value)}>
               <Plus size={18} /> Dodaj umowę
             </button>
@@ -677,6 +744,10 @@ function PayrollDetailsModal({
         </div>
 
         <div style={modalBodyStyle}>
+          {showNotificationHistory && (
+            <PayrollNotificationHistoryPanel notifications={notificationHistory} loading={historyLoading} />
+          )}
+
           {showForm && (
             <section style={formBoxStyle}>
               <div style={formHeaderStyle}>
@@ -951,6 +1022,22 @@ function formatDate(value: string | null) {
   return value ? new Intl.DateTimeFormat("pl-PL").format(new Date(`${value}T12:00:00`)) : "-";
 }
 
+function formatDateTime(value: string) {
+  return value ? new Intl.DateTimeFormat("pl-PL", { dateStyle: "short", timeStyle: "short" }).format(new Date(value)) : "-";
+}
+
+function stringMeta(value: unknown) {
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
+function payrollDateKindLabel(value: string | null) {
+  if (value === "contract_end") return "Koniec umowy";
+  if (value === "student_card_expiry") return "Koniec ważności legitymacji studenckiej";
+  if (value === "medical_exam_expiry") return "Koniec ważności badań lekarskich";
+  if (value === "bhp_training_expiry") return "Koniec ważności szkolenia BHP";
+  return value || "-";
+}
+
 function emptyToNull(value: string) {
   return value.trim() ? value.trim() : null;
 }
@@ -1156,3 +1243,5 @@ const disabledInputStyle: CSSProperties = { ...inputStyle, background: "rgba(226
 const checkboxFieldStyle: CSSProperties = { minHeight: "42px", display: "flex", alignItems: "center", gap: "8px", color: colors.navy, fontSize: "14px", fontWeight: 850 };
 const checkboxInputStyle: CSSProperties = { width: "16px", height: "16px", margin: 0, accentColor: colors.navy };
 const contractsSectionStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.card, padding: "0", overflow: "hidden" };
+const historyPanelStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.inputBackground, padding: "18px" };
+const historyTableStyle: CSSProperties = { width: "100%", minWidth: "980px", borderCollapse: "collapse", background: colors.white };

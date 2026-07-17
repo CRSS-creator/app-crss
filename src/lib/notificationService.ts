@@ -23,6 +23,16 @@ export async function fetchNotifications() {
     .limit(100);
 }
 
+export async function fetchPayrollNotificationsForClient(clientId: string) {
+  return supabase
+    .from("powiadomienia")
+    .select("*")
+    .eq("type", "payroll_contract_expiry")
+    .eq("metadata->>client_id", clientId)
+    .order("created_at", { ascending: false })
+    .limit(100);
+}
+
 export async function fetchUnreadNotificationsCount() {
   return supabase
     .from("powiadomienia")

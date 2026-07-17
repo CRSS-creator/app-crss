@@ -382,6 +382,7 @@ function BulkMonthlyEntryModal({ rows, year, type, onClose, onSaved }: { rows: L
 function LimitDetailsModal({ row, year, onClose, onSaved }: { row: LimitRow; year: number; onClose: () => void; onSaved: () => void }) {
   const [annualLimit, setAnnualLimit] = useState(String(toNumber(row.register.limit_roczny)));
   const [exemptionStatus, setExemptionStatus] = useState(row.register.status_zwolnienia || "podmiotowe");
+  const [vatExemptionStatuses, setVatExemptionStatuses] = useState<string[]>(() => exemptionStatusValues(row.register.status_zwolnienia || "podmiotowe"));
   const [notes, setNotes] = useState(row.register.uwagi || "");
   const [monthValues, setMonthValues] = useState<Record<number, string>>(() => monthValueMap(row.monthly));
   const [businessStartDate, setBusinessStartDate] = useState(`${year}-01-01`);
@@ -394,7 +395,7 @@ function LimitDetailsModal({ row, year, onClose, onSaved }: { row: LimitRow; yea
     setSaving(true);
     const registerResult = await updateLimitRegister(row.register.id, {
       limit_roczny: parseAmount(annualLimit),
-      status_zwolnienia: row.register.typ === "wnt" ? null : exemptionStatus,
+      status_zwolnienia: row.register.typ === "wnt" ? null : row.register.typ === "vat" ? serializeExemptionStatuses(vatExemptionStatuses) : exemptionStatus,
       uwagi: notes.trim() || null,
     });
 
@@ -444,7 +445,23 @@ function LimitDetailsModal({ row, year, onClose, onSaved }: { row: LimitRow; yea
             <span style={fieldLabelStyle}>Limit roczny</span>
             <input value={annualLimit} onChange={(event) => setAnnualLimit(event.target.value)} inputMode="decimal" style={inputStyle} />
           </label>
-          {row.register.typ !== "wnt" && (
+          {row.register.typ === "vat" ? (
+            <div style={fieldStyle}>
+              <span style={fieldLabelStyle}>Status zwolnienia</span>
+              <div style={checkboxGroupStyle}>
+                <CheckboxPill
+                  label="Podmiotowe"
+                  checked={vatExemptionStatuses.includes("podmiotowe")}
+                  onChange={(checked) => setVatExemptionStatuses((current) => toggleExemptionStatus(current, "podmiotowe", checked))}
+                />
+                <CheckboxPill
+                  label="Przedmiotowe"
+                  checked={vatExemptionStatuses.includes("przedmiotowe")}
+                  onChange={(checked) => setVatExemptionStatuses((current) => toggleExemptionStatus(current, "przedmiotowe", checked))}
+                />
+              </div>
+            </div>
+          ) : row.register.typ !== "wnt" && (
             <label style={fieldStyle}>
               <span style={fieldLabelStyle}>Status zwolnienia</span>
               <select value={exemptionStatus} onChange={(event) => setExemptionStatus(event.target.value)} style={inputStyle}>
@@ -516,6 +533,15 @@ function MonthlyStatus({ done }: { done: boolean }) {
     <span style={monthlyDoneStyle}><Check size={15} /> Dodano</span>
   ) : (
     <span style={monthlyMissingStyle}>Brak wpisu</span>
+  );
+}
+
+function CheckboxPill({ label, checked, onChange }: { label: string; checked: boolean; onChange: (checked: boolean) => void }) {
+  return (
+    <label style={checked ? activeCheckboxPillStyle : checkboxPillStyle}>
+      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} style={checkboxInputStyle} />
+      {label}
+    </label>
   );
 }
 
@@ -630,9 +656,29 @@ function activeTabLabel(type: LimitType) {
 }
 
 function exemptionStatusLabel(status: string | null | undefined) {
-  if (status === "podmiotowe") return "Podmiotowe";
-  if (status === "przedmiotowe") return "Przedmiotowe";
+  const statuses = exemptionStatusValues(status);
+  if (statuses.length === 2) return "Podmiotowe + przedmiotowe";
+  if (statuses.includes("podmiotowe")) return "Podmiotowe";
+  if (statuses.includes("przedmiotowe")) return "Przedmiotowe";
   return "-";
+}
+
+function exemptionStatusValues(status: string | null | undefined) {
+  const value = String(status || "").toLowerCase();
+  const values: string[] = [];
+  if (value.includes("podmiotowe")) values.push("podmiotowe");
+  if (value.includes("przedmiotowe")) values.push("przedmiotowe");
+  return values;
+}
+
+function serializeExemptionStatuses(statuses: string[]) {
+  const ordered = ["podmiotowe", "przedmiotowe"].filter((status) => statuses.includes(status));
+  return ordered.length > 0 ? ordered.join("+") : null;
+}
+
+function toggleExemptionStatus(current: string[], status: string, checked: boolean) {
+  if (checked) return Array.from(new Set([...current, status]));
+  return current.filter((item) => item !== status);
 }
 
 function registerHint(type: LimitType) {
@@ -754,6 +800,10 @@ const annualGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "
 const fieldStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "8px" };
 const fieldLabelStyle: CSSProperties = { color: colors.muted, fontSize: "12px", fontWeight: 850, textTransform: "uppercase" };
 const inputStyle: CSSProperties = { minHeight: "42px", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.text, padding: "0 12px", fontSize: "14px", fontWeight: 750 };
+const checkboxGroupStyle: CSSProperties = { minHeight: "42px", display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" };
+const checkboxPillStyle: CSSProperties = { minHeight: "36px", padding: "0 12px", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.navy, fontSize: "13px", fontWeight: 850, display: "inline-flex", alignItems: "center", gap: "8px", cursor: "pointer" };
+const activeCheckboxPillStyle: CSSProperties = { ...checkboxPillStyle, borderColor: colors.navy, background: "rgba(23, 59, 115, 0.08)" };
+const checkboxInputStyle: CSSProperties = { width: "15px", height: "15px", margin: 0, accentColor: colors.navy };
 const disabledInputStyle: CSSProperties = { ...inputStyle, background: "rgba(226, 232, 240, 0.72)", color: colors.muted, cursor: "not-allowed" };
 const proportionalBoxStyle: CSSProperties = { display: "grid", gridTemplateColumns: "220px 1fr auto", gap: "12px", alignItems: "end", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.inputBackground, padding: "14px" };
 const proportionalInfoStyle: CSSProperties = { minHeight: "42px", display: "flex", flexDirection: "column", justifyContent: "center", gap: "4px", color: colors.muted, fontSize: "12px", fontWeight: 800 };

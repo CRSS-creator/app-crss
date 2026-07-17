@@ -214,28 +214,21 @@ function PayrollContractNotificationTable({ notification }: { notification: AppN
         <table style={payrollTableStyle}>
           <thead>
             <tr>
-              <th style={payrollThStyle}>Klient</th>
-              <th style={payrollThStyle}>Osoba</th>
-              <th style={payrollThStyle}>Termin dotyczy</th>
-              <th style={payrollThStyle}>Typ</th>
-              <th style={payrollThStyle}>Numer</th>
-              <th style={payrollThStyle}>Termin</th>
-              <th style={payrollThStyle}>Informacja</th>
+              <th style={payrollThStyle}>Czego dotyczy</th>
+              <th style={payrollThStyle}>Pracownik / zleceniobiorca</th>
+              <th style={payrollThStyle}>Numer umowy</th>
+              <th style={payrollThStyle}>Data</th>
+              <th style={payrollThStyle}>Informacja dla klienta</th>
             </tr>
           </thead>
           <tbody>
             {items.map((item, index) => (
               <tr key={`${item.date_kind || "term"}-${item.contract_number || index}`}>
-                <td style={payrollTdStyle}>
-                  <strong>{stringMeta(item.client_name) || "Klient bez nazwy"}</strong>
-                  <span style={payrollMetaStyle}>{stringMeta(item.client_nip) || "Brak NIP"}</span>
-                </td>
-                <td style={payrollTdStyle}>{stringMeta(item.employee_name) || "Brak danych"}</td>
                 <td style={payrollTdStyle}>{payrollDateKindLabel(stringMeta(item.date_kind))}</td>
-                <td style={payrollTdStyle}>{payrollContractTypeLabel(stringMeta(item.contract_type))}</td>
-                <td style={payrollTdStyle}>{stringMeta(item.contract_number) || "-"}</td>
+                <td style={payrollTdStyle}>{stringMeta(item.employee_name) || ""}</td>
+                <td style={payrollTdStyle}>{stringMeta(item.contract_number) || ""}</td>
                 <td style={payrollTdStyle}>{formatDateOnly(stringMeta(item.due_date))}</td>
-                <td style={payrollTdStyle}>{stringMeta(item.client_request) || "-"}</td>
+                <td style={payrollTdStyle}>{stringMeta(item.client_request) || ""}</td>
               </tr>
             ))}
           </tbody>
@@ -252,17 +245,20 @@ function payrollShortBody(notification: AppNotification) {
   const itemCount = items.length;
 
   if (itemCount > 1) {
-    const firstClient = stringMeta(items[0].client_name) || "klienta bez nazwy";
-    return `U klienta ${firstClient} kończy się ${itemCount} terminów kadrowych w ciągu najbliższych 3 dni. Lista jest w szczegółach.`;
+    const clientName = stringMeta(metadata.client_name) || stringMeta(items[0].client_name) || "klienta bez nazwy";
+    return `U klienta ${clientName} kończy się ${itemCount} terminów kadrowych w ciągu najbliższych 3 dni. Lista jest w szczegółach.`;
   }
 
   const clientName = stringMeta(metadata.client_name) || "klienta bez nazwy";
   const employeeName = stringMeta(metadata.employee_name);
-  const dateKind = payrollDateKindLabel(stringMeta(metadata.date_kind)).toLowerCase();
+  const dateKind = payrollDateKindLabel(stringMeta(metadata.date_kind));
   const dueDate = formatDateOnly(stringMeta(metadata.due_date));
   const personPart = employeeName ? ` (${employeeName})` : "";
+  const datePart = dueDate !== "-" ? ` Termin: ${dueDate}.` : "";
 
-  return `U klienta ${clientName} kończy się: ${dateKind}${personPart}. Termin: ${dueDate}.`;
+  if (dateKind === "-") return notification.body || `U klienta ${clientName} kończy się termin kadrowy.`;
+
+  return `U klienta ${clientName} kończy się: ${dateKind.toLowerCase()}${personPart}.${datePart}`;
 }
 
 function payrollClientEmailSent(notification: AppNotification) {
@@ -289,13 +285,6 @@ function getPayrollNotificationItems(metadata: Record<string, unknown>): Payroll
 
 function stringMeta(value: unknown) {
   return typeof value === "string" && value.trim() ? value : null;
-}
-
-function payrollContractTypeLabel(value: string | null) {
-  if (value === "umowa_o_prace") return "Umowa o pracę";
-  if (value === "umowa_cywilnoprawna") return "Umowa cywilnoprawna";
-  if (value === "student") return "Student";
-  return value || "-";
 }
 
 function payrollDateKindLabel(value: string | null) {
@@ -366,7 +355,6 @@ const payrollTableWrapStyle: React.CSSProperties = { overflowX: "auto" };
 const payrollTableStyle: React.CSSProperties = { width: "100%", minWidth: "880px", borderCollapse: "collapse" };
 const payrollThStyle: React.CSSProperties = { padding: "10px 12px", textAlign: "left", fontSize: "11px", color: colors.text, textTransform: "uppercase", letterSpacing: "0.08em", borderBottom: `1px solid ${colors.border}`, whiteSpace: "nowrap" };
 const payrollTdStyle: React.CSSProperties = { padding: "12px", color: colors.text, borderBottom: `1px solid ${colors.border}`, verticalAlign: "top", fontSize: "13px" };
-const payrollMetaStyle: React.CSSProperties = { display: "block", marginTop: "4px", color: colors.muted, fontSize: "12px", fontWeight: 750 };
 const payrollRequestStyle: React.CSSProperties = { margin: 0, padding: "12px 14px", color: colors.text, lineHeight: 1.55, fontSize: "13px", fontWeight: 750 };
 const primaryButtonStyle: React.CSSProperties = { border: "none", borderRadius: radius.button, padding: "10px 14px", minHeight: "42px", background: colors.red, color: colors.white, fontWeight: 800, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", textAlign: "center" };
 const secondaryButtonStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "10px 14px", minHeight: "42px", background: colors.white, color: colors.navy, fontWeight: 800, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", textAlign: "center", textDecoration: "none" };

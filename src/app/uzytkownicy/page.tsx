@@ -554,14 +554,8 @@ function TemplatesTab({ templates, clients, users, draft, loading, saving, setDr
           onRemove={(clientId) => setDraft((current) => ({ ...current, klient_ids: current.klient_ids.filter((id) => id !== clientId) }))}
         />
 
-        <CheckboxGroup label="Forma prawna" disabled={draft.klient_ids.length > 0} options={LEGAL_FORM_OPTIONS} selected={draft.formy_prawne} onChange={(formy_prawne) => setDraft((current) => ({ ...current, formy_prawne }))} />
-        <CheckboxGroup label="Forma opodatkowania" disabled={draft.klient_ids.length > 0} options={TAXATION_FORM_OPTIONS} selected={draft.formy_opodatkowania} onChange={(formy_opodatkowania) => setDraft((current) => ({ ...current, formy_opodatkowania }))} />
-        <div style={templateSidePanelStyle}>
-          <div style={templateVatGridStyle}>
-            <Field label="VAT"><AppSelect style={inputStyle} disabled={draft.klient_ids.length > 0} value={draft.vatMode} options={VAT_OPTIONS} onChange={(value) => setDraft((current) => ({ ...current, vatMode: value as VatMode }))} /></Field>
-            <Field label="VAT-UE"><AppSelect style={inputStyle} disabled={draft.klient_ids.length > 0} value={draft.vatUeMode} options={VAT_UE_OPTIONS} onChange={(value) => setDraft((current) => ({ ...current, vatUeMode: value as VatUeMode }))} /></Field>
-            <Field label="Kadry"><AppSelect style={inputStyle} disabled={draft.klient_ids.length > 0} value={draft.payrollMode} options={PAYROLL_OPTIONS} onChange={(value) => setDraft((current) => ({ ...current, payrollMode: value as PayrollMode }))} /></Field>
-          </div>
+        <div style={legalAndA1BlockStyle}>
+          <CheckboxGroup label="Forma prawna" disabled={draft.klient_ids.length > 0} options={LEGAL_FORM_OPTIONS} selected={draft.formy_prawne} fullWidth={false} onChange={(formy_prawne) => setDraft((current) => ({ ...current, formy_prawne }))} />
           <div style={a1FilterStyle}>
             <span style={labelStyle}>A1</span>
             <label style={a1CheckboxStyle}>
@@ -573,6 +567,14 @@ function TemplatesTab({ templates, clients, users, draft, loading, saving, setDr
               />
               <span>Tylko podmioty z listy A1</span>
             </label>
+          </div>
+        </div>
+        <CheckboxGroup label="Forma opodatkowania" disabled={draft.klient_ids.length > 0} options={TAXATION_FORM_OPTIONS} selected={draft.formy_opodatkowania} onChange={(formy_opodatkowania) => setDraft((current) => ({ ...current, formy_opodatkowania }))} />
+        <div style={templateSidePanelStyle}>
+          <div style={templateVatGridStyle}>
+            <Field label="VAT"><AppSelect style={inputStyle} disabled={draft.klient_ids.length > 0} value={draft.vatMode} options={VAT_OPTIONS} onChange={(value) => setDraft((current) => ({ ...current, vatMode: value as VatMode }))} /></Field>
+            <Field label="VAT-UE"><AppSelect style={inputStyle} disabled={draft.klient_ids.length > 0} value={draft.vatUeMode} options={VAT_UE_OPTIONS} onChange={(value) => setDraft((current) => ({ ...current, vatUeMode: value as VatUeMode }))} /></Field>
+            <Field label="Kadry"><AppSelect style={inputStyle} disabled={draft.klient_ids.length > 0} value={draft.payrollMode} options={PAYROLL_OPTIONS} onChange={(value) => setDraft((current) => ({ ...current, payrollMode: value as PayrollMode }))} /></Field>
           </div>
         </div>
       </div>
@@ -715,11 +717,11 @@ function UsersTab({ users, loading, onRoleChange, onUserCreated }: { users: User
   );
 }
 
-function CheckboxGroup({ label, options, selected, disabled, onChange }: { label: string; options: readonly { value: string; label: string }[]; selected: string[]; disabled?: boolean; onChange: (value: string[]) => void }) {
+function CheckboxGroup({ label, options, selected, disabled, fullWidth = true, onChange }: { label: string; options: readonly { value: string; label: string }[]; selected: string[]; disabled?: boolean; fullWidth?: boolean; onChange: (value: string[]) => void }) {
   function toggle(value: string) {
     onChange(selected.includes(value) ? selected.filter((item) => item !== value) : [...selected, value]);
   }
-  return <div style={checkboxGroupStyle}><span style={labelStyle}>{label}</span><div style={checkboxGridStyle}>{options.map((option) => <label key={option.value} style={checkboxOptionStyle}><input type="checkbox" disabled={disabled} checked={selected.includes(option.value)} onChange={() => toggle(option.value)} /><span>{option.label}</span></label>)}</div></div>;
+  return <div style={fullWidth ? checkboxGroupStyle : compactCheckboxGroupStyle}><span style={labelStyle}>{label}</span><div style={checkboxGridStyle}>{options.map((option) => <label key={option.value} style={checkboxOptionStyle}><input type="checkbox" disabled={disabled} checked={selected.includes(option.value)} onChange={() => toggle(option.value)} /><span>{option.label}</span></label>)}</div></div>;
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) { return <label style={fieldStyle}><span style={labelStyle}>{label}</span>{children}</label>; }
@@ -800,6 +802,8 @@ const fieldStyle: CSSProperties = { display: "flex", flexDirection: "column", ga
 const labelStyle: CSSProperties = { color: colors.muted, fontSize: "13px", fontWeight: 850 };
 const inputStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, padding: "10px 12px", fontWeight: 700, minHeight: "42px", width: "100%" };
 const checkboxGroupStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "8px", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, padding: "12px", gridColumn: "span 2" };
+const compactCheckboxGroupStyle: CSSProperties = { ...checkboxGroupStyle, gridColumn: "auto" };
+const legalAndA1BlockStyle: CSSProperties = { gridColumn: "span 2", display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "12px" };
 const checkboxGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "8px" };
 const checkboxOptionStyle: CSSProperties = { display: "flex", alignItems: "center", gap: "8px", color: colors.text, fontWeight: 750, fontSize: "13px" };
 const clientPickerStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "8px", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, padding: "12px", gridColumn: "span 2" };
@@ -810,7 +814,7 @@ const clientPillStyle: CSSProperties = { display: "inline-flex", alignItems: "ce
 const pillRemoveStyle: CSSProperties = { border: "none", background: "transparent", color: colors.navy, cursor: "pointer", fontWeight: 900, fontSize: "15px", lineHeight: 1 };
 const templateSidePanelStyle: CSSProperties = { gridColumn: "3 / -1", display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "12px", alignSelf: "stretch" };
 const templateVatGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "12px" };
-const a1FilterStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, padding: "10px 12px", display: "flex", flexDirection: "column", gap: "8px" };
+const a1FilterStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, padding: "10px 12px", display: "flex", flexDirection: "column", gap: "8px", gridColumn: "auto" };
 const a1CheckboxStyle: CSSProperties = { display: "flex", alignItems: "center", gap: "8px", color: colors.text, fontWeight: 750, fontSize: "13px" };
 const buttonRowStyle: CSSProperties = { display: "flex", gap: "10px", marginBottom: "18px", flexWrap: "wrap" };
 const primaryButtonStyle: CSSProperties = { border: "none", borderRadius: radius.button, background: colors.red, color: colors.white, padding: "11px 15px", minHeight: "42px", fontWeight: 850, cursor: "pointer", whiteSpace: "nowrap" };

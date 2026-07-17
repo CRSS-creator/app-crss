@@ -246,7 +246,7 @@ function payrollShortBody(notification: AppNotification) {
 
   if (itemCount > 1) {
     const clientName = stringMeta(metadata.client_name) || stringMeta(items[0].client_name) || "klienta bez nazwy";
-    return `U klienta ${clientName} kończy się ${itemCount} terminów kadrowych w ciągu najbliższych 3 dni. Lista jest w szczegółach.`;
+    return `U klienta ${clientName} kończy się ${itemCount} terminów kadrowych w ciągu najbliższych 3 dni roboczych. Lista jest w szczegółach.`;
   }
 
   const clientName = stringMeta(metadata.client_name) || "klienta bez nazwy";

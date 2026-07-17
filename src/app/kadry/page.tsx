@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { CalendarDays, ChevronLeft, ChevronRight, Plus, X } from "lucide-react";
+import { CalendarDays, Check, ChevronLeft, ChevronRight, Plus, X } from "lucide-react";
 import AccessGuard from "@/components/AccessGuard";
 import AppLayout from "@/components/AppLayout";
 import AppSelect from "@/components/AppSelect";
@@ -414,35 +414,40 @@ function A1Table({
 
   return (
     <div style={tableWrapStyle}>
-      <table style={tableStyle}>
+      <table style={a1RegisterTableStyle}>
         <thead>
           <tr>
             <Th>Klient</Th>
             <Th>Opiekun</Th>
             <Th>Data uzyskania A1</Th>
             <Th>Data końca A1</Th>
+            <Th align="center">Wpis za poprzedni miesiąc</Th>
             <Th align="center">% przychodów zagranicznych</Th>
             <Th align="center">Szczegóły</Th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
-            <tr key={row.record.id}>
-              <Td>
-                <strong style={clientNameStyle}>{row.client?.nazwa || "Klient bez nazwy"}</strong>
-                <span style={clientMetaStyle}>{row.client?.nip || "Brak NIP"}</span>
-              </Td>
-              <Td>{caregiverLabel(row.client)}</Td>
-              <Td>{formatDate(row.record.data_uzyskania_a1)}</Td>
-              <Td>{formatDate(row.record.data_konca_a1)}</Td>
-              <Td align="center"><A1PercentBadge value={calculateA1Totals(row.monthly).procentZagraniczny} /></Td>
-              <Td align="center">
-                <button type="button" style={detailsButtonStyle} onClick={() => onDetails(row.record.id)}>
-                  Szczegóły
-                </button>
-              </Td>
-            </tr>
-          ))}
+          {rows.map((row) => {
+            const previousMonthDone = hasA1MonthlyEntry(row.monthly);
+            return (
+              <tr key={row.record.id}>
+                <Td>
+                  <strong style={clientNameStyle}>{row.client?.nazwa || "Klient bez nazwy"}</strong>
+                  <span style={clientMetaStyle}>{row.client?.nip || "Brak NIP"}</span>
+                </Td>
+                <Td>{caregiverLabel(row.client)}</Td>
+                <Td>{formatDate(row.record.data_uzyskania_a1)}</Td>
+                <Td>{formatDate(row.record.data_konca_a1)}</Td>
+                <Td align="center"><MonthlyStatus done={previousMonthDone} /></Td>
+                <Td align="center"><A1PercentBadge value={calculateA1Totals(row.monthly).procentZagraniczny} /></Td>
+                <Td align="center">
+                  <button type="button" style={detailsButtonStyle} onClick={() => onDetails(row.record.id)}>
+                    Szczegóły
+                  </button>
+                </Td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -931,6 +936,14 @@ function A1PercentBadge({ value }: { value: number | string }) {
   return <span style={safePercent <= 75 ? a1OkBadgeStyle : a1WarningBadgeStyle}>{formatPercent(safePercent)}</span>;
 }
 
+function MonthlyStatus({ done }: { done: boolean }) {
+  return done ? (
+    <span style={monthlyDoneStyle}><Check size={15} /> Dodano</span>
+  ) : (
+    <span style={monthlyMissingStyle}>Brak wpisu</span>
+  );
+}
+
 function Th({ children, align = "left", sticky = false }: { children: React.ReactNode; align?: "left" | "center"; sticky?: boolean }) {
   const style = align === "center" ? centeredThStyle : thStyle;
   return <th style={sticky ? { ...style, position: "sticky", top: 0, zIndex: 1, background: colors.white } : style}>{children}</th>;
@@ -1071,6 +1084,20 @@ function a1MonthKey(year: number, month: number) {
   return `${year}-${String(month).padStart(2, "0")}`;
 }
 
+function hasA1MonthlyEntry(monthly: PayrollA1MonthlyRevenue[]) {
+  const { year, month } = previousReportingMonth();
+  return monthly.some((record) => record.rok === year && record.miesiac === month);
+}
+
+function previousReportingMonth() {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1;
+  return currentMonth === 1
+    ? { year: currentYear - 1, month: 12 }
+    : { year: currentYear, month: currentMonth - 1 };
+}
+
 function a1MonthValueMap(monthly: PayrollA1MonthlyRevenue[]) {
   return monthly.reduce<Record<string, { krajowy: string; zagraniczny: string }>>((values, item) => {
     values[a1MonthKey(item.rok, item.miesiac)] = {
@@ -1190,6 +1217,7 @@ const emptyStyle: CSSProperties = { margin: 0, padding: "28px 24px", color: colo
 const emptyInlineStyle: CSSProperties = { margin: 0, color: colors.muted, fontWeight: 750 };
 const tableWrapStyle: CSSProperties = { width: "100%", overflowX: "auto" };
 const tableStyle: CSSProperties = { width: "100%", minWidth: "980px", borderCollapse: "collapse" };
+const a1RegisterTableStyle: CSSProperties = { ...tableStyle, minWidth: "1120px" };
 const detailsTableStyle: CSSProperties = { width: "100%", minWidth: "1240px", borderCollapse: "collapse" };
 const a1MonthlyTableStyle: CSSProperties = { width: "100%", minWidth: "760px", borderCollapse: "collapse" };
 const a1MonthlyScrollStyle: CSSProperties = { width: "100%", maxHeight: "min(48vh, 520px)", overflow: "auto" };
@@ -1203,6 +1231,8 @@ const yesBadgeStyle: CSSProperties = { display: "inline-flex", alignItems: "cent
 const noBadgeStyle: CSSProperties = { ...yesBadgeStyle, background: "rgba(239, 68, 68, 0.12)", color: colors.red };
 const a1OkBadgeStyle: CSSProperties = { ...yesBadgeStyle, minWidth: "64px" };
 const a1WarningBadgeStyle: CSSProperties = { ...a1OkBadgeStyle, background: "rgba(239, 68, 68, 0.12)", color: colors.red };
+const monthlyDoneStyle: CSSProperties = { display: "inline-flex", alignItems: "center", gap: "6px", minHeight: "30px", padding: "6px 10px", borderRadius: radius.badge, background: "rgba(22, 163, 74, 0.12)", color: colors.success, fontSize: "12px", fontWeight: 850 };
+const monthlyMissingStyle: CSSProperties = { display: "inline-flex", alignItems: "center", minHeight: "30px", padding: "6px 10px", borderRadius: radius.badge, background: "rgba(100, 116, 139, 0.12)", color: colors.muted, fontSize: "12px", fontWeight: 850 };
 const detailsButtonStyle: CSSProperties = { minHeight: "38px", padding: "0 14px", borderRadius: radius.button, border: `1px solid ${colors.border}`, background: colors.white, color: colors.navy, fontWeight: 850, cursor: "pointer" };
 const modalOverlayStyle: CSSProperties = { position: "fixed", inset: 0, zIndex: 60, background: "rgba(15, 23, 42, 0.38)", display: "flex", justifyContent: "center", alignItems: "flex-start", padding: "28px", overflowY: "auto" };
 const wideModalStyle: CSSProperties = { width: "min(1380px, calc(100vw - 56px))", maxHeight: "calc(100vh - 56px)", borderRadius: radius.card, background: colors.white, border: `1px solid ${colors.border}`, boxShadow: "0 32px 90px rgba(15, 23, 42, 0.28)", overflow: "hidden", display: "flex", flexDirection: "column" };

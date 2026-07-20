@@ -205,7 +205,7 @@ function AmlContent() {
                   <Th>Weryfikacja AML</Th>
                   <Th>Formularz wstępny</Th>
                   <Th>Ocena ryzyka</Th>
-                  <Th>Oświadczenie o weryfikacji i identyfikacji klienta</Th>
+                  <Th wrap>Oświadczenie o weryfikacji i identyfikacji klienta</Th>
                   <Th>Szczegóły</Th>
                 </tr>
               </thead>
@@ -219,10 +219,10 @@ function AmlContent() {
                     </Td>
                     <Td>{row.client.nip || "-"}</Td>
                     <Td>{caregiverLabel(row.client)}</Td>
-                    <Td><StatusPill done={amlCheckStatus(row, "verification")} /></Td>
-                    <Td><StatusPill done={amlCheckStatus(row, "initial_form")} /></Td>
-                    <Td><StatusPill done={amlCheckStatus(row, "risk_assessment")} /></Td>
-                    <Td><StatusPill done={amlCheckStatus(row, "identification_statement")} /></Td>
+                    <StatusTd><StatusPill done={amlCheckStatus(row, "verification")} /></StatusTd>
+                    <StatusTd><StatusPill done={amlCheckStatus(row, "initial_form")} /></StatusTd>
+                    <StatusTd><StatusPill done={amlCheckStatus(row, "risk_assessment")} /></StatusTd>
+                    <StatusTd><StatusPill done={amlCheckStatus(row, "identification_statement")} /></StatusTd>
                     <Td>
                       <button type="button" onClick={() => setSelectedClientId(row.client.id)} style={detailsButtonStyle}>
                         Szczegóły

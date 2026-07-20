@@ -5,7 +5,6 @@ import { splitEmails } from "@/lib/contactFields";
 const ALLOWED_ROLES = new Set(["owner", "manager", "admin", "accountant"]);
 const APP_URL = "https://app.crss.com.pl";
 const BULK_TO_EMAIL = "biuro@crss.com.pl";
-const BCC_BATCH_SIZE = 10;
 
 type AuthorizedResult =
   | { admin: SupabaseClient; requesterId: string; requesterName: string; role: string; error: null }
@@ -56,7 +55,7 @@ function normalizeBulkWebhookUrl(webhookUrl: string) {
   return webhookUrl.replace(/powiadomienia-kadrowe\b/, "powiadomienia-zbiorcze");
 }
 
-function webhookDiagnostics(webhookUrl: string, batches?: number) {
+function webhookDiagnostics(webhookUrl: string) {
   let path = "nieznana sciezka";
   try {
     const url = new URL(webhookUrl);
@@ -68,7 +67,6 @@ function webhookDiagnostics(webhookUrl: string, batches?: number) {
   return {
     webhookMode: webhookUrl.includes("/webhook-test/") ? "test" : "production",
     webhookPath: path,
-    batches,
   };
 }
 
@@ -232,14 +230,6 @@ function historyRecipient(recipient: BulkRecipient) {
   };
 }
 
-function chunkRecipients(recipients: BulkRecipient[], size: number) {
-  const chunks: BulkRecipient[][] = [];
-  for (let index = 0; index < recipients.length; index += size) {
-    chunks.push(recipients.slice(index, index + size));
-  }
-  return chunks;
-}
-
 export async function POST(request: NextRequest) {
   const auth = await getAuthorizedUser(request);
   if (auth.error) return auth.error;
@@ -298,76 +288,66 @@ export async function POST(request: NextRequest) {
   }
 
   const html = buildHtmlMessage(message);
-  const batches = chunkRecipients(recipients, BCC_BATCH_SIZE);
-  const diagnostics = webhookDiagnostics(webhookUrl, batches.length);
+  const bccEmails = recipients.map((recipient) => recipient.email);
+  const diagnostics = webhookDiagnostics(webhookUrl);
 
-  for (let batchIndex = 0; batchIndex < batches.length; batchIndex += 1) {
-    const batch = batches[batchIndex];
-    const bccEmails = batch.map((recipient) => recipient.email);
+  let response: Response;
+  try {
+    response = await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        event: "bulk_client_notification_requested",
+        deliveryMode: "single_email_bcc",
+        recipientEmail: null,
+        recipientEmails: [],
+        toEmail: BULK_TO_EMAIL,
+        bccEmails,
+        bcc: bccEmails,
+        subject,
+        message,
+        html,
+        recipients: recipients.map(historyRecipient),
+        requestedByName: auth.requesterName,
+        appUrl: APP_URL,
+        requiresDeliveryConfirmation: true,
+      }),
+    });
+  } catch (error) {
+    const details = error instanceof Error ? error.message : String(error);
+    return NextResponse.json(
+      {
+        error: `Nie udało się połączyć z automatyzacją n8n. Szczegóły: ${details}`,
+        diagnostics,
+      },
+      { status: 502 }
+    );
+  }
 
-    let response: Response;
-    try {
-      response = await fetch(webhookUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          event: "bulk_client_notification_requested",
-          deliveryMode: "single_email_bcc_batch",
-          batchNumber: batchIndex + 1,
-          batchCount: batches.length,
-          batchSize: bccEmails.length,
-          totalRecipients: recipients.length,
-          recipientEmail: null,
-          recipientEmails: [],
-          toEmail: BULK_TO_EMAIL,
-          bccEmails,
-          bcc: bccEmails,
-          subject,
-          message,
-          html,
-          recipients: batch.map(historyRecipient),
-          allRecipients: recipients.map(historyRecipient),
-          requestedByName: auth.requesterName,
-          appUrl: APP_URL,
-          requiresDeliveryConfirmation: true,
-        }),
-      });
-    } catch (error) {
-      const details = error instanceof Error ? error.message : String(error);
-      return NextResponse.json(
-        {
-          error: `Nie udało się połączyć z automatyzacją n8n dla paczki ${batchIndex + 1}/${batches.length}. Szczegóły: ${details}`,
-          diagnostics,
-        },
-        { status: 502 }
-      );
-    }
+  if (!response.ok) {
+    const errorDetails = await readWebhookError(response);
+    return NextResponse.json(
+      {
+        error: `Nie udało się przekazać komunikatu zbiorczego do n8n. ${errorDetails} Sprawdź workflow wysyłki komunikatów oraz pola: toEmail, bccEmails, subject i html.`,
+        sent: 0,
+        failed: recipients.length,
+        diagnostics,
+      },
+      { status: 502 }
+    );
+  }
 
-    if (!response.ok) {
-      const errorDetails = await readWebhookError(response);
-      return NextResponse.json(
-        {
-          error: `Nie udało się przekazać paczki ${batchIndex + 1}/${batches.length} do n8n. ${errorDetails} Sprawdź workflow wysyłki komunikatów oraz pola: toEmail, bccEmails, subject i html.`,
-          sent: batchIndex * BCC_BATCH_SIZE,
-          failed: recipients.length - batchIndex * BCC_BATCH_SIZE,
-          diagnostics,
-        },
-        { status: 502 }
-      );
-    }
-
-    const webhookConfirmation = await readWebhookConfirmation(response);
-    if (!webhookConfirmation.confirmed) {
-      return NextResponse.json(
-        {
-          error: `n8n odebralo paczke ${batchIndex + 1}/${batches.length}, ale nie potwierdzilo wysylki po Gmailu. ${webhookConfirmation.details}`,
-          sent: batchIndex * BCC_BATCH_SIZE,
-          failed: recipients.length - batchIndex * BCC_BATCH_SIZE,
-          diagnostics,
-        },
-        { status: 502 }
-      );
-    }
+  const webhookConfirmation = await readWebhookConfirmation(response);
+  if (!webhookConfirmation.confirmed) {
+    return NextResponse.json(
+      {
+        error: `n8n odebralo komunikat, ale nie potwierdzilo wysylki po Gmailu. ${webhookConfirmation.details}`,
+        sent: 0,
+        failed: recipients.length,
+        diagnostics,
+      },
+      { status: 502 }
+    );
   }
 
   await auth.admin
@@ -386,8 +366,6 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({
     sent: recipients.length,
-    batches: batches.length,
-    batchSize: BCC_BATCH_SIZE,
     skipped: skippedCount,
     diagnostics,
   });

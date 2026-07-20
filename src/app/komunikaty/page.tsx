@@ -218,7 +218,7 @@ function KomunikatyContent() {
       return;
     }
 
-    if (!window.confirm(`Wysłać komunikat w paczkach UDW po maksymalnie 10 adresów e-mail? Łącznie: ${selectedEmailCount} adresów.`)) return;
+    if (!window.confirm(`Wysłać jedną wiadomość z UDW do ${selectedEmailCount} adresów e-mail?`)) return;
 
     setSending(true);
     const { data: sessionData } = await supabase.auth.getSession();
@@ -254,7 +254,7 @@ function KomunikatyContent() {
       return;
     }
 
-    setResultMessage(`Wysłano komunikat w ${result.batches || 0} paczkach UDW po maksymalnie ${result.batchSize || 10} adresów. Łącznie: ${result.sent || 0} adresów. Pominięto bez e-maila: ${result.skipped || 0}.${diagnostics}`);
+    setResultMessage(`Wysłano jedną wiadomość z UDW do ${result.sent || 0} adresów. Pominięto bez e-maila: ${result.skipped || 0}.${diagnostics}`);
     await loadHistory();
   }
 
@@ -365,7 +365,7 @@ function KomunikatyContent() {
           <button type="button" style={primaryButtonStyle} onClick={handleSend} disabled={sending || selectedWithEmail.length === 0}>
             {sending ? "Wysyłam..." : "Wyślij komunikat"}
           </button>
-          <span style={helperStyle}>Wysyłka obejmie paczki UDW po maksymalnie 10 adresów e-mail. Łącznie: {selectedEmailCount} adresów.</span>
+          <span style={helperStyle}>Wysyłka obejmie jedną wiadomość z UDW do {selectedEmailCount} adresów e-mail.</span>
         </div>
         {resultMessage && <p style={resultStyle}>{resultMessage}</p>}
       </section>

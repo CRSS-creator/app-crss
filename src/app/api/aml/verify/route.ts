@@ -917,6 +917,56 @@ function drawReportSection(
     setY(getY() - 10);
   });
 }
+
+function drawFooter(page: PDFPage, font: PDFFont) {
+  page.drawText("Raport wygenerowany automatycznie w module AML CRSS.", {
+    x: 42,
+    y: 28,
+    size: 7,
+    font,
+    color: rgb(0.42, 0.48, 0.58),
+  });
+}
+
+function resultLabel(result: string) {
+  if (result === "pozytywna") return "Pozytywna";
+  if (result === "wymaga_analizy") return "Wymaga analizy";
+  if (result === "negatywna") return "Negatywna";
+  return result || "-";
+}
+
+function statusLabel(status: OfficialCheck["status"]) {
+  switch (status) {
+    case "ok":
+      return "OK";
+    case "confirmed":
+      return "Potwierdzono";
+    case "warning":
+      return "Uwaga";
+    case "error":
+      return "Błąd";
+    case "skipped":
+      return "Pominięto";
+    default:
+      return "-";
+  }
+}
+
+function statusColor(status: OfficialCheck["status"]) {
+  switch (status) {
+    case "ok":
+    case "confirmed":
+      return rgb(0.09, 0.50, 0.24);
+    case "warning":
+      return rgb(0.72, 0.40, 0.02);
+    case "error":
+      return rgb(0.78, 0.12, 0.12);
+    case "skipped":
+    default:
+      return rgb(0.42, 0.48, 0.58);
+  }
+}
+
 async function buildAmlReportPdfLegacy(input: {
   clientName: string;
   nip: string;

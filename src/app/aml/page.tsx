@@ -685,6 +685,14 @@ function Th({ children }: { children: React.ReactNode }) {
   return <th style={thStyle}>{children}</th>;
 }
 
+function WrappedTh({ children }: { children: React.ReactNode }) {
+  return <th style={wrappedThStyle}>{children}</th>;
+}
+
+function StatusTd({ children }: { children: React.ReactNode }) {
+  return <td style={statusTdStyle}>{children}</td>;
+}
+
 function Td({ children }: { children: React.ReactNode }) {
   return <td style={tdStyle}>{children}</td>;
 }
@@ -726,7 +734,9 @@ const sectionHintStyle: CSSProperties = { margin: "6px 0 0", color: colors.muted
 const tableWrapStyle: CSSProperties = { width: "100%", overflowX: "auto" };
 const tableStyle: CSSProperties = { width: "100%", minWidth: "1320px", borderCollapse: "collapse" };
 const thStyle: CSSProperties = { padding: "16px 18px", textAlign: "left", fontSize: "12px", color: colors.text, textTransform: "uppercase", letterSpacing: "0.08em", borderBottom: `1px solid ${colors.border}`, whiteSpace: "nowrap" };
+const wrappedThStyle: CSSProperties = { ...thStyle, width: "260px", minWidth: "220px", whiteSpace: "normal", lineHeight: 1.35 };
 const tdStyle: CSSProperties = { padding: "18px", borderBottom: `1px solid ${colors.border}`, color: colors.text, verticalAlign: "middle", fontSize: "15px" };
+const statusTdStyle: CSSProperties = { ...tdStyle, textAlign: "center" };
 const clientNameStyle: CSSProperties = { display: "block", color: colors.navy, fontWeight: 850, lineHeight: 1.35 };
 const clientMetaStyle: CSSProperties = { display: "block", marginTop: "5px", color: colors.muted, fontSize: "13px" };
 const badgeStyle: CSSProperties = { display: "inline-flex", minHeight: "30px", alignItems: "center", justifyContent: "center", padding: "6px 12px", borderRadius: radius.badge, fontSize: "13px", fontWeight: 850, whiteSpace: "nowrap" };

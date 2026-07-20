@@ -12,7 +12,9 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const AML_REPORT_BUCKET = "crm-umowy";
-const CRBR_API_URL = process.env.CRBR_API_URL || "https://bramka-crbr.mf.gov.pl:5058/uslugiBiznesowe/uslugiESB/AP/ApiPrzegladoweCRBR/2022/02/01";
+const CRBR_SERVICE_NAMESPACE = "http://www.mf.gov.pl/uslugiBiznesowe/uslugiESB/AP/ApiPrzegladoweCRBR/2022/12/01";
+const CRBR_SCHEMA_NAMESPACE = "http://www.mf.gov.pl/schematy/AP/ApiPrzegladoweCRBR/2022/12/01";
+const CRBR_API_URL = process.env.CRBR_API_URL || "https://bramka-crbr.mf.gov.pl:5058/uslugiBiznesowe/uslugiESB/AP/ApiPrzegladoweCRBR/2022/12/01";
 const CEIDG_API_TOKEN = process.env.CEIDG_API_TOKEN;
 const CEIDG_API_URL = process.env.CEIDG_API_URL || "https://dane.biznes.gov.pl/api/ceidg/v3/firmy";
 const OPENSANCTIONS_API_KEY = process.env.OPENSANCTIONS_API_KEY || process.env.OPEN_SANCTIONS_API_KEY;
@@ -461,14 +463,14 @@ function normalizeTextForMatch(value: string) {
     .toLowerCase();
 }
 async function verifyCrbr(nip: string, krs: string | null): Promise<OfficialCheck> {
-  const searchTag = krs ? `<ns1:KRS>${escapeXml(krs.padStart(10, "0"))}</ns1:KRS>` : `<ns1:NIP>${escapeXml(nip)}</ns1:NIP>`;
+  const searchTag = krs ? `<api:KRS>${escapeXml(krs.padStart(10, "0"))}</api:KRS>` : `<api:NIP>${escapeXml(nip)}</api:NIP>`;
   const envelope = `<?xml version="1.0" encoding="UTF-8"?>
-<soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope" xmlns:ns="http://www.mf.gov.pl/uslugiBiznesowe/uslugiESB/AP/ApiPrzegladoweCRBR/2022/02/01" xmlns:ns1="http://www.mf.gov.pl/schematy/AP/ApiPrzegladoweCRBR/2022/02/01">
+<soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope" xmlns:ns="${CRBR_SERVICE_NAMESPACE}" xmlns:api="${CRBR_SCHEMA_NAMESPACE}">
   <soap:Header/>
   <soap:Body>
     <ns:PobierzInformacjeOSpolkachIBeneficjentach>
       <PobierzInformacjeOSpolkachIBeneficjentachDane>
-        <ns1:SzczegolyWniosku>${searchTag}</ns1:SzczegolyWniosku>
+        <api:SzczegolyWniosku>${searchTag}</api:SzczegolyWniosku>
       </PobierzInformacjeOSpolkachIBeneficjentachDane>
     </ns:PobierzInformacjeOSpolkachIBeneficjentach>
   </soap:Body>
@@ -477,7 +479,11 @@ async function verifyCrbr(nip: string, krs: string | null): Promise<OfficialChec
   try {
     const response = await fetch(CRBR_API_URL, {
       method: "POST",
-      headers: { "content-type": "application/soap+xml; charset=utf-8", accept: "application/soap+xml, text/xml" },
+      headers: {
+        "content-type": "application/soap+xml; charset=utf-8",
+        accept: "application/soap+xml, text/xml",
+        soapaction: `${CRBR_SERVICE_NAMESPACE}/PobierzInformacjeOSpolkachIBeneficjentach`,
+      },
       body: envelope,
     });
     const xml = await response.text();
@@ -850,16 +856,48 @@ function parseCrbrCompanies(xml: string) {
       pierwszeImie: readXmlTag(ownerBlock, "PierwszeImie"),
       kolejneImiona: readXmlTag(ownerBlock, "KolejneImiona"),
       nazwisko: readXmlTag(ownerBlock, "Nazwisko"),
+      pesel: readXmlTag(ownerBlock, "PESEL"),
       dataUrodzenia: readXmlTag(ownerBlock, "DataUrodzenia"),
-      obywatelstwo: readXmlTag(ownerBlock, "Obywatelstwo"),
-      krajZamieszkania: readXmlTag(ownerBlock, "KrajZamieszkania"),
+      obywatelstwo: readDictionaryValue(ownerBlock, "Obywatelstwo"),
+      krajZamieszkania: readDictionaryValue(ownerBlock, "KrajZamieszkania"),
       udzialy: xmlBlocks(ownerBlock, "InformacjaOUdzialach").map((shareBlock) => ({
-        rodzaj: readXmlTag(shareBlock, "RodzajUprawnienWlascicielskich") || readXmlTag(shareBlock, "InneUprawnienia"),
+        rodzaj: readOwnershipDescription(shareBlock),
         ilosc: readXmlTag(shareBlock, "Ilosc"),
-        jednostka: readXmlTag(shareBlock, "JednostkaMiary"),
+        jednostka: readDictionaryValue(shareBlock, "JednostkaMiary"),
       })),
     })),
   }));
+}
+
+function readDictionaryValue(xml: string, tag: string) {
+  const block = xmlBlocks(xml, tag)[0];
+  if (!block) return readXmlTag(xml, tag);
+  return readXmlTag(block, "Nazwa") || readXmlTag(block, "Opis") || readXmlTag(block, "Kod") || readXmlTag(xml, tag);
+}
+
+function readOwnershipDescription(xml: string) {
+  const directOwnership = xmlBlocks(xml, "UprawnieniaWlascicielskieBezposrednie")[0];
+  if (directOwnership) {
+    const ownershipKind = xmlBlocks(directOwnership, "UprawnieniaWlascicielskie")[0];
+    const privilegeKind = xmlBlocks(directOwnership, "InformacjaOUprzywilejowaniu")[0];
+    return [
+      ownershipKind ? readDictionaryValue(ownershipKind, "UprawnieniaWlascicielskie") || readXmlTag(ownershipKind, "Opis") : null,
+      privilegeKind ? readDictionaryValue(privilegeKind, "RodzajUprzywilejowania") : null,
+    ].filter(Boolean).join("; ") || "uprawnienia właścicielskie bezpośrednie";
+  }
+
+  const indirectOwnership = readXmlTag(xml, "UprawnieniaWlascicielskiePosrednie");
+  if (indirectOwnership) return indirectOwnership;
+
+  const otherRights = xmlBlocks(xml, "InneUprawnienia")[0];
+  if (otherRights) {
+    return [
+      readDictionaryValue(otherRights, "RodzajInnychUprawnien"),
+      readXmlTag(otherRights, "OpisInnychUprawnien"),
+    ].filter(Boolean).join("; ") || "inne uprawnienia";
+  }
+
+  return null;
 }
 
 function xmlBlocks(xml: string, tag: string) {

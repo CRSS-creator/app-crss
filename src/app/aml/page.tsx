@@ -632,10 +632,10 @@ function RegistryDetails({ register }: { register: AmlRegisterRecord | null }) {
                     <div style={beneficialOwnerMetaStyle}>
                       <span>PESEL: {asText(owner.pesel)}</span>
                       <span>Rola: {beneficiaryRoleLabel(owner)}</span>
-                      <span>Udziałowiec: {yesNoLabel(owner.udzialowiec)}</span>
-                      <span>Reprezentant: {yesNoLabel(owner.reprezentant)}</span>
+                      <span>Udziałowiec: {yesNoLabel(beneficiaryIsShareholder(owner))}</span>
+                      <span>Reprezentant: {yesNoLabel(beneficiaryIsRepresentative(owner))}</span>
                       <span>Udziały: {beneficiarySharesLabel(owner)}</span>
-                      <span>Głosy: {beneficiaryVotesLabel(owner)}</span>
+                      <span>Głosy: {beneficiaryVotesDisplayLabel(owner)}</span>
                       <span>Obywatelstwo: {asText(owner.obywatelstwo)}</span>
                       <span>Kraj zamieszkania: {asText(owner.krajZamieszkania)}</span>
                       <span>Status: {registerStatusText(asText(owner.status))}</span>
@@ -794,18 +794,48 @@ function yesNoLabel(value: unknown) {
   return "-";
 }
 
+function beneficiaryIsShareholder(owner: Record<string, unknown>) {
+  if (owner.udzialowiec === true) return true;
+  const role = normalizeUiText([owner.rola, owner.typBeneficjenta].filter(Boolean).join(" "));
+  const hasRole = /\bwspolnik|\budzial|akcj|wlasci|glos/.test(role);
+  const shares = beneficiarySharesLabel(owner);
+  const votes = beneficiaryVotesLabel(owner);
+  return hasRole || shares !== "-" || votes !== "-";
+}
+
+function beneficiaryIsRepresentative(owner: Record<string, unknown>) {
+  if (owner.reprezentant === true) return true;
+  const role = normalizeUiText([owner.rola, owner.typBeneficjenta].filter(Boolean).join(" "));
+  return /\breprezent|zarzad|prokur|organ/.test(role);
+}
+
 function beneficiarySharesLabel(owner: Record<string, unknown>) {
-  const direct = [owner.liczbaUdzialow, owner.procentUdzialow].filter(Boolean).join(" / ");
+  const direct = [owner.liczbaUdzialow, owner.procentUdzialow, owner.wartoscUdzialow].filter(Boolean).join(" / ");
   if (direct) return direct;
   const shares = Array.isArray(owner.udzialy) ? owner.udzialy as Array<Record<string, unknown>> : [];
   const values = shares
-    .map((share) => [share.ilosc, share.jednostka].filter(Boolean).join(" "))
+    .map((share) => [share.liczbaUdzialow, share.procentUdzialow, share.wartoscUdzialow, [share.ilosc, share.jednostka].filter(Boolean).join(" ")].filter(Boolean).join(" / "))
     .filter(Boolean);
   return values.join(", ") || "-";
 }
 
 function beneficiaryVotesLabel(owner: Record<string, unknown>) {
   return [owner.liczbaGlosow, owner.procentGlosow].filter(Boolean).join(" / ") || "-";
+}
+
+function beneficiaryVotesDisplayLabel(owner: Record<string, unknown>) {
+  const value = beneficiaryVotesLabel(owner);
+  if (value !== "-") return value;
+  return beneficiaryIsShareholder(owner) ? "Brak danych w CRBR/KRS" : "-";
+}
+
+function normalizeUiText(value: string) {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9]+/g, " ")
+    .trim()
+    .toLowerCase();
 }
 
 function isArchivedVerification(verification: AmlVerificationRecord) {

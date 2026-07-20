@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
   checks.push(sanctionsCheck);
   const now = new Date();
   const pkdCodes = collectPkdCodes(ceidgCheck, krsCheck);
-  const beneficialOwners = extractCrbrBeneficialOwners(crbrCheck, now);
+  const beneficialOwners = extractCrbrBeneficialOwners(crbrCheck, now, krsCheck);
   const result = summarizeResult(checks);
   const registryDetails = buildRegistryDetails({
     nip,
@@ -742,9 +742,11 @@ function buildRegistryDetails(input: {
   };
 }
 
-function extractCrbrBeneficialOwners(check: OfficialCheck, checkedAt: Date) {
+function extractCrbrBeneficialOwners(check: OfficialCheck, checkedAt: Date, krsCheck: OfficialCheck) {
   const details = check.details as { companies?: Array<{ beneficjenci?: Array<Record<string, unknown>>; nazwa?: string; nip?: string; krs?: string }> };
   const companies = Array.isArray(details.companies) ? details.companies : [];
+  const krsRepresentatives = collectKrsRepresentativeNames(krsCheck);
+  const krsShareholders = collectKrsShareholderDetails(krsCheck);
   const owners = companies.flatMap((company) => (company.beneficjenci || []).map((owner) => ({
     source: "CRBR",
     status: "pobrano",
@@ -757,12 +759,13 @@ function extractCrbrBeneficialOwners(check: OfficialCheck, checkedAt: Date) {
     krajZamieszkania: owner.krajZamieszkania || null,
     dataUrodzenia: owner.dataUrodzenia || null,
     rola: owner.rola || null,
-    reprezentant: owner.reprezentant ?? null,
-    udzialowiec: owner.udzialowiec ?? null,
-    liczbaUdzialow: owner.liczbaUdzialow || null,
-    procentUdzialow: owner.procentUdzialow || null,
-    liczbaGlosow: owner.liczbaGlosow || null,
-    procentGlosow: owner.procentGlosow || null,
+    reprezentant: owner.reprezentant || krsRepresentatives.has(normalizePersonName([owner.pierwszeImie, owner.kolejneImiona, owner.nazwisko].filter(Boolean).join(" "))),
+    udzialowiec: owner.udzialowiec ?? isShareholderRole(String(owner.rola || ""), Array.isArray(owner.udzialy) ? owner.udzialy : []),
+    liczbaUdzialow: owner.liczbaUdzialow || krsShareholders.get(normalizePersonName([owner.pierwszeImie, owner.kolejneImiona, owner.nazwisko].filter(Boolean).join(" ")))?.liczbaUdzialow || null,
+    procentUdzialow: owner.procentUdzialow || krsShareholders.get(normalizePersonName([owner.pierwszeImie, owner.kolejneImiona, owner.nazwisko].filter(Boolean).join(" ")))?.procentUdzialow || null,
+    wartoscUdzialow: owner.wartoscUdzialow || krsShareholders.get(normalizePersonName([owner.pierwszeImie, owner.kolejneImiona, owner.nazwisko].filter(Boolean).join(" ")))?.wartoscUdzialow || null,
+    liczbaGlosow: owner.liczbaGlosow || krsShareholders.get(normalizePersonName([owner.pierwszeImie, owner.kolejneImiona, owner.nazwisko].filter(Boolean).join(" ")))?.liczbaGlosow || null,
+    procentGlosow: owner.procentGlosow || krsShareholders.get(normalizePersonName([owner.pierwszeImie, owner.kolejneImiona, owner.nazwisko].filter(Boolean).join(" ")))?.procentGlosow || null,
     udzialy: Array.isArray(owner.udzialy) ? owner.udzialy : [],
     spolka: { nazwa: company.nazwa || null, nip: company.nip || null, krs: company.krs || null },
     checkedAt: checkedAt.toISOString(),
@@ -814,6 +817,7 @@ function parseCrbrCompanies(xml: string) {
         udzialowiec: isCrbrShareholder(ownerBlock, ownershipDescriptions),
         liczbaUdzialow: readFirstXmlTag(ownerBlock, ["LiczbaUdzialow", "IloscUdzialow", "LiczbaAkcji"]),
         procentUdzialow: readFirstXmlTag(ownerBlock, ["ProcentUdzialow", "UdzialProcentowy", "WartoscProcentowaUdzialow", "ProcentAkcji"]),
+        wartoscUdzialow: readFirstXmlTag(ownerBlock, ["WartoscUdzialow", "WartoscNominalnaUdzialow", "WartoscAkcji"]),
         liczbaGlosow: readFirstXmlTag(ownerBlock, ["LiczbaGlosow", "IloscGlosow"]),
         procentGlosow: readFirstXmlTag(ownerBlock, ["ProcentGlosow", "UdzialProcentowyGlosow", "WartoscProcentowaGlosow"]),
         udzialy: shareBlocks.map((shareBlock) => ({
@@ -822,6 +826,7 @@ function parseCrbrCompanies(xml: string) {
           jednostka: readDictionaryValue(shareBlock, "JednostkaMiary"),
           liczbaUdzialow: readFirstXmlTag(shareBlock, ["LiczbaUdzialow", "IloscUdzialow", "LiczbaAkcji", "Ilosc"]),
           procentUdzialow: readFirstXmlTag(shareBlock, ["ProcentUdzialow", "UdzialProcentowy", "WartoscProcentowaUdzialow", "ProcentAkcji"]),
+          wartoscUdzialow: readFirstXmlTag(shareBlock, ["WartoscUdzialow", "WartoscNominalnaUdzialow", "WartoscAkcji"]),
           liczbaGlosow: readFirstXmlTag(shareBlock, ["LiczbaGlosow", "IloscGlosow"]),
           procentGlosow: readFirstXmlTag(shareBlock, ["ProcentGlosow", "UdzialProcentowyGlosow", "WartoscProcentowaGlosow"]),
         })),
@@ -872,8 +877,81 @@ function isCrbrShareholder(ownerBlock: string, ownershipDescriptions: string[]) 
     ownershipDescriptions.join(" "),
   ].filter(Boolean).join(" "));
   if (/\b(true|tak|1)\b/.test(text)) return true;
-  if (/\budzial|akcj|wlasci|glos/.test(text)) return true;
+  if (/\bwspolnik|\budzial|akcj|wlasci|glos/.test(text)) return true;
   return false;
+}
+
+function isShareholderRole(role: string, shares: unknown[]) {
+  const text = normalizeTextForMatch(role);
+  return shares.length > 0 || /\bwspolnik|\budzial|akcj|wlasci|glos/.test(text);
+}
+
+function collectKrsRepresentativeNames(krsCheck: OfficialCheck) {
+  const details = krsCheck.details as { data?: unknown };
+  const names = new Set<string>();
+  collectRepresentativeNames(details.data, "", names);
+  return names;
+}
+
+function collectKrsShareholderDetails(krsCheck: OfficialCheck) {
+  const details = krsCheck.details as { data?: unknown };
+  const shareholders = new Map<string, Record<string, string | null>>();
+  collectShareholderDetails(details.data, "", shareholders);
+  return shareholders;
+}
+
+function collectRepresentativeNames(value: unknown, context: string, names: Set<string>) {
+  if (!value || typeof value !== "object") return;
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectRepresentativeNames(item, context, names));
+    return;
+  }
+
+  const record = value as Record<string, unknown>;
+  const nextContext = normalizeTextForMatch(`${context} ${Object.keys(record).join(" ")}`);
+  const firstName = firstText(record, ["imie", "imiona", "pierwszeImie", "pierwsze_imie"]);
+  const lastName = firstText(record, ["nazwisko", "nazwiskoNazwa", "nazwisko_nazwa"]);
+  if (firstName && lastName && /\breprezent|zarzad|prokur|organ/.test(nextContext)) {
+    names.add(normalizePersonName(`${firstName} ${lastName}`));
+  }
+
+  Object.entries(record).forEach(([key, nested]) => {
+    collectRepresentativeNames(nested, `${nextContext} ${key}`, names);
+  });
+}
+
+function collectShareholderDetails(value: unknown, context: string, shareholders: Map<string, Record<string, string | null>>) {
+  if (!value || typeof value !== "object") return;
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectShareholderDetails(item, context, shareholders));
+    return;
+  }
+
+  const record = value as Record<string, unknown>;
+  const nextContext = normalizeTextForMatch(`${context} ${Object.keys(record).join(" ")}`);
+  const firstName = firstText(record, ["imie", "imiona", "pierwszeImie", "pierwsze_imie"]);
+  const lastName = firstText(record, ["nazwisko", "nazwiskoNazwa", "nazwisko_nazwa"]);
+  const isShareholderContext = /\bwspolnik|\budzial|akcj|glos|kapital/.test(nextContext);
+
+  if (firstName && lastName && isShareholderContext) {
+    const name = normalizePersonName(`${firstName} ${lastName}`);
+    const existing = shareholders.get(name) || {};
+    shareholders.set(name, {
+      liczbaUdzialow: existing.liczbaUdzialow || firstDeepText(record, ["liczbaUdzialow", "iloscUdzialow", "liczbaAkcji", "ilosc"]),
+      procentUdzialow: existing.procentUdzialow || firstDeepText(record, ["procentUdzialow", "udzialProcentowy", "procentAkcji"]),
+      wartoscUdzialow: existing.wartoscUdzialow || firstDeepText(record, ["wartoscUdzialow", "wartoscNominalnaUdzialow", "wartoscAkcji", "wartosc"]),
+      liczbaGlosow: existing.liczbaGlosow || firstDeepText(record, ["liczbaGlosow", "iloscGlosow"]),
+      procentGlosow: existing.procentGlosow || firstDeepText(record, ["procentGlosow", "udzialProcentowyGlosow"]),
+    });
+  }
+
+  Object.entries(record).forEach(([key, nested]) => {
+    collectShareholderDetails(nested, `${nextContext} ${key}`, shareholders);
+  });
+}
+
+function normalizePersonName(value: string) {
+  return normalizeTextForMatch(value).replace(/\s+/g, " ").trim();
 }
 
 function readOwnershipDescription(xml: string) {
@@ -1027,7 +1105,7 @@ async function buildAmlReportPdf(input: {
         owner.rola ? `rola: ${owner.rola}` : null,
         owner.udzialowiec !== null && owner.udzialowiec !== undefined ? `udziałowiec: ${owner.udzialowiec ? "TAK" : "NIE"}` : null,
         owner.reprezentant !== null && owner.reprezentant !== undefined ? `reprezentant: ${owner.reprezentant ? "TAK" : "NIE"}` : null,
-        owner.liczbaUdzialow || owner.procentUdzialow ? `udziały: ${[owner.liczbaUdzialow, owner.procentUdzialow].filter(Boolean).join(" / ")}` : null,
+        owner.liczbaUdzialow || owner.procentUdzialow || owner.wartoscUdzialow ? `udziały: ${[owner.liczbaUdzialow, owner.procentUdzialow, owner.wartoscUdzialow].filter(Boolean).join(" / ")}` : null,
         owner.liczbaGlosow || owner.procentGlosow ? `głosy: ${[owner.liczbaGlosow, owner.procentGlosow].filter(Boolean).join(" / ")}` : null,
         owner.obywatelstwo ? `obywatelstwo: ${owner.obywatelstwo}` : null,
         owner.krajZamieszkania ? `kraj: ${owner.krajZamieszkania}` : null,

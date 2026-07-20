@@ -361,7 +361,6 @@ function RegistryDetails({ register }: { register: AmlRegisterRecord | null }) {
   const vat = asRecord(registry.bialaListaVat);
   const owners = Array.isArray(register?.beneficjenci_rzeczywisci) ? register.beneficjenci_rzeczywisci : [];
   const pkdCodes = Array.isArray(register?.kody_pkd) ? register.kody_pkd : [];
-  const isKrsEntity = Boolean(identifiers.krs || register?.numer_krs);
 
   return (
     <section style={detailsSectionStyle}>
@@ -377,13 +376,6 @@ function RegistryDetails({ register }: { register: AmlRegisterRecord | null }) {
             <Definition label="KRS" value={asText(identifiers.krs || register.numer_krs)} />
             <Definition label="Rejestr" value={asText(identifiers.rejestr)} />
             <Definition label="VAT" value={vat.statusVat ? `VAT ${String(vat.statusVat).toLowerCase()}` : "-"} />
-          </div>
-          <div style={registryPanelStyle}>
-            <h4 style={registryTitleStyle}>Statusy źródeł</h4>
-            <Definition label="KRS" value={sourceStatusLabel(register.krs_status || "")} />
-            <Definition label="VAT" value={sourceStatusLabel(asText(asRecord(registry.statusy).vat))} />
-            <Definition label="Status CRBR" value={register.crbr_status ? registerStatusText(register.crbr_status) : "Do weryfikacji"} />
-            {!isKrsEntity && <Definition label="CEIDG" value={sourceStatusLabel(asText(asRecord(registry.statusy).ceidg))} />}
           </div>
           <div style={beneficialOwnersPanelStyle}>
             <h4 style={registryTitleStyle}>Beneficjenci rzeczywiści z CRBR</h4>
@@ -796,7 +788,7 @@ const tabPanelLabelStyle: CSSProperties = { color: colors.navy, fontSize: "14px"
 const registryGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "12px", alignItems: "stretch" };
 const registryPanelStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "16px", background: colors.inputBackground };
 const registryPanelWideStyle: CSSProperties = { ...registryPanelStyle, gridColumn: "1 / -1" };
-const beneficialOwnersPanelStyle: CSSProperties = { ...registryPanelStyle, minHeight: "180px", gridColumn: "1 / -1" };
+const beneficialOwnersPanelStyle: CSSProperties = { ...registryPanelStyle, minHeight: "180px" };
 const beneficialOwnersListStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "10px" };
 const beneficialOwnerItemStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, padding: "12px" };
 const beneficialOwnerNameStyle: CSSProperties = { display: "block", color: colors.navy, fontSize: "14px", lineHeight: 1.35 };

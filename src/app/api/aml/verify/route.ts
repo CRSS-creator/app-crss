@@ -792,12 +792,7 @@ function extractCrbrBeneficialOwners(check: OfficialCheck, checkedAt: Date) {
     checkedAt: checkedAt.toISOString(),
   })));
 
-  return owners.length > 0 ? owners : [{
-    source: "CRBR",
-    status: check.status,
-    label: check.label,
-    checkedAt: checkedAt.toISOString(),
-  }];
+  return owners;
 }
 
 function collectPepSubjects(beneficialOwners: Array<Record<string, unknown>>, krsCheck: OfficialCheck) {

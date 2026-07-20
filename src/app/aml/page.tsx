@@ -468,9 +468,11 @@ function AmlTabContent({
 function AmlDatePicker({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   const [open, setOpen] = useState(false);
   const [viewDate, setViewDate] = useState(() => dateFromInput(value) || new Date());
+  const [draft, setDraft] = useState(() => value ? formatDate(value) : "");
   const days = calendarDays(viewDate);
 
   useEffect(() => {
+    setDraft(value ? formatDate(value) : "");
     if (value) setViewDate(dateFromInput(value) || new Date());
   }, [value]);
 
@@ -484,12 +486,45 @@ function AmlDatePicker({ value, onChange }: { value: string; onChange: (value: s
     setOpen(false);
   }
 
+  function commitTypedDate(rawValue = draft) {
+    const parsed = inputValueFromPolishDate(rawValue);
+    if (parsed) {
+      onChange(parsed);
+      setDraft(formatDate(parsed));
+      setViewDate(dateFromInput(parsed) || new Date());
+      return;
+    }
+    if (!rawValue.trim()) onChange("");
+    setDraft(value ? formatDate(value) : "");
+  }
+
   return (
     <div style={datePickerWrapStyle}>
-      <button type="button" style={dateInputButtonStyle} onClick={() => setOpen((current) => !current)}>
-        <span style={value ? dateInputValueStyle : dateInputPlaceholderStyle}>{value ? formatDate(value) : "dd.mm.rrrr"}</span>
-        <CalendarDays size={18} />
-      </button>
+      <div style={dateInputWrapStyle}>
+        <input
+          type="text"
+          inputMode="numeric"
+          value={draft}
+          placeholder="dd.mm.rrrr"
+          style={dateTextInputStyle}
+          onChange={(event) => setDraft(event.target.value)}
+          onBlur={() => commitTypedDate()}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              commitTypedDate();
+              setOpen(false);
+            }
+            if (event.key === "Escape") {
+              setDraft(value ? formatDate(value) : "");
+              setOpen(false);
+            }
+          }}
+        />
+        <button type="button" style={dateIconButtonStyle} onClick={() => setOpen((current) => !current)} aria-label="Wybierz datę z kalendarza">
+          <CalendarDays size={18} />
+        </button>
+      </div>
       {open && (
         <div style={dateCalendarStyle}>
           <div style={dateCalendarHeaderStyle}>
@@ -820,6 +855,19 @@ function dateToInputValue(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
+function inputValueFromPolishDate(value: string) {
+  const trimmed = value.trim();
+  const polish = trimmed.match(/^(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{4})$/);
+  const iso = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  const day = polish ? Number(polish[1]) : iso ? Number(iso[3]) : 0;
+  const month = polish ? Number(polish[2]) : iso ? Number(iso[2]) : 0;
+  const year = polish ? Number(polish[3]) : iso ? Number(iso[1]) : 0;
+  if (!day || !month || !year) return null;
+  const date = new Date(year, month - 1, day, 12);
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null;
+  return dateToInputValue(date);
+}
+
 function calendarDays(viewDate: Date) {
   const firstDay = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1, 12);
   const startOffset = (firstDay.getDay() + 6) % 7;
@@ -1020,9 +1068,9 @@ const secondaryButtonStyle: CSSProperties = { minHeight: "46px", padding: "0 16p
 const nextVerificationFieldStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "6px", width: "210px" };
 const nextVerificationLabelStyle: CSSProperties = { color: colors.muted, fontSize: "12px", fontWeight: 850, textTransform: "uppercase" };
 const datePickerWrapStyle: CSSProperties = { position: "relative" };
-const dateInputButtonStyle: CSSProperties = { minHeight: "46px", width: "100%", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.inputBackground, color: colors.navy, padding: "0 12px", fontSize: "15px", fontWeight: 850, display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", cursor: "pointer", textAlign: "left" };
-const dateInputValueStyle: CSSProperties = { color: colors.text, fontWeight: 850 };
-const dateInputPlaceholderStyle: CSSProperties = { color: colors.navy, fontWeight: 850 };
+const dateInputWrapStyle: CSSProperties = { minHeight: "46px", width: "100%", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.inputBackground, display: "flex", alignItems: "center", gap: "6px", padding: "0 8px 0 12px" };
+const dateTextInputStyle: CSSProperties = { width: "100%", minWidth: 0, border: "none", outline: "none", background: "transparent", color: colors.navy, fontSize: "15px", fontWeight: 850 };
+const dateIconButtonStyle: CSSProperties = { width: "34px", height: "34px", border: "none", borderRadius: radius.button, background: "transparent", color: colors.navy, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flex: "0 0 auto" };
 const dateCalendarStyle: CSSProperties = { position: "absolute", top: "calc(100% + 8px)", left: 0, zIndex: 90, width: "300px", border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.white, boxShadow: shadow.card, padding: "12px" };
 const dateCalendarHeaderStyle: CSSProperties = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", marginBottom: "10px", color: colors.navy, textTransform: "capitalize" };
 const dateNavButtonStyle: CSSProperties = { width: "34px", height: "34px", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.inputBackground, color: colors.navy, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer" };

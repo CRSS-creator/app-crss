@@ -153,9 +153,12 @@ function AmlContent() {
       <section style={cardStyle}>
         <div style={sectionHeaderStyle}>
           <div>
-            <h2 style={sectionTitleStyle}>Podmioty z onboardingu</h2>
-            <p style={sectionHintStyle}>Szczegóły otwierają pełną historię AML i zapisane raporty weryfikacji.</p>
+            <h2 style={sectionTitleStyle}>Wszyscy klienci</h2>
+            <p style={sectionHintStyle}>Lista obejmuje wszystkich klientów w aplikacji. Szczegóły otwierają pełną historię AML i zapisane raporty weryfikacji.</p>
           </div>
+        </div>
+
+        <div style={searchRowStyle}>
           <input
             type="search"
             value={searchTerm}
@@ -163,12 +166,17 @@ function AmlContent() {
             placeholder="Szukaj po kliencie, NIP, opiekunie lub statusie"
             style={searchInputStyle}
           />
+          {searchTerm && (
+            <button type="button" style={clearSearchButtonStyle} onClick={() => setSearchTerm("")}>
+              Wyczyść
+            </button>
+          )}
         </div>
 
         {loading ? (
           <p style={emptyStyle}>Ładowanie rejestru AML...</p>
         ) : rows.length === 0 ? (
-          <p style={emptyStyle}>Brak klientów w onboardingu do pokazania w rejestrze AML.</p>
+          <p style={emptyStyle}>Brak klientów do pokazania w rejestrze AML.</p>
         ) : filteredRows.length === 0 ? (
           <p style={emptyStyle}>Brak wyników dla wpisanej frazy.</p>
         ) : (
@@ -424,7 +432,6 @@ function buildRows(
   const registersByClient = new Map(registers.map((register) => [register.klient_id, register]));
 
   return clients
-    .filter((client) => String(client.status_klienta || "").toLowerCase() === "onboarding")
     .map((client) => ({
       client,
       stage: amlStagesByClient.get(client.id) || null,
@@ -650,18 +657,9 @@ const pageStyle: CSSProperties = { display: "flex", flexDirection: "column", gap
 const headerStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "24px", alignItems: "flex-start" };
 const eyebrowStyle: CSSProperties = { margin: "0 0 8px", fontSize: "13px", fontWeight: 850, letterSpacing: "0.08em", color: colors.red, textTransform: "uppercase" };
 const titleStyle: CSSProperties = { margin: 0, fontSize: "34px", lineHeight: 1.15, color: colors.navy };
-const searchInputStyle: CSSProperties = {
-  width: "min(420px, 100%)",
-  minHeight: "46px",
-  border: `1px solid ${colors.border}`,
-  borderRadius: radius.button,
-  background: colors.white,
-  color: colors.text,
-  padding: "0 16px",
-  fontSize: "15px",
-  fontWeight: 700,
-  outline: "none",
-};
+const searchRowStyle: CSSProperties = { display: "flex", alignItems: "center", gap: "12px", padding: "18px 24px 18px" };
+const searchInputStyle: CSSProperties = { width: "100%", flex: "1 1 auto", minWidth: 0, border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "13px 16px", background: colors.inputBackground, color: colors.text, fontSize: "15px", fontWeight: 650, outline: "none" };
+const clearSearchButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "12px 14px", background: colors.white, color: colors.navy, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" };
 const statsGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "14px" };
 const statCardStyle: CSSProperties = { minHeight: "92px", border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.card, boxShadow: shadow.soft, padding: "20px", display: "flex", alignItems: "center", gap: "16px" };
 const statIconStyle: CSSProperties = { width: "44px", height: "44px", borderRadius: radius.button, display: "inline-flex", alignItems: "center", justifyContent: "center" };

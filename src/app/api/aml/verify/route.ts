@@ -150,7 +150,7 @@ export async function POST(request: NextRequest) {
       wykonana_by: auth.requesterId,
       status: "wykonana",
       wynik: result,
-      zrodla: checks.map(sourceAuditEntry),
+      zrodla: checks.map((check) => ({ source: check.source, status: check.status, label: check.label })),
       dane: { checks, dane_rejestrowe: registryDetails, beneficjenci_rzeczywisci: beneficialOwners, kody_pkd: pkdCodes },
       vat_status: checksVat ? (vatCheck.status === "ok" ? String(vatSubject?.statusVat || "sprawdzono") : vatCheck.status) : "potwierdzono_zwolnienie",
       vies_status: checksVies ? statusForSource(checks, "VIES") : "potwierdzono_brak_vat_ue",
@@ -201,7 +201,7 @@ export async function POST(request: NextRequest) {
     zmiany: {
       status: nextStatus,
       wynik: result,
-      sources: checks.map(sourceAuditEntry),
+      sources: checks.map((check) => ({ source: check.source, status: check.status, label: check.label })),
       dane_rejestrowe: registryDetails,
       beneficjenci_rzeczywisci: beneficialOwners,
       kody_pkd: pkdCodes,
@@ -538,19 +538,6 @@ function statusForAnySource(checks: OfficialCheck[], sources: string[]) {
   return "nie_sprawdzono";
 }
 
-function sourceAuditEntry(check: OfficialCheck) {
-  const details = check.details as Record<string, unknown>;
-  return {
-    source: check.source,
-    status: check.status,
-    label: check.label,
-    identyfikatorZapytania: details.identyfikatorZapytania || details.requestId || details.requestDate || null,
-    identyfikatorTechniczny: details.identyfikatorTechniczny || null,
-    identyfikatorZewnetrzny: details.requestId || details.requestDate || null,
-    checkedAt: details.checkedAt || null,
-  };
-}
-
 function createSourceQueryId(source: string) {
   const sourcePart = normalizeTextForMatch(source).replace(/\s+/g, "-").toUpperCase().slice(0, 18) || "SOURCE";
   const datePart = new Date().toISOString().replace(/[-:TZ.]/g, "").slice(0, 14);
@@ -727,7 +714,6 @@ function buildRegistryDetails(input: {
       ceidg: statusForSource(input.checks, "CEIDG"),
       crbr: statusForSource(input.checks, "CRBR"),
     },
-    zrodlaZapytan: input.checks.map(sourceAuditEntry),
     kodyPkd: input.pkdCodes,
     ceidg: input.ceidgCheck?.status === "ok" ? {
       liczbaWpisow: Array.isArray(ceidgDetails?.companies) ? ceidgDetails.companies.length : 0,
@@ -770,6 +756,13 @@ function extractCrbrBeneficialOwners(check: OfficialCheck, checkedAt: Date) {
     obywatelstwo: owner.obywatelstwo || null,
     krajZamieszkania: owner.krajZamieszkania || null,
     dataUrodzenia: owner.dataUrodzenia || null,
+    rola: owner.rola || null,
+    reprezentant: owner.reprezentant ?? null,
+    udzialowiec: owner.udzialowiec ?? null,
+    liczbaUdzialow: owner.liczbaUdzialow || null,
+    procentUdzialow: owner.procentUdzialow || null,
+    liczbaGlosow: owner.liczbaGlosow || null,
+    procentGlosow: owner.procentGlosow || null,
     udzialy: Array.isArray(owner.udzialy) ? owner.udzialy : [],
     spolka: { nazwa: company.nazwa || null, nip: company.nip || null, krs: company.krs || null },
     checkedAt: checkedAt.toISOString(),
@@ -805,20 +798,35 @@ function parseCrbrCompanies(xml: string) {
       readXmlTag(block, "NrDomu") || readXmlTag(block, "Numer"),
       readXmlTag(block, "NrLokalu"),
     ].filter(Boolean).join(" "),
-    beneficjenci: xmlBlocks(block, "BeneficjentRzeczywisty").map((ownerBlock) => ({
-      pierwszeImie: readXmlTag(ownerBlock, "PierwszeImie"),
-      kolejneImiona: readXmlTag(ownerBlock, "KolejneImiona"),
-      nazwisko: readXmlTag(ownerBlock, "Nazwisko"),
-      pesel: readXmlTag(ownerBlock, "PESEL"),
-      dataUrodzenia: readXmlTag(ownerBlock, "DataUrodzenia"),
-      obywatelstwo: readDictionaryValue(ownerBlock, "Obywatelstwo"),
-      krajZamieszkania: readDictionaryValue(ownerBlock, "KrajZamieszkania"),
-      udzialy: xmlBlocks(ownerBlock, "InformacjaOUdzialach").map((shareBlock) => ({
-        rodzaj: readOwnershipDescription(shareBlock),
-        ilosc: readXmlTag(shareBlock, "Ilosc"),
-        jednostka: readDictionaryValue(shareBlock, "JednostkaMiary"),
-      })),
-    })),
+    beneficjenci: xmlBlocks(block, "BeneficjentRzeczywisty").map((ownerBlock) => {
+      const shareBlocks = xmlBlocks(ownerBlock, "InformacjaOUdzialach");
+      const ownershipDescriptions = shareBlocks.map(readOwnershipDescription).filter(Boolean) as string[];
+      return {
+        pierwszeImie: readXmlTag(ownerBlock, "PierwszeImie"),
+        kolejneImiona: readXmlTag(ownerBlock, "KolejneImiona"),
+        nazwisko: readXmlTag(ownerBlock, "Nazwisko"),
+        pesel: readXmlTag(ownerBlock, "PESEL"),
+        dataUrodzenia: readXmlTag(ownerBlock, "DataUrodzenia"),
+        obywatelstwo: readDictionaryValue(ownerBlock, "Obywatelstwo"),
+        krajZamieszkania: readDictionaryValue(ownerBlock, "KrajZamieszkania"),
+        rola: readBeneficiaryRole(ownerBlock, ownershipDescriptions),
+        reprezentant: isCrbrRepresentative(ownerBlock, ownershipDescriptions),
+        udzialowiec: isCrbrShareholder(ownerBlock, ownershipDescriptions),
+        liczbaUdzialow: readFirstXmlTag(ownerBlock, ["LiczbaUdzialow", "IloscUdzialow", "LiczbaAkcji"]),
+        procentUdzialow: readFirstXmlTag(ownerBlock, ["ProcentUdzialow", "UdzialProcentowy", "WartoscProcentowaUdzialow", "ProcentAkcji"]),
+        liczbaGlosow: readFirstXmlTag(ownerBlock, ["LiczbaGlosow", "IloscGlosow"]),
+        procentGlosow: readFirstXmlTag(ownerBlock, ["ProcentGlosow", "UdzialProcentowyGlosow", "WartoscProcentowaGlosow"]),
+        udzialy: shareBlocks.map((shareBlock) => ({
+          rodzaj: readOwnershipDescription(shareBlock),
+          ilosc: readXmlTag(shareBlock, "Ilosc"),
+          jednostka: readDictionaryValue(shareBlock, "JednostkaMiary"),
+          liczbaUdzialow: readFirstXmlTag(shareBlock, ["LiczbaUdzialow", "IloscUdzialow", "LiczbaAkcji", "Ilosc"]),
+          procentUdzialow: readFirstXmlTag(shareBlock, ["ProcentUdzialow", "UdzialProcentowy", "WartoscProcentowaUdzialow", "ProcentAkcji"]),
+          liczbaGlosow: readFirstXmlTag(shareBlock, ["LiczbaGlosow", "IloscGlosow"]),
+          procentGlosow: readFirstXmlTag(shareBlock, ["ProcentGlosow", "UdzialProcentowyGlosow", "WartoscProcentowaGlosow"]),
+        })),
+      };
+    }),
   }));
 }
 
@@ -826,6 +834,46 @@ function readDictionaryValue(xml: string, tag: string) {
   const block = xmlBlocks(xml, tag)[0];
   if (!block) return readXmlTag(xml, tag);
   return readXmlTag(block, "Nazwa") || readXmlTag(block, "Opis") || readXmlTag(block, "Kod") || readXmlTag(xml, tag);
+}
+
+function readFirstXmlTag(xml: string, tags: string[]) {
+  for (const tag of tags) {
+    const value = readXmlTag(xml, tag);
+    if (value) return value;
+  }
+  return null;
+}
+
+function readBeneficiaryRole(ownerBlock: string, ownershipDescriptions: string[]) {
+  return readDictionaryValue(ownerBlock, "RodzajBeneficjenta")
+    || readDictionaryValue(ownerBlock, "Funkcja")
+    || readDictionaryValue(ownerBlock, "Rola")
+    || ownershipDescriptions.join("; ")
+    || null;
+}
+
+function isCrbrRepresentative(ownerBlock: string, ownershipDescriptions: string[]) {
+  const text = normalizeTextForMatch([
+    readXmlTag(ownerBlock, "CzyReprezentant"),
+    readDictionaryValue(ownerBlock, "Funkcja"),
+    readDictionaryValue(ownerBlock, "Rola"),
+    ownershipDescriptions.join(" "),
+  ].filter(Boolean).join(" "));
+  if (/\b(true|tak|1)\b/.test(text)) return true;
+  if (/\breprezent/.test(text) || /\bzarzad/.test(text) || /\bprokur/.test(text)) return true;
+  return false;
+}
+
+function isCrbrShareholder(ownerBlock: string, ownershipDescriptions: string[]) {
+  const text = normalizeTextForMatch([
+    readXmlTag(ownerBlock, "CzyUdzialowiec"),
+    readDictionaryValue(ownerBlock, "Funkcja"),
+    readDictionaryValue(ownerBlock, "Rola"),
+    ownershipDescriptions.join(" "),
+  ].filter(Boolean).join(" "));
+  if (/\b(true|tak|1)\b/.test(text)) return true;
+  if (/\budzial|akcj|wlasci|glos/.test(text)) return true;
+  return false;
 }
 
 function readOwnershipDescription(xml: string) {
@@ -973,7 +1021,17 @@ async function buildAmlReportPdf(input: {
   drawInfoBox("Beneficjenci rzeczywiści", input.beneficialOwners.length > 0
     ? input.beneficialOwners.slice(0, 8).map((owner, index) => [
       `${index + 1}.`,
-      [owner.label, owner.pesel ? `PESEL: ${owner.pesel}` : null, owner.obywatelstwo ? `obywatelstwo: ${owner.obywatelstwo}` : null, owner.krajZamieszkania ? `kraj: ${owner.krajZamieszkania}` : null].filter(Boolean).join(" | ") || "-"
+      [
+        owner.label,
+        owner.pesel ? `PESEL: ${owner.pesel}` : null,
+        owner.rola ? `rola: ${owner.rola}` : null,
+        owner.udzialowiec !== null && owner.udzialowiec !== undefined ? `udziałowiec: ${owner.udzialowiec ? "TAK" : "NIE"}` : null,
+        owner.reprezentant !== null && owner.reprezentant !== undefined ? `reprezentant: ${owner.reprezentant ? "TAK" : "NIE"}` : null,
+        owner.liczbaUdzialow || owner.procentUdzialow ? `udziały: ${[owner.liczbaUdzialow, owner.procentUdzialow].filter(Boolean).join(" / ")}` : null,
+        owner.liczbaGlosow || owner.procentGlosow ? `głosy: ${[owner.liczbaGlosow, owner.procentGlosow].filter(Boolean).join(" / ")}` : null,
+        owner.obywatelstwo ? `obywatelstwo: ${owner.obywatelstwo}` : null,
+        owner.krajZamieszkania ? `kraj: ${owner.krajZamieszkania}` : null,
+      ].filter(Boolean).join(" | ") || "-"
     ])
     : [["-", "Brak zapisanych beneficjentów rzeczywistych z CRBR."]]
   );

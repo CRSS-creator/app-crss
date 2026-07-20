@@ -604,7 +604,6 @@ function RegistryDetails({ register }: { register: AmlRegisterRecord | null }) {
   const vat = asRecord(registry.bialaListaVat);
   const pepOsint = asRecord(registry.pepOsint);
   const pepFindings = Array.isArray(pepOsint.findings) ? pepOsint.findings as Array<Record<string, unknown>> : [];
-  const sourceQueries = Array.isArray(registry.zrodlaZapytan) ? registry.zrodlaZapytan as Array<Record<string, unknown>> : [];
   const owners = Array.isArray(register?.beneficjenci_rzeczywisci) ? register.beneficjenci_rzeczywisci : [];
   const pkdCodes = Array.isArray(register?.kody_pkd) ? register.kody_pkd : [];
 
@@ -632,6 +631,11 @@ function RegistryDetails({ register }: { register: AmlRegisterRecord | null }) {
                     <strong style={beneficialOwnerNameStyle}>{asText(owner.label)}</strong>
                     <div style={beneficialOwnerMetaStyle}>
                       <span>PESEL: {asText(owner.pesel)}</span>
+                      <span>Rola: {beneficiaryRoleLabel(owner)}</span>
+                      <span>Udziałowiec: {yesNoLabel(owner.udzialowiec)}</span>
+                      <span>Reprezentant: {yesNoLabel(owner.reprezentant)}</span>
+                      <span>Udziały: {beneficiarySharesLabel(owner)}</span>
+                      <span>Głosy: {beneficiaryVotesLabel(owner)}</span>
                       <span>Obywatelstwo: {asText(owner.obywatelstwo)}</span>
                       <span>Kraj zamieszkania: {asText(owner.krajZamieszkania)}</span>
                       <span>Status: {registerStatusText(asText(owner.status))}</span>
@@ -641,25 +645,6 @@ function RegistryDetails({ register }: { register: AmlRegisterRecord | null }) {
               </div>
             ) : (
               <p style={emptySmallStyle}>Brak zapisanych beneficjentów z CRBR.</p>
-            )}
-          </div>
-          <div style={registryPanelWideStyle}>
-            <h4 style={registryTitleStyle}>Identyfikatory zapytań w źródłach</h4>
-            {sourceQueries.length > 0 ? (
-              <div style={sourceQueriesGridStyle}>
-                {sourceQueries.map((source, index) => (
-                  <div key={`${asText(source.source)}-${index}`} style={sourceQueryItemStyle}>
-                    <strong style={sourceQueryTitleStyle}>{asText(source.source)}</strong>
-                    <span>Status: {sourceStatusLabel(asText(source.status))}</span>
-                    <span>Identyfikator: {asText(source.identyfikatorZapytania)}</span>
-                    {source.identyfikatorTechniczny ? <span>Techniczny: {asText(source.identyfikatorTechniczny)}</span> : null}
-                    {source.identyfikatorZewnetrzny ? <span>Zewnętrzny: {asText(source.identyfikatorZewnetrzny)}</span> : null}
-                    <span>Data: {formatDateTime(asText(source.checkedAt))}</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p style={emptySmallStyle}>Brak zapisanych identyfikatorów zapytań dla źródeł.</p>
             )}
           </div>
           <div style={registryPanelWideStyle}>
@@ -793,9 +778,34 @@ function VerificationItem({ verification, profilesById }: { verification: AmlVer
 function visibleVerificationSources(verification: AmlVerificationRecord) {
   const sources = verification.zrodla || [];
   const hasKrs = sources.some((source) => String(source.source || "").toLowerCase().includes("krs"));
+  const withoutPep = sources.filter((source) => String(source.source || "").toLowerCase() !== "pep");
   return hasKrs
-    ? sources.filter((source) => !String(source.source || "").toLowerCase().includes("ceidg"))
-    : sources;
+    ? withoutPep.filter((source) => !String(source.source || "").toLowerCase().includes("ceidg"))
+    : withoutPep;
+}
+
+function beneficiaryRoleLabel(owner: Record<string, unknown>) {
+  return asText(owner.rola || owner.typBeneficjenta);
+}
+
+function yesNoLabel(value: unknown) {
+  if (value === true) return "TAK";
+  if (value === false) return "NIE";
+  return "-";
+}
+
+function beneficiarySharesLabel(owner: Record<string, unknown>) {
+  const direct = [owner.liczbaUdzialow, owner.procentUdzialow].filter(Boolean).join(" / ");
+  if (direct) return direct;
+  const shares = Array.isArray(owner.udzialy) ? owner.udzialy as Array<Record<string, unknown>> : [];
+  const values = shares
+    .map((share) => [share.ilosc, share.jednostka].filter(Boolean).join(" "))
+    .filter(Boolean);
+  return values.join(", ") || "-";
+}
+
+function beneficiaryVotesLabel(owner: Record<string, unknown>) {
+  return [owner.liczbaGlosow, owner.procentGlosow].filter(Boolean).join(" / ") || "-";
 }
 
 function isArchivedVerification(verification: AmlVerificationRecord) {
@@ -1199,9 +1209,6 @@ const beneficialOwnersListStyle: CSSProperties = { display: "grid", gridTemplate
 const beneficialOwnerItemStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, padding: "12px" };
 const beneficialOwnerNameStyle: CSSProperties = { display: "block", color: colors.navy, fontSize: "14px", lineHeight: 1.35 };
 const beneficialOwnerMetaStyle: CSSProperties = { display: "grid", gap: "5px", marginTop: "8px", color: colors.muted, fontSize: "12px", fontWeight: 750, lineHeight: 1.35 };
-const sourceQueriesGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "10px" };
-const sourceQueryItemStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, padding: "12px", display: "grid", gap: "5px", color: colors.muted, fontSize: "12px", fontWeight: 750, lineHeight: 1.35, overflowWrap: "anywhere" };
-const sourceQueryTitleStyle: CSSProperties = { color: colors.navy, fontSize: "13px", lineHeight: 1.35 };
 const pepOsintContentStyle: CSSProperties = { display: "grid", gap: "10px" };
 const pepFindingsListStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "10px" };
 const pepFindingItemStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, padding: "12px", display: "grid", gap: "8px", color: colors.text, fontSize: "13px", lineHeight: 1.45 };

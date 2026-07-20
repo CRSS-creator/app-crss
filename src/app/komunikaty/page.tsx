@@ -247,13 +247,14 @@ function KomunikatyContent() {
 
     const result = await response.json().catch(() => ({}));
     setSending(false);
+    const diagnostics = formatWebhookDiagnostics(result.diagnostics);
 
     if (!response.ok) {
-      setResultMessage(result.error || "Nie udało się przekazać komunikatu do wysyłki.");
+      setResultMessage(`${result.error || "Nie udało się przekazać komunikatu do wysyłki."}${diagnostics}`);
       return;
     }
 
-    setResultMessage(`Wysłano komunikat w ${result.batches || 0} paczkach UDW po maksymalnie ${result.batchSize || 10} adresów. Łącznie: ${result.sent || 0} adresów. Pominięto bez e-maila: ${result.skipped || 0}.`);
+    setResultMessage(`Wysłano komunikat w ${result.batches || 0} paczkach UDW po maksymalnie ${result.batchSize || 10} adresów. Łącznie: ${result.sent || 0} adresów. Pominięto bez e-maila: ${result.skipped || 0}.${diagnostics}`);
     await loadHistory();
   }
 
@@ -437,6 +438,16 @@ function normalizeFilterText(value: string | null | undefined) {
 
 function isSameOption(value: string | null | undefined, filterValue: string) {
   return normalizeFilterText(value) === normalizeFilterText(filterValue);
+}
+
+function formatWebhookDiagnostics(diagnostics: unknown) {
+  if (!diagnostics || typeof diagnostics !== "object") return "";
+  const data = diagnostics as { webhookMode?: unknown; webhookPath?: unknown; batches?: unknown };
+  const mode = typeof data.webhookMode === "string" ? data.webhookMode : null;
+  const path = typeof data.webhookPath === "string" ? data.webhookPath : null;
+  const batches = typeof data.batches === "number" ? data.batches : null;
+  if (!mode && !path && !batches) return "";
+  return ` Webhook: ${mode || "?"}${path ? ` ${path}` : ""}${batches ? `, paczki: ${batches}` : ""}.`;
 }
 
 function SummaryCard({ label, value }: { label: string; value: number }) {

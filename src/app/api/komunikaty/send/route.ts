@@ -52,6 +52,22 @@ function getWebhookUrl() {
   return { webhookUrl, error: null };
 }
 
+function webhookDiagnostics(webhookUrl: string, batches?: number) {
+  let path = "nieznana sciezka";
+  try {
+    const url = new URL(webhookUrl);
+    path = url.pathname;
+  } catch {
+    path = webhookUrl.includes("/webhook-test/") ? "/webhook-test/..." : webhookUrl.includes("/webhook/") ? "/webhook/..." : "nieprawidlowy URL";
+  }
+
+  return {
+    webhookMode: webhookUrl.includes("/webhook-test/") ? "test" : "production",
+    webhookPath: path,
+    batches,
+  };
+}
+
 async function getAuthorizedUser(request: NextRequest): Promise<AuthorizedResult> {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -279,6 +295,7 @@ export async function POST(request: NextRequest) {
 
   const html = buildHtmlMessage(message);
   const batches = chunkRecipients(recipients, BCC_BATCH_SIZE);
+  const diagnostics = webhookDiagnostics(webhookUrl, batches.length);
 
   for (let batchIndex = 0; batchIndex < batches.length; batchIndex += 1) {
     const batch = batches[batchIndex];
@@ -314,7 +331,10 @@ export async function POST(request: NextRequest) {
     } catch (error) {
       const details = error instanceof Error ? error.message : String(error);
       return NextResponse.json(
-        { error: `Nie udało się połączyć z automatyzacją n8n dla paczki ${batchIndex + 1}/${batches.length}. Szczegóły: ${details}` },
+        {
+          error: `Nie udało się połączyć z automatyzacją n8n dla paczki ${batchIndex + 1}/${batches.length}. Szczegóły: ${details}`,
+          diagnostics,
+        },
         { status: 502 }
       );
     }
@@ -326,6 +346,7 @@ export async function POST(request: NextRequest) {
           error: `Nie udało się przekazać paczki ${batchIndex + 1}/${batches.length} do n8n. ${errorDetails} Sprawdź workflow wysyłki komunikatów oraz pola: toEmail, bccEmails, subject i html.`,
           sent: batchIndex * BCC_BATCH_SIZE,
           failed: recipients.length - batchIndex * BCC_BATCH_SIZE,
+          diagnostics,
         },
         { status: 502 }
       );
@@ -338,6 +359,7 @@ export async function POST(request: NextRequest) {
           error: `n8n odebralo paczke ${batchIndex + 1}/${batches.length}, ale nie potwierdzilo wysylki po Gmailu. ${webhookConfirmation.details}`,
           sent: batchIndex * BCC_BATCH_SIZE,
           failed: recipients.length - batchIndex * BCC_BATCH_SIZE,
+          diagnostics,
         },
         { status: 502 }
       );
@@ -363,5 +385,6 @@ export async function POST(request: NextRequest) {
     batches: batches.length,
     batchSize: BCC_BATCH_SIZE,
     skipped: skippedCount,
+    diagnostics,
   });
 }

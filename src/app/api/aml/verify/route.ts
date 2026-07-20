@@ -17,7 +17,6 @@ const CRBR_SCHEMA_NAMESPACE = "http://www.mf.gov.pl/schematy/AP/ApiPrzegladoweCR
 const CRBR_API_URL = process.env.CRBR_API_URL || "https://bramka-crbr.mf.gov.pl:5058/uslugiBiznesowe/uslugiESB/AP/ApiPrzegladoweCRBR/2022/12/01";
 const CEIDG_API_TOKEN = process.env.CEIDG_API_TOKEN;
 const CEIDG_API_URL = process.env.CEIDG_API_URL || "https://dane.biznes.gov.pl/api/ceidg/v3/firmy";
-const OPENSANCTIONS_API_KEY = process.env.OPENSANCTIONS_API_KEY || process.env.OPEN_SANCTIONS_API_KEY;
 
 type VerifyPayload = {
   clientId?: string;
@@ -108,8 +107,6 @@ export async function POST(request: NextRequest) {
   const now = new Date();
   const pkdCodes = collectPkdCodes(ceidgCheck, krsCheck);
   const beneficialOwners = extractCrbrBeneficialOwners(crbrCheck, now);
-  const pepCheck = await verifyPep(collectPepSubjects(beneficialOwners, krsCheck));
-  checks.push(pepCheck);
   const result = summarizeResult(checks);
   const registryDetails = buildRegistryDetails({
     nip,
@@ -158,7 +155,7 @@ export async function POST(request: NextRequest) {
       vat_status: checksVat ? (vatCheck.status === "ok" ? String(vatSubject?.statusVat || "sprawdzono") : vatCheck.status) : "potwierdzono_zwolnienie",
       vies_status: checksVies ? statusForSource(checks, "VIES") : "potwierdzono_brak_vat_ue",
       krs_status: statusForSource(checks, "KRS"),
-      pep_status: statusForSource(checks, "PEP"),
+      pep_status: "nie_sprawdzono",
       sankcje_status: "do_dopiecia",
       numer_krs: krsNumber,
       numer_regon: regonNumber,
@@ -181,7 +178,7 @@ export async function POST(request: NextRequest) {
       ostatnia_weryfikacja_at: now.toISOString(),
       ostatnia_weryfikacja_by: auth.requesterId,
       ostatnia_weryfikacja_id: verification.id,
-      pep_status: statusForSource(checks, "PEP"),
+      pep_status: "nie_sprawdzono",
       sankcje_status: "do_dopiecia",
       dane_rejestrowe: registryDetails,
       beneficjenci_rzeczywisci: beneficialOwners,
@@ -514,65 +511,6 @@ async function verifyCrbr(nip: string, krs: string | null): Promise<OfficialChec
   }
 }
 
-async function verifyPep(subjects: string[]): Promise<OfficialCheck> {
-  const queryId = createSourceQueryId("PEP");
-  const uniqueSubjects = [...new Set(subjects.map((subject) => subject.trim()).filter(Boolean))].slice(0, 12);
-  if (uniqueSubjects.length === 0) {
-    return { source: "PEP", status: "ok", label: "Beneficjenci rzeczywiści i osoby powiązane nie znajdują się na liście PEP.", details: { identyfikatorZapytania: queryId, subjects: uniqueSubjects, checkedAt: new Date().toISOString(), source: "OpenSanctions PEP" } };
-  }
-  if (!OPENSANCTIONS_API_KEY) {
-    return {
-      source: "PEP",
-      status: "warning",
-      label: "PEP wymaga konfiguracji klucza OPENSANCTIONS_API_KEY.",
-      details: { identyfikatorZapytania: queryId, subjects: uniqueSubjects, checkedAt: new Date().toISOString(), source: "OpenSanctions PEP" },
-    };
-  }
-
-  const matches: Array<Record<string, unknown>> = [];
-  const errors: Array<Record<string, unknown>> = [];
-  for (const subject of uniqueSubjects) {
-    const url = `https://api.opensanctions.org/search/peps?limit=5&q=${encodeURIComponent(subject)}`;
-    try {
-      const response = await fetch(url, {
-        headers: { accept: "application/json", authorization: `ApiKey ${OPENSANCTIONS_API_KEY}` },
-      });
-      const data = await response.json().catch(() => null) as { results?: Array<Record<string, unknown>> } | null;
-      if (!response.ok) {
-        errors.push({ subject, httpStatus: response.status, data });
-        continue;
-      }
-      const subjectMatches = Array.isArray(data?.results) ? data.results : [];
-      subjectMatches.slice(0, 3).forEach((match) => matches.push({ subject, match }));
-    } catch (error) {
-      errors.push({ subject, message: errorMessage(error) });
-    }
-  }
-
-  if (matches.length > 0) {
-    return {
-      source: "PEP",
-      status: "warning",
-      label: "Znaleziono potencjalne dopasowania PEP. Wymagana analiza ręczna.",
-      details: { identyfikatorZapytania: queryId, subjects: uniqueSubjects, matches, errors, checkedAt: new Date().toISOString(), source: "OpenSanctions PEP" },
-    };
-  }
-  if (errors.length > 0) {
-    return {
-      source: "PEP",
-      status: "error",
-      label: "Nie udało się zakończyć screeningu PEP.",
-      details: { identyfikatorZapytania: queryId, subjects: uniqueSubjects, errors, checkedAt: new Date().toISOString(), source: "OpenSanctions PEP" },
-    };
-  }
-  return {
-    source: "PEP",
-    status: "ok",
-    label: "Beneficjenci rzeczywiści i osoby powiązane nie znajdują się na liście PEP.",
-    details: { identyfikatorZapytania: queryId, subjects: uniqueSubjects, checkedAt: new Date().toISOString(), source: "OpenSanctions PEP" },
-  };
-}
-
 function skippedCheck(source: string, label: string): OfficialCheck {
   return { source, status: "skipped", label, details: { identyfikatorZapytania: createSourceQueryId(source), checkedAt: new Date().toISOString() } };
 }
@@ -840,30 +778,6 @@ function extractCrbrBeneficialOwners(check: OfficialCheck, checkedAt: Date) {
   return owners;
 }
 
-function collectPepSubjects(beneficialOwners: Array<Record<string, unknown>>, krsCheck: OfficialCheck) {
-  const ownerNames = beneficialOwners
-    .map((owner) => String(owner.label || "").trim())
-    .filter((name) => name && !name.toLowerCase().includes("crbr") && !name.toLowerCase().includes("beneficjentów"));
-  const krsDetails = krsCheck.details as { data?: unknown };
-  return [...ownerNames, ...extractPersonNames(krsDetails.data)];
-}
-
-function extractPersonNames(value: unknown): string[] {
-  if (!value || typeof value !== "object") return [];
-  if (Array.isArray(value)) return value.flatMap(extractPersonNames);
-
-  const record = value as Record<string, unknown>;
-  const firstName = firstText(record, ["imie", "imiona", "pierwszeImie", "pierwsze_imie"]);
-  const lastName = firstText(record, ["nazwisko", "nazwiskoNazwa", "nazwisko_nazwa"]);
-  const directName = firstText(record, ["nazwa", "firma"]);
-  const current = firstName && lastName
-    ? [`${firstName} ${lastName}`]
-    : directName && /\s/.test(directName) && !/\b(sp\.|spółka|s\.a\.|fundacja|stowarzyszenie)\b/i.test(directName)
-      ? [directName]
-      : [];
-  return [...current, ...Object.values(record).flatMap(extractPersonNames)];
-}
-
 function normalizeNip(value: unknown) {
   return String(value || "").replace(/\D/g, "");
 }
@@ -1044,7 +958,6 @@ async function buildAmlReportPdf(input: {
   const krsCheck = input.checks.find((check) => check.source.includes("KRS"));
   const crbrCheck = input.checks.find((check) => check.source.includes("CRBR"));
   const sanctionsCheck = input.checks.find((check) => check.source.includes("sankcyjne"));
-  const pepCheck = input.checks.find((check) => check.source === "PEP");
 
   drawInfoBox("Identyfikatory", [
     ["NIP", asPdfText(identifiers.nip || input.nip)],
@@ -1071,15 +984,14 @@ async function buildAmlReportPdf(input: {
     ])
     : [["-", "Brak zapisanych kodów PKD."]]
   );
-  drawReportSection("PEP", [["PEP", pepCheck]]);
 
   y -= 8;
   drawText("Metryka raportu", 14, margin, navy, 60);
   drawText(`Raport pobrano i zapisano: ${input.createdAt.toLocaleString("pl-PL")}`, 9, margin, muted);
   drawText(`Użytkownik generujący: ${input.requesterName}`, 9, margin, muted);
   const sourceSummary = ceidgCheck
-    ? "Źródła: CEIDG, Biała Lista VAT MF, VIES, KRS MS, CRBR MF, OpenSanctions PEP i publiczna lista sankcyjna ONZ."
-    : "Źródła: Biała Lista VAT MF, VIES, KRS MS, CRBR MF, OpenSanctions PEP i publiczna lista sankcyjna ONZ.";
+    ? "Źródła: CEIDG, Biała Lista VAT MF, VIES, KRS MS, CRBR MF i publiczna lista sankcyjna ONZ."
+    : "Źródła: Biała Lista VAT MF, VIES, KRS MS, CRBR MF i publiczna lista sankcyjna ONZ.";
   drawText(sourceSummary, 9, margin, muted, 92);
 
   drawFooter(page, font);
@@ -1147,7 +1059,6 @@ function readLogoBytes() {
 }
 
 function statusLabelForReport(check: OfficialCheck) {
-  if (check.source === "PEP" && check.status === "ok") return "Nie figuruje";
   return statusLabel(check.status);
 }
 

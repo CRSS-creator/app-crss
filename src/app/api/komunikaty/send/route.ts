@@ -49,7 +49,11 @@ function getWebhookUrl() {
     };
   }
 
-  return { webhookUrl, error: null };
+  return { webhookUrl: normalizeBulkWebhookUrl(webhookUrl), error: null };
+}
+
+function normalizeBulkWebhookUrl(webhookUrl: string) {
+  return webhookUrl.replace(/powiadomienia-kadrowe\b/, "powiadomienia-zbiorcze");
 }
 
 function webhookDiagnostics(webhookUrl: string, batches?: number) {

@@ -508,7 +508,7 @@ async function verifyCrbr(nip: string, krs: string | null): Promise<OfficialChec
 async function verifyPep(subjects: string[]): Promise<OfficialCheck> {
   const uniqueSubjects = [...new Set(subjects.map((subject) => subject.trim()).filter(Boolean))].slice(0, 12);
   if (uniqueSubjects.length === 0) {
-    return { source: "PEP", status: "ok", label: "Beneficjenci rzeczywisci i osoby powiazane nie znajduja sie na liscie PEP.", details: { subjects: uniqueSubjects, checkedAt: new Date().toISOString(), source: "OpenSanctions PEP" } };
+    return { source: "PEP", status: "ok", label: "Beneficjenci rzeczywiści i osoby powiązane nie znajdują się na liście PEP.", details: { subjects: uniqueSubjects, checkedAt: new Date().toISOString(), source: "OpenSanctions PEP" } };
   }
   if (!OPENSANCTIONS_API_KEY) {
     return {
@@ -558,7 +558,7 @@ async function verifyPep(subjects: string[]): Promise<OfficialCheck> {
   return {
     source: "PEP",
     status: "ok",
-    label: "Beneficjenci rzeczywisci i osoby powiazane nie znajduja sie na liscie PEP.",
+    label: "Beneficjenci rzeczywiści i osoby powiązane nie znajdują się na liście PEP.",
     details: { subjects: uniqueSubjects, checkedAt: new Date().toISOString(), source: "OpenSanctions PEP" },
   };
 }
@@ -989,13 +989,12 @@ async function buildAmlReportPdf(input: {
     page.drawText("CRSS", { x: margin, y: 802, size: 28, font, color: navy });
   }
   page.drawText("Skaner AML", { x: margin + 78, y: 802, size: 22, font, color: navy });
-  page.drawText("Przeciwdzialanie praniu pieniedzy i finansowaniu terroryzmu", { x: margin + 78, y: 782, size: 10, font, color: muted });
-  page.drawText(resultLabel(input.result), { x: 430, y: 802, size: 12, font, color: input.result === "pozytywna" ? green : red });
+  page.drawText("Przeciwdziałanie praniu pieniędzy i finansowaniu terroryzmu", { x: margin + 78, y: 782, size: 10, font, color: muted });
   y = 740;
 
   drawText(`Data zapytania: ${input.createdAt.toLocaleString("pl-PL")}`, 10, margin, text);
-  drawText(`Wygenerowal: ${input.requesterName}`, 10, margin, text);
-  drawText(`Pelna nazwa podmiotu: ${input.clientName}`, 10, margin, text, 72);
+  drawText(`Wygenerował: ${input.requesterName}`, 10, margin, text);
+  drawText(`Pełna nazwa podmiotu: ${input.clientName}`, 10, margin, text, 72);
   y -= 8;
 
   const vatCheck = input.checks.find((check) => normalizeTextForMatch(check.source).includes("biala lista") || check.source === "Status VAT");
@@ -1010,37 +1009,36 @@ async function buildAmlReportPdf(input: {
     ["NIP", asPdfText(identifiers.nip || input.nip)],
     ["REGON", asPdfText(identifiers.regon)],
     ["KRS", asPdfText(identifiers.krs)],
-    ["Rejestr", asPdfText(identifiers.rejestr || "Rejestr przedsiebiorcow")],
-    ["Status VAT", vatData.statusVat ? `VAT ${String(vatData.statusVat).toLowerCase()}` : "-"],
+    ["Rejestr", asPdfText(identifiers.rejestr || "Rejestr przedsiębiorców")],
   ]);
   drawReportSection("Dane rejestrowe podmiotu", ceidgCheck ? [["CEIDG", ceidgCheck], ["KRS", krsCheck]] : [["KRS", krsCheck]]);
-  drawReportSection("Informacje o platniku VAT", [["Status VAT", vatCheck]]);
+  drawInfoBox("Informacje o płatniku VAT", vatReportRows(vatData, vatCheck));
   drawReportSection("Rejestr VIES", [["VIES", viesCheck]]);
   drawReportSection("Wyniki weryfikacji na listach sankcyjnych", [["Listy sankcyjne", sanctionsCheck]]);
-  drawReportSection("Beneficjenci rzeczywisci", [["CRBR", crbrCheck]]);
-  drawInfoBox("Beneficjenci rzeczywisci", input.beneficialOwners.length > 0
+  drawReportSection("Beneficjenci rzeczywiści", [["CRBR", crbrCheck]]);
+  drawInfoBox("Beneficjenci rzeczywiści", input.beneficialOwners.length > 0
     ? input.beneficialOwners.slice(0, 8).map((owner, index) => [
       `${index + 1}.`,
       [owner.label, owner.obywatelstwo ? `obywatelstwo: ${owner.obywatelstwo}` : null, owner.krajZamieszkania ? `kraj: ${owner.krajZamieszkania}` : null].filter(Boolean).join(" | ") || "-"
     ])
-    : [["-", "Brak zapisanych beneficjentow rzeczywistych z CRBR."]]
+    : [["-", "Brak zapisanych beneficjentów rzeczywistych z CRBR."]]
   );
   drawInfoBox("Kody PKD", input.pkdCodes.length > 0
     ? input.pkdCodes.slice(0, 12).map((pkd) => [
       pkd.kod,
-      [pkd.nazwa, pkd.przewazajace ? "przewazajace" : null, pkd.zrodlo].filter(Boolean).join(" | ")
+      [pkd.nazwa, pkd.przewazajace ? "przeważające" : null, pkd.zrodlo].filter(Boolean).join(" | ")
     ])
-    : [["-", "Brak zapisanych kodow PKD."]]
+    : [["-", "Brak zapisanych kodów PKD."]]
   );
   drawReportSection("PEP", [["PEP", pepCheck]]);
 
   y -= 8;
   drawText("Metryka raportu", 14, margin, navy, 60);
   drawText(`Raport pobrano i zapisano: ${input.createdAt.toLocaleString("pl-PL")}`, 9, margin, muted);
-  drawText(`Uzytkownik generujacy: ${input.requesterName}`, 9, margin, muted);
+  drawText(`Użytkownik generujący: ${input.requesterName}`, 9, margin, muted);
   const sourceSummary = ceidgCheck
-    ? "Zrodla: CEIDG, Biala Lista VAT MF, VIES, KRS MS, CRBR MF, OpenSanctions PEP i publiczna lista sankcyjna ONZ."
-    : "Zrodla: Biala Lista VAT MF, VIES, KRS MS, CRBR MF, OpenSanctions PEP i publiczna lista sankcyjna ONZ.";
+    ? "Źródła: CEIDG, Biała Lista VAT MF, VIES, KRS MS, CRBR MF, OpenSanctions PEP i publiczna lista sankcyjna ONZ."
+    : "Źródła: Biała Lista VAT MF, VIES, KRS MS, CRBR MF, OpenSanctions PEP i publiczna lista sankcyjna ONZ.";
   drawText(sourceSummary, 9, margin, muted, 92);
 
   drawFooter(page, font);
@@ -1110,6 +1108,20 @@ function readLogoBytes() {
 function statusLabelForReport(check: OfficialCheck) {
   if (check.source === "PEP" && check.status === "ok") return "Nie figuruje";
   return statusLabel(check.status);
+}
+
+function vatReportRows(vatData: Record<string, unknown>, vatCheck: OfficialCheck | undefined): Array<[string, string]> {
+  const statusVat = String(vatData.statusVat || "").trim();
+  const label = vatCheck?.label || "";
+  const rows: Array<[string, string]> = [
+    ["Status VAT", statusVat ? `VAT ${statusVat.toLowerCase()}` : label || "-"],
+    ["Nazwa", asPdfText(vatData.nazwa)],
+    ["REGON", asPdfText(vatData.regon)],
+    ["KRS", asPdfText(vatData.krs)],
+    ["Adres siedziby", asPdfText(vatData.adresSiedziby)],
+    ["Adres działalności", asPdfText(vatData.adresDzialalnosci)],
+  ];
+  return rows.filter(([, value], index) => index === 0 || value !== "-");
 }
 
 function drawFooter(page: PDFPage, font: PDFFont) {

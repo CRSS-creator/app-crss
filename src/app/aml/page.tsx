@@ -205,7 +205,7 @@ function AmlContent() {
                   <Th>Weryfikacja AML</Th>
                   <Th>Formularz wstępny</Th>
                   <Th>Ocena ryzyka</Th>
-                  <Th wrap={true}>Oświadczenie o weryfikacji i identyfikacji klienta</Th>
+                  <WrappedTh>Oświadczenie o weryfikacji i identyfikacji klienta</WrappedTh>
                   <Th>Szczegóły</Th>
                 </tr>
               </thead>

@@ -1,0 +1,29 @@
+use_default_settings: true
+
+general:
+  debug: false
+  instance_name: "CRSS AML Search"
+
+search:
+  safe_search: 0
+  autocomplete: ""
+  default_lang: "pl"
+  formats:
+    - html
+    - json
+
+server:
+  bind_address: "0.0.0.0"
+  port: 8080
+  limiter: false
+  public_instance: false
+  image_proxy: false
+
+ui:
+  static_use_hash: true
+  default_locale: "pl"
+
+outgoing:
+  request_timeout: 8.0
+  max_request_timeout: 12.0
+  useragent_suffix: "CRSS AML PEP OSINT"

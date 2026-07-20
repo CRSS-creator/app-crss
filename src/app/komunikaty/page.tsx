@@ -6,7 +6,7 @@ import AccessGuard from "@/components/AccessGuard";
 import AppSelect from "@/components/AppSelect";
 import { colors, radius, shadow } from "@/app/design";
 import { fetchClientCaregivers, fetchClients } from "@/lib/clientService";
-import { hasEmail } from "@/lib/contactFields";
+import { hasEmail, splitEmails } from "@/lib/contactFields";
 import { supabase } from "@/lib/supabaseClient";
 
 type Profile = {
@@ -172,6 +172,7 @@ function KomunikatyContent() {
   const filteredIds = filteredClients.map((client) => client.id);
   const selectedClients = clients.filter((client) => selectedIds.includes(client.id));
   const selectedWithEmail = selectedClients.filter((client) => hasEmail(client.email));
+  const selectedEmailCount = selectedClients.reduce((sum, client) => sum + splitEmails(client.email).length, 0);
   const filteredWithEmail = filteredClients.filter((client) => hasEmail(client.email));
   const allFilteredSelected = filteredIds.length > 0 && filteredIds.every((id) => selectedIds.includes(id));
   const shouldShowList = showRecipientList || Boolean(searchQuery.trim()) || selectedIds.length > 0;
@@ -217,7 +218,7 @@ function KomunikatyContent() {
       return;
     }
 
-    if (!window.confirm(`Wysłać komunikat do ${selectedWithEmail.length} klientów z adresem e-mail?`)) return;
+    if (!window.confirm(`Wysłać jedną wiadomość z UDW do ${selectedEmailCount} adresów e-mail?`)) return;
 
     setSending(true);
     const { data: sessionData } = await supabase.auth.getSession();
@@ -252,7 +253,7 @@ function KomunikatyContent() {
       return;
     }
 
-    setResultMessage(`Przekazano do wysyłki: ${result.sent || 0}. Pominięto bez e-maila: ${result.skipped || 0}.`);
+    setResultMessage(`Przekazano jedną wiadomość do wysyłki w UDW: ${result.sent || 0} adresów. Pominięto bez e-maila: ${result.skipped || 0}.`);
     await loadHistory();
   }
 
@@ -363,7 +364,7 @@ function KomunikatyContent() {
           <button type="button" style={primaryButtonStyle} onClick={handleSend} disabled={sending || selectedWithEmail.length === 0}>
             {sending ? "Wysyłam..." : "Wyślij komunikat"}
           </button>
-          <span style={helperStyle}>Wysyłka obejmie {selectedWithEmail.length} klientów z uzupełnionym adresem e-mail.</span>
+          <span style={helperStyle}>Wysyłka obejmie jedną wiadomość z UDW do {selectedEmailCount} adresów e-mail.</span>
         </div>
         {resultMessage && <p style={resultStyle}>{resultMessage}</p>}
       </section>

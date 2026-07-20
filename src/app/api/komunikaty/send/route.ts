@@ -4,6 +4,7 @@ import { splitEmails } from "@/lib/contactFields";
 
 const ALLOWED_ROLES = new Set(["owner", "manager", "admin", "accountant"]);
 const APP_URL = "https://app.crss.com.pl";
+const BULK_TO_EMAIL = "biuro@crss.com.pl";
 
 type AuthorizedResult =
   | { admin: SupabaseClient; requesterId: string; requesterName: string; role: string; error: null }
@@ -14,6 +15,24 @@ type BulkNotificationPayload = {
   subject?: string;
   message?: string;
   filterSnapshot?: Record<string, unknown>;
+};
+
+type BulkRecipient = {
+  client: {
+    id: string;
+    nazwa: string | null;
+    nip: string | null;
+    email: string | null;
+    opiekun_id: string | null;
+    profiles?: {
+      full_name: string | null;
+      email: string | null;
+    } | {
+      full_name: string | null;
+      email: string | null;
+    }[] | null;
+  };
+  email: string;
 };
 
 function getWebhookUrl() {
@@ -118,12 +137,57 @@ function buildHtmlMessage(message: string) {
 </div>`.trim();
 }
 
+async function readWebhookError(response: Response) {
+  const text = await response.text().catch(() => "");
+  if (!text.trim()) return `Automatyzacja zwróciła błąd HTTP ${response.status} ${response.statusText || ""}.`.trim();
+
+  try {
+    const parsed = JSON.parse(text) as Record<string, unknown>;
+    const details = [
+      parsed.error,
+      parsed.message,
+      parsed.details,
+      parsed.reason,
+    ].filter((value): value is string => typeof value === "string" && value.trim().length > 0);
+
+    if (details.length > 0) return `Automatyzacja zwróciła błąd HTTP ${response.status}: ${details.join(" ")}`;
+  } catch {
+    // The webhook may return plain text or HTML; include a short excerpt for diagnostics.
+  }
+
+  return `Automatyzacja zwróciła błąd HTTP ${response.status}: ${text.slice(0, 700)}`;
+}
+
+function uniqueRecipients(recipients: BulkRecipient[]) {
+  const seen = new Set<string>();
+  return recipients.filter((recipient) => {
+    const normalized = recipient.email.trim().toLocaleLowerCase("pl-PL");
+    if (!normalized || seen.has(normalized)) return false;
+    seen.add(normalized);
+    return true;
+  });
+}
+
+function historyRecipient(recipient: BulkRecipient) {
+  const caregiver = Array.isArray(recipient.client.profiles) ? recipient.client.profiles[0] : recipient.client.profiles;
+  return {
+    clientId: recipient.client.id,
+    clientName: recipient.client.nazwa,
+    clientNip: recipient.client.nip,
+    email: recipient.email,
+    caregiverName: caregiver?.full_name || null,
+    caregiverEmail: caregiver?.email || null,
+  };
+}
+
 export async function POST(request: NextRequest) {
   const auth = await getAuthorizedUser(request);
   if (auth.error) return auth.error;
 
   const webhookConfig = getWebhookUrl();
   if (webhookConfig.error) return webhookConfig.error;
+  const webhookUrl = webhookConfig.webhookUrl;
+  if (!webhookUrl) return NextResponse.json({ error: "Brak adresu webhooka n8n do wysyłki komunikatów." }, { status: 500 });
 
   let payload: BulkNotificationPayload;
   try {
@@ -160,51 +224,59 @@ export async function POST(request: NextRequest) {
     .in("id", clientIds);
 
   if (clientsError) {
-    return NextResponse.json({ error: "Nie udało się pobrać klientów do wysyłki." }, { status: 500 });
+    return NextResponse.json({ error: `Nie udało się pobrać klientów do wysyłki: ${clientsError.message}` }, { status: 500 });
   }
 
   const allowedClients = (clients || []).filter((client) => auth.role !== "accountant" || client.opiekun_id === auth.requesterId);
-  const recipients = allowedClients.flatMap((client) =>
+  const skippedCount = allowedClients.filter((client) => splitEmails(client.email).length === 0).length;
+  const recipients = uniqueRecipients(allowedClients.flatMap((client) =>
     splitEmails(client.email).map((email) => ({ client, email }))
-  );
+  ));
 
   if (recipients.length === 0) {
     return NextResponse.json({ error: "Wybrani klienci nie mają adresów e-mail albo nie masz uprawnień do ich wysyłki." }, { status: 400 });
   }
 
   const html = buildHtmlMessage(message);
-  const failed: string[] = [];
+  const bccEmails = recipients.map((recipient) => recipient.email);
 
-  for (const recipient of recipients) {
-    const client = recipient.client;
-    const caregiver = Array.isArray(client.profiles) ? client.profiles[0] : client.profiles;
-    const response = await fetch(webhookConfig.webhookUrl, {
+  let response: Response;
+  try {
+    response = await fetch(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         event: "bulk_client_notification_requested",
-        clientId: client.id,
-        clientName: client.nazwa,
-        clientNip: client.nip,
-        recipientEmail: recipient.email,
+        deliveryMode: "single_email_bcc",
+        recipientEmail: null,
+        recipientEmails: [],
+        toEmail: BULK_TO_EMAIL,
+        bccEmails,
+        bcc: bccEmails,
         subject,
         message,
         html,
-        caregiverName: caregiver?.full_name || null,
-        caregiverEmail: caregiver?.email || null,
+        recipients: recipients.map(historyRecipient),
         requestedByName: auth.requesterName,
         appUrl: APP_URL,
       }),
     });
-
-    if (!response.ok) {
-      failed.push(client.nazwa || recipient.email || client.id);
-    }
+  } catch (error) {
+    const details = error instanceof Error ? error.message : String(error);
+    return NextResponse.json(
+      { error: `Nie udało się połączyć z automatyzacją n8n. Szczegóły: ${details}` },
+      { status: 502 }
+    );
   }
 
-  if (failed.length > 0) {
+  if (!response.ok) {
+    const errorDetails = await readWebhookError(response);
     return NextResponse.json(
-      { error: `Nie udało się przekazać części komunikatów do n8n: ${failed.join(", ")}.`, sent: recipients.length - failed.length, failed: failed.length },
+      {
+        error: `Nie udało się przekazać komunikatu zbiorczego do n8n. ${errorDetails} Sprawdź workflow wysyłki komunikatów oraz pola: toEmail, bccEmails, subject i html.`,
+        sent: 0,
+        failed: recipients.length,
+      },
       { status: 502 }
     );
   }
@@ -217,25 +289,14 @@ export async function POST(request: NextRequest) {
       subject,
       message,
       recipients_count: recipients.length,
-      recipients: recipients.map((recipient) => {
-        const client = recipient.client;
-        const caregiver = Array.isArray(client.profiles) ? client.profiles[0] : client.profiles;
-        return {
-          clientId: client.id,
-          clientName: client.nazwa,
-          clientNip: client.nip,
-          email: recipient.email,
-          caregiverName: caregiver?.full_name || null,
-          caregiverEmail: caregiver?.email || null,
-        };
-      }),
-      skipped_count: allowedClients.filter((client) => splitEmails(client.email).length === 0).length,
+      recipients: recipients.map(historyRecipient),
+      skipped_count: skippedCount,
       failed_count: 0,
       filter_snapshot: payload.filterSnapshot || {},
     });
 
   return NextResponse.json({
     sent: recipients.length,
-    skipped: allowedClients.length - recipients.length,
+    skipped: skippedCount,
   });
 }

@@ -230,9 +230,45 @@ function normalizePepOsintResult(result: Record<string, unknown>, checkedAt: str
     checkedAt,
     subjects,
     findings,
+    checkedSources: normalizeCheckedSources(result.checkedSources, findings),
     notes: result.notes || null,
     disclaimer: "Wynik ma charakter wspomagający. Publiczne wyszukiwanie internetowe nie zastępuje oficjalnego screeningu PEP u licencjonowanego dostawcy danych.",
   };
+}
+
+function normalizeCheckedSources(value: unknown, findings: unknown[]) {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => {
+        const record = asRecord(item);
+        if (Object.keys(record).length > 0) {
+          return {
+            title: String(record.title || record.name || record.source || record.url || "").trim(),
+            url: String(record.url || "").trim() || null,
+            description: String(record.description || record.snippet || record.query || "").trim() || null,
+          };
+        }
+        return { title: String(item || "").trim(), url: null, description: null };
+      })
+      .filter((item) => item.title);
+  }
+
+  const byUrl = new Map<string, { title: string; url: string | null; description: string | null }>();
+  findings.forEach((finding) => {
+    const sources = Array.isArray(asRecord(finding).sources) ? asRecord(finding).sources as unknown[] : [];
+    sources.forEach((source) => {
+      const record = asRecord(source);
+      const url = String(record.url || "").trim();
+      const title = String(record.title || url || "").trim();
+      if (!title) return;
+      byUrl.set(url || title, {
+        title,
+        url: url || null,
+        description: String(record.snippet || "").trim() || null,
+      });
+    });
+  });
+  return [...byUrl.values()].slice(0, 12);
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

@@ -181,7 +181,17 @@ return [{
       ? "PEP OSINT: znaleziono potencjalne przesłanki, wymagana analiza."
       : "PEP OSINT: brak przesłanek PEP w sprawdzonych źródłach."),
     findings,
-    notes: parsed.notes || "Sprawdzenie wykonane przez n8n na podstawie SearXNG i OpenAI.",
+    checkedSources: parsed.checkedSources || [...new Map(
+      findings
+        .flatMap((finding) => finding.sources || [])
+        .filter((source) => source?.url || source?.title)
+        .map((source) => [source.url || source.title, {
+          title: source.title || source.url,
+          url: source.url || null,
+          description: source.snippet || null,
+        }])
+    ).values()],
+    notes: parsed.notes || "Sprawdzono publiczne wyniki wyszukiwania SearXNG dla fraz PEP, osoba politycznie eksponowana, funkcje publiczne oraz domeny gov.pl, sejm.gov.pl, senat.gov.pl i europarl.europa.eu. Ocena została wykonana przez OpenAI na podstawie przekazanych wyników wyszukiwania.",
   },
 }];
 ```

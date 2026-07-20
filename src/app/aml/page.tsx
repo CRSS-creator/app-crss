@@ -604,6 +604,7 @@ function RegistryDetails({ register }: { register: AmlRegisterRecord | null }) {
   const vat = asRecord(registry.bialaListaVat);
   const pepOsint = asRecord(registry.pepOsint);
   const pepFindings = Array.isArray(pepOsint.findings) ? pepOsint.findings as Array<Record<string, unknown>> : [];
+  const pepCheckedSources = Array.isArray(pepOsint.checkedSources) ? pepOsint.checkedSources as Array<Record<string, unknown>> : [];
   const owners = Array.isArray(register?.beneficjenci_rzeczywisci) ? register.beneficjenci_rzeczywisci : [];
   const pkdCodes = Array.isArray(register?.kody_pkd) ? register.kody_pkd : [];
 
@@ -654,6 +655,25 @@ function RegistryDetails({ register }: { register: AmlRegisterRecord | null }) {
                 <Definition label="Status" value={pepOsintStatusLabel(asText(pepOsint.status))} />
                 <Definition label="Opis" value={asText(pepOsint.label)} />
                 <Definition label="Data" value={formatDateTime(asText(pepOsint.checkedAt))} />
+                {pepOsint.notes ? <Definition label="Metodyka" value={asText(pepOsint.notes)} /> : null}
+                {pepCheckedSources.length > 0 ? (
+                  <div style={pepSourcesPanelStyle}>
+                    <strong style={pepSourcesTitleStyle}>Sprawdzone źródła</strong>
+                    <div style={pepFindingSourcesStyle}>
+                      {pepCheckedSources.slice(0, 12).map((source, sourceIndex) => {
+                        const url = String(source.url || "");
+                        const label = asText(source.title || source.name || url);
+                        return url ? (
+                          <a key={`${url}-${sourceIndex}`} href={url} target="_blank" rel="noreferrer" style={pepFindingSourceStyle}>
+                            {label}
+                          </a>
+                        ) : (
+                          <span key={`${label}-${sourceIndex}`} style={pepSourceTextBadgeStyle}>{label}</span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
                 {pepFindings.length > 0 ? (
                   <div style={pepFindingsListStyle}>
                     {pepFindings.slice(0, 6).map((finding, index) => {
@@ -1240,10 +1260,13 @@ const beneficialOwnerItemStyle: CSSProperties = { border: `1px solid ${colors.bo
 const beneficialOwnerNameStyle: CSSProperties = { display: "block", color: colors.navy, fontSize: "14px", lineHeight: 1.35 };
 const beneficialOwnerMetaStyle: CSSProperties = { display: "grid", gap: "5px", marginTop: "8px", color: colors.muted, fontSize: "12px", fontWeight: 750, lineHeight: 1.35 };
 const pepOsintContentStyle: CSSProperties = { display: "grid", gap: "10px" };
+const pepSourcesPanelStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, padding: "12px", display: "grid", gap: "8px" };
+const pepSourcesTitleStyle: CSSProperties = { color: colors.navy, fontSize: "13px" };
 const pepFindingsListStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "10px" };
 const pepFindingItemStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, padding: "12px", display: "grid", gap: "8px", color: colors.text, fontSize: "13px", lineHeight: 1.45 };
 const pepFindingSourcesStyle: CSSProperties = { display: "flex", flexWrap: "wrap", gap: "6px" };
 const pepFindingSourceStyle: CSSProperties = { color: colors.navy, fontWeight: 850, textDecoration: "none", border: `1px solid ${colors.border}`, borderRadius: radius.badge, padding: "5px 8px", background: colors.inputBackground, maxWidth: "100%", overflowWrap: "anywhere" };
+const pepSourceTextBadgeStyle: CSSProperties = { ...pepFindingSourceStyle, display: "inline-flex" };
 const registryTitleStyle: CSSProperties = { margin: "0 0 12px", color: colors.navy, fontSize: "15px" };
 const definitionStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(86px, 0.42fr) minmax(0, 1fr)", gap: "10px", padding: "8px 0", borderTop: `1px solid ${colors.border}` };
 const definitionLabelStyle: CSSProperties = { color: colors.muted, fontSize: "12px", fontWeight: 850, textTransform: "uppercase" };

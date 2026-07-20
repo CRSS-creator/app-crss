@@ -12,8 +12,7 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const AML_REPORT_BUCKET = "crm-umowy";
-const GUS_REGON_API_KEY = process.env.GUS_REGON_API_KEY;
-const GUS_REGON_API_URL = process.env.GUS_REGON_API_URL || "https://wyszukiwarkaregon.stat.gov.pl/wsBIR/UslugaBIRzewnPubl.svc";
+const CRBR_API_URL = process.env.CRBR_API_URL || "https://bramka-crbr.mf.gov.pl:5058/uslugiBiznesowe/uslugiESB/AP/ApiPrzegladoweCRBR/2022/02/01";
 const CEIDG_API_TOKEN = process.env.CEIDG_API_TOKEN;
 const CEIDG_API_URL = process.env.CEIDG_API_URL || "https://dane.biznes.gov.pl/api/ceidg/v3/firmy";
 
@@ -86,17 +85,16 @@ export async function POST(request: NextRequest) {
   const ceidgCheck = await verifyCeidg(nip);
   checks.push(ceidgCheck);
 
-  const regonCheck = GUS_REGON_API_KEY ? await verifyGusRegon(nip) : null;
-  if (regonCheck) checks.push(regonCheck);
-
-  const regonSubject = regonCheck ? getRegonSubject(regonCheck) : null;
   const ceidgIdentity = getCeidgIdentity(ceidgCheck);
-  const regonNumber = String(vatSubject?.regon || ceidgIdentity.regon || regonSubject?.Regon || "").trim() || null;
-  const krsNumber = normalizeKrs(String(vatSubject?.krs || ceidgIdentity.krs || regonSubject?.Krs || ""));
+  const regonNumber = String(vatSubject?.regon || ceidgIdentity.regon || "").trim() || null;
+  const krsNumber = normalizeKrs(String(vatSubject?.krs || ceidgIdentity.krs || ""));
   const krsCheck = krsNumber
     ? await verifyKrs(krsNumber)
     : skippedCheck("KRS", "Brak numeru KRS w danych z Białej Listy VAT i CEIDG. Dla JDG wpis KRS zwykle nie występuje.");
   checks.push(krsCheck);
+
+  const crbrCheck = await verifyCrbr(nip, krsNumber);
+  checks.push(crbrCheck);
 
   const sanctionsCheck = await verifySanctionsLists(client.nazwa || "", nip);
   checks.push(sanctionsCheck);
@@ -104,17 +102,17 @@ export async function POST(request: NextRequest) {
   const result = summarizeResult(checks);
   const now = new Date();
   const pkdCodes = collectPkdCodes(ceidgCheck, krsCheck);
+  const beneficialOwners = extractCrbrBeneficialOwners(crbrCheck, now);
   const registryDetails = buildRegistryDetails({
     nip,
     vatSubject,
-    regonSubject,
     krsCheck,
     ceidgCheck,
+    crbrCheck,
     pkdCodes,
     checks,
     checkedAt: now,
   });
-  const beneficialOwners = buildBeneficialOwnersDetails(now);
   const reportName = buildReportFileName(client.nazwa, nip, now);
   const pdf = await buildAmlReportPdf({
     clientName: client.nazwa || "Klient bez nazwy",
@@ -178,9 +176,9 @@ export async function POST(request: NextRequest) {
       beneficjenci_rzeczywisci: beneficialOwners,
       numer_regon: regonNumber,
       numer_krs: krsNumber || null,
-      gus_status: regonCheck ? statusForSource(checks, "GUS REGON") : "nie_uzyto",
+      gus_status: "nie_uzyto",
       krs_status: statusForSource(checks, "KRS"),
-      crbr_status: "do_weryfikacji",
+      crbr_status: statusForSource(checks, "CRBR"),
       kody_pkd: pkdCodes,
       updated_at: now.toISOString(),
     })
@@ -453,79 +451,44 @@ function normalizeTextForMatch(value: string) {
     .trim()
     .toLowerCase();
 }
-async function verifyGusRegon(nip: string): Promise<OfficialCheck> {
-  if (!GUS_REGON_API_KEY) {
-    return skippedCheck("GUS REGON", "Dodaj sekret GUS_REGON_API_KEY, aby uruchomić automatyczną weryfikację w rejestrze REGON.");
-  }
-
-  let sessionId: string | null = null;
-  try {
-    const loginResponse = await gusSoapRequest("Zaloguj", `
-      <ns:Zaloguj>
-        <ns:pKluczUzytkownika>${escapeXml(GUS_REGON_API_KEY)}</ns:pKluczUzytkownika>
-      </ns:Zaloguj>
-    `);
-    sessionId = readXmlTag(loginResponse, "ZalogujResult");
-
-    if (!sessionId) {
-      return { source: "GUS REGON", status: "error", label: "Nie udało się zalogować do API GUS BIR.", details: { checkedAt: new Date().toISOString() } };
-    }
-
-    const searchResponse = await gusSoapRequest("DaneSzukajPodmioty", `
-      <ns:DaneSzukajPodmioty>
-        <ns:pParametryWyszukiwania>
-          <dat:Nip>${escapeXml(nip)}</dat:Nip>
-        </ns:pParametryWyszukiwania>
-      </ns:DaneSzukajPodmioty>
-    `, sessionId);
-    const resultXml = decodeXmlEntities(readXmlTag(searchResponse, "DaneSzukajPodmiotyResult") || "");
-    const records = parseGusRecords(resultXml);
-    const firstRecord = records[0] || null;
-
-    return {
-      source: "GUS REGON",
-      status: firstRecord ? "ok" : "warning",
-      label: firstRecord ? "Podmiot odnaleziony w rejestrze REGON." : "Nie odnaleziono podmiotu w rejestrze REGON dla podanego NIP.",
-      details: { record: firstRecord, records, checkedAt: new Date().toISOString(), url: GUS_REGON_API_URL },
-    };
-  } catch (error) {
-    return { source: "GUS REGON", status: "error", label: "Błąd połączenia z API GUS BIR.", details: { message: errorMessage(error), checkedAt: new Date().toISOString(), url: GUS_REGON_API_URL } };
-  } finally {
-    if (sessionId) {
-      await gusSoapRequest("Wyloguj", `
-        <ns:Wyloguj>
-          <ns:pIdentyfikatorSesji>${escapeXml(sessionId)}</ns:pIdentyfikatorSesji>
-        </ns:Wyloguj>
-      `, sessionId).catch(() => null);
-    }
-  }
-}
-
-async function gusSoapRequest(action: "Zaloguj" | "DaneSzukajPodmioty" | "Wyloguj", body: string, sessionId?: string) {
-  const soapAction = `http://CIS/BIR/PUBL/2014/07/IUslugaBIRzewnPubl/${action}`;
+async function verifyCrbr(nip: string, krs: string | null): Promise<OfficialCheck> {
+  const searchTag = krs ? `<ns1:KRS>${escapeXml(krs.padStart(10, "0"))}</ns1:KRS>` : `<ns1:NIP>${escapeXml(nip)}</ns1:NIP>`;
   const envelope = `<?xml version="1.0" encoding="UTF-8"?>
-<soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope" xmlns:ns="http://CIS/BIR/PUBL/2014/07" xmlns:dat="http://CIS/BIR/PUBL/2014/07/DataContract">
-  <soap:Header xmlns:wsa="http://www.w3.org/2005/08/addressing">
-    <wsa:To>${escapeXml(GUS_REGON_API_URL)}</wsa:To>
-    <wsa:Action>${soapAction}</wsa:Action>
-  </soap:Header>
-  <soap:Body>${body}</soap:Body>
+<soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope" xmlns:ns="http://www.mf.gov.pl/uslugiBiznesowe/uslugiESB/AP/ApiPrzegladoweCRBR/2022/02/01" xmlns:ns1="http://www.mf.gov.pl/schematy/AP/ApiPrzegladoweCRBR/2022/02/01">
+  <soap:Header/>
+  <soap:Body>
+    <ns:PobierzInformacjeOSpolkachIBeneficjentach>
+      <PobierzInformacjeOSpolkachIBeneficjentachDane>
+        <ns1:SzczegolyWniosku>${searchTag}</ns1:SzczegolyWniosku>
+      </PobierzInformacjeOSpolkachIBeneficjentachDane>
+    </ns:PobierzInformacjeOSpolkachIBeneficjentach>
+  </soap:Body>
 </soap:Envelope>`;
 
-  const headers: Record<string, string> = {
-    "Content-Type": `application/soap+xml; charset=utf-8; action="${soapAction}"`,
-    Accept: "application/soap+xml",
-  };
-  if (sessionId) headers.sid = sessionId;
+  try {
+    const response = await fetch(CRBR_API_URL, {
+      method: "POST",
+      headers: { "content-type": "application/soap+xml; charset=utf-8", accept: "application/soap+xml, text/xml" },
+      body: envelope,
+    });
+    const xml = await response.text();
+    if (!response.ok) {
+      return { source: "CRBR", status: "error", label: "Nie udało się pobrać danych z CRBR.", details: { httpStatus: response.status, response: xml.slice(0, 1200), url: CRBR_API_URL } };
+    }
 
-  const response = await fetch(GUS_REGON_API_URL, { method: "POST", headers, body: envelope });
-  const text = await response.text();
-  if (!response.ok) {
-    throw new Error(`GUS BIR HTTP ${response.status}: ${text.slice(0, 300)}`);
+    const status = readXmlTag(xml, "Status") || "";
+    const companies = parseCrbrCompanies(xml);
+    const hasOwners = companies.some((company) => company.beneficjenci.length > 0);
+    return {
+      source: "CRBR",
+      status: hasOwners ? "ok" : "warning",
+      label: hasOwners ? "Pobrano beneficjentów rzeczywistych z CRBR." : "CRBR nie zwrócił beneficjentów dla podmiotu.",
+      details: { status, companies, checkedAt: new Date().toISOString(), url: CRBR_API_URL, searchBy: krs ? "KRS" : "NIP" },
+    };
+  } catch (error) {
+    return { source: "CRBR", status: "error", label: "Błąd połączenia z CRBR.", details: { message: errorMessage(error), url: CRBR_API_URL } };
   }
-  return text;
 }
-
 function skippedCheck(source: string, label: string): OfficialCheck {
   return { source, status: "skipped", label, details: { checkedAt: new Date().toISOString() } };
 }
@@ -556,11 +519,6 @@ function statusForAnySource(checks: OfficialCheck[], sources: string[]) {
 function getVatSubject(check: OfficialCheck) {
   const details = check.details as { subject?: Record<string, unknown> };
   return details.subject || null;
-}
-
-function getRegonSubject(check: OfficialCheck) {
-  const details = check.details as { record?: Record<string, string> | null };
-  return details.record || null;
 }
 
 function getCeidgIdentity(check: OfficialCheck) {
@@ -611,7 +569,7 @@ function collectPkdCodes(...checks: OfficialCheck[]): PkdCode[] {
 
   for (const check of checks) {
     const source = check.source.includes("KRS") ? "KRS" : check.source;
-    const extracted = extractPkdCodes(check.details, source);
+    const extracted = source === "KRS" ? extractKrsPkdCodes(check.details) : extractPkdCodes(check.details, source);
     for (const item of extracted) {
       const key = `${item.zrodlo}:${item.kod}`;
       const existing = codes.get(key);
@@ -643,15 +601,21 @@ function extractPkdCodes(value: unknown, source: string, inPkdNode = false): Pkd
   const hasPkdKey = Object.keys(record).some((key) => key.toLowerCase().includes("pkd"));
   const pkdRecord = inPkdNode || hasPkdKey;
   const directCode = firstText(record, ["kod", "kodPkd", "kod_pkd", "pkd", "code"]);
+  const krsCompositeCode = record.kodDzial && record.kodKlasa
+    ? `${String(record.kodDzial)}${String(record.kodKlasa)}${record.kodPodklasa ? String(record.kodPodklasa) : ""}`
+    : null;
   const directName = firstText(record, ["nazwa", "opis", "opisPkd", "name"]);
-  const mainFlag = Boolean(record.przewazajace || record.przeważające || record.glowne || record.główne || record.main);
-  const directCodes = pkdRecord && directCode
-    ? [{ kod: formatPkdCode(directCode), nazwa: directName, przewazajace: mainFlag, zrodlo: source }]
+  const mainFlag = Boolean(record.przewazajace || record.przeważające || record.glowne || record.główne || record.main || Object.keys(record).some((key) => key.toLowerCase().includes("przewazajacej")));
+  const finalCode = directCode || krsCompositeCode;
+  const directCodes = pkdRecord && finalCode
+    ? [{ kod: formatPkdCode(finalCode), nazwa: directName, przewazajace: mainFlag, zrodlo: source }]
     : [];
 
   const nestedCodes = Object.entries(record).flatMap(([key, item]) => {
-    const childInPkd = pkdRecord || key.toLowerCase().includes("pkd") || key.toLowerCase().includes("dzialalnosci");
-    return extractPkdCodes(item, source, childInPkd);
+    const lowerKey = key.toLowerCase();
+    const childInPkd = pkdRecord || lowerKey.includes("pkd") || lowerKey.includes("dzialalnosci");
+    const childCodes = extractPkdCodes(item, source, childInPkd);
+    return lowerKey.includes("przewazajacej") ? childCodes.map((code) => ({ ...code, przewazajace: true })) : childCodes;
   });
 
   return [...directCodes, ...nestedCodes].filter((item) => item.kod !== "");
@@ -683,12 +647,16 @@ function formatPkdCode(value: string) {
   return match[3] ? `${match[1]}.${match[2]}.${match[3]}` : `${match[1]}.${match[2]}`;
 }
 
+function extractKrsPkdCodes(details: Record<string, unknown>): PkdCode[] {
+  return extractPkdCodes(details, "KRS");
+}
+
 function buildRegistryDetails(input: {
   nip: string;
   vatSubject: Record<string, unknown> | null;
-  regonSubject: Record<string, string> | null;
   krsCheck: OfficialCheck;
   ceidgCheck: OfficialCheck;
+  crbrCheck: OfficialCheck;
   pkdCodes: PkdCode[];
   checks: OfficialCheck[];
   checkedAt: Date;
@@ -701,38 +669,21 @@ function buildRegistryDetails(input: {
     updatedAt: input.checkedAt.toISOString(),
     identyfikatory: {
       nip: input.nip,
-      regon: String(input.vatSubject?.regon || ceidgIdentity.regon || input.regonSubject?.Regon || "") || null,
-      krs: String(input.vatSubject?.krs || ceidgIdentity.krs || input.regonSubject?.Krs || krsDetails.krs || "") || null,
+      regon: String(input.vatSubject?.regon || ceidgIdentity.regon || "") || null,
+      krs: String(input.vatSubject?.krs || ceidgIdentity.krs || krsDetails.krs || "") || null,
+      rejestr: krsDetails.register === "P" ? "Rejestr przedsiębiorców" : krsDetails.register || null,
     },
     statusy: {
       vat: statusForAnySource(input.checks, ["Status VAT", "Biała Lista VAT"]),
       vies: statusForSource(input.checks, "VIES"),
-      regon: statusForSource(input.checks, "GUS REGON"),
       krs: statusForSource(input.checks, "KRS"),
       ceidg: statusForSource(input.checks, "CEIDG"),
-      crbr: "do_weryfikacji",
+      crbr: statusForSource(input.checks, "CRBR"),
     },
     kodyPkd: input.pkdCodes,
     ceidg: input.ceidgCheck.status === "ok" ? {
       liczbaWpisow: Array.isArray(ceidgDetails.companies) ? ceidgDetails.companies.length : 0,
       url: ceidgDetails.url || null,
-    } : null,
-    gusRegon: input.regonSubject ? {
-      nazwa: input.regonSubject.Nazwa || null,
-      regon: input.regonSubject.Regon || null,
-      nip: input.regonSubject.Nip || null,
-      krs: input.regonSubject.Krs || null,
-      typ: input.regonSubject.Typ || null,
-      statusNip: input.regonSubject.StatusNip || null,
-      wojewodztwo: input.regonSubject.Wojewodztwo || null,
-      powiat: input.regonSubject.Powiat || null,
-      gmina: input.regonSubject.Gmina || null,
-      miejscowosc: input.regonSubject.Miejscowosc || null,
-      kodPocztowy: input.regonSubject.KodPocztowy || null,
-      ulica: input.regonSubject.Ulica || null,
-      nrNieruchomosci: input.regonSubject.NrNieruchomosci || null,
-      nrLokalu: input.regonSubject.NrLokalu || null,
-      dataZakonczeniaDzialalnosci: input.regonSubject.DataZakonczeniaDzialalnosci || null,
     } : null,
     krs: input.krsCheck.status === "ok" ? {
       numer: krsDetails.krs || null,
@@ -750,14 +701,32 @@ function buildRegistryDetails(input: {
       adresDzialalnosci: input.vatSubject.workingAddress || null,
       rachunki: Array.isArray(input.vatSubject.accountNumbers) ? input.vatSubject.accountNumbers : [],
     } : null,
+    crbr: input.crbrCheck.status === "ok" ? input.crbrCheck.details : null,
   };
 }
 
-function buildBeneficialOwnersDetails(checkedAt: Date) {
-  return [{
+function extractCrbrBeneficialOwners(check: OfficialCheck, checkedAt: Date) {
+  const details = check.details as { companies?: Array<{ beneficjenci?: Array<Record<string, unknown>>; nazwa?: string; nip?: string; krs?: string }> };
+  const companies = Array.isArray(details.companies) ? details.companies : [];
+  const owners = companies.flatMap((company) => (company.beneficjenci || []).map((owner) => ({
     source: "CRBR",
-    status: "do_weryfikacji",
-    label: "Miejsce przygotowane pod zapis beneficjentów rzeczywistych po podłączeniu oficjalnego źródła CRBR albo po ręcznej weryfikacji.",
+    status: "pobrano",
+    label: [owner.pierwszeImie, owner.kolejneImiona, owner.nazwisko].filter(Boolean).join(" ").trim() || "Beneficjent rzeczywisty",
+    pierwszeImie: owner.pierwszeImie || null,
+    kolejneImiona: owner.kolejneImiona || null,
+    nazwisko: owner.nazwisko || null,
+    obywatelstwo: owner.obywatelstwo || null,
+    krajZamieszkania: owner.krajZamieszkania || null,
+    dataUrodzenia: owner.dataUrodzenia || null,
+    udzialy: Array.isArray(owner.udzialy) ? owner.udzialy : [],
+    spolka: { nazwa: company.nazwa || null, nip: company.nip || null, krs: company.krs || null },
+    checkedAt: checkedAt.toISOString(),
+  })));
+
+  return owners.length > 0 ? owners : [{
+    source: "CRBR",
+    status: check.status,
+    label: check.label,
     checkedAt: checkedAt.toISOString(),
   }];
 }
@@ -773,19 +742,41 @@ function normalizeKrs(value: string) {
 function readXmlTag(xml: string, tag: string) {
   const pattern = new RegExp(`<(?:\\w+:)?${tag}>([\\s\\S]*?)</(?:\\w+:)?${tag}>`, "i");
   const match = xml.match(pattern);
-  return match?.[1]?.replace(/<!\\[CDATA\\[|\\]\\]>/g, "").trim() || null;
+  return match?.[1] ? decodeXmlEntities(match[1].replace(/<!\\[CDATA\\[|\\]\\]>/g, "").trim()) || null : null;
 }
 
-function parseGusRecords(xml: string) {
-  const records = [...xml.matchAll(/<dane>([\s\S]*?)<\/dane>/gi)];
-  return records.map((recordMatch) => {
-    const recordXml = recordMatch[1] || "";
-    const record: Record<string, string> = {};
-    for (const fieldMatch of recordXml.matchAll(/<([A-Za-z0-9_]+)>([\s\S]*?)<\/\1>/g)) {
-      record[fieldMatch[1]] = decodeXmlEntities(fieldMatch[2] || "").trim();
-    }
-    return record;
-  });
+function parseCrbrCompanies(xml: string) {
+  return xmlBlocks(xml, "SpolkaIBeneficjenci").map((block) => ({
+    nazwa: readXmlTag(block, "Nazwa"),
+    nip: readXmlTag(block, "NIP"),
+    krs: readXmlTag(block, "KRS"),
+    formaOrganizacyjna: readXmlTag(block, "OpisFormyOrganizacyjnej"),
+    adres: [
+      readXmlTag(block, "KodPocztowy"),
+      readXmlTag(block, "Miejscowosc"),
+      readXmlTag(block, "Ulica"),
+      readXmlTag(block, "NrDomu") || readXmlTag(block, "Numer"),
+      readXmlTag(block, "NrLokalu"),
+    ].filter(Boolean).join(" "),
+    beneficjenci: xmlBlocks(block, "BeneficjentRzeczywisty").map((ownerBlock) => ({
+      pierwszeImie: readXmlTag(ownerBlock, "PierwszeImie"),
+      kolejneImiona: readXmlTag(ownerBlock, "KolejneImiona"),
+      nazwisko: readXmlTag(ownerBlock, "Nazwisko"),
+      dataUrodzenia: readXmlTag(ownerBlock, "DataUrodzenia"),
+      obywatelstwo: readXmlTag(ownerBlock, "Obywatelstwo"),
+      krajZamieszkania: readXmlTag(ownerBlock, "KrajZamieszkania"),
+      udzialy: xmlBlocks(ownerBlock, "InformacjaOUdzialach").map((shareBlock) => ({
+        rodzaj: readXmlTag(shareBlock, "RodzajUprawnienWlascicielskich") || readXmlTag(shareBlock, "InneUprawnienia"),
+        ilosc: readXmlTag(shareBlock, "Ilosc"),
+        jednostka: readXmlTag(shareBlock, "JednostkaMiary"),
+      })),
+    })),
+  }));
+}
+
+function xmlBlocks(xml: string, tag: string) {
+  const pattern = new RegExp(`<(?:\\w+:)?${tag}\\b[^>]*>([\\s\\S]*?)</(?:\\w+:)?${tag}>`, "gi");
+  return [...xml.matchAll(pattern)].map((match) => match[1] || "");
 }
 
 function decodeXmlEntities(value: string) {
@@ -863,23 +854,21 @@ async function buildAmlReportPdf(input: {
   const vatCheck = input.checks.find((check) => check.source.includes("Biała Lista") || check.source === "Status VAT");
   const viesCheck = input.checks.find((check) => check.source.includes("VIES"));
   const ceidgCheck = input.checks.find((check) => check.source.includes("CEIDG"));
-  const krsCheck = input.checks.find((check) => check.source.includes("KRS"));
+  const crbrCheck = input.checks.find((check) => check.source.includes("CRBR"));
   const sanctionsCheck = input.checks.find((check) => check.source.includes("sankcyjne"));
   const pepCheck = input.checks.find((check) => check.source === "PEP");
 
-  drawReportSection("Dane rejestrowe podmiotu", [["CEIDG", ceidgCheck], ["KRS", krsCheck]], drawText, () => y, (nextY) => { y = nextY; }, page, font, margin, soft, border, navy, muted);
+  drawReportSection("Dane rejestrowe podmiotu", [["CEIDG", ceidgCheck]], drawText, () => y, (nextY) => { y = nextY; }, page, font, margin, soft, border, navy, muted);
   drawReportSection("Informacje o płatniku VAT", [["Status VAT", vatCheck]], drawText, () => y, (nextY) => { y = nextY; }, page, font, margin, soft, border, navy, muted);
   drawReportSection("Rejestr VIES", [["VIES", viesCheck]], drawText, () => y, (nextY) => { y = nextY; }, page, font, margin, soft, border, navy, muted);
   drawReportSection("Wyniki weryfikacji na listach sankcyjnych", [["Listy sankcyjne", sanctionsCheck]], drawText, () => y, (nextY) => { y = nextY; }, page, font, margin, soft, border, navy, muted);
-  drawReportSection("Weryfikacja osób powiązanych z firmą", [["PEP", pepCheck]], drawText, () => y, (nextY) => { y = nextY; }, page, font, margin, soft, border, navy, muted);
+  drawReportSection("Beneficjenci rzeczywiści i osoby powiązane", [["CRBR", crbrCheck], ["PEP", pepCheck]], drawText, () => y, (nextY) => { y = nextY; }, page, font, margin, soft, border, navy, muted);
 
   y -= 8;
   drawText("Metryka raportu", 14, margin, navy, 60);
   drawText(`Raport pobrano i zapisano: ${input.createdAt.toLocaleString("pl-PL")}`, 9, margin, muted);
   drawText(`Użytkownik generujący: ${input.requesterName}`, 9, margin, muted);
-  const sourceSummary = input.checks.some((check) => check.source.includes("GUS REGON"))
-    ? "Źródła: CEIDG, Biała Lista VAT MF, VIES, KRS MS, GUS REGON i publiczna lista sankcyjna ONZ."
-    : "Źródła: CEIDG, Biała Lista VAT MF, VIES, KRS MS i publiczna lista sankcyjna ONZ. GUS REGON nie był wymagany dla tej weryfikacji.";
+  const sourceSummary = "Źródła: CEIDG, Biała Lista VAT MF, VIES, KRS MS, CRBR MF i publiczna lista sankcyjna ONZ.";
   drawText(sourceSummary, 9, margin, muted, 92);
 
   drawFooter(page, font);

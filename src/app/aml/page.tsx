@@ -358,8 +358,6 @@ function AmlDetailsModal({
 function RegistryDetails({ register }: { register: AmlRegisterRecord | null }) {
   const registry = asRecord(register?.dane_rejestrowe);
   const identifiers = asRecord(registry.identyfikatory);
-  const gus = asRecord(registry.gusRegon);
-  const krs = asRecord(registry.krs);
   const vat = asRecord(registry.bialaListaVat);
   const owners = Array.isArray(register?.beneficjenci_rzeczywisci) ? register.beneficjenci_rzeczywisci : [];
   const pkdCodes = Array.isArray(register?.kody_pkd) ? register.kody_pkd : [];
@@ -376,24 +374,34 @@ function RegistryDetails({ register }: { register: AmlRegisterRecord | null }) {
             <Definition label="NIP" value={asText(identifiers.nip)} />
             <Definition label="REGON" value={asText(identifiers.regon || register.numer_regon)} />
             <Definition label="KRS" value={asText(identifiers.krs || register.numer_krs)} />
+            <Definition label="Rejestr" value={asText(identifiers.rejestr)} />
+            <Definition label="VAT" value={vat.statusVat ? `VAT ${String(vat.statusVat).toLowerCase()}` : "-"} />
           </div>
           <div style={registryPanelStyle}>
-            <h4 style={registryTitleStyle}>GUS REGON</h4>
-            <Definition label="Status" value={sourceStatusLabel(register.gus_status || "")} />
-            <Definition label="Nazwa" value={asText(gus.nazwa)} />
-            <Definition label="Adres" value={formatAddress(gus)} />
-          </div>
-          <div style={registryPanelStyle}>
-            <h4 style={registryTitleStyle}>KRS</h4>
-            <Definition label="Status" value={sourceStatusLabel(register.krs_status || "")} />
-            <Definition label="Rejestr" value={asText(krs.rejestr)} />
-            <Definition label="Odpis" value={krs.pobranoOdpis ? "Pobrany z API MS" : "-"} />
-          </div>
-          <div style={registryPanelStyle}>
-            <h4 style={registryTitleStyle}>VAT i beneficjenci</h4>
-            <Definition label="Status VAT" value={asText(vat.statusVat)} />
-            <Definition label="Beneficjenci" value={owners.length > 0 ? asText(owners[0]?.label || owners[0]?.status) : "Do weryfikacji"} />
+            <h4 style={registryTitleStyle}>Statusy źródeł</h4>
+            <Definition label="CEIDG" value={sourceStatusLabel(asText(asRecord(registry.statusy).ceidg))} />
+            <Definition label="KRS" value={sourceStatusLabel(register.krs_status || "")} />
+            <Definition label="VAT" value={sourceStatusLabel(asText(asRecord(registry.statusy).vat))} />
             <Definition label="Status CRBR" value={register.crbr_status ? registerStatusText(register.crbr_status) : "Do weryfikacji"} />
+          </div>
+          <div style={beneficialOwnersPanelStyle}>
+            <h4 style={registryTitleStyle}>Beneficjenci rzeczywiści z CRBR</h4>
+            {owners.length > 0 ? (
+              <div style={beneficialOwnersListStyle}>
+                {owners.map((owner, index) => (
+                  <div key={`${asText(owner.label)}-${index}`} style={beneficialOwnerItemStyle}>
+                    <strong style={beneficialOwnerNameStyle}>{asText(owner.label)}</strong>
+                    <div style={beneficialOwnerMetaStyle}>
+                      <span>Obywatelstwo: {asText(owner.obywatelstwo)}</span>
+                      <span>Kraj zamieszkania: {asText(owner.krajZamieszkania)}</span>
+                      <span>Status: {registerStatusText(asText(owner.status))}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p style={emptySmallStyle}>Brak zapisanych beneficjentów z CRBR.</p>
+            )}
           </div>
           <div style={registryPanelWideStyle}>
             <h4 style={registryTitleStyle}>Kody PKD do formularza wstępnego</h4>
@@ -615,6 +623,10 @@ function formatChanges(value: Record<string, unknown>) {
 function registerStatusText(status: string) {
   if (status === "zweryfikowano_automatycznie") return "Zweryfikowano automatycznie";
   if (status === "wymaga_analizy") return "Wymaga analizy";
+  if (status === "ok" || status === "pobrano") return "Pobrano";
+  if (status === "warning") return "Wymaga uwagi";
+  if (status === "error") return "Błąd źródła";
+  if (status === "skipped") return "Do weryfikacji";
   return status.replace(/_/g, " ");
 }
 
@@ -769,9 +781,14 @@ const tabButtonStyle: CSSProperties = { minHeight: "42px", border: `1px solid ${
 const activeTabButtonStyle: CSSProperties = { ...tabButtonStyle, background: colors.navy, borderColor: colors.navy, color: colors.white };
 const tabPanelStyle: CSSProperties = { minHeight: "54px", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.inputBackground, display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", padding: "12px 14px" };
 const tabPanelLabelStyle: CSSProperties = { color: colors.navy, fontSize: "14px", fontWeight: 850 };
-const registryGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "12px" };
+const registryGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(260px, 0.9fr) minmax(260px, 0.9fr) minmax(420px, 1.4fr)", gap: "12px" };
 const registryPanelStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "16px", background: colors.inputBackground };
 const registryPanelWideStyle: CSSProperties = { ...registryPanelStyle, gridColumn: "1 / -1" };
+const beneficialOwnersPanelStyle: CSSProperties = { ...registryPanelStyle, minHeight: "180px" };
+const beneficialOwnersListStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "10px" };
+const beneficialOwnerItemStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, padding: "12px" };
+const beneficialOwnerNameStyle: CSSProperties = { display: "block", color: colors.navy, fontSize: "14px", lineHeight: 1.35 };
+const beneficialOwnerMetaStyle: CSSProperties = { display: "grid", gap: "5px", marginTop: "8px", color: colors.muted, fontSize: "12px", fontWeight: 750, lineHeight: 1.35 };
 const registryTitleStyle: CSSProperties = { margin: "0 0 12px", color: colors.navy, fontSize: "15px" };
 const definitionStyle: CSSProperties = { display: "grid", gridTemplateColumns: "92px 1fr", gap: "10px", padding: "8px 0", borderTop: `1px solid ${colors.border}` };
 const definitionLabelStyle: CSSProperties = { color: colors.muted, fontSize: "12px", fontWeight: 850, textTransform: "uppercase" };

@@ -602,6 +602,11 @@ function RegistryDetails({ register }: { register: AmlRegisterRecord | null }) {
   const registry = asRecord(register?.dane_rejestrowe);
   const identifiers = asRecord(registry.identyfikatory);
   const vat = asRecord(registry.bialaListaVat);
+  const crbr = asRecord(registry.crbr);
+  const crbrMeta = asRecord(crbr.requestMeta);
+  const crbrCompanies = Array.isArray(crbr.companies) ? crbr.companies as Array<Record<string, unknown>> : [];
+  const crbrCompany = crbrCompanies[0] || {};
+  const crbrRepresentatives = crbrRepresentativesFromCompanies(crbrCompanies);
   const pepOsint = asRecord(registry.pepOsint);
   const pepFindings = Array.isArray(pepOsint.findings) ? pepOsint.findings as Array<Record<string, unknown>> : [];
   const pepCheckedSources = Array.isArray(pepOsint.checkedSources) ? pepOsint.checkedSources as Array<Record<string, unknown>> : [];
@@ -642,6 +647,37 @@ function RegistryDetails({ register }: { register: AmlRegisterRecord | null }) {
               </div>
             ) : (
               <p style={emptySmallStyle}>Brak zapisanych beneficjentów z CRBR.</p>
+            )}
+          </div>
+          <div style={registryPanelStyle}>
+            <h4 style={registryTitleStyle}>Metryka CRBR</h4>
+            <Definition label="Id wniosku" value={asText(crbrMeta.identyfikatorWniosku || crbr.identyfikatorZapytania)} />
+            <Definition label={"Z\u0142o\u017cenie"} value={formatCrbrDateTime(crbrMeta.dataICzasZlozeniaWniosku)} />
+            <Definition label={"Udost\u0119pnienie"} value={formatCrbrDateTime(crbrMeta.dataICzasUdostepnieniaWniosku)} />
+            <Definition label="Kryterium" value={[crbrMeta.kryterium, crbrMeta.wartoscKryterium].filter(Boolean).join(": ") || "-"} />
+            <Definition label="Nazwa" value={asText(crbrCompany.nazwa)} />
+            <Definition label="Adres" value={asText(crbrCompany.adres)} />
+            <Definition label="Forma" value={asText(crbrCompany.formaOrganizacyjna)} />
+          </div>
+          <div style={beneficialOwnersPanelStyle}>
+            <h4 style={registryTitleStyle}>Reprezentanci z CRBR</h4>
+            {crbrRepresentatives.length > 0 ? (
+              <div style={beneficialOwnersListStyle}>
+                {crbrRepresentatives.map((representative, index) => (
+                  <div key={`${asText(representative.label)}-${index}`} style={beneficialOwnerItemStyle}>
+                    <strong style={beneficialOwnerNameStyle}>{asText(representative.label)}</strong>
+                    <div style={beneficialOwnerMetaStyle}>
+                      <span>PESEL: {asText(representative.pesel)}</span>
+                      <span>Data urodzenia: {asText(representative.dataUrodzenia)}</span>
+                      <span>Funkcja: {asText(representative.funkcja)}</span>
+                      <span>Obywatelstwo: {asText(representative.obywatelstwo)}</span>
+                      <span>Kraj zamieszkania: {asText(representative.krajZamieszkania)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p style={emptySmallStyle}>{"Brak zapisanych reprezentant\u00f3w z CRBR."}</p>
             )}
           </div>
           <div style={registryPanelWideStyle}>
@@ -818,6 +854,17 @@ function beneficiarySharesLabel(owner: Record<string, unknown>) {
   return values.join(", ") || "Do uzupełnienia w formularzu";
 }
 
+function crbrRepresentativesFromCompanies(companies: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
+  return companies.flatMap((company) => {
+    const representatives = Array.isArray(company.reprezentanci) ? company.reprezentanci as Array<Record<string, unknown>> : [];
+    return representatives.map((representative) => ({
+      ...representative,
+      label: [representative.pierwszeImie, representative.kolejneImiona, representative.nazwisko].filter(Boolean).join(" ").trim() || "Reprezentant",
+      spolka: company.nazwa || null,
+    }));
+  });
+}
+
 function formatPercentValue(value: unknown) {
   const text = String(value || "").trim();
   if (!text) return "";
@@ -964,6 +1011,14 @@ function profileLabel(id: string | null | undefined, profilesById: Record<string
 function formatDateTime(value: string | null | undefined) {
   if (!value) return "-";
   return new Date(value).toLocaleString("pl-PL", { dateStyle: "short", timeStyle: "short" });
+}
+
+function formatCrbrDateTime(value: unknown) {
+  const text = String(value || "").trim();
+  if (!text || text === "-") return "-";
+  const date = new Date(text.replace(" ", "T"));
+  if (Number.isNaN(date.getTime())) return text;
+  return date.toLocaleString("pl-PL", { dateStyle: "short", timeStyle: "short" });
 }
 
 function formatDate(value: string | null | undefined) {

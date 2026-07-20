@@ -498,13 +498,21 @@ async function verifyCrbr(nip: string, krs: string | null): Promise<OfficialChec
     }
 
     const status = readXmlTag(xml, "Status") || "";
+    const requestMeta = {
+      identyfikatorWniosku: readFirstXmlTag(xml, ["IdentyfikatorWniosku", "IdentyfikatorZlozonegoWniosku", "IdentyfikatorZłożonegoWniosku"]),
+      dataICzasZlozeniaWniosku: readFirstXmlTag(xml, ["DataICzasZlozeniaWniosku", "DataICzasZłożeniaWniosku", "DataZlozeniaWniosku", "DataZłożeniaWniosku"]),
+      dataICzasUdostepnieniaWniosku: readFirstXmlTag(xml, ["DataICzasUdostepnieniaWniosku", "DataICzasUdostępnieniaWniosku", "DataUdostepnieniaWniosku", "DataUdostępnieniaWniosku"]),
+      celZapytania: readXmlTag(xml, "CelZapytania"),
+      kryterium: krs ? "KRS" : "NIP",
+      wartoscKryterium: krs ? krs.padStart(10, "0") : nip,
+    };
     const companies = parseCrbrCompanies(xml);
     const hasOwners = companies.some((company) => company.beneficjenci.length > 0);
     return {
       source: "CRBR",
       status: hasOwners ? "ok" : "warning",
       label: hasOwners ? "Pobrano beneficjentów rzeczywistych z CRBR." : "CRBR nie zwrócił beneficjentów dla podmiotu.",
-      details: { identyfikatorZapytania: queryId, status, companies, checkedAt: new Date().toISOString(), url: CRBR_API_URL, searchBy: krs ? "KRS" : "NIP" },
+      details: { identyfikatorZapytania: queryId, status, requestMeta, companies, checkedAt: new Date().toISOString(), url: CRBR_API_URL, searchBy: krs ? "KRS" : "NIP" },
     };
   } catch (error) {
     return { source: "CRBR", status: "error", label: "Błąd połączenia z CRBR.", details: { identyfikatorZapytania: queryId, message: errorMessage(error), checkedAt: new Date().toISOString(), url: CRBR_API_URL } };
@@ -794,6 +802,13 @@ function parseCrbrCompanies(xml: string) {
     nip: readXmlTag(block, "NIP"),
     krs: readXmlTag(block, "KRS"),
     formaOrganizacyjna: readXmlTag(block, "OpisFormyOrganizacyjnej"),
+    poczatkowaDataPrezentacjiZgloszenia: readFirstXmlTag(block, ["PoczatkowaDataPrezentacjiZgloszenia", "PoczątkowaDataPrezentacjiZgłoszenia", "DataOd"]),
+    koncowaDataPrezentacjiZgloszenia: readFirstXmlTag(block, ["KoncowaDataPrezentacjiZgloszenia", "KońcowaDataPrezentacjiZgłoszenia", "DataDo"]),
+    kodPocztowy: readXmlTag(block, "KodPocztowy"),
+    miejscowosc: readXmlTag(block, "Miejscowosc"),
+    ulica: readXmlTag(block, "Ulica"),
+    numerDomu: readXmlTag(block, "NrDomu") || readXmlTag(block, "Numer") || readXmlTag(block, "NumerDomu"),
+    numerLokalu: readXmlTag(block, "NrLokalu") || readXmlTag(block, "NumerLokalu"),
     adres: [
       readXmlTag(block, "KodPocztowy"),
       readXmlTag(block, "Miejscowosc"),
@@ -832,6 +847,19 @@ function parseCrbrCompanies(xml: string) {
         })),
       };
     }),
+    reprezentanci: xmlBlocksAny(block, ["Reprezentant", "ReprezentantZglaszajacy", "ReprezentantZgłaszający", "OsobaReprezentujaca", "OsobaReprezentująca"]).map((representativeBlock) => ({
+      pierwszeImie: readXmlTag(representativeBlock, "PierwszeImie"),
+      kolejneImiona: readXmlTag(representativeBlock, "KolejneImiona"),
+      nazwisko: readXmlTag(representativeBlock, "Nazwisko"),
+      pesel: readXmlTag(representativeBlock, "PESEL"),
+      dataUrodzenia: readXmlTag(representativeBlock, "DataUrodzenia"),
+      obywatelstwo: readDictionaryValue(representativeBlock, "Obywatelstwo"),
+      krajZamieszkania: readDictionaryValue(representativeBlock, "KrajZamieszkania"),
+      funkcja: readDictionaryValue(representativeBlock, "FunkcjaZglaszajacego")
+        || readDictionaryValue(representativeBlock, "FunkcjaZgłaszającego")
+        || readDictionaryValue(representativeBlock, "Funkcja")
+        || "REPREZENTANT",
+    })),
   }));
 }
 
@@ -984,6 +1012,10 @@ function xmlBlocks(xml: string, tag: string) {
   return [...xml.matchAll(pattern)].map((match) => match[1] || "");
 }
 
+function xmlBlocksAny(xml: string, tags: string[]) {
+  return tags.flatMap((tag) => xmlBlocks(xml, tag));
+}
+
 function decodeXmlEntities(value: string) {
   return value
     .replace(/&#x([0-9a-fA-F]+);/g, (_, hex: string) => String.fromCodePoint(Number.parseInt(hex, 16)))
@@ -1084,6 +1116,18 @@ async function buildAmlReportPdf(input: {
   const krsCheck = input.checks.find((check) => check.source.includes("KRS"));
   const crbrCheck = input.checks.find((check) => check.source.includes("CRBR"));
   const sanctionsCheck = input.checks.find((check) => check.source.includes("sankcyjne"));
+  const crbrDetails = input.registryDetails.crbr && typeof input.registryDetails.crbr === "object"
+    ? input.registryDetails.crbr as Record<string, unknown>
+    : {};
+  const crbrMeta = crbrDetails.requestMeta && typeof crbrDetails.requestMeta === "object"
+    ? crbrDetails.requestMeta as Record<string, unknown>
+    : {};
+  const crbrCompanies = Array.isArray(crbrDetails.companies) ? crbrDetails.companies as Array<Record<string, unknown>> : [];
+  const crbrCompany = crbrCompanies[0] || {};
+  const crbrRepresentatives: Array<Record<string, unknown>> = crbrCompanies.flatMap((company) => {
+    const representatives = Array.isArray(company.reprezentanci) ? company.reprezentanci as Array<Record<string, unknown>> : [];
+    return representatives.map((representative) => ({ ...representative, spolka: company.nazwa || null }));
+  });
 
   drawInfoBox("Identyfikatory", [
     ["NIP", asPdfText(identifiers.nip || input.nip)],
@@ -1096,6 +1140,15 @@ async function buildAmlReportPdf(input: {
   drawReportSection("Rejestr VIES", [["VIES", viesCheck]]);
   drawReportSection("Wyniki weryfikacji na listach sankcyjnych", [["Listy sankcyjne", sanctionsCheck]]);
   drawReportSection("Beneficjenci rzeczywiści", [["CRBR", crbrCheck]]);
+  drawInfoBox("Metryka CRBR", [
+    ["Id wniosku", asPdfText(crbrMeta.identyfikatorWniosku || crbrDetails.identyfikatorZapytania)],
+    ["Z\u0142o\u017cenie", asPdfText(crbrMeta.dataICzasZlozeniaWniosku)],
+    ["Udost\u0119pnienie", asPdfText(crbrMeta.dataICzasUdostepnieniaWniosku)],
+    ["Kryterium", asPdfText([crbrMeta.kryterium, crbrMeta.wartoscKryterium].filter(Boolean).join(": "))],
+    ["Nazwa", asPdfText(crbrCompany.nazwa)],
+    ["Adres", asPdfText(crbrCompany.adres)],
+    ["Forma", asPdfText(crbrCompany.formaOrganizacyjna)],
+  ]);
   drawInfoBox("Beneficjenci rzeczywiści", input.beneficialOwners.length > 0
     ? input.beneficialOwners.slice(0, 8).map((owner, index) => [
       `${index + 1}.`,
@@ -1112,6 +1165,20 @@ async function buildAmlReportPdf(input: {
       ].filter(Boolean).join(" | ") || "-"
     ])
     : [["-", "Brak zapisanych beneficjentów rzeczywistych z CRBR."]]
+  );
+  drawInfoBox("Reprezentanci z CRBR", crbrRepresentatives.length > 0
+    ? crbrRepresentatives.slice(0, 8).map((representative, index) => [
+      `${index + 1}.`,
+      [
+        [representative.pierwszeImie, representative.kolejneImiona, representative.nazwisko].filter(Boolean).join(" ").trim(),
+        representative.pesel ? `PESEL: ${representative.pesel}` : null,
+        representative.dataUrodzenia ? `data urodzenia: ${representative.dataUrodzenia}` : null,
+        representative.funkcja ? `funkcja: ${representative.funkcja}` : null,
+        representative.obywatelstwo ? `obywatelstwo: ${representative.obywatelstwo}` : null,
+        representative.krajZamieszkania ? `kraj: ${representative.krajZamieszkania}` : null,
+      ].filter(Boolean).join(" | ") || "-"
+    ])
+    : [["-", "Brak zapisanych reprezentant\u00f3w z CRBR."]]
   );
   drawInfoBox("Kody PKD", input.pkdCodes.length > 0
     ? input.pkdCodes.slice(0, 12).map((pkd) => [

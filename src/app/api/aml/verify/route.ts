@@ -502,7 +502,7 @@ async function verifyCrbr(nip: string, krs: string | null): Promise<OfficialChec
 async function verifyPep(subjects: string[]): Promise<OfficialCheck> {
   const uniqueSubjects = [...new Set(subjects.map((subject) => subject.trim()).filter(Boolean))].slice(0, 12);
   if (uniqueSubjects.length === 0) {
-    return confirmedCheck("PEP", "Brak osób fizycznych do automatycznego screeningu PEP w danych CRBR/KRS.");
+    return { source: "PEP", status: "ok", label: "Beneficjenci rzeczywisci i osoby powiazane nie znajduja sie na liscie PEP.", details: { subjects: uniqueSubjects, checkedAt: new Date().toISOString(), source: "OpenSanctions PEP" } };
   }
   if (!OPENSANCTIONS_API_KEY) {
     return {
@@ -552,7 +552,7 @@ async function verifyPep(subjects: string[]): Promise<OfficialCheck> {
   return {
     source: "PEP",
     status: "ok",
-    label: "Nie znaleziono potencjalnych dopasowań PEP.",
+    label: "Beneficjenci rzeczywisci i osoby powiazane nie znajduja sie na liscie PEP.",
     details: { subjects: uniqueSubjects, checkedAt: new Date().toISOString(), source: "OpenSanctions PEP" },
   };
 }
@@ -909,9 +909,12 @@ async function buildAmlReportPdf(input: {
   const doc = await PDFDocument.create();
   doc.registerFontkit(fontkit);
   const font = await doc.embedFont(readFontBytes(), { subset: true });
+  const logoBytes = readLogoBytes();
+  const logoImage = logoBytes ? await doc.embedPng(logoBytes) : null;
   let page = doc.addPage([595, 842]);
   let y = 790;
   const margin = 42;
+  const contentWidth = 511;
   const navy = rgb(0.07, 0.17, 0.39);
   const text = rgb(0.04, 0.12, 0.25);
   const muted = rgb(0.32, 0.38, 0.5);
@@ -942,19 +945,22 @@ async function buildAmlReportPdf(input: {
     ? input.registryDetails.bialaListaVat as Record<string, unknown>
     : {};
 
-  page.drawText("CRSS", { x: margin, y: 802, size: 28, font, color: navy });
-  page.drawText("Księgowość praktyczna", { x: margin + 2, y: 785, size: 9, font, color: muted });
-  page.drawText("Przeciwdziałanie praniu pieniędzy i finansowaniu terroryzmu (AML&CFT)", { x: margin, y: 748, size: 13, font, color: navy });
-  page.drawText("Skaner AML", { x: margin, y: 724, size: 22, font, color: navy });
-  page.drawText(resultLabel(input.result), { x: 430, y: 726, size: 12, font, color: input.result === "pozytywna" ? green : red });
-  y = 690;
+  if (logoImage) {
+    page.drawImage(logoImage, { x: margin, y: 766, width: 58, height: 58 });
+  } else {
+    page.drawText("CRSS", { x: margin, y: 802, size: 28, font, color: navy });
+  }
+  page.drawText("Skaner AML", { x: margin + 78, y: 802, size: 22, font, color: navy });
+  page.drawText("Przeciwdzialanie praniu pieniedzy i finansowaniu terroryzmu", { x: margin + 78, y: 782, size: 10, font, color: muted });
+  page.drawText(resultLabel(input.result), { x: 430, y: 802, size: 12, font, color: input.result === "pozytywna" ? green : red });
+  y = 740;
 
   drawText(`Data zapytania: ${input.createdAt.toLocaleString("pl-PL")}`, 10, margin, text);
-  drawText(`Wygenerował: ${input.requesterName}`, 10, margin, text);
-  drawText(`Pełna nazwa podmiotu: ${input.clientName}`, 10, margin, text, 72);
+  drawText(`Wygenerowal: ${input.requesterName}`, 10, margin, text);
+  drawText(`Pelna nazwa podmiotu: ${input.clientName}`, 10, margin, text, 72);
   y -= 8;
 
-  const vatCheck = input.checks.find((check) => check.source.includes("Biała Lista") || check.source === "Status VAT");
+  const vatCheck = input.checks.find((check) => normalizeTextForMatch(check.source).includes("biala lista") || check.source === "Status VAT");
   const viesCheck = input.checks.find((check) => check.source.includes("VIES"));
   const ceidgCheck = input.checks.find((check) => check.source.includes("CEIDG"));
   const krsCheck = input.checks.find((check) => check.source.includes("KRS"));
@@ -966,30 +972,37 @@ async function buildAmlReportPdf(input: {
     ["NIP", asPdfText(identifiers.nip || input.nip)],
     ["REGON", asPdfText(identifiers.regon)],
     ["KRS", asPdfText(identifiers.krs)],
-    ["Rejestr", asPdfText(identifiers.rejestr || "Rejestr przedsiębiorców")],
+    ["Rejestr", asPdfText(identifiers.rejestr || "Rejestr przedsiebiorcow")],
     ["Status VAT", vatData.statusVat ? `VAT ${String(vatData.statusVat).toLowerCase()}` : "-"],
   ]);
-  drawReportSection("Dane rejestrowe podmiotu", ceidgCheck ? [["CEIDG", ceidgCheck], ["KRS", krsCheck]] : [["KRS", krsCheck]], drawText, () => y, (nextY) => { y = nextY; }, page, font, margin, soft, border, navy, muted);
-  drawReportSection("Informacje o płatniku VAT", [["Status VAT", vatCheck]], drawText, () => y, (nextY) => { y = nextY; }, page, font, margin, soft, border, navy, muted);
-  drawReportSection("Rejestr VIES", [["VIES", viesCheck]], drawText, () => y, (nextY) => { y = nextY; }, page, font, margin, soft, border, navy, muted);
-  drawReportSection("Wyniki weryfikacji na listach sankcyjnych", [["Listy sankcyjne", sanctionsCheck]], drawText, () => y, (nextY) => { y = nextY; }, page, font, margin, soft, border, navy, muted);
-  drawReportSection("Beneficjenci rzeczywiści i osoby powiązane", [["CRBR", crbrCheck], ["PEP", pepCheck]], drawText, () => y, (nextY) => { y = nextY; }, page, font, margin, soft, border, navy, muted);
-  drawInfoBox("Beneficjenci rzeczywiści", input.beneficialOwners.slice(0, 8).map((owner, index) => [
-    `${index + 1}.`,
-    [owner.label, owner.obywatelstwo ? `obywatelstwo: ${owner.obywatelstwo}` : null, owner.krajZamieszkania ? `kraj: ${owner.krajZamieszkania}` : null].filter(Boolean).join(" | ") || "-"
-  ]));
-  drawInfoBox("Kody PKD", input.pkdCodes.slice(0, 12).map((pkd) => [
-    pkd.kod,
-    [pkd.nazwa, pkd.przewazajace ? "przeważające" : null, pkd.zrodlo].filter(Boolean).join(" | ")
-  ]));
+  drawReportSection("Dane rejestrowe podmiotu", ceidgCheck ? [["CEIDG", ceidgCheck], ["KRS", krsCheck]] : [["KRS", krsCheck]]);
+  drawReportSection("Informacje o platniku VAT", [["Status VAT", vatCheck]]);
+  drawReportSection("Rejestr VIES", [["VIES", viesCheck]]);
+  drawReportSection("Wyniki weryfikacji na listach sankcyjnych", [["Listy sankcyjne", sanctionsCheck]]);
+  drawReportSection("Beneficjenci rzeczywisci", [["CRBR", crbrCheck]]);
+  drawInfoBox("Beneficjenci rzeczywisci", input.beneficialOwners.length > 0
+    ? input.beneficialOwners.slice(0, 8).map((owner, index) => [
+      `${index + 1}.`,
+      [owner.label, owner.obywatelstwo ? `obywatelstwo: ${owner.obywatelstwo}` : null, owner.krajZamieszkania ? `kraj: ${owner.krajZamieszkania}` : null].filter(Boolean).join(" | ") || "-"
+    ])
+    : [["-", "Brak zapisanych beneficjentow rzeczywistych z CRBR."]]
+  );
+  drawInfoBox("Kody PKD", input.pkdCodes.length > 0
+    ? input.pkdCodes.slice(0, 12).map((pkd) => [
+      pkd.kod,
+      [pkd.nazwa, pkd.przewazajace ? "przewazajace" : null, pkd.zrodlo].filter(Boolean).join(" | ")
+    ])
+    : [["-", "Brak zapisanych kodow PKD."]]
+  );
+  drawReportSection("PEP", [["PEP", pepCheck]]);
 
   y -= 8;
   drawText("Metryka raportu", 14, margin, navy, 60);
   drawText(`Raport pobrano i zapisano: ${input.createdAt.toLocaleString("pl-PL")}`, 9, margin, muted);
-  drawText(`Użytkownik generujący: ${input.requesterName}`, 9, margin, muted);
+  drawText(`Uzytkownik generujacy: ${input.requesterName}`, 9, margin, muted);
   const sourceSummary = ceidgCheck
-    ? "Źródła: CEIDG, Biała Lista VAT MF, VIES, KRS MS, CRBR MF, OpenSanctions PEP i publiczna lista sankcyjna ONZ."
-    : "Źródła: Biała Lista VAT MF, VIES, KRS MS, CRBR MF, OpenSanctions PEP i publiczna lista sankcyjna ONZ.";
+    ? "Zrodla: CEIDG, Biala Lista VAT MF, VIES, KRS MS, CRBR MF, OpenSanctions PEP i publiczna lista sankcyjna ONZ."
+    : "Zrodla: Biala Lista VAT MF, VIES, KRS MS, CRBR MF, OpenSanctions PEP i publiczna lista sankcyjna ONZ.";
   drawText(sourceSummary, 9, margin, muted, 92);
 
   drawFooter(page, font);
@@ -997,49 +1010,68 @@ async function buildAmlReportPdf(input: {
   return Buffer.from(bytes);
 
   function drawInfoBox(title: string, rows: Array<[string, string]>) {
-    ensurePage(58 + rows.length * 18);
+    const preparedRows = rows.map(([label, value]) => ({ label, value: value || "-", lines: wrapText(value || "-", 62) }));
+    const rowHeights = preparedRows.map((row) => Math.max(24, 14 + row.lines.length * 11));
+    ensurePage(30 + rowHeights.reduce((sum, height) => sum + height, 0));
     page.drawText(title, { x: margin, y, size: 14, font, color: navy });
     y -= 18;
-    rows.forEach(([label, value]) => {
-      ensurePage(24);
-      page.drawRectangle({ x: margin, y: y - 14, width: 511, height: 22, color: soft, borderColor: border, borderWidth: 0.5 });
-      page.drawText(label, { x: margin + 8, y: y - 7, size: 8.5, font, color: navy });
-      page.drawText(wrapText(value || "-", 70)[0] || "-", { x: margin + 92, y: y - 7, size: 8.5, font, color: text });
-      y -= 23;
+    preparedRows.forEach((row, index) => {
+      const height = rowHeights[index];
+      page.drawRectangle({ x: margin, y: y - height + 8, width: contentWidth, height, color: soft, borderColor: border, borderWidth: 0.5 });
+      page.drawText(row.label, { x: margin + 8, y: y - 7, size: 8.5, font, color: navy });
+      let valueY = y - 7;
+      row.lines.forEach((line) => {
+        page.drawText(line, { x: margin + 92, y: valueY, size: 8.5, font, color: text });
+        valueY -= 11;
+      });
+      y -= height + 2;
     });
     y -= 8;
   }
+
+  function drawReportSection(title: string, rows: Array<[string, OfficialCheck | undefined]>) {
+    const preparedRows = rows.map(([label, check]) => {
+      const body = check ? check.label : "Nie dotyczy albo brak danych w zrodle.";
+      const details = check ? summarizeDetails(check.details) : "";
+      const bodyLines = wrapText(body, 78);
+      const detailLines = details ? wrapText(details, 88).slice(0, 3) : [];
+      const height = Math.max(52, 30 + bodyLines.length * 11 + detailLines.length * 10);
+      return { label, check, bodyLines, detailLines, height };
+    });
+    ensurePage(30 + preparedRows.reduce((sum, row) => sum + row.height + 8, 0));
+    page.drawText(title, { x: margin, y, size: 14, font, color: navy });
+    y -= 18;
+    preparedRows.forEach((row) => {
+      page.drawRectangle({ x: margin, y: y - row.height + 8, width: contentWidth, height: row.height, color: soft, borderColor: border, borderWidth: 1 });
+      page.drawText(row.label, { x: margin + 10, y: y - 10, size: 9, font, color: navy });
+      page.drawText(row.check ? statusLabelForReport(row.check) : "-", { x: margin + 410, y: y - 10, size: 8, font, color: row.check ? statusColor(row.check.status) : muted });
+      let rowY = y - 25;
+      row.bodyLines.forEach((line) => {
+        page.drawText(line, { x: margin + 10, y: rowY, size: 8.5, font, color: muted });
+        rowY -= 11;
+      });
+      row.detailLines.forEach((line) => {
+        page.drawText(line, { x: margin + 10, y: rowY, size: 7.5, font, color: muted });
+        rowY -= 10;
+      });
+      y -= row.height + 8;
+    });
+    y -= 4;
+  }
 }
 
-function drawReportSection(
-  title: string,
-  rows: Array<[string, OfficialCheck | undefined]>,
-  drawText: (value: string, size?: number, x?: number, color?: ReturnType<typeof rgb>, maxChars?: number) => void,
-  getY: () => number,
-  setY: (value: number) => void,
-  page: PDFPage,
-  font: PDFFont,
-  margin: number,
-  soft: ReturnType<typeof rgb>,
-  border: ReturnType<typeof rgb>,
-  navy: ReturnType<typeof rgb>,
-  muted: ReturnType<typeof rgb>
-) {
-  drawText(title, 14, margin, navy, 64);
-  let y = getY() - 4;
-  setY(y);
+function readLogoBytes() {
+  const candidates = [
+    path.join(process.cwd(), "public", "logo-crss.png"),
+    path.join(process.cwd(), "public", "logo-crss-mail.png"),
+  ];
+  const logoPath = candidates.find((candidate) => existsSync(candidate));
+  return logoPath ? readFileSync(logoPath) : null;
+}
 
-  rows.forEach(([label, check]) => {
-    const boxY = getY();
-    page.drawRectangle({ x: margin, y: boxY - 52, width: 511, height: 48, color: soft, borderColor: border, borderWidth: 1 });
-    page.drawText(label, { x: margin + 10, y: boxY - 18, size: 9, font, color: navy });
-    page.drawText(check ? statusLabel(check.status) : "-", { x: margin + 410, y: boxY - 18, size: 8, font, color: check ? statusColor(check.status) : muted });
-    setY(boxY - 33);
-    drawText(check ? check.label : "Nie dotyczy albo brak danych w źródle.", 8.5, margin + 10, muted, 86);
-    const details = check ? summarizeDetails(check.details) : "";
-    if (details) drawText(details, 7.5, margin + 10, muted, 96);
-    setY(getY() - 10);
-  });
+function statusLabelForReport(check: OfficialCheck) {
+  if (check.source === "PEP" && check.status === "ok") return "Nie figuruje";
+  return statusLabel(check.status);
 }
 
 function drawFooter(page: PDFPage, font: PDFFont) {

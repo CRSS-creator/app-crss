@@ -15,6 +15,7 @@ const AML_REPORT_BUCKET = "crm-umowy";
 const CRBR_API_URL = process.env.CRBR_API_URL || "https://bramka-crbr.mf.gov.pl:5058/uslugiBiznesowe/uslugiESB/AP/ApiPrzegladoweCRBR/2022/02/01";
 const CEIDG_API_TOKEN = process.env.CEIDG_API_TOKEN;
 const CEIDG_API_URL = process.env.CEIDG_API_URL || "https://dane.biznes.gov.pl/api/ceidg/v3/firmy";
+const OPENSANCTIONS_API_KEY = process.env.OPENSANCTIONS_API_KEY || process.env.OPEN_SANCTIONS_API_KEY;
 
 type VerifyPayload = {
   clientId?: string;
@@ -82,12 +83,16 @@ export async function POST(request: NextRequest) {
     : confirmedCheck("VAT-UE", "Weryfikacja potwierdzona: klient nie jest oznaczony jako podatnik VAT-UE.")
   );
 
-  const ceidgCheck = await verifyCeidg(nip);
-  checks.push(ceidgCheck);
-
-  const ceidgIdentity = getCeidgIdentity(ceidgCheck);
+  let ceidgCheck: OfficialCheck | null = null;
+  let ceidgIdentity = { regon: null as string | null, krs: null as string | null };
+  let krsNumber = normalizeKrs(String(vatSubject?.krs || ""));
+  if (!krsNumber) {
+    ceidgCheck = await verifyCeidg(nip);
+    checks.push(ceidgCheck);
+    ceidgIdentity = getCeidgIdentity(ceidgCheck);
+    krsNumber = normalizeKrs(String(vatSubject?.krs || ceidgIdentity.krs || ""));
+  }
   const regonNumber = String(vatSubject?.regon || ceidgIdentity.regon || "").trim() || null;
-  const krsNumber = normalizeKrs(String(vatSubject?.krs || ceidgIdentity.krs || ""));
   const krsCheck = krsNumber
     ? await verifyKrs(krsNumber)
     : skippedCheck("KRS", "Brak numeru KRS w danych z Białej Listy VAT i CEIDG. Dla JDG wpis KRS zwykle nie występuje.");
@@ -98,11 +103,12 @@ export async function POST(request: NextRequest) {
 
   const sanctionsCheck = await verifySanctionsLists(client.nazwa || "", nip);
   checks.push(sanctionsCheck);
-  checks.push(skippedCheck("PEP", "Brak jednego oficjalnego publicznego API PEP. Status PEP pozostaje do potwierdzenia formularzem i oświadczeniem klienta."));
-  const result = summarizeResult(checks);
   const now = new Date();
   const pkdCodes = collectPkdCodes(ceidgCheck, krsCheck);
   const beneficialOwners = extractCrbrBeneficialOwners(crbrCheck, now);
+  const pepCheck = await verifyPep(collectPepSubjects(beneficialOwners, krsCheck));
+  checks.push(pepCheck);
+  const result = summarizeResult(checks);
   const registryDetails = buildRegistryDetails({
     nip,
     vatSubject,
@@ -121,6 +127,9 @@ export async function POST(request: NextRequest) {
     createdAt: now,
     checks,
     result,
+    registryDetails,
+    beneficialOwners,
+    pkdCodes,
   });
   const storagePath = `aml/${client.id}/verifications/${Date.now()}-${reportName}`;
 
@@ -147,7 +156,7 @@ export async function POST(request: NextRequest) {
       vat_status: checksVat ? (vatCheck.status === "ok" ? String(vatSubject?.statusVat || "sprawdzono") : vatCheck.status) : "potwierdzono_zwolnienie",
       vies_status: checksVies ? statusForSource(checks, "VIES") : "potwierdzono_brak_vat_ue",
       krs_status: statusForSource(checks, "KRS"),
-      pep_status: "do_weryfikacji_formularzem",
+      pep_status: statusForSource(checks, "PEP"),
       sankcje_status: "do_dopiecia",
       numer_krs: krsNumber,
       numer_regon: regonNumber,
@@ -170,7 +179,7 @@ export async function POST(request: NextRequest) {
       ostatnia_weryfikacja_at: now.toISOString(),
       ostatnia_weryfikacja_by: auth.requesterId,
       ostatnia_weryfikacja_id: verification.id,
-      pep_status: "do_weryfikacji_formularzem",
+      pep_status: statusForSource(checks, "PEP"),
       sankcje_status: "do_dopiecia",
       dane_rejestrowe: registryDetails,
       beneficjenci_rzeczywisci: beneficialOwners,
@@ -489,6 +498,65 @@ async function verifyCrbr(nip: string, krs: string | null): Promise<OfficialChec
     return { source: "CRBR", status: "error", label: "Błąd połączenia z CRBR.", details: { message: errorMessage(error), url: CRBR_API_URL } };
   }
 }
+
+async function verifyPep(subjects: string[]): Promise<OfficialCheck> {
+  const uniqueSubjects = [...new Set(subjects.map((subject) => subject.trim()).filter(Boolean))].slice(0, 12);
+  if (uniqueSubjects.length === 0) {
+    return confirmedCheck("PEP", "Brak osób fizycznych do automatycznego screeningu PEP w danych CRBR/KRS.");
+  }
+  if (!OPENSANCTIONS_API_KEY) {
+    return {
+      source: "PEP",
+      status: "warning",
+      label: "PEP wymaga konfiguracji klucza OPENSANCTIONS_API_KEY.",
+      details: { subjects: uniqueSubjects, checkedAt: new Date().toISOString(), source: "OpenSanctions PEP" },
+    };
+  }
+
+  const matches: Array<Record<string, unknown>> = [];
+  const errors: Array<Record<string, unknown>> = [];
+  for (const subject of uniqueSubjects) {
+    const url = `https://api.opensanctions.org/search/peps?limit=5&q=${encodeURIComponent(subject)}`;
+    try {
+      const response = await fetch(url, {
+        headers: { accept: "application/json", authorization: `ApiKey ${OPENSANCTIONS_API_KEY}` },
+      });
+      const data = await response.json().catch(() => null) as { results?: Array<Record<string, unknown>> } | null;
+      if (!response.ok) {
+        errors.push({ subject, httpStatus: response.status, data });
+        continue;
+      }
+      const subjectMatches = Array.isArray(data?.results) ? data.results : [];
+      subjectMatches.slice(0, 3).forEach((match) => matches.push({ subject, match }));
+    } catch (error) {
+      errors.push({ subject, message: errorMessage(error) });
+    }
+  }
+
+  if (matches.length > 0) {
+    return {
+      source: "PEP",
+      status: "warning",
+      label: "Znaleziono potencjalne dopasowania PEP. Wymagana analiza ręczna.",
+      details: { subjects: uniqueSubjects, matches, errors, checkedAt: new Date().toISOString(), source: "OpenSanctions PEP" },
+    };
+  }
+  if (errors.length > 0) {
+    return {
+      source: "PEP",
+      status: "error",
+      label: "Nie udało się zakończyć screeningu PEP.",
+      details: { subjects: uniqueSubjects, errors, checkedAt: new Date().toISOString(), source: "OpenSanctions PEP" },
+    };
+  }
+  return {
+    source: "PEP",
+    status: "ok",
+    label: "Nie znaleziono potencjalnych dopasowań PEP.",
+    details: { subjects: uniqueSubjects, checkedAt: new Date().toISOString(), source: "OpenSanctions PEP" },
+  };
+}
+
 function skippedCheck(source: string, label: string): OfficialCheck {
   return { source, status: "skipped", label, details: { checkedAt: new Date().toISOString() } };
 }
@@ -564,10 +632,11 @@ function extractCeidgCompanies(data: unknown) {
   return [];
 }
 
-function collectPkdCodes(...checks: OfficialCheck[]): PkdCode[] {
+function collectPkdCodes(...checks: Array<OfficialCheck | null | undefined>): PkdCode[] {
   const codes = new Map<string, PkdCode>();
 
   for (const check of checks) {
+    if (!check) continue;
     const source = check.source.includes("KRS") ? "KRS" : check.source;
     const extracted = source === "KRS" ? extractKrsPkdCodes(check.details) : extractPkdCodes(check.details, source);
     for (const item of extracted) {
@@ -655,15 +724,15 @@ function buildRegistryDetails(input: {
   nip: string;
   vatSubject: Record<string, unknown> | null;
   krsCheck: OfficialCheck;
-  ceidgCheck: OfficialCheck;
+  ceidgCheck: OfficialCheck | null;
   crbrCheck: OfficialCheck;
   pkdCodes: PkdCode[];
   checks: OfficialCheck[];
   checkedAt: Date;
 }) {
   const krsDetails = input.krsCheck.details as { krs?: string; register?: string; data?: unknown; url?: string };
-  const ceidgDetails = input.ceidgCheck.details as { companies?: unknown[]; url?: string };
-  const ceidgIdentity = getCeidgIdentity(input.ceidgCheck);
+  const ceidgDetails = input.ceidgCheck?.details as { companies?: unknown[]; url?: string } | undefined;
+  const ceidgIdentity = input.ceidgCheck ? getCeidgIdentity(input.ceidgCheck) : { regon: null, krs: null };
 
   return {
     updatedAt: input.checkedAt.toISOString(),
@@ -681,9 +750,9 @@ function buildRegistryDetails(input: {
       crbr: statusForSource(input.checks, "CRBR"),
     },
     kodyPkd: input.pkdCodes,
-    ceidg: input.ceidgCheck.status === "ok" ? {
-      liczbaWpisow: Array.isArray(ceidgDetails.companies) ? ceidgDetails.companies.length : 0,
-      url: ceidgDetails.url || null,
+    ceidg: input.ceidgCheck?.status === "ok" ? {
+      liczbaWpisow: Array.isArray(ceidgDetails?.companies) ? ceidgDetails.companies.length : 0,
+      url: ceidgDetails?.url || null,
     } : null,
     krs: input.krsCheck.status === "ok" ? {
       numer: krsDetails.krs || null,
@@ -729,6 +798,30 @@ function extractCrbrBeneficialOwners(check: OfficialCheck, checkedAt: Date) {
     label: check.label,
     checkedAt: checkedAt.toISOString(),
   }];
+}
+
+function collectPepSubjects(beneficialOwners: Array<Record<string, unknown>>, krsCheck: OfficialCheck) {
+  const ownerNames = beneficialOwners
+    .map((owner) => String(owner.label || "").trim())
+    .filter((name) => name && !name.toLowerCase().includes("crbr") && !name.toLowerCase().includes("beneficjentów"));
+  const krsDetails = krsCheck.details as { data?: unknown };
+  return [...ownerNames, ...extractPersonNames(krsDetails.data)];
+}
+
+function extractPersonNames(value: unknown): string[] {
+  if (!value || typeof value !== "object") return [];
+  if (Array.isArray(value)) return value.flatMap(extractPersonNames);
+
+  const record = value as Record<string, unknown>;
+  const firstName = firstText(record, ["imie", "imiona", "pierwszeImie", "pierwsze_imie"]);
+  const lastName = firstText(record, ["nazwisko", "nazwiskoNazwa", "nazwisko_nazwa"]);
+  const directName = firstText(record, ["nazwa", "firma"]);
+  const current = firstName && lastName
+    ? [`${firstName} ${lastName}`]
+    : directName && /\s/.test(directName) && !/\b(sp\.|spółka|s\.a\.|fundacja|stowarzyszenie)\b/i.test(directName)
+      ? [directName]
+      : [];
+  return [...current, ...Object.values(record).flatMap(extractPersonNames)];
 }
 
 function normalizeNip(value: unknown) {
@@ -802,6 +895,11 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Nieznany błąd";
 }
 
+function asPdfText(value: unknown) {
+  if (value === null || value === undefined || value === "") return "-";
+  return String(value);
+}
+
 async function buildAmlReportPdf(input: {
   clientName: string;
   nip: string;
@@ -809,6 +907,9 @@ async function buildAmlReportPdf(input: {
   createdAt: Date;
   checks: OfficialCheck[];
   result: string;
+  registryDetails: Record<string, unknown>;
+  beneficialOwners: Array<Record<string, unknown>>;
+  pkdCodes: PkdCode[];
 }) {
   const doc = await PDFDocument.create();
   doc.registerFontkit(fontkit);
@@ -821,6 +922,8 @@ async function buildAmlReportPdf(input: {
   const muted = rgb(0.32, 0.38, 0.5);
   const border = rgb(0.80, 0.84, 0.90);
   const soft = rgb(0.96, 0.98, 1);
+  const green = rgb(0.09, 0.50, 0.24);
+  const red = rgb(0.86, 0.15, 0.22);
 
   const ensurePage = (height = 54) => {
     if (y - height >= 58) return;
@@ -837,43 +940,80 @@ async function buildAmlReportPdf(input: {
     }
   };
 
-  page.drawText("Przeciwdziałanie praniu pieniędzy i finansowaniu terroryzmu", { x: margin, y, size: 15, font, color: navy });
-  y -= 20;
-  page.drawText("(AML&CFT)", { x: margin, y, size: 13, font, color: navy });
-  y -= 28;
-  page.drawText("Skaner AML", { x: margin, y, size: 18, font, color: navy });
-  y -= 26;
+  const identifiers = input.registryDetails.identyfikatory && typeof input.registryDetails.identyfikatory === "object"
+    ? input.registryDetails.identyfikatory as Record<string, unknown>
+    : {};
+  const vatData = input.registryDetails.bialaListaVat && typeof input.registryDetails.bialaListaVat === "object"
+    ? input.registryDetails.bialaListaVat as Record<string, unknown>
+    : {};
+
+  page.drawText("CRSS", { x: margin, y: 802, size: 28, font, color: navy });
+  page.drawText("Księgowość praktyczna", { x: margin + 2, y: 785, size: 9, font, color: muted });
+  page.drawText("Przeciwdziałanie praniu pieniędzy i finansowaniu terroryzmu (AML&CFT)", { x: margin, y: 748, size: 13, font, color: navy });
+  page.drawText("Skaner AML", { x: margin, y: 724, size: 22, font, color: navy });
+  page.drawText(resultLabel(input.result), { x: 430, y: 726, size: 12, font, color: input.result === "pozytywna" ? green : red });
+  y = 690;
 
   drawText(`Data zapytania: ${input.createdAt.toLocaleString("pl-PL")}`, 10, margin, text);
   drawText(`Wygenerował: ${input.requesterName}`, 10, margin, text);
-  drawText(`Informacje dla numeru: ${input.nip}`, 10, margin, text);
   drawText(`Pełna nazwa podmiotu: ${input.clientName}`, 10, margin, text, 72);
-  drawText(`Wynik weryfikacji: ${resultLabel(input.result)}`, 10, margin, text);
   y -= 8;
 
   const vatCheck = input.checks.find((check) => check.source.includes("Biała Lista") || check.source === "Status VAT");
   const viesCheck = input.checks.find((check) => check.source.includes("VIES"));
   const ceidgCheck = input.checks.find((check) => check.source.includes("CEIDG"));
+  const krsCheck = input.checks.find((check) => check.source.includes("KRS"));
   const crbrCheck = input.checks.find((check) => check.source.includes("CRBR"));
   const sanctionsCheck = input.checks.find((check) => check.source.includes("sankcyjne"));
   const pepCheck = input.checks.find((check) => check.source === "PEP");
 
-  drawReportSection("Dane rejestrowe podmiotu", [["CEIDG", ceidgCheck]], drawText, () => y, (nextY) => { y = nextY; }, page, font, margin, soft, border, navy, muted);
+  drawInfoBox("Identyfikatory", [
+    ["NIP", asPdfText(identifiers.nip || input.nip)],
+    ["REGON", asPdfText(identifiers.regon)],
+    ["KRS", asPdfText(identifiers.krs)],
+    ["Rejestr", asPdfText(identifiers.rejestr || "Rejestr przedsiębiorców")],
+    ["Status VAT", vatData.statusVat ? `VAT ${String(vatData.statusVat).toLowerCase()}` : "-"],
+  ]);
+  drawReportSection("Dane rejestrowe podmiotu", ceidgCheck ? [["CEIDG", ceidgCheck], ["KRS", krsCheck]] : [["KRS", krsCheck]], drawText, () => y, (nextY) => { y = nextY; }, page, font, margin, soft, border, navy, muted);
   drawReportSection("Informacje o płatniku VAT", [["Status VAT", vatCheck]], drawText, () => y, (nextY) => { y = nextY; }, page, font, margin, soft, border, navy, muted);
   drawReportSection("Rejestr VIES", [["VIES", viesCheck]], drawText, () => y, (nextY) => { y = nextY; }, page, font, margin, soft, border, navy, muted);
   drawReportSection("Wyniki weryfikacji na listach sankcyjnych", [["Listy sankcyjne", sanctionsCheck]], drawText, () => y, (nextY) => { y = nextY; }, page, font, margin, soft, border, navy, muted);
   drawReportSection("Beneficjenci rzeczywiści i osoby powiązane", [["CRBR", crbrCheck], ["PEP", pepCheck]], drawText, () => y, (nextY) => { y = nextY; }, page, font, margin, soft, border, navy, muted);
+  drawInfoBox("Beneficjenci rzeczywiści", input.beneficialOwners.slice(0, 8).map((owner, index) => [
+    `${index + 1}.`,
+    [owner.label, owner.obywatelstwo ? `obywatelstwo: ${owner.obywatelstwo}` : null, owner.krajZamieszkania ? `kraj: ${owner.krajZamieszkania}` : null].filter(Boolean).join(" | ") || "-"
+  ]));
+  drawInfoBox("Kody PKD", input.pkdCodes.slice(0, 12).map((pkd) => [
+    pkd.kod,
+    [pkd.nazwa, pkd.przewazajace ? "przeważające" : null, pkd.zrodlo].filter(Boolean).join(" | ")
+  ]));
 
   y -= 8;
   drawText("Metryka raportu", 14, margin, navy, 60);
   drawText(`Raport pobrano i zapisano: ${input.createdAt.toLocaleString("pl-PL")}`, 9, margin, muted);
   drawText(`Użytkownik generujący: ${input.requesterName}`, 9, margin, muted);
-  const sourceSummary = "Źródła: CEIDG, Biała Lista VAT MF, VIES, KRS MS, CRBR MF i publiczna lista sankcyjna ONZ.";
+  const sourceSummary = ceidgCheck
+    ? "Źródła: CEIDG, Biała Lista VAT MF, VIES, KRS MS, CRBR MF, OpenSanctions PEP i publiczna lista sankcyjna ONZ."
+    : "Źródła: Biała Lista VAT MF, VIES, KRS MS, CRBR MF, OpenSanctions PEP i publiczna lista sankcyjna ONZ.";
   drawText(sourceSummary, 9, margin, muted, 92);
 
   drawFooter(page, font);
   const bytes = await doc.save();
   return Buffer.from(bytes);
+
+  function drawInfoBox(title: string, rows: Array<[string, string]>) {
+    ensurePage(58 + rows.length * 18);
+    page.drawText(title, { x: margin, y, size: 14, font, color: navy });
+    y -= 18;
+    rows.forEach(([label, value]) => {
+      ensurePage(24);
+      page.drawRectangle({ x: margin, y: y - 14, width: 511, height: 22, color: soft, borderColor: border, borderWidth: 0.5 });
+      page.drawText(label, { x: margin + 8, y: y - 7, size: 8.5, font, color: navy });
+      page.drawText(wrapText(value || "-", 70)[0] || "-", { x: margin + 92, y: y - 7, size: 8.5, font, color: text });
+      y -= 23;
+    });
+    y -= 8;
+  }
 }
 
 function drawReportSection(

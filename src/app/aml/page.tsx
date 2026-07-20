@@ -361,6 +361,7 @@ function RegistryDetails({ register }: { register: AmlRegisterRecord | null }) {
   const vat = asRecord(registry.bialaListaVat);
   const owners = Array.isArray(register?.beneficjenci_rzeczywisci) ? register.beneficjenci_rzeczywisci : [];
   const pkdCodes = Array.isArray(register?.kody_pkd) ? register.kody_pkd : [];
+  const isKrsEntity = Boolean(identifiers.krs || register?.numer_krs);
 
   return (
     <section style={detailsSectionStyle}>
@@ -379,10 +380,10 @@ function RegistryDetails({ register }: { register: AmlRegisterRecord | null }) {
           </div>
           <div style={registryPanelStyle}>
             <h4 style={registryTitleStyle}>Statusy źródeł</h4>
-            <Definition label="CEIDG" value={sourceStatusLabel(asText(asRecord(registry.statusy).ceidg))} />
             <Definition label="KRS" value={sourceStatusLabel(register.krs_status || "")} />
             <Definition label="VAT" value={sourceStatusLabel(asText(asRecord(registry.statusy).vat))} />
             <Definition label="Status CRBR" value={register.crbr_status ? registerStatusText(register.crbr_status) : "Do weryfikacji"} />
+            {!isKrsEntity && <Definition label="CEIDG" value={sourceStatusLabel(asText(asRecord(registry.statusy).ceidg))} />}
           </div>
           <div style={beneficialOwnersPanelStyle}>
             <h4 style={registryTitleStyle}>Beneficjenci rzeczywiści z CRBR</h4>
@@ -424,6 +425,7 @@ function RegistryDetails({ register }: { register: AmlRegisterRecord | null }) {
 }
 
 function VerificationItem({ verification, profilesById }: { verification: AmlVerificationRecord; profilesById: Record<string, Profile> }) {
+  const sources = visibleVerificationSources(verification);
   async function openReport() {
     const result = await getAmlReportUrl(verification.id);
     if (result.error || !result.data?.url) {
@@ -453,7 +455,7 @@ function VerificationItem({ verification, profilesById }: { verification: AmlVer
         <strong style={verificationTitleStyle}>{formatDateTime(verification.created_at)} · {verificationResultLabel(verification.wynik)}</strong>
         <p style={verificationMetaStyle}>Wykonał: {profileLabel(verification.wykonana_by, profilesById)}</p>
         <div style={sourceGridStyle}>
-          {(verification.zrodla || []).map((source, index) => (
+          {sources.map((source, index) => (
             <span key={`${verification.id}-${index}`} style={sourceBadgeStyle(String(source.status || ""))}>
               {String(source.source || "Źródło")} · {sourceStatusLabel(String(source.status || ""))}
             </span>
@@ -466,6 +468,14 @@ function VerificationItem({ verification, profilesById }: { verification: AmlVer
       </div>
     </article>
   );
+}
+
+function visibleVerificationSources(verification: AmlVerificationRecord) {
+  const sources = verification.zrodla || [];
+  const hasKrs = sources.some((source) => String(source.source || "").toLowerCase().includes("krs"));
+  return hasKrs
+    ? sources.filter((source) => !String(source.source || "").toLowerCase().includes("ceidg"))
+    : sources;
 }
 
 function StatusPill({ done }: { done: boolean }) {
@@ -781,16 +791,16 @@ const tabButtonStyle: CSSProperties = { minHeight: "42px", border: `1px solid ${
 const activeTabButtonStyle: CSSProperties = { ...tabButtonStyle, background: colors.navy, borderColor: colors.navy, color: colors.white };
 const tabPanelStyle: CSSProperties = { minHeight: "54px", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.inputBackground, display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", padding: "12px 14px" };
 const tabPanelLabelStyle: CSSProperties = { color: colors.navy, fontSize: "14px", fontWeight: 850 };
-const registryGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(260px, 0.9fr) minmax(260px, 0.9fr) minmax(420px, 1.4fr)", gap: "12px" };
+const registryGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "12px", alignItems: "stretch" };
 const registryPanelStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "16px", background: colors.inputBackground };
 const registryPanelWideStyle: CSSProperties = { ...registryPanelStyle, gridColumn: "1 / -1" };
-const beneficialOwnersPanelStyle: CSSProperties = { ...registryPanelStyle, minHeight: "180px" };
+const beneficialOwnersPanelStyle: CSSProperties = { ...registryPanelStyle, minHeight: "180px", gridColumn: "1 / -1" };
 const beneficialOwnersListStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "10px" };
 const beneficialOwnerItemStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, padding: "12px" };
 const beneficialOwnerNameStyle: CSSProperties = { display: "block", color: colors.navy, fontSize: "14px", lineHeight: 1.35 };
 const beneficialOwnerMetaStyle: CSSProperties = { display: "grid", gap: "5px", marginTop: "8px", color: colors.muted, fontSize: "12px", fontWeight: 750, lineHeight: 1.35 };
 const registryTitleStyle: CSSProperties = { margin: "0 0 12px", color: colors.navy, fontSize: "15px" };
-const definitionStyle: CSSProperties = { display: "grid", gridTemplateColumns: "92px 1fr", gap: "10px", padding: "8px 0", borderTop: `1px solid ${colors.border}` };
+const definitionStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(86px, 0.42fr) minmax(0, 1fr)", gap: "10px", padding: "8px 0", borderTop: `1px solid ${colors.border}` };
 const definitionLabelStyle: CSSProperties = { color: colors.muted, fontSize: "12px", fontWeight: 850, textTransform: "uppercase" };
 const definitionValueStyle: CSSProperties = { color: colors.text, fontSize: "13px", lineHeight: 1.45, overflowWrap: "anywhere" };
 const pkdListStyle: CSSProperties = { display: "flex", flexWrap: "wrap", gap: "8px" };

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { ClipboardCheck, Download, Eye, FileSearch, History, Send, ShieldCheck, X } from "lucide-react";
+import { ClipboardCheck, Download, Eye, FileSearch, History, Send, ShieldCheck, Upload, X } from "lucide-react";
 import AccessGuard from "@/components/AccessGuard";
 import AppLayout from "@/components/AppLayout";
 import { colors, radius, shadow } from "@/app/design";
@@ -11,6 +11,7 @@ import {
   fetchAmlVerifications,
   getAmlReportUrl,
   updateNextAmlVerificationDate,
+  uploadArchivedAmlReport,
   verifyClientAml,
   type AmlHistoryRecord,
   type AmlRegisterRecord,
@@ -87,6 +88,7 @@ function AmlContent() {
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [verifyingClientId, setVerifyingClientId] = useState<string | null>(null);
   const [savingNextVerificationClientId, setSavingNextVerificationClientId] = useState<string | null>(null);
+  const [uploadingArchiveClientId, setUploadingArchiveClientId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
@@ -148,6 +150,20 @@ function AmlContent() {
     setSavingNextVerificationClientId(row.client.id);
     const result = await updateNextAmlVerificationDate(row.client.id, nextVerificationDate);
     setSavingNextVerificationClientId(null);
+
+    if (result.error) {
+      alert(result.error.message);
+      return;
+    }
+
+    await loadData();
+    setSelectedClientId(row.client.id);
+  }
+
+  async function handleUploadArchivedReport(row: AmlRow, file: File) {
+    setUploadingArchiveClientId(row.client.id);
+    const result = await uploadArchivedAmlReport(row.client.id, file);
+    setUploadingArchiveClientId(null);
 
     if (result.error) {
       alert(result.error.message);
@@ -260,8 +276,10 @@ function AmlContent() {
           profilesById={profilesById}
           verifying={verifyingClientId === selectedRow.client.id}
           savingNextVerification={savingNextVerificationClientId === selectedRow.client.id}
+          uploadingArchive={uploadingArchiveClientId === selectedRow.client.id}
           onVerify={() => void handleVerify(selectedRow)}
           onSaveNextVerificationDate={(nextVerificationDate) => void handleSaveNextVerificationDate(selectedRow, nextVerificationDate)}
+          onUploadArchivedReport={(file) => void handleUploadArchivedReport(selectedRow, file)}
           onClose={() => setSelectedClientId(null)}
         />
       )}
@@ -274,16 +292,20 @@ function AmlDetailsModal({
   profilesById,
   verifying,
   savingNextVerification,
+  uploadingArchive,
   onVerify,
   onSaveNextVerificationDate,
+  onUploadArchivedReport,
   onClose,
 }: {
   row: AmlRow;
   profilesById: Record<string, Profile>;
   verifying: boolean;
   savingNextVerification: boolean;
+  uploadingArchive: boolean;
   onVerify: () => void;
   onSaveNextVerificationDate: (nextVerificationDate: string | null) => void;
+  onUploadArchivedReport: (file: File) => void;
   onClose: () => void;
 }) {
   const [activeTab, setActiveTab] = useState<AmlCheckKey>("verification");
@@ -358,6 +380,8 @@ function AmlDetailsModal({
           activeCheckDone={activeCheckDone}
           row={row}
           profilesById={profilesById}
+          uploadingArchive={uploadingArchive}
+          onUploadArchivedReport={onUploadArchivedReport}
         />
       </aside>
     </div>
@@ -370,12 +394,16 @@ function AmlTabContent({
   activeCheckDone,
   row,
   profilesById,
+  uploadingArchive,
+  onUploadArchivedReport,
 }: {
   activeTab: AmlCheckKey;
   activeCheck: AmlCheck;
   activeCheckDone: boolean;
   row: AmlRow;
   profilesById: Record<string, Profile>;
+  uploadingArchive: boolean;
+  onUploadArchivedReport: (file: File) => void;
 }) {
   if (activeTab === "verification") {
     return (
@@ -388,7 +416,10 @@ function AmlTabContent({
         </section>
         <RegistryDetails register={row.register} />
         <section style={detailsSectionStyle}>
-          <h3 style={detailsTitleStyle}>Weryfikacje i raporty</h3>
+          <div style={detailsSectionHeaderStyle}>
+            <h3 style={detailsTitleStyle}>Weryfikacje i raporty</h3>
+            <ArchivedReportUpload uploading={uploadingArchive} onUpload={onUploadArchivedReport} />
+          </div>
           {row.verifications.length === 0 ? (
             <p style={emptySmallStyle}>Brak wykonanej weryfikacji AML.</p>
           ) : (
@@ -508,8 +539,29 @@ function RegistryDetails({ register }: { register: AmlRegisterRecord | null }) {
   );
 }
 
+function ArchivedReportUpload({ uploading, onUpload }: { uploading: boolean; onUpload: (file: File) => void }) {
+  return (
+    <label style={archiveUploadButtonStyle}>
+      <Upload size={16} />
+      {uploading ? "Dodawanie..." : "Dodaj raport archiwalny"}
+      <input
+        type="file"
+        accept="application/pdf,.pdf"
+        disabled={uploading}
+        style={hiddenFileInputStyle}
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = "";
+          if (file) onUpload(file);
+        }}
+      />
+    </label>
+  );
+}
+
 function VerificationItem({ verification, profilesById }: { verification: AmlVerificationRecord; profilesById: Record<string, Profile> }) {
   const sources = visibleVerificationSources(verification);
+  const archived = isArchivedVerification(verification);
   async function openReport() {
     const result = await getAmlReportUrl(verification.id);
     if (result.error || !result.data?.url) {
@@ -537,6 +589,7 @@ function VerificationItem({ verification, profilesById }: { verification: AmlVer
     <article style={verificationItemStyle}>
       <div>
         <strong style={verificationTitleStyle}>{formatDateTime(verification.created_at)} · {verificationResultLabel(verification.wynik)}</strong>
+        {archived ? <span style={archivedBadgeStyle}>Archiwalny</span> : null}
         <p style={verificationMetaStyle}>Wykonał: {profileLabel(verification.wykonana_by, profilesById)}</p>
         <div style={sourceGridStyle}>
           {sources.map((source, index) => (
@@ -560,6 +613,10 @@ function visibleVerificationSources(verification: AmlVerificationRecord) {
   return hasKrs
     ? sources.filter((source) => !String(source.source || "").toLowerCase().includes("ceidg"))
     : sources;
+}
+
+function isArchivedVerification(verification: AmlVerificationRecord) {
+  return verification.status === "archiwalny" || verification.wynik === "archiwalny" || Boolean((verification.dane as { archiwalny?: unknown })?.archiwalny);
 }
 
 function StatusPill({ done }: { done: boolean }) {
@@ -651,6 +708,7 @@ function registerStatusLabel(register: AmlRegisterRecord | null) {
 function verificationResultLabel(result: string) {
   if (result === "pozytywna") return "Weryfikacja pozytywna";
   if (result === "wymaga_analizy") return "Wymaga analizy";
+  if (result === "archiwalny") return "Raport archiwalny";
   return result || "Wykonana";
 }
 
@@ -660,11 +718,14 @@ function sourceStatusLabel(status: string) {
   if (status === "warning") return "Uwaga";
   if (status === "error") return "Błąd";
   if (status === "skipped") return "Do dopięcia";
+  if (status === "archiwalny") return "Archiwalny";
   return status || "-";
 }
 
 function historyActionLabel(action: string) {
   if (action === "automatyczna_weryfikacja_aml") return "Automatyczna weryfikacja AML";
+  if (action === "dodano_archiwalny_raport_aml") return "Dodano archiwalny raport AML";
+  if (action === "aktualizacja_nastepnej_weryfikacji") return "Aktualizacja następnej weryfikacji";
   return action.replace(/_/g, " ");
 }
 
@@ -744,6 +805,7 @@ function sourceBadgeStyle(status: string): CSSProperties {
   if (status === "confirmed") return { ...sourceBadgeBaseStyle, background: "rgba(22, 163, 74, 0.12)", color: colors.success };
   if (status === "warning") return { ...sourceBadgeBaseStyle, background: "rgba(245, 158, 11, 0.14)", color: "#9a5b00" };
   if (status === "error") return { ...sourceBadgeBaseStyle, background: "rgba(220, 38, 38, 0.12)", color: colors.danger };
+  if (status === "archiwalny") return { ...sourceBadgeBaseStyle, background: "rgba(23, 59, 115, 0.10)", color: colors.navy };
   return { ...sourceBadgeBaseStyle, background: "rgba(100, 116, 139, 0.12)", color: colors.muted };
 }
 
@@ -873,6 +935,7 @@ const infoLabelStyle: CSSProperties = { display: "block", color: colors.muted, f
 const infoValueStyle: CSSProperties = { display: "block", marginTop: "8px", color: colors.navy, fontSize: "14px" };
 const detailsSectionStyle: CSSProperties = { padding: "24px 30px", borderTop: `1px solid ${colors.border}` };
 const detailsTitleStyle: CSSProperties = { margin: "0 0 16px", color: colors.navy, fontSize: "20px" };
+const detailsSectionHeaderStyle: CSSProperties = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", marginBottom: "16px", flexWrap: "wrap" };
 const tabsSectionStyle: CSSProperties = { padding: "20px 30px", borderTop: `1px solid ${colors.border}`, display: "flex", flexDirection: "column", gap: "14px" };
 const tabsListStyle: CSSProperties = { display: "flex", gap: "8px", flexWrap: "wrap", margin: "10px 0 14px" };
 const tabButtonStyle: CSSProperties = { minHeight: "42px", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.navy, padding: "0 14px", fontWeight: 850, cursor: "pointer" };
@@ -905,6 +968,9 @@ const verificationTitleStyle: CSSProperties = { color: colors.navy, fontSize: "1
 const verificationMetaStyle: CSSProperties = { margin: "6px 0 12px", color: colors.muted, fontSize: "13px", fontWeight: 700 };
 const sourceGridStyle: CSSProperties = { display: "flex", flexWrap: "wrap", gap: "8px" };
 const sourceBadgeBaseStyle: CSSProperties = { display: "inline-flex", padding: "6px 10px", borderRadius: radius.badge, fontSize: "12px", fontWeight: 850 };
+const archiveUploadButtonStyle: CSSProperties = { minHeight: "38px", padding: "0 12px", borderRadius: radius.button, border: `1px solid ${colors.border}`, background: colors.white, color: colors.navy, fontWeight: 850, display: "inline-flex", alignItems: "center", gap: "8px", cursor: "pointer" };
+const hiddenFileInputStyle: CSSProperties = { display: "none" };
+const archivedBadgeStyle: CSSProperties = { ...sourceBadgeBaseStyle, marginLeft: "10px", background: "rgba(23, 59, 115, 0.10)", color: colors.navy, verticalAlign: "middle" };
 const reportButtonsStyle: CSSProperties = { display: "flex", gap: "8px", flexWrap: "wrap", justifyContent: "flex-end" };
 const smallButtonStyle: CSSProperties = { minHeight: "36px", padding: "0 12px", borderRadius: radius.button, border: `1px solid ${colors.border}`, background: colors.white, color: colors.navy, fontWeight: 850, display: "inline-flex", alignItems: "center", gap: "8px", cursor: "pointer" };
 const historyListStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "14px" };

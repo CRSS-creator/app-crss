@@ -123,6 +123,29 @@ export async function updateNextAmlVerificationDate(clientId: string, nextVerifi
   return { data: body?.register || null, error: null };
 }
 
+export async function uploadArchivedAmlReport(clientId: string, file: File) {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
+  if (!token) return { data: null, error: new Error("Brak aktywnej sesji użytkownika.") };
+
+  const formData = new FormData();
+  formData.append("clientId", clientId);
+  formData.append("file", file);
+
+  const response = await fetch("/api/aml/archive-report", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    return { data: null, error: new Error(body?.error || "Nie udało się dodać archiwalnego raportu AML.") };
+  }
+
+  return { data: body?.verification || null, error: null };
+}
+
 export async function getAmlReportUrl(verificationId: string) {
   const { data: sessionData } = await supabase.auth.getSession();
   const token = sessionData.session?.access_token;

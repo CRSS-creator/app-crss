@@ -153,7 +153,7 @@ export async function POST(request: NextRequest) {
       wykonana_by: auth.requesterId,
       status: "wykonana",
       wynik: result,
-      zrodla: checks.map((check) => ({ source: check.source, status: check.status, label: check.label })),
+      zrodla: checks.map(sourceAuditEntry),
       dane: { checks, dane_rejestrowe: registryDetails, beneficjenci_rzeczywisci: beneficialOwners, kody_pkd: pkdCodes },
       vat_status: checksVat ? (vatCheck.status === "ok" ? String(vatSubject?.statusVat || "sprawdzono") : vatCheck.status) : "potwierdzono_zwolnienie",
       vies_status: checksVies ? statusForSource(checks, "VIES") : "potwierdzono_brak_vat_ue",
@@ -204,7 +204,7 @@ export async function POST(request: NextRequest) {
     zmiany: {
       status: nextStatus,
       wynik: result,
-      sources: checks.map((check) => ({ source: check.source, status: check.status, label: check.label })),
+      sources: checks.map(sourceAuditEntry),
       dane_rejestrowe: registryDetails,
       beneficjenci_rzeczywisci: beneficialOwners,
       kody_pkd: pkdCodes,
@@ -275,24 +275,27 @@ async function ensureAmlRegister(admin: SupabaseClient, clientId: string) {
 async function verifyVatWhitelist(nip: string): Promise<OfficialCheck> {
   const date = new Date().toISOString().slice(0, 10);
   const url = `https://wl-api.mf.gov.pl/api/search/nip/${nip}?date=${date}`;
+  const queryId = createSourceQueryId("VAT");
   try {
     const response = await fetch(url, { headers: { accept: "application/json" } });
     const data = await response.json().catch(() => null);
     if (!response.ok) {
-      return { source: "Biała Lista VAT MF", status: "error", label: "Nie udało się pobrać danych VAT.", details: { httpStatus: response.status, data } };
+      return { source: "Biała Lista VAT MF", status: "error", label: "Nie udało się pobrać danych VAT.", details: { identyfikatorZapytania: queryId, httpStatus: response.status, data, checkedAt: new Date().toISOString(), url } };
     }
+    const requestId = data?.result?.requestId || null;
     return {
       source: "Biała Lista VAT MF",
       status: data?.result?.subject ? "ok" : "warning",
       label: data?.result?.subject ? "Podmiot odnaleziony w wykazie VAT." : "Brak podmiotu w wykazie VAT.",
-      details: { requestId: data?.result?.requestId, subject: data?.result?.subject, checkedAt: new Date().toISOString(), url },
+      details: { identyfikatorZapytania: requestId || queryId, identyfikatorTechniczny: queryId, requestId, subject: data?.result?.subject, checkedAt: new Date().toISOString(), url },
     };
   } catch (error) {
-    return { source: "Biała Lista VAT MF", status: "error", label: "Błąd połączenia z API MF.", details: { message: errorMessage(error), url } };
+    return { source: "Biała Lista VAT MF", status: "error", label: "Błąd połączenia z API MF.", details: { identyfikatorZapytania: queryId, message: errorMessage(error), checkedAt: new Date().toISOString(), url } };
   }
 }
 
 async function verifyVies(nip: string): Promise<OfficialCheck> {
+  const queryId = createSourceQueryId("VIES");
   const body = `<?xml version="1.0" encoding="UTF-8"?>
 <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:urn="urn:ec.europa.eu:taxud:vies:services:checkVat:types">
   <soapenv:Header/>
@@ -313,18 +316,20 @@ async function verifyVies(nip: string): Promise<OfficialCheck> {
     });
     const text = await response.text();
     if (!response.ok) {
-      return { source: "VIES Komisji Europejskiej", status: "error", label: "Nie udało się pobrać danych VIES.", details: { httpStatus: response.status, response: text.slice(0, 1200) } };
+      return { source: "VIES Komisji Europejskiej", status: "error", label: "Nie udało się pobrać danych VIES.", details: { identyfikatorZapytania: queryId, httpStatus: response.status, response: text.slice(0, 1200), checkedAt: new Date().toISOString(), url } };
     }
 
     const valid = readXmlTag(text, "valid");
+    const requestDate = readXmlTag(text, "requestDate");
     return {
       source: "VIES Komisji Europejskiej",
       status: valid === "true" ? "ok" : "warning",
       label: valid === "true" ? "Numer VAT-UE aktywny w VIES." : "Numer VAT-UE nieaktywny albo brak rejestracji w VIES.",
       details: {
+        identyfikatorZapytania: queryId,
         countryCode: readXmlTag(text, "countryCode"),
         vatNumber: readXmlTag(text, "vatNumber"),
-        requestDate: readXmlTag(text, "requestDate"),
+        requestDate,
         valid,
         name: readXmlTag(text, "name"),
         address: readXmlTag(text, "address"),
@@ -333,13 +338,14 @@ async function verifyVies(nip: string): Promise<OfficialCheck> {
       },
     };
   } catch (error) {
-    return { source: "VIES Komisji Europejskiej", status: "error", label: "Błąd połączenia z VIES.", details: { message: errorMessage(error), url } };
+    return { source: "VIES Komisji Europejskiej", status: "error", label: "Błąd połączenia z VIES.", details: { identyfikatorZapytania: queryId, message: errorMessage(error), checkedAt: new Date().toISOString(), url } };
   }
 }
 
 async function verifyKrs(krs: string): Promise<OfficialCheck> {
   const paddedKrs = krs.padStart(10, "0");
   const baseUrl = `https://api-krs.ms.gov.pl/api/krs/OdpisAktualny/${paddedKrs}`;
+  const queryId = createSourceQueryId("KRS");
 
   for (const register of ["P", "S"]) {
     const url = `${baseUrl}?rejestr=${register}&format=json`;
@@ -348,20 +354,20 @@ async function verifyKrs(krs: string): Promise<OfficialCheck> {
       if (response.status === 404) continue;
       const data = await response.json().catch(() => null);
       if (!response.ok) {
-        return { source: "KRS Ministerstwa Sprawiedliwości", status: "error", label: "Nie udało się pobrać odpisu KRS.", details: { httpStatus: response.status, data, url } };
+        return { source: "KRS Ministerstwa Sprawiedliwości", status: "error", label: "Nie udało się pobrać odpisu KRS.", details: { identyfikatorZapytania: queryId, httpStatus: response.status, data, checkedAt: new Date().toISOString(), url } };
       }
       return {
         source: "KRS Ministerstwa Sprawiedliwości",
         status: "ok",
         label: "Pobrano aktualny odpis KRS z API Ministerstwa Sprawiedliwości.",
-        details: { krs: paddedKrs, register, data, checkedAt: new Date().toISOString(), url },
+        details: { identyfikatorZapytania: queryId, krs: paddedKrs, register, data, checkedAt: new Date().toISOString(), url },
       };
     } catch (error) {
-      return { source: "KRS Ministerstwa Sprawiedliwości", status: "error", label: "Błąd połączenia z API KRS.", details: { message: errorMessage(error), url } };
+      return { source: "KRS Ministerstwa Sprawiedliwości", status: "error", label: "Błąd połączenia z API KRS.", details: { identyfikatorZapytania: queryId, message: errorMessage(error), checkedAt: new Date().toISOString(), url } };
     }
   }
 
-  return { source: "KRS Ministerstwa Sprawiedliwości", status: "warning", label: "Nie znaleziono odpisu KRS dla numeru z Białej Listy VAT.", details: { krs: paddedKrs } };
+  return { source: "KRS Ministerstwa Sprawiedliwości", status: "warning", label: "Nie znaleziono odpisu KRS dla numeru z Białej Listy VAT.", details: { identyfikatorZapytania: queryId, krs: paddedKrs, checkedAt: new Date().toISOString() } };
 }
 
 async function verifyCeidg(nip: string): Promise<OfficialCheck> {
@@ -370,6 +376,7 @@ async function verifyCeidg(nip: string): Promise<OfficialCheck> {
   }
 
   const url = `${CEIDG_API_URL}?nip=${encodeURIComponent(nip)}`;
+  const queryId = createSourceQueryId("CEIDG");
   try {
     const response = await fetch(url, {
       headers: {
@@ -379,7 +386,7 @@ async function verifyCeidg(nip: string): Promise<OfficialCheck> {
     });
     const data = await response.json().catch(() => null);
     if (!response.ok) {
-      return { source: "CEIDG", status: "error", label: "Nie udało się pobrać danych z API CEIDG.", details: { httpStatus: response.status, data, url } };
+      return { source: "CEIDG", status: "error", label: "Nie udało się pobrać danych z API CEIDG.", details: { identyfikatorZapytania: queryId, httpStatus: response.status, data, checkedAt: new Date().toISOString(), url } };
     }
 
     const companies = extractCeidgCompanies(data);
@@ -387,14 +394,15 @@ async function verifyCeidg(nip: string): Promise<OfficialCheck> {
       source: "CEIDG",
       status: companies.length > 0 ? "ok" : "warning",
       label: companies.length > 0 ? "Podmiot odnaleziony w CEIDG." : "Brak podmiotu w CEIDG dla podanego NIP.",
-      details: { companies, data, checkedAt: new Date().toISOString(), url },
+      details: { identyfikatorZapytania: queryId, companies, data, checkedAt: new Date().toISOString(), url },
     };
   } catch (error) {
-    return { source: "CEIDG", status: "error", label: "Błąd połączenia z API CEIDG.", details: { message: errorMessage(error), url } };
+    return { source: "CEIDG", status: "error", label: "Błąd połączenia z API CEIDG.", details: { identyfikatorZapytania: queryId, message: errorMessage(error), checkedAt: new Date().toISOString(), url } };
   }
 }
 
 async function verifySanctionsLists(name: string, nip: string): Promise<OfficialCheck> {
+  const queryId = createSourceQueryId("SANCTIONS");
   const normalizedName = normalizeTextForMatch(name);
   const normalizedNip = normalizeNip(nip);
   const sources = [
@@ -433,7 +441,7 @@ async function verifySanctionsLists(name: string, nip: string): Promise<Official
       source: "Listy sankcyjne",
       status: "warning",
       label: "W publicznych listach sankcyjnych znaleziono potencjalne dopasowanie. Wymagana analiza ręczna.",
-      details: { matches, errors, checkedAt: new Date().toISOString() },
+      details: { identyfikatorZapytania: queryId, matches, errors, checkedAt: new Date().toISOString() },
     };
   }
 
@@ -442,7 +450,7 @@ async function verifySanctionsLists(name: string, nip: string): Promise<Official
       source: "Listy sankcyjne",
       status: "error",
       label: "Nie udało się pobrać publicznych list sankcyjnych.",
-      details: { errors, checkedAt: new Date().toISOString() },
+      details: { identyfikatorZapytania: queryId, errors, checkedAt: new Date().toISOString() },
     };
   }
 
@@ -450,7 +458,7 @@ async function verifySanctionsLists(name: string, nip: string): Promise<Official
     source: "Listy sankcyjne",
     status: "ok",
     label: "Nie znaleziono podmiotu na sprawdzonych publicznych listach sankcyjnych.",
-    details: { checkedSources: sources.map((source) => source.label), errors, checkedAt: new Date().toISOString() },
+    details: { identyfikatorZapytania: queryId, checkedSources: sources.map((source) => source.label), errors, checkedAt: new Date().toISOString() },
   };
 }
 
@@ -463,6 +471,7 @@ function normalizeTextForMatch(value: string) {
     .toLowerCase();
 }
 async function verifyCrbr(nip: string, krs: string | null): Promise<OfficialCheck> {
+  const queryId = createSourceQueryId("CRBR");
   const searchTag = krs ? `<api:KRS>${escapeXml(krs.padStart(10, "0"))}</api:KRS>` : `<api:NIP>${escapeXml(nip)}</api:NIP>`;
   const envelope = `<?xml version="1.0" encoding="UTF-8"?>
 <soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope" xmlns:ns="${CRBR_SERVICE_NAMESPACE}" xmlns:api="${CRBR_SCHEMA_NAMESPACE}">
@@ -488,7 +497,7 @@ async function verifyCrbr(nip: string, krs: string | null): Promise<OfficialChec
     });
     const xml = await response.text();
     if (!response.ok) {
-      return { source: "CRBR", status: "error", label: "Nie udało się pobrać danych z CRBR.", details: { httpStatus: response.status, response: xml.slice(0, 1200), url: CRBR_API_URL } };
+      return { source: "CRBR", status: "error", label: "Nie udało się pobrać danych z CRBR.", details: { identyfikatorZapytania: queryId, httpStatus: response.status, response: xml.slice(0, 1200), checkedAt: new Date().toISOString(), url: CRBR_API_URL } };
     }
 
     const status = readXmlTag(xml, "Status") || "";
@@ -498,24 +507,25 @@ async function verifyCrbr(nip: string, krs: string | null): Promise<OfficialChec
       source: "CRBR",
       status: hasOwners ? "ok" : "warning",
       label: hasOwners ? "Pobrano beneficjentów rzeczywistych z CRBR." : "CRBR nie zwrócił beneficjentów dla podmiotu.",
-      details: { status, companies, checkedAt: new Date().toISOString(), url: CRBR_API_URL, searchBy: krs ? "KRS" : "NIP" },
+      details: { identyfikatorZapytania: queryId, status, companies, checkedAt: new Date().toISOString(), url: CRBR_API_URL, searchBy: krs ? "KRS" : "NIP" },
     };
   } catch (error) {
-    return { source: "CRBR", status: "error", label: "Błąd połączenia z CRBR.", details: { message: errorMessage(error), url: CRBR_API_URL } };
+    return { source: "CRBR", status: "error", label: "Błąd połączenia z CRBR.", details: { identyfikatorZapytania: queryId, message: errorMessage(error), checkedAt: new Date().toISOString(), url: CRBR_API_URL } };
   }
 }
 
 async function verifyPep(subjects: string[]): Promise<OfficialCheck> {
+  const queryId = createSourceQueryId("PEP");
   const uniqueSubjects = [...new Set(subjects.map((subject) => subject.trim()).filter(Boolean))].slice(0, 12);
   if (uniqueSubjects.length === 0) {
-    return { source: "PEP", status: "ok", label: "Beneficjenci rzeczywiści i osoby powiązane nie znajdują się na liście PEP.", details: { subjects: uniqueSubjects, checkedAt: new Date().toISOString(), source: "OpenSanctions PEP" } };
+    return { source: "PEP", status: "ok", label: "Beneficjenci rzeczywiści i osoby powiązane nie znajdują się na liście PEP.", details: { identyfikatorZapytania: queryId, subjects: uniqueSubjects, checkedAt: new Date().toISOString(), source: "OpenSanctions PEP" } };
   }
   if (!OPENSANCTIONS_API_KEY) {
     return {
       source: "PEP",
       status: "warning",
       label: "PEP wymaga konfiguracji klucza OPENSANCTIONS_API_KEY.",
-      details: { subjects: uniqueSubjects, checkedAt: new Date().toISOString(), source: "OpenSanctions PEP" },
+      details: { identyfikatorZapytania: queryId, subjects: uniqueSubjects, checkedAt: new Date().toISOString(), source: "OpenSanctions PEP" },
     };
   }
 
@@ -544,7 +554,7 @@ async function verifyPep(subjects: string[]): Promise<OfficialCheck> {
       source: "PEP",
       status: "warning",
       label: "Znaleziono potencjalne dopasowania PEP. Wymagana analiza ręczna.",
-      details: { subjects: uniqueSubjects, matches, errors, checkedAt: new Date().toISOString(), source: "OpenSanctions PEP" },
+      details: { identyfikatorZapytania: queryId, subjects: uniqueSubjects, matches, errors, checkedAt: new Date().toISOString(), source: "OpenSanctions PEP" },
     };
   }
   if (errors.length > 0) {
@@ -552,23 +562,23 @@ async function verifyPep(subjects: string[]): Promise<OfficialCheck> {
       source: "PEP",
       status: "error",
       label: "Nie udało się zakończyć screeningu PEP.",
-      details: { subjects: uniqueSubjects, errors, checkedAt: new Date().toISOString(), source: "OpenSanctions PEP" },
+      details: { identyfikatorZapytania: queryId, subjects: uniqueSubjects, errors, checkedAt: new Date().toISOString(), source: "OpenSanctions PEP" },
     };
   }
   return {
     source: "PEP",
     status: "ok",
     label: "Beneficjenci rzeczywiści i osoby powiązane nie znajdują się na liście PEP.",
-    details: { subjects: uniqueSubjects, checkedAt: new Date().toISOString(), source: "OpenSanctions PEP" },
+    details: { identyfikatorZapytania: queryId, subjects: uniqueSubjects, checkedAt: new Date().toISOString(), source: "OpenSanctions PEP" },
   };
 }
 
 function skippedCheck(source: string, label: string): OfficialCheck {
-  return { source, status: "skipped", label, details: { checkedAt: new Date().toISOString() } };
+  return { source, status: "skipped", label, details: { identyfikatorZapytania: createSourceQueryId(source), checkedAt: new Date().toISOString() } };
 }
 
 function confirmedCheck(source: string, label: string): OfficialCheck {
-  return { source, status: "confirmed", label, details: { checkedAt: new Date().toISOString() } };
+  return { source, status: "confirmed", label, details: { identyfikatorZapytania: createSourceQueryId(source), checkedAt: new Date().toISOString() } };
 }
 
 function summarizeResult(checks: OfficialCheck[]) {
@@ -588,6 +598,28 @@ function statusForAnySource(checks: OfficialCheck[], sources: string[]) {
     if (check) return check.status;
   }
   return "nie_sprawdzono";
+}
+
+function sourceAuditEntry(check: OfficialCheck) {
+  const details = check.details as Record<string, unknown>;
+  return {
+    source: check.source,
+    status: check.status,
+    label: check.label,
+    identyfikatorZapytania: details.identyfikatorZapytania || details.requestId || details.requestDate || null,
+    identyfikatorTechniczny: details.identyfikatorTechniczny || null,
+    identyfikatorZewnetrzny: details.requestId || details.requestDate || null,
+    checkedAt: details.checkedAt || null,
+  };
+}
+
+function createSourceQueryId(source: string) {
+  const sourcePart = normalizeTextForMatch(source).replace(/\s+/g, "-").toUpperCase().slice(0, 18) || "SOURCE";
+  const datePart = new Date().toISOString().replace(/[-:TZ.]/g, "").slice(0, 14);
+  const randomPart = typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID().replace(/-/g, "").slice(0, 8).toUpperCase()
+    : Math.random().toString(36).slice(2, 10).toUpperCase();
+  return `AML-${sourcePart}-${datePart}-${randomPart}`;
 }
 
 function getVatSubject(check: OfficialCheck) {
@@ -738,6 +770,8 @@ function buildRegistryDetails(input: {
 }) {
   const krsDetails = input.krsCheck.details as { krs?: string; register?: string; data?: unknown; url?: string };
   const ceidgDetails = input.ceidgCheck?.details as { companies?: unknown[]; url?: string } | undefined;
+  const vatCheck = input.checks.find((check) => normalizeTextForMatch(check.source).includes("biala lista") || check.source === "Status VAT");
+  const vatDetails = vatCheck?.details as { identyfikatorZapytania?: unknown; identyfikatorTechniczny?: unknown; requestId?: unknown } | undefined;
   const ceidgIdentity = input.ceidgCheck ? getCeidgIdentity(input.ceidgCheck) : { regon: null, krs: null };
 
   return {
@@ -755,6 +789,7 @@ function buildRegistryDetails(input: {
       ceidg: statusForSource(input.checks, "CEIDG"),
       crbr: statusForSource(input.checks, "CRBR"),
     },
+    zrodlaZapytan: input.checks.map(sourceAuditEntry),
     kodyPkd: input.pkdCodes,
     ceidg: input.ceidgCheck?.status === "ok" ? {
       liczbaWpisow: Array.isArray(ceidgDetails?.companies) ? ceidgDetails.companies.length : 0,
@@ -768,6 +803,9 @@ function buildRegistryDetails(input: {
       dane: krsDetails.data || null,
     } : null,
     bialaListaVat: input.vatSubject ? {
+      identyfikatorZapytania: vatDetails?.identyfikatorZapytania || vatDetails?.requestId || null,
+      identyfikatorTechniczny: vatDetails?.identyfikatorTechniczny || null,
+      requestId: vatDetails?.requestId || null,
       nazwa: input.vatSubject.name || null,
       statusVat: input.vatSubject.statusVat || null,
       regon: input.vatSubject.regon || null,
@@ -1117,6 +1155,8 @@ function vatReportRows(vatData: Record<string, unknown>, vatCheck: OfficialCheck
   const statusVat = String(vatData.statusVat || "").trim();
   const label = vatCheck?.label || "";
   const rows: Array<[string, string]> = [
+    ["Identyfikator zapytania", asPdfText(vatData.identyfikatorZapytania || vatData.requestId)],
+    ["Identyfikator techniczny", asPdfText(vatData.identyfikatorTechniczny)],
     ["Status VAT", statusVat ? `VAT ${statusVat.toLowerCase()}` : label || "-"],
     ["Nazwa", asPdfText(vatData.nazwa)],
     ["REGON", asPdfText(vatData.regon)],
@@ -1261,7 +1301,7 @@ function summarizeDetails(details: Record<string, unknown>) {
     ].filter(Boolean).join(" | ");
   }
 
-  const simple = ["valid", "requestDate", "krs", "register", "httpStatus"]
+  const simple = ["identyfikatorZapytania", "identyfikatorTechniczny", "requestId", "requestDate", "krs", "register", "httpStatus"]
     .map((key) => details[key] ? `${key}: ${String(details[key])}` : null)
     .filter(Boolean);
   return simple.join(" | ");

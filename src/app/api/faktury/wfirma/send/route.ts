@@ -31,6 +31,11 @@ type InvoiceRow = {
   opis: string | null;
   wfirma_sync_status: string;
   faktury_pozycje?: InvoiceLineRow[] | null;
+  klienci?: {
+    email: string | null;
+  }[] | {
+    email: string | null;
+  } | null;
 };
 
 type InvoiceLineRow = {
@@ -78,6 +83,9 @@ export async function POST(request: NextRequest) {
       waluta,
       opis,
       wfirma_sync_status,
+      klienci (
+        email
+      ),
       faktury_pozycje (
         nazwa,
         ilosc,
@@ -297,7 +305,7 @@ function buildWfirmaInvoicePayload(
       : {
           name: invoice.kontrahent_nazwa,
           nip: invoice.kontrahent_nip || undefined,
-          email: invoice.kontrahent_email || undefined,
+          email: invoiceClientEmail(invoice) || undefined,
           zip: contractorAddress?.zip || undefined,
           city: contractorAddress?.city || undefined,
           street: contractorAddress?.street || undefined,
@@ -313,6 +321,11 @@ function buildWfirmaInvoicePayload(
     description: invoice.opis || undefined,
     invoicecontents,
   };
+}
+
+function invoiceClientEmail(invoice: InvoiceRow) {
+  const client = Array.isArray(invoice.klienci) ? invoice.klienci[0] : invoice.klienci;
+  return stringify(client?.email) || null;
 }
 
 function buildWfirmaInvoiceContent(line: InvoiceLineRow) {

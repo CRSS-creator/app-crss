@@ -40,6 +40,7 @@ type ClientMatch = {
   id: string;
   nazwa: string | null;
   nip: string | null;
+  email: string | null;
 };
 
 type ContractorInfo = {
@@ -151,7 +152,7 @@ function importRange(payload: ImportPayload) {
 }
 
 async function loadClientMatches(admin: SupabaseClient) {
-  const { data, error } = await admin.from("klienci").select("id,nazwa,nip").not("nip", "is", null);
+  const { data, error } = await admin.from("klienci").select("id,nazwa,nip,email").not("nip", "is", null);
   if (error) throw new Error("Nie udało się pobrać klientów do dopasowania po NIP.");
   return (data || []) as ClientMatch[];
 }
@@ -185,7 +186,7 @@ async function saveImportedInvoice(
     termin_platnosci: issueDate ? addDays(issueDate, 7) : null,
     kontrahent_nazwa: contractorInfo.name || stringify(client?.nazwa) || "Kontrahent wFirma",
     kontrahent_nip: contractorNip || null,
-    kontrahent_email: contractorInfo.email || null,
+    kontrahent_email: stringify(client?.email) || null,
     waluta: stringify(invoice.currency) || "PLN",
     kwota_netto: net,
     kwota_vat: tax,

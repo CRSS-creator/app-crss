@@ -1056,7 +1056,7 @@ function canSelectInvoice(invoice: Invoice) {
 }
 
 function hasInvoiceEmail(invoice: Invoice) {
-  return [invoice.kontrahent_email, invoice.klienci?.email].some((value) => String(value || "").includes("@"));
+  return String(invoice.klienci?.email || "").includes("@");
 }
 
 function hasInvoicePhone(invoice: Invoice) {

@@ -256,11 +256,7 @@ async function insertMailHistory(
 
 function firstInvoiceEmail(invoice: InvoiceMailRow) {
   const client = Array.isArray(invoice.klienci) ? invoice.klienci[0] : invoice.klienci;
-  const candidates = [
-    ...splitEmails(invoice.kontrahent_email),
-    ...splitEmails(client?.email),
-  ];
-  return candidates[0] || null;
+  return splitEmails(client?.email)[0] || null;
 }
 
 function firstInvoicePhone(invoice: InvoiceMailRow) {

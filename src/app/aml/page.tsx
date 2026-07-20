@@ -633,7 +633,6 @@ function RegistryDetails({ register }: { register: AmlRegisterRecord | null }) {
                     <div style={beneficialOwnerMetaStyle}>
                       <span>PESEL: {asText(owner.pesel)}</span>
                       <span>Rola: {beneficiaryRoleLabel(owner)}</span>
-                      <span>Reprezentant: {yesNoLabel(beneficiaryIsRepresentative(owner))}</span>
                       <span>Udziały: {beneficiarySharesLabel(owner)}</span>
                       <span>Obywatelstwo: {asText(owner.obywatelstwo)}</span>
                       <span>Kraj zamieszkania: {asText(owner.krajZamieszkania)}</span>
@@ -802,29 +801,27 @@ function visibleVerificationSources(verification: AmlVerificationRecord) {
 }
 
 function beneficiaryRoleLabel(owner: Record<string, unknown>) {
-  return asText(owner.rola || owner.typBeneficjenta);
-}
-
-function yesNoLabel(value: unknown) {
-  if (value === true) return "TAK";
-  if (value === false) return "NIE";
-  return "-";
-}
-
-function beneficiaryIsRepresentative(owner: Record<string, unknown>) {
-  if (owner.reprezentant === true) return true;
-  const role = normalizeUiText([owner.rola, owner.typBeneficjenta].filter(Boolean).join(" "));
-  return /\breprezent|zarzad|prokur|organ/.test(role);
+  const role = String(owner.rola || owner.typBeneficjenta || "")
+    .split(";")
+    .map((part) => part.trim())
+    .filter((part) => part && normalizeUiText(part) !== "brak")
+    .join("; ");
+  return asText(role);
 }
 
 function beneficiarySharesLabel(owner: Record<string, unknown>) {
-  const direct = [owner.liczbaUdzialow, owner.procentUdzialow, owner.wartoscUdzialow].filter(Boolean).join(" / ");
-  if (direct) return direct;
+  if (owner.procentUdzialow) return formatPercentValue(owner.procentUdzialow);
   const shares = Array.isArray(owner.udzialy) ? owner.udzialy as Array<Record<string, unknown>> : [];
   const values = shares
-    .map((share) => [share.liczbaUdzialow, share.procentUdzialow, share.wartoscUdzialow, [share.ilosc, share.jednostka].filter(Boolean).join(" ")].filter(Boolean).join(" / "))
+    .map((share) => share.procentUdzialow ? formatPercentValue(share.procentUdzialow) : "")
     .filter(Boolean);
-  return values.join(", ") || "-";
+  return values.join(", ") || "Do uzupełnienia w formularzu";
+}
+
+function formatPercentValue(value: unknown) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  return text.includes("%") ? text : `${text}%`;
 }
 
 function normalizeUiText(value: string) {
@@ -1229,10 +1226,10 @@ const tabPanelStyle: CSSProperties = { minHeight: "54px", border: `1px solid ${c
 const tabPanelLabelStyle: CSSProperties = { color: colors.navy, fontSize: "14px", fontWeight: 850 };
 const tabContentPlaceholderStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.inputBackground, padding: "18px", display: "grid", gap: "8px" };
 const tabContentTitleStyle: CSSProperties = { color: colors.navy, fontSize: "16px" };
-const registryGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "12px", alignItems: "stretch" };
+const registryGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "12px", alignItems: "stretch" };
 const registryPanelStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "16px", background: colors.inputBackground };
 const registryPanelWideStyle: CSSProperties = { ...registryPanelStyle, gridColumn: "1 / -1" };
-const beneficialOwnersPanelStyle: CSSProperties = { ...registryPanelStyle, gridColumn: "1 / -1", minHeight: "180px" };
+const beneficialOwnersPanelStyle: CSSProperties = { ...registryPanelStyle, minHeight: "180px" };
 const beneficialOwnersListStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "10px", alignItems: "stretch" };
 const beneficialOwnerItemStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, padding: "12px" };
 const beneficialOwnerNameStyle: CSSProperties = { display: "block", color: colors.navy, fontSize: "14px", lineHeight: 1.35 };

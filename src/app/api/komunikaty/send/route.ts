@@ -49,16 +49,6 @@ function getWebhookUrl() {
     };
   }
 
-  if (webhookUrl.includes("/webhook-test/")) {
-    return {
-      webhookUrl: null,
-      error: NextResponse.json(
-        { error: "W aplikacji ustawiony jest testowy webhook n8n. Użyj produkcyjnego adresu /webhook/... i aktywuj workflow w n8n." },
-        { status: 500 }
-      ),
-    };
-  }
-
   return { webhookUrl, error: null };
 }
 

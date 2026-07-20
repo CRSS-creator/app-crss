@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { ClipboardCheck, Download, Eye, FileSearch, History, Send, ShieldCheck, X } from "lucide-react";
@@ -50,6 +50,20 @@ type AmlRow = {
   verifications: AmlVerificationRecord[];
   history: AmlHistoryRecord[];
 };
+
+type AmlCheckKey = "verification" | "initial_form" | "risk_assessment" | "identification_statement";
+
+type AmlCheck = {
+  key: AmlCheckKey;
+  label: string;
+};
+
+const AML_CHECKS: AmlCheck[] = [
+  { key: "verification", label: "Weryfikacja AML" },
+  { key: "initial_form", label: "Formularz wstępny" },
+  { key: "risk_assessment", label: "Ocena ryzyka" },
+  { key: "identification_statement", label: "Oświadczenie o weryfikacji i identyfikacji klienta" },
+];
 
 export default function AmlPage() {
   return (
@@ -188,9 +202,10 @@ function AmlContent() {
                   <Th>Klient</Th>
                   <Th>NIP</Th>
                   <Th>Opiekun</Th>
-                  <Th>Etap AML</Th>
-                  <Th>Status rejestru</Th>
-                  <Th>Ostatnia weryfikacja</Th>
+                  <Th>Weryfikacja AML</Th>
+                  <Th>Formularz wstępny</Th>
+                  <Th>Ocena ryzyka</Th>
+                  <Th>Oświadczenie o weryfikacji i identyfikacji klienta</Th>
                   <Th>Szczegóły</Th>
                 </tr>
               </thead>
@@ -204,9 +219,10 @@ function AmlContent() {
                     </Td>
                     <Td>{row.client.nip || "-"}</Td>
                     <Td>{caregiverLabel(row.client)}</Td>
-                    <Td><span style={stageBadgeStyle(row.stage)}>{stageStatusLabel(row.stage)}</span></Td>
-                    <Td><span style={registerBadgeStyle(row.register)}>{registerStatusLabel(row.register)}</span></Td>
-                    <Td>{formatDateTime(row.register?.ostatnia_weryfikacja_at)}</Td>
+                    <Td><StatusPill done={amlCheckStatus(row, "verification")} /></Td>
+                    <Td><StatusPill done={amlCheckStatus(row, "initial_form")} /></Td>
+                    <Td><StatusPill done={amlCheckStatus(row, "risk_assessment")} /></Td>
+                    <Td><StatusPill done={amlCheckStatus(row, "identification_statement")} /></Td>
                     <Td>
                       <button type="button" onClick={() => setSelectedClientId(row.client.id)} style={detailsButtonStyle}>
                         Szczegóły
@@ -246,6 +262,10 @@ function AmlDetailsModal({
   onVerify: () => void;
   onClose: () => void;
 }) {
+  const [activeTab, setActiveTab] = useState<AmlCheckKey>("verification");
+  const activeCheck = AML_CHECKS.find((check) => check.key === activeTab) || AML_CHECKS[0];
+  const activeCheckDone = amlCheckStatus(row, activeCheck.key);
+
   return (
     <div style={modalBackdropStyle}>
       <aside style={modalStyle}>
@@ -273,6 +293,25 @@ function AmlDetailsModal({
           <InfoBox label="Wykonał" value={profileLabel(row.register?.ostatnia_weryfikacja_by, profilesById)} />
           <InfoBox label="Następna weryfikacja" value={formatDate(row.register?.nastepna_weryfikacja_at)} />
         </div>
+
+        <section style={tabsSectionStyle} aria-label="Zakładki AML klienta">
+          <div style={tabsListStyle}>
+            {AML_CHECKS.map((check) => (
+              <button
+                key={check.key}
+                type="button"
+                onClick={() => setActiveTab(check.key)}
+                style={activeTab === check.key ? activeTabButtonStyle : tabButtonStyle}
+              >
+                {check.label}
+              </button>
+            ))}
+          </div>
+          <div style={tabPanelStyle}>
+            <span style={tabPanelLabelStyle}>{activeCheck.label}</span>
+            <StatusPill done={activeCheckDone} />
+          </div>
+        </section>
 
         <RegistryDetails register={row.register} />
 
@@ -421,6 +460,17 @@ function VerificationItem({ verification, profilesById }: { verification: AmlVer
   );
 }
 
+function StatusPill({ done }: { done: boolean }) {
+  return <span style={statusPillStyle(done)}>{done ? "TAK" : "NIE"}</span>;
+}
+
+function amlCheckStatus(row: AmlRow, check: AmlCheckKey) {
+  if (check === "verification") return row.verifications.length > 0 || Boolean(row.register?.ostatnia_weryfikacja_at);
+  if (check === "initial_form") return ["formularz_wyslany", "formularz_odebrany", "zatwierdzone"].includes(String(row.register?.status || ""));
+  if (check === "risk_assessment") return Boolean(row.register?.poziom_ryzyka);
+  return row.register?.status === "zatwierdzone";
+}
+
 function buildRows(
   clients: Client[],
   stages: OnboardingStageRecord[],
@@ -461,6 +511,7 @@ function filterRows(rows: AmlRow[], searchTerm: string) {
       stageStatusLabel(row.stage),
       registerStatusLabel(row.register),
       formatDateTime(row.register?.ostatnia_weryfikacja_at),
+      ...AML_CHECKS.map((check) => amlCheckStatus(row, check.key) ? "tak" : "nie"),
     ];
 
     return values.some((value) => String(value || "").toLowerCase().includes(query));
@@ -673,12 +724,20 @@ const sectionHeaderStyle: CSSProperties = { padding: "24px 28px", borderBottom: 
 const sectionTitleStyle: CSSProperties = { margin: 0, fontSize: "22px", color: colors.navy };
 const sectionHintStyle: CSSProperties = { margin: "6px 0 0", color: colors.muted, fontSize: "14px" };
 const tableWrapStyle: CSSProperties = { width: "100%", overflowX: "auto" };
-const tableStyle: CSSProperties = { width: "100%", minWidth: "1100px", borderCollapse: "collapse" };
+const tableStyle: CSSProperties = { width: "100%", minWidth: "1320px", borderCollapse: "collapse" };
 const thStyle: CSSProperties = { padding: "16px 18px", textAlign: "left", fontSize: "12px", color: colors.text, textTransform: "uppercase", letterSpacing: "0.08em", borderBottom: `1px solid ${colors.border}`, whiteSpace: "nowrap" };
 const tdStyle: CSSProperties = { padding: "18px", borderBottom: `1px solid ${colors.border}`, color: colors.text, verticalAlign: "middle", fontSize: "15px" };
 const clientNameStyle: CSSProperties = { display: "block", color: colors.navy, fontWeight: 850, lineHeight: 1.35 };
 const clientMetaStyle: CSSProperties = { display: "block", marginTop: "5px", color: colors.muted, fontSize: "13px" };
 const badgeStyle: CSSProperties = { display: "inline-flex", minHeight: "30px", alignItems: "center", justifyContent: "center", padding: "6px 12px", borderRadius: radius.badge, fontSize: "13px", fontWeight: 850, whiteSpace: "nowrap" };
+function statusPillStyle(done: boolean): CSSProperties {
+  return {
+    ...badgeStyle,
+    minWidth: "54px",
+    background: done ? "rgba(22, 163, 74, 0.12)" : "rgba(220, 38, 38, 0.12)",
+    color: done ? colors.success : colors.danger,
+  };
+}
 const detailsButtonStyle: CSSProperties = { minHeight: "40px", padding: "0 16px", borderRadius: radius.button, border: `1px solid ${colors.border}`, color: colors.navy, fontWeight: 850, background: colors.white, cursor: "pointer" };
 const emptyStyle: CSSProperties = { margin: 0, padding: "34px 28px", color: colors.muted, fontWeight: 750 };
 const modalBackdropStyle: CSSProperties = { position: "fixed", inset: 0, zIndex: 60, background: "rgba(15, 23, 42, 0.38)", display: "flex", justifyContent: "flex-end", padding: "24px" };
@@ -694,6 +753,12 @@ const infoLabelStyle: CSSProperties = { display: "block", color: colors.muted, f
 const infoValueStyle: CSSProperties = { display: "block", marginTop: "8px", color: colors.navy, fontSize: "14px" };
 const detailsSectionStyle: CSSProperties = { padding: "24px 30px", borderTop: `1px solid ${colors.border}` };
 const detailsTitleStyle: CSSProperties = { margin: "0 0 16px", color: colors.navy, fontSize: "20px" };
+const tabsSectionStyle: CSSProperties = { padding: "20px 30px", borderTop: `1px solid ${colors.border}`, display: "flex", flexDirection: "column", gap: "14px" };
+const tabsListStyle: CSSProperties = { display: "flex", gap: "8px", flexWrap: "wrap" };
+const tabButtonStyle: CSSProperties = { minHeight: "42px", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.navy, padding: "0 14px", fontWeight: 850, cursor: "pointer" };
+const activeTabButtonStyle: CSSProperties = { ...tabButtonStyle, background: colors.navy, borderColor: colors.navy, color: colors.white };
+const tabPanelStyle: CSSProperties = { minHeight: "54px", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.inputBackground, display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", padding: "12px 14px" };
+const tabPanelLabelStyle: CSSProperties = { color: colors.navy, fontSize: "14px", fontWeight: 850 };
 const registryGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "12px" };
 const registryPanelStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "16px", background: colors.inputBackground };
 const registryPanelWideStyle: CSSProperties = { ...registryPanelStyle, gridColumn: "1 / -1" };

@@ -1152,8 +1152,8 @@ function statusPillStyle(done: boolean): CSSProperties {
 }
 const detailsButtonStyle: CSSProperties = { minHeight: "40px", padding: "0 16px", borderRadius: radius.button, border: `1px solid ${colors.border}`, color: colors.navy, fontWeight: 850, background: colors.white, cursor: "pointer" };
 const emptyStyle: CSSProperties = { margin: 0, padding: "34px 28px", color: colors.muted, fontWeight: 750 };
-const modalBackdropStyle: CSSProperties = { position: "fixed", inset: 0, zIndex: 60, background: "rgba(15, 23, 42, 0.38)", display: "flex", justifyContent: "flex-end", padding: "24px" };
-const modalStyle: CSSProperties = { width: "min(1180px, calc(100vw - 48px))", maxHeight: "calc(100vh - 48px)", overflowY: "auto", borderRadius: radius.card, background: colors.white, boxShadow: "0 32px 90px rgba(15, 23, 42, 0.28)", border: `1px solid ${colors.border}` };
+const modalBackdropStyle: CSSProperties = { position: "fixed", inset: 0, zIndex: 60, background: "rgba(15, 23, 42, 0.38)", display: "flex", alignItems: "center", justifyContent: "center", padding: "18px" };
+const modalStyle: CSSProperties = { width: "min(1360px, calc(100vw - 36px))", maxHeight: "calc(100vh - 36px)", overflowY: "auto", borderRadius: radius.card, background: colors.white, boxShadow: "0 32px 90px rgba(15, 23, 42, 0.28)", border: `1px solid ${colors.border}` };
 const modalHeaderStyle: CSSProperties = { position: "sticky", top: 0, zIndex: 2, background: colors.white, display: "flex", justifyContent: "space-between", gap: "20px", padding: "26px 30px", borderBottom: `1px solid ${colors.border}` };
 const modalTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "28px" };
 const iconButtonStyle: CSSProperties = { width: "44px", height: "44px", borderRadius: radius.button, border: `1px solid ${colors.border}`, background: colors.white, color: colors.navy, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer" };

@@ -10,6 +10,7 @@ import {
   fetchAmlRegisters,
   fetchAmlVerifications,
   getAmlReportUrl,
+  runPepOsintCheck,
   updateNextAmlVerificationDate,
   uploadArchivedAmlReport,
   verifyClientAml,
@@ -87,6 +88,7 @@ function AmlContent() {
   const [loading, setLoading] = useState(true);
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [verifyingClientId, setVerifyingClientId] = useState<string | null>(null);
+  const [checkingPepOsintClientId, setCheckingPepOsintClientId] = useState<string | null>(null);
   const [savingNextVerificationClientId, setSavingNextVerificationClientId] = useState<string | null>(null);
   const [uploadingArchiveClientId, setUploadingArchiveClientId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -136,6 +138,20 @@ function AmlContent() {
     setVerifyingClientId(row.client.id);
     const result = await verifyClientAml(row.client.id);
     setVerifyingClientId(null);
+
+    if (result.error) {
+      alert(result.error.message);
+      return;
+    }
+
+    await loadData();
+    setSelectedClientId(row.client.id);
+  }
+
+  async function handleRunPepOsint(row: AmlRow) {
+    setCheckingPepOsintClientId(row.client.id);
+    const result = await runPepOsintCheck(row.client.id);
+    setCheckingPepOsintClientId(null);
 
     if (result.error) {
       alert(result.error.message);
@@ -275,9 +291,11 @@ function AmlContent() {
           row={selectedRow}
           profilesById={profilesById}
           verifying={verifyingClientId === selectedRow.client.id}
+          checkingPepOsint={checkingPepOsintClientId === selectedRow.client.id}
           savingNextVerification={savingNextVerificationClientId === selectedRow.client.id}
           uploadingArchive={uploadingArchiveClientId === selectedRow.client.id}
           onVerify={() => void handleVerify(selectedRow)}
+          onRunPepOsint={() => void handleRunPepOsint(selectedRow)}
           onSaveNextVerificationDate={(nextVerificationDate) => void handleSaveNextVerificationDate(selectedRow, nextVerificationDate)}
           onUploadArchivedReport={(file) => void handleUploadArchivedReport(selectedRow, file)}
           onClose={() => setSelectedClientId(null)}
@@ -291,9 +309,11 @@ function AmlDetailsModal({
   row,
   profilesById,
   verifying,
+  checkingPepOsint,
   savingNextVerification,
   uploadingArchive,
   onVerify,
+  onRunPepOsint,
   onSaveNextVerificationDate,
   onUploadArchivedReport,
   onClose,
@@ -301,9 +321,11 @@ function AmlDetailsModal({
   row: AmlRow;
   profilesById: Record<string, Profile>;
   verifying: boolean;
+  checkingPepOsint: boolean;
   savingNextVerification: boolean;
   uploadingArchive: boolean;
   onVerify: () => void;
+  onRunPepOsint: () => void;
   onSaveNextVerificationDate: (nextVerificationDate: string | null) => void;
   onUploadArchivedReport: (file: File) => void;
   onClose: () => void;
@@ -347,6 +369,10 @@ function AmlDetailsModal({
           <button type="button" onClick={onVerify} disabled={verifying} style={primaryButtonStyle}>
             <FileSearch size={18} />
             {verifying ? "Trwa weryfikacja..." : "Zweryfikuj AML"}
+          </button>
+          <button type="button" onClick={onRunPepOsint} disabled={checkingPepOsint} style={secondaryButtonStyle}>
+            <FileSearch size={18} />
+            {checkingPepOsint ? "Sprawdzanie PEP..." : "Sprawdź PEP OSINT"}
           </button>
           <label style={nextVerificationFieldStyle}>
             <span style={nextVerificationLabelStyle}>Następna weryfikacja</span>
@@ -576,6 +602,8 @@ function RegistryDetails({ register }: { register: AmlRegisterRecord | null }) {
   const registry = asRecord(register?.dane_rejestrowe);
   const identifiers = asRecord(registry.identyfikatory);
   const vat = asRecord(registry.bialaListaVat);
+  const pepOsint = asRecord(registry.pepOsint);
+  const pepFindings = Array.isArray(pepOsint.findings) ? pepOsint.findings as Array<Record<string, unknown>> : [];
   const owners = Array.isArray(register?.beneficjenci_rzeczywisci) ? register.beneficjenci_rzeczywisci : [];
   const pkdCodes = Array.isArray(register?.kody_pkd) ? register.kody_pkd : [];
 
@@ -612,6 +640,44 @@ function RegistryDetails({ register }: { register: AmlRegisterRecord | null }) {
               </div>
             ) : (
               <p style={emptySmallStyle}>Brak zapisanych beneficjentów z CRBR.</p>
+            )}
+          </div>
+          <div style={registryPanelWideStyle}>
+            <h4 style={registryTitleStyle}>PEP OSINT</h4>
+            {Object.keys(pepOsint).length > 0 ? (
+              <div style={pepOsintContentStyle}>
+                <Definition label="Status" value={pepOsintStatusLabel(asText(pepOsint.status))} />
+                <Definition label="Opis" value={asText(pepOsint.label)} />
+                <Definition label="Data" value={formatDateTime(asText(pepOsint.checkedAt))} />
+                {pepFindings.length > 0 ? (
+                  <div style={pepFindingsListStyle}>
+                    {pepFindings.slice(0, 6).map((finding, index) => {
+                      const sources = Array.isArray(finding.sources) ? finding.sources as Array<Record<string, unknown>> : [];
+                      return (
+                        <div key={`${asText(finding.subject)}-${index}`} style={pepFindingItemStyle}>
+                          <strong style={beneficialOwnerNameStyle}>{asText(finding.subject)}</strong>
+                          <span>{asText(finding.summary || finding.risk)}</span>
+                          {sources.length > 0 ? (
+                            <div style={pepFindingSourcesStyle}>
+                              {sources.slice(0, 4).map((source, sourceIndex) => {
+                                const url = String(source.url || "");
+                                if (!url) return null;
+                                return (
+                                  <a key={`${url}-${sourceIndex}`} href={url} target="_blank" rel="noreferrer" style={pepFindingSourceStyle}>
+                                    {asText(source.title || url)}
+                                  </a>
+                                );
+                              })}
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <p style={emptySmallStyle}>Brak wykonanego sprawdzenia PEP OSINT.</p>
             )}
           </div>
           <div style={registryPanelWideStyle}>
@@ -823,7 +889,15 @@ function historyActionLabel(action: string) {
   if (action === "automatyczna_weryfikacja_aml") return "Automatyczna weryfikacja AML";
   if (action === "dodano_archiwalny_raport_aml") return "Dodano archiwalny raport AML";
   if (action === "aktualizacja_nastepnej_weryfikacji") return "Aktualizacja następnej weryfikacji";
+  if (action === "sprawdzenie_pep_osint") return "Sprawdzenie PEP OSINT";
   return action.replace(/_/g, " ");
+}
+
+function pepOsintStatusLabel(status: string) {
+  if (status === "ok") return "Brak przesłanek";
+  if (status === "warning") return "Wymaga analizy";
+  if (status === "error") return "Błąd sprawdzenia";
+  return status || "-";
 }
 
 function profileLabel(id: string | null | undefined, profilesById: Record<string, Profile>) {
@@ -1105,6 +1179,11 @@ const beneficialOwnersListStyle: CSSProperties = { display: "grid", gridTemplate
 const beneficialOwnerItemStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, padding: "12px" };
 const beneficialOwnerNameStyle: CSSProperties = { display: "block", color: colors.navy, fontSize: "14px", lineHeight: 1.35 };
 const beneficialOwnerMetaStyle: CSSProperties = { display: "grid", gap: "5px", marginTop: "8px", color: colors.muted, fontSize: "12px", fontWeight: 750, lineHeight: 1.35 };
+const pepOsintContentStyle: CSSProperties = { display: "grid", gap: "10px" };
+const pepFindingsListStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "10px" };
+const pepFindingItemStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, padding: "12px", display: "grid", gap: "8px", color: colors.text, fontSize: "13px", lineHeight: 1.45 };
+const pepFindingSourcesStyle: CSSProperties = { display: "flex", flexWrap: "wrap", gap: "6px" };
+const pepFindingSourceStyle: CSSProperties = { color: colors.navy, fontWeight: 850, textDecoration: "none", border: `1px solid ${colors.border}`, borderRadius: radius.badge, padding: "5px 8px", background: colors.inputBackground, maxWidth: "100%", overflowWrap: "anywhere" };
 const registryTitleStyle: CSSProperties = { margin: "0 0 12px", color: colors.navy, fontSize: "15px" };
 const definitionStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(86px, 0.42fr) minmax(0, 1fr)", gap: "10px", padding: "8px 0", borderTop: `1px solid ${colors.border}` };
 const definitionLabelStyle: CSSProperties = { color: colors.muted, fontSize: "12px", fontWeight: 850, textTransform: "uppercase" };

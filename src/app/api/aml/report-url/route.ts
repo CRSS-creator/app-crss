@@ -61,5 +61,5 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: signedUrl.error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ url: signedUrl.data.signedUrl, fileName: verification.pdf_name || "raport_aml.pdf" });
+  return NextResponse.json({ url: signedUrl.data.signedUrl, fileName: verification.pdf_name || "Analiza_AML_Klient_Data.pdf" });
 }

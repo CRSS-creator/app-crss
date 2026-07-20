@@ -579,7 +579,7 @@ function VerificationItem({ verification, profilesById }: { verification: AmlVer
     }
     const link = document.createElement("a");
     link.href = result.data.url;
-    link.download = result.data.fileName || verification.pdf_name || "raport_aml.pdf";
+    link.download = result.data.fileName || verification.pdf_name || "Analiza_AML_Klient_Data.pdf";
     document.body.appendChild(link);
     link.click();
     link.remove();

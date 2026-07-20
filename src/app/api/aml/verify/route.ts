@@ -1265,7 +1265,7 @@ function summarizeDetails(details: Record<string, unknown>) {
 }
 
 function buildReportFileName(clientName: string | null, nip: string, date: Date) {
-  const datePart = date.toISOString().slice(0, 16).replace(/[-:T]/g, "");
+  const datePart = date.toISOString().slice(0, 10);
   const namePart = String(clientName || "klient")
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -1273,5 +1273,5 @@ function buildReportFileName(clientName: string | null, nip: string, date: Date)
     .replace(/^-|-$/g, "")
     .slice(0, 60)
     || "klient";
-  return `raport_aml_${nip}_${datePart}_${namePart}.pdf`;
+  return `Analiza_AML_${namePart}_${datePart}.pdf`;
 }

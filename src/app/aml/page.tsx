@@ -272,6 +272,18 @@ function AmlDetailsModal({
         <div style={modalHeaderStyle}>
           <div>
             <p style={eyebrowStyle}>Szczegóły AML</p>
+            <div style={tabsListStyle} aria-label="Zakładki AML klienta">
+              {AML_CHECKS.map((check) => (
+                <button
+                  key={check.key}
+                  type="button"
+                  onClick={() => setActiveTab(check.key)}
+                  style={activeTab === check.key ? activeTabButtonStyle : tabButtonStyle}
+                >
+                  {check.label}
+                </button>
+              ))}
+            </div>
             <h2 style={modalTitleStyle}>{row.client.nazwa || "Klient bez nazwy"}</h2>
             <p style={sectionHintStyle}>NIP: {row.client.nip || "-"} · Opiekun: {caregiverLabel(row.client)}</p>
           </div>
@@ -294,27 +306,41 @@ function AmlDetailsModal({
           <InfoBox label="Następna weryfikacja" value={formatDate(row.register?.nastepna_weryfikacja_at)} />
         </div>
 
-        <section style={tabsSectionStyle} aria-label="Zakładki AML klienta">
-          <div style={tabsListStyle}>
-            {AML_CHECKS.map((check) => (
-              <button
-                key={check.key}
-                type="button"
-                onClick={() => setActiveTab(check.key)}
-                style={activeTab === check.key ? activeTabButtonStyle : tabButtonStyle}
-              >
-                {check.label}
-              </button>
-            ))}
-          </div>
+        <AmlTabContent
+          activeTab={activeTab}
+          activeCheck={activeCheck}
+          activeCheckDone={activeCheckDone}
+          row={row}
+          profilesById={profilesById}
+        />
+      </aside>
+    </div>
+  );
+}
+
+function AmlTabContent({
+  activeTab,
+  activeCheck,
+  activeCheckDone,
+  row,
+  profilesById,
+}: {
+  activeTab: AmlCheckKey;
+  activeCheck: AmlCheck;
+  activeCheckDone: boolean;
+  row: AmlRow;
+  profilesById: Record<string, Profile>;
+}) {
+  if (activeTab === "verification") {
+    return (
+      <>
+        <section style={tabsSectionStyle}>
           <div style={tabPanelStyle}>
             <span style={tabPanelLabelStyle}>{activeCheck.label}</span>
             <StatusPill done={activeCheckDone} />
           </div>
         </section>
-
         <RegistryDetails register={row.register} />
-
         <section style={detailsSectionStyle}>
           <h3 style={detailsTitleStyle}>Weryfikacje i raporty</h3>
           {row.verifications.length === 0 ? (
@@ -327,7 +353,6 @@ function AmlDetailsModal({
             </div>
           )}
         </section>
-
         <section style={detailsSectionStyle}>
           <h3 style={detailsTitleStyle}>Pełna historia zmian</h3>
           {row.history.length === 0 ? (
@@ -350,9 +375,28 @@ function AmlDetailsModal({
             </div>
           )}
         </section>
-      </aside>
-    </div>
+      </>
+    );
+  }
+
+  return (
+    <section style={tabsSectionStyle}>
+      <div style={tabPanelStyle}>
+        <span style={tabPanelLabelStyle}>{activeCheck.label}</span>
+        <StatusPill done={activeCheckDone} />
+      </div>
+      <div style={tabContentPlaceholderStyle}>
+        <strong style={tabContentTitleStyle}>{activeCheck.label}</strong>
+        <p style={emptySmallStyle}>{tabEmptyMessage(activeTab)}</p>
+      </div>
+    </section>
   );
+}
+
+function tabEmptyMessage(tab: AmlCheckKey) {
+  if (tab === "initial_form") return "Brak zapisanego formularza wstępnego dla tego klienta.";
+  if (tab === "risk_assessment") return "Brak zapisanej oceny ryzyka dla tego klienta.";
+  return "Brak zapisanego oświadczenia o weryfikacji i identyfikacji klienta.";
 }
 
 function RegistryDetails({ register }: { register: AmlRegisterRecord | null }) {
@@ -780,11 +824,13 @@ const infoValueStyle: CSSProperties = { display: "block", marginTop: "8px", colo
 const detailsSectionStyle: CSSProperties = { padding: "24px 30px", borderTop: `1px solid ${colors.border}` };
 const detailsTitleStyle: CSSProperties = { margin: "0 0 16px", color: colors.navy, fontSize: "20px" };
 const tabsSectionStyle: CSSProperties = { padding: "20px 30px", borderTop: `1px solid ${colors.border}`, display: "flex", flexDirection: "column", gap: "14px" };
-const tabsListStyle: CSSProperties = { display: "flex", gap: "8px", flexWrap: "wrap" };
+const tabsListStyle: CSSProperties = { display: "flex", gap: "8px", flexWrap: "wrap", margin: "10px 0 14px" };
 const tabButtonStyle: CSSProperties = { minHeight: "42px", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.navy, padding: "0 14px", fontWeight: 850, cursor: "pointer" };
 const activeTabButtonStyle: CSSProperties = { ...tabButtonStyle, background: colors.navy, borderColor: colors.navy, color: colors.white };
 const tabPanelStyle: CSSProperties = { minHeight: "54px", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.inputBackground, display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", padding: "12px 14px" };
 const tabPanelLabelStyle: CSSProperties = { color: colors.navy, fontSize: "14px", fontWeight: 850 };
+const tabContentPlaceholderStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.inputBackground, padding: "18px", display: "grid", gap: "8px" };
+const tabContentTitleStyle: CSSProperties = { color: colors.navy, fontSize: "16px" };
 const registryGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "12px", alignItems: "stretch" };
 const registryPanelStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "16px", background: colors.inputBackground };
 const registryPanelWideStyle: CSSProperties = { ...registryPanelStyle, gridColumn: "1 / -1" };

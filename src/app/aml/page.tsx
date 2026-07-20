@@ -633,13 +633,8 @@ function RegistryDetails({ register }: { register: AmlRegisterRecord | null }) {
                     <div style={beneficialOwnerMetaStyle}>
                       <span>PESEL: {asText(owner.pesel)}</span>
                       <span>Rola: {beneficiaryRoleLabel(owner)}</span>
-                      <span>Udziałowiec: {yesNoLabel(beneficiaryIsShareholder(owner))}</span>
                       <span>Reprezentant: {yesNoLabel(beneficiaryIsRepresentative(owner))}</span>
                       <span>Udziały: {beneficiarySharesLabel(owner)}</span>
-                      <span>Głosy: {beneficiaryVotesDisplayLabel(owner)}</span>
-                      <span>Obywatelstwo: {asText(owner.obywatelstwo)}</span>
-                      <span>Kraj zamieszkania: {asText(owner.krajZamieszkania)}</span>
-                      <span>Status: {registerStatusText(asText(owner.status))}</span>
                     </div>
                   </div>
                 ))}
@@ -814,15 +809,6 @@ function yesNoLabel(value: unknown) {
   return "-";
 }
 
-function beneficiaryIsShareholder(owner: Record<string, unknown>) {
-  if (owner.udzialowiec === true) return true;
-  const role = normalizeUiText([owner.rola, owner.typBeneficjenta].filter(Boolean).join(" "));
-  const hasRole = /\bwspolnik|\budzial|akcj|wlasci|glos/.test(role);
-  const shares = beneficiarySharesLabel(owner);
-  const votes = beneficiaryVotesLabel(owner);
-  return hasRole || shares !== "-" || votes !== "-";
-}
-
 function beneficiaryIsRepresentative(owner: Record<string, unknown>) {
   if (owner.reprezentant === true) return true;
   const role = normalizeUiText([owner.rola, owner.typBeneficjenta].filter(Boolean).join(" "));
@@ -837,16 +823,6 @@ function beneficiarySharesLabel(owner: Record<string, unknown>) {
     .map((share) => [share.liczbaUdzialow, share.procentUdzialow, share.wartoscUdzialow, [share.ilosc, share.jednostka].filter(Boolean).join(" ")].filter(Boolean).join(" / "))
     .filter(Boolean);
   return values.join(", ") || "-";
-}
-
-function beneficiaryVotesLabel(owner: Record<string, unknown>) {
-  return [owner.liczbaGlosow, owner.procentGlosow].filter(Boolean).join(" / ") || "-";
-}
-
-function beneficiaryVotesDisplayLabel(owner: Record<string, unknown>) {
-  const value = beneficiaryVotesLabel(owner);
-  if (value !== "-") return value;
-  return beneficiaryIsShareholder(owner) ? "Brak danych w CRBR/KRS" : "-";
 }
 
 function normalizeUiText(value: string) {

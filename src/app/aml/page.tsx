@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { ClipboardCheck, Download, Eye, FileSearch, History, Send, ShieldCheck, X } from "lucide-react";
@@ -205,7 +205,7 @@ function AmlContent() {
                   <Th>Weryfikacja AML</Th>
                   <Th>Formularz wstępny</Th>
                   <Th>Ocena ryzyka</Th>
-                  <Th wrap>Oświadczenie o weryfikacji i identyfikacji klienta</Th>
+                  <Th wrap={true}>Oświadczenie o weryfikacji i identyfikacji klienta</Th>
                   <Th>Szczegóły</Th>
                 </tr>
               </thead>

@@ -86,19 +86,21 @@ export async function POST(request: NextRequest) {
   const ceidgCheck = await verifyCeidg(nip);
   checks.push(ceidgCheck);
 
-  const regonCheck = await verifyGusRegon(nip);
-  checks.push(regonCheck);
+  const regonCheck = GUS_REGON_API_KEY ? await verifyGusRegon(nip) : null;
+  if (regonCheck) checks.push(regonCheck);
 
-  const regonSubject = getRegonSubject(regonCheck);
-  const regonNumber = String(vatSubject?.regon || regonSubject?.Regon || "").trim() || null;
-  const krsNumber = normalizeKrs(String(vatSubject?.krs || regonSubject?.Krs || ""));
+  const regonSubject = regonCheck ? getRegonSubject(regonCheck) : null;
+  const ceidgIdentity = getCeidgIdentity(ceidgCheck);
+  const regonNumber = String(vatSubject?.regon || ceidgIdentity.regon || regonSubject?.Regon || "").trim() || null;
+  const krsNumber = normalizeKrs(String(vatSubject?.krs || ceidgIdentity.krs || regonSubject?.Krs || ""));
   const krsCheck = krsNumber
     ? await verifyKrs(krsNumber)
-    : skippedCheck("KRS", "Brak numeru KRS w danych z Białej Listy VAT i REGON.");
+    : skippedCheck("KRS", "Brak numeru KRS w danych z Białej Listy VAT i CEIDG. Dla JDG wpis KRS zwykle nie występuje.");
   checks.push(krsCheck);
-  checks.push(skippedCheck("Listy sankcyjne", "Weryfikacja sankcyjna zostanie dopięta do oficjalnego źródła list sankcyjnych w kolejnym kroku."));
-  checks.push(skippedCheck("PEP", "Nie ma jednego publicznego oficjalnego API PEP. Status PEP pozostaje do weryfikacji formularzem i oświadczeniem."));
 
+  const sanctionsCheck = await verifySanctionsLists(client.nazwa || "", nip);
+  checks.push(sanctionsCheck);
+  checks.push(skippedCheck("PEP", "Brak jednego oficjalnego publicznego API PEP. Status PEP pozostaje do potwierdzenia formularzem i oświadczeniem klienta."));
   const result = summarizeResult(checks);
   const now = new Date();
   const pkdCodes = collectPkdCodes(ceidgCheck, krsCheck);
@@ -176,7 +178,7 @@ export async function POST(request: NextRequest) {
       beneficjenci_rzeczywisci: beneficialOwners,
       numer_regon: regonNumber,
       numer_krs: krsNumber || null,
-      gus_status: statusForSource(checks, "GUS REGON"),
+      gus_status: regonCheck ? statusForSource(checks, "GUS REGON") : "nie_uzyto",
       krs_status: statusForSource(checks, "KRS"),
       crbr_status: "do_weryfikacji",
       kody_pkd: pkdCodes,
@@ -383,6 +385,74 @@ async function verifyCeidg(nip: string): Promise<OfficialCheck> {
   }
 }
 
+async function verifySanctionsLists(name: string, nip: string): Promise<OfficialCheck> {
+  const normalizedName = normalizeTextForMatch(name);
+  const normalizedNip = normalizeNip(nip);
+  const sources = [
+    {
+      label: "Lista sankcyjna ONZ",
+      url: "https://scsanctions.un.org/resources/xml/en/consolidated.xml",
+    },
+  ];
+
+  const matches: Array<{ source: string; value: string }> = [];
+  const errors: Array<{ source: string; message: string }> = [];
+
+  for (const source of sources) {
+    try {
+      const response = await fetch(source.url, { headers: { accept: "application/xml,text/xml,*/*" } });
+      const text = await response.text();
+      if (!response.ok) {
+        errors.push({ source: source.label, message: `HTTP ${response.status}` });
+        continue;
+      }
+
+      const normalizedList = normalizeTextForMatch(text);
+      if (normalizedName && normalizedList.includes(normalizedName)) {
+        matches.push({ source: source.label, value: name });
+      }
+      if (normalizedNip && text.replace(/\D/g, "").includes(normalizedNip)) {
+        matches.push({ source: source.label, value: normalizedNip });
+      }
+    } catch (error) {
+      errors.push({ source: source.label, message: errorMessage(error) });
+    }
+  }
+
+  if (matches.length > 0) {
+    return {
+      source: "Listy sankcyjne",
+      status: "warning",
+      label: "W publicznych listach sankcyjnych znaleziono potencjalne dopasowanie. Wymagana analiza ręczna.",
+      details: { matches, errors, checkedAt: new Date().toISOString() },
+    };
+  }
+
+  if (errors.length === sources.length) {
+    return {
+      source: "Listy sankcyjne",
+      status: "error",
+      label: "Nie udało się pobrać publicznych list sankcyjnych.",
+      details: { errors, checkedAt: new Date().toISOString() },
+    };
+  }
+
+  return {
+    source: "Listy sankcyjne",
+    status: "ok",
+    label: "Nie znaleziono podmiotu na sprawdzonych publicznych listach sankcyjnych.",
+    details: { checkedSources: sources.map((source) => source.label), errors, checkedAt: new Date().toISOString() },
+  };
+}
+
+function normalizeTextForMatch(value: string) {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9]+/g, " ")
+    .trim()
+    .toLowerCase();
+}
 async function verifyGusRegon(nip: string): Promise<OfficialCheck> {
   if (!GUS_REGON_API_KEY) {
     return skippedCheck("GUS REGON", "Dodaj sekret GUS_REGON_API_KEY, aby uruchomić automatyczną weryfikację w rejestrze REGON.");
@@ -493,6 +563,40 @@ function getRegonSubject(check: OfficialCheck) {
   return details.record || null;
 }
 
+function getCeidgIdentity(check: OfficialCheck) {
+  const details = check.details as { companies?: Array<Record<string, unknown>> };
+  const company = Array.isArray(details.companies) ? details.companies[0] : null;
+  if (!company) return { regon: null as string | null, krs: null as string | null };
+
+  return {
+    regon: firstDeepText(company, ["regon", "REGON", "numerRegon", "numer_regon"]),
+    krs: firstDeepText(company, ["krs", "KRS", "numerKrs", "numer_krs"]),
+  };
+}
+
+function firstDeepText(value: unknown, keys: string[]): string | null {
+  if (!value || typeof value !== "object") return null;
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = firstDeepText(item, keys);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  for (const key of keys) {
+    const direct = record[key];
+    if (typeof direct === "string" && direct.trim()) return direct.trim();
+    if (typeof direct === "number") return String(direct);
+  }
+
+  for (const nested of Object.values(record)) {
+    const found = firstDeepText(nested, keys);
+    if (found) return found;
+  }
+  return null;
+}
 function extractCeidgCompanies(data: unknown) {
   const root = data && typeof data === "object" ? data as Record<string, unknown> : {};
   const candidates = [root.firmy, root.data, root.items, root.results, root.result];
@@ -591,13 +695,14 @@ function buildRegistryDetails(input: {
 }) {
   const krsDetails = input.krsCheck.details as { krs?: string; register?: string; data?: unknown; url?: string };
   const ceidgDetails = input.ceidgCheck.details as { companies?: unknown[]; url?: string };
+  const ceidgIdentity = getCeidgIdentity(input.ceidgCheck);
 
   return {
     updatedAt: input.checkedAt.toISOString(),
     identyfikatory: {
       nip: input.nip,
-      regon: String(input.vatSubject?.regon || input.regonSubject?.Regon || "") || null,
-      krs: String(input.vatSubject?.krs || input.regonSubject?.Krs || krsDetails.krs || "") || null,
+      regon: String(input.vatSubject?.regon || ceidgIdentity.regon || input.regonSubject?.Regon || "") || null,
+      krs: String(input.vatSubject?.krs || ceidgIdentity.krs || input.regonSubject?.Krs || krsDetails.krs || "") || null,
     },
     statusy: {
       vat: statusForAnySource(input.checks, ["Status VAT", "Biała Lista VAT"]),
@@ -718,115 +823,100 @@ async function buildAmlReportPdf(input: {
   doc.registerFontkit(fontkit);
   const font = await doc.embedFont(readFontBytes(), { subset: true });
   let page = doc.addPage([595, 842]);
-  let y = 768;
+  let y = 790;
   const margin = 42;
-  const contentWidth = 511;
   const navy = rgb(0.07, 0.17, 0.39);
   const text = rgb(0.04, 0.12, 0.25);
   const muted = rgb(0.32, 0.38, 0.5);
   const border = rgb(0.80, 0.84, 0.90);
   const soft = rgb(0.96, 0.98, 1);
 
-  const ensurePage = (height = 60) => {
+  const ensurePage = (height = 54) => {
     if (y - height >= 58) return;
     drawFooter(page, font);
     page = doc.addPage([595, 842]);
-    y = 768;
-    drawHeaderMark(page, font);
+    y = 790;
   };
 
-  const draw = (value: string, size = 10, x = margin, color = text, maxChars = 86) => {
-    const lines = wrapText(value, maxChars);
-    for (const line of lines) {
+  const drawText = (value: string, size = 10, x = margin, color = text, maxChars = 88) => {
+    for (const line of wrapText(value, maxChars)) {
       ensurePage(size + 12);
       page.drawText(line, { x, y, size, font, color });
       y -= size + 5;
     }
   };
 
-  drawHeaderMark(page, font);
-  page.drawText("Raport weryfikacji AML", { x: margin, y: 710, size: 22, font, color: navy });
-  page.drawText("CRSS Sp. z o.o., ul. Szewska 1/5, 63-100 Śrem", { x: margin, y: 688, size: 9, font, color: muted });
-  y = 652;
+  page.drawText("Przeciwdziałanie praniu pieniędzy i finansowaniu terroryzmu", { x: margin, y, size: 15, font, color: navy });
+  y -= 20;
+  page.drawText("(AML&CFT)", { x: margin, y, size: 13, font, color: navy });
+  y -= 28;
+  page.drawText("Skaner AML", { x: margin, y, size: 18, font, color: navy });
+  y -= 26;
 
-  drawInfoGrid(page, font, [
-    ["Klient", input.clientName],
-    ["NIP", input.nip],
-    ["Wykonał", input.requesterName],
-    ["Data", input.createdAt.toLocaleString("pl-PL")],
-    ["Wynik", resultLabel(input.result)],
-  ], margin, y, contentWidth);
-  y -= 118;
-
-  draw("Źródła oficjalne", 16, margin, navy, 60);
+  drawText(`Data zapytania: ${input.createdAt.toLocaleString("pl-PL")}`, 10, margin, text);
+  drawText(`Wygenerował: ${input.requesterName}`, 10, margin, text);
+  drawText(`Informacje dla numeru: ${input.nip}`, 10, margin, text);
+  drawText(`Pełna nazwa podmiotu: ${input.clientName}`, 10, margin, text, 72);
+  drawText(`Wynik weryfikacji: ${resultLabel(input.result)}`, 10, margin, text);
   y -= 8;
 
-  input.checks.forEach((check, index) => {
-    ensurePage(88);
-    const cardHeight = Math.max(70, 48 + wrapText(check.label, 72).length * 12);
-    page.drawRectangle({ x: margin, y: y - cardHeight + 16, width: contentWidth, height: cardHeight, color: soft, borderColor: border, borderWidth: 1 });
-    page.drawText(`${index + 1}. ${check.source}`, { x: margin + 14, y, size: 11, font, color: navy });
-    page.drawText(statusLabel(check.status), { x: margin + contentWidth - 94, y, size: 9, font, color: statusColor(check.status) });
-    y -= 18;
-    draw(check.label, 10, margin + 14, text, 74);
-    const summary = summarizeDetails(check.details);
-    if (summary) draw(summary, 8.5, margin + 14, muted, 92);
-    y -= 14;
-  });
+  const vatCheck = input.checks.find((check) => check.source.includes("Biała Lista") || check.source === "Status VAT");
+  const viesCheck = input.checks.find((check) => check.source.includes("VIES"));
+  const ceidgCheck = input.checks.find((check) => check.source.includes("CEIDG"));
+  const krsCheck = input.checks.find((check) => check.source.includes("KRS"));
+  const sanctionsCheck = input.checks.find((check) => check.source.includes("sankcyjne"));
+  const pepCheck = input.checks.find((check) => check.source === "PEP");
+
+  drawReportSection("Dane rejestrowe podmiotu", [["CEIDG", ceidgCheck], ["KRS", krsCheck]], drawText, () => y, (nextY) => { y = nextY; }, page, font, margin, soft, border, navy, muted);
+  drawReportSection("Informacje o płatniku VAT", [["Status VAT", vatCheck]], drawText, () => y, (nextY) => { y = nextY; }, page, font, margin, soft, border, navy, muted);
+  drawReportSection("Rejestr VIES", [["VIES", viesCheck]], drawText, () => y, (nextY) => { y = nextY; }, page, font, margin, soft, border, navy, muted);
+  drawReportSection("Wyniki weryfikacji na listach sankcyjnych", [["Listy sankcyjne", sanctionsCheck]], drawText, () => y, (nextY) => { y = nextY; }, page, font, margin, soft, border, navy, muted);
+  drawReportSection("Weryfikacja osób powiązanych z firmą", [["PEP", pepCheck]], drawText, () => y, (nextY) => { y = nextY; }, page, font, margin, soft, border, navy, muted);
+
+  y -= 8;
+  drawText("Metryka raportu", 14, margin, navy, 60);
+  drawText(`Raport pobrano i zapisano: ${input.createdAt.toLocaleString("pl-PL")}`, 9, margin, muted);
+  drawText(`Użytkownik generujący: ${input.requesterName}`, 9, margin, muted);
+  const sourceSummary = input.checks.some((check) => check.source.includes("GUS REGON"))
+    ? "Źródła: CEIDG, Biała Lista VAT MF, VIES, KRS MS, GUS REGON i publiczna lista sankcyjna ONZ."
+    : "Źródła: CEIDG, Biała Lista VAT MF, VIES, KRS MS i publiczna lista sankcyjna ONZ. GUS REGON nie był wymagany dla tej weryfikacji.";
+  drawText(sourceSummary, 9, margin, muted, 92);
 
   drawFooter(page, font);
   const bytes = await doc.save();
   return Buffer.from(bytes);
 }
 
-function drawHeaderMark(page: PDFPage, font: PDFFont) {
-  const navy = rgb(0.07, 0.17, 0.39);
-  page.drawRectangle({ x: 42, y: 744, width: 80, height: 48, borderColor: navy, borderWidth: 1.6 });
-  page.drawLine({ start: { x: 42, y: 792 }, end: { x: 78, y: 792 }, thickness: 5, color: navy });
-  page.drawLine({ start: { x: 122, y: 744 }, end: { x: 86, y: 744 }, thickness: 5, color: navy });
-  page.drawText("CRSS", { x: 56, y: 760, size: 18, font, color: navy });
-}
+function drawReportSection(
+  title: string,
+  rows: Array<[string, OfficialCheck | undefined]>,
+  drawText: (value: string, size?: number, x?: number, color?: ReturnType<typeof rgb>, maxChars?: number) => void,
+  getY: () => number,
+  setY: (value: number) => void,
+  page: PDFPage,
+  font: PDFFont,
+  margin: number,
+  soft: ReturnType<typeof rgb>,
+  border: ReturnType<typeof rgb>,
+  navy: ReturnType<typeof rgb>,
+  muted: ReturnType<typeof rgb>
+) {
+  drawText(title, 14, margin, navy, 64);
+  let y = getY() - 4;
+  setY(y);
 
-function drawInfoGrid(page: PDFPage, font: PDFFont, items: string[][], x: number, y: number, width: number) {
-  const boxWidth = (width - 16) / 2;
-  items.forEach(([label, value], index) => {
-    const column = index % 2;
-    const row = Math.floor(index / 2);
-    const boxX = x + column * (boxWidth + 16);
-    const boxY = y - row * 36;
-    page.drawRectangle({ x: boxX, y: boxY - 26, width: boxWidth, height: 30, color: rgb(0.96, 0.98, 1), borderColor: rgb(0.80, 0.84, 0.90), borderWidth: 1 });
-    page.drawText(label.toUpperCase(), { x: boxX + 10, y: boxY - 7, size: 6.8, font, color: rgb(0.32, 0.38, 0.5) });
-    page.drawText(String(value || "-").slice(0, 48), { x: boxX + 10, y: boxY - 20, size: 9, font, color: rgb(0.04, 0.12, 0.25) });
+  rows.forEach(([label, check]) => {
+    const boxY = getY();
+    page.drawRectangle({ x: margin, y: boxY - 52, width: 511, height: 48, color: soft, borderColor: border, borderWidth: 1 });
+    page.drawText(label, { x: margin + 10, y: boxY - 18, size: 9, font, color: navy });
+    page.drawText(check ? statusLabel(check.status) : "-", { x: margin + 410, y: boxY - 18, size: 8, font, color: check ? statusColor(check.status) : muted });
+    setY(boxY - 33);
+    drawText(check ? check.label : "Nie dotyczy albo brak danych w źródle.", 8.5, margin + 10, muted, 86);
+    const details = check ? summarizeDetails(check.details) : "";
+    if (details) drawText(details, 7.5, margin + 10, muted, 96);
+    setY(getY() - 10);
   });
 }
-
-function drawFooter(page: PDFPage, font: PDFFont) {
-  page.drawLine({ start: { x: 42, y: 38 }, end: { x: 553, y: 38 }, thickness: 0.7, color: rgb(0.80, 0.84, 0.90) });
-  page.drawText("Raport wygenerowany w module AML aplikacji CRSS", { x: 42, y: 24, size: 8, font, color: rgb(0.32, 0.38, 0.5) });
-}
-
-function resultLabel(result: string) {
-  if (result === "pozytywna") return "Pozytywna";
-  if (result === "wymaga_analizy") return "Wymaga analizy";
-  return result;
-}
-
-function statusLabel(status: OfficialCheck["status"]) {
-  if (status === "ok") return "OK";
-  if (status === "confirmed") return "POTWIERDZONO";
-  if (status === "warning") return "UWAGA";
-  if (status === "error") return "BŁĄD";
-  return "POMINIĘTO";
-}
-
-function statusColor(status: OfficialCheck["status"]) {
-  if (status === "ok") return rgb(0.09, 0.55, 0.25);
-  if (status === "confirmed") return rgb(0.09, 0.55, 0.25);
-  if (status === "warning") return rgb(0.73, 0.42, 0);
-  if (status === "error") return rgb(0.78, 0.10, 0.10);
-  return rgb(0.32, 0.38, 0.5);
-}
-
 async function buildAmlReportPdfLegacy(input: {
   clientName: string;
   nip: string;

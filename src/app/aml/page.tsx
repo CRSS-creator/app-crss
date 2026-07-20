@@ -635,6 +635,8 @@ function RegistryDetails({ register }: { register: AmlRegisterRecord | null }) {
                       <span>Rola: {beneficiaryRoleLabel(owner)}</span>
                       <span>Reprezentant: {yesNoLabel(beneficiaryIsRepresentative(owner))}</span>
                       <span>Udziały: {beneficiarySharesLabel(owner)}</span>
+                      <span>Obywatelstwo: {asText(owner.obywatelstwo)}</span>
+                      <span>Kraj zamieszkania: {asText(owner.krajZamieszkania)}</span>
                     </div>
                   </div>
                 ))}

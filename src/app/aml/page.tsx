@@ -602,6 +602,7 @@ function RegistryDetails({ register }: { register: AmlRegisterRecord | null }) {
                   <div key={`${asText(owner.label)}-${index}`} style={beneficialOwnerItemStyle}>
                     <strong style={beneficialOwnerNameStyle}>{asText(owner.label)}</strong>
                     <div style={beneficialOwnerMetaStyle}>
+                      <span>PESEL: {asText(owner.pesel)}</span>
                       <span>Obywatelstwo: {asText(owner.obywatelstwo)}</span>
                       <span>Kraj zamieszkania: {asText(owner.krajZamieszkania)}</span>
                       <span>Status: {registerStatusText(asText(owner.status))}</span>

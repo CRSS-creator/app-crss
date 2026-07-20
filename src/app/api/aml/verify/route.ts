@@ -790,6 +790,7 @@ function extractCrbrBeneficialOwners(check: OfficialCheck, checkedAt: Date) {
     pierwszeImie: owner.pierwszeImie || null,
     kolejneImiona: owner.kolejneImiona || null,
     nazwisko: owner.nazwisko || null,
+    pesel: owner.pesel || null,
     obywatelstwo: owner.obywatelstwo || null,
     krajZamieszkania: owner.krajZamieszkania || null,
     dataUrodzenia: owner.dataUrodzenia || null,
@@ -907,6 +908,8 @@ function xmlBlocks(xml: string, tag: string) {
 
 function decodeXmlEntities(value: string) {
   return value
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex: string) => String.fromCodePoint(Number.parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, decimal: string) => String.fromCodePoint(Number.parseInt(decimal, 10)))
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&amp;/g, "&")
@@ -1019,7 +1022,7 @@ async function buildAmlReportPdf(input: {
   drawInfoBox("Beneficjenci rzeczywiści", input.beneficialOwners.length > 0
     ? input.beneficialOwners.slice(0, 8).map((owner, index) => [
       `${index + 1}.`,
-      [owner.label, owner.obywatelstwo ? `obywatelstwo: ${owner.obywatelstwo}` : null, owner.krajZamieszkania ? `kraj: ${owner.krajZamieszkania}` : null].filter(Boolean).join(" | ") || "-"
+      [owner.label, owner.pesel ? `PESEL: ${owner.pesel}` : null, owner.obywatelstwo ? `obywatelstwo: ${owner.obywatelstwo}` : null, owner.krajZamieszkania ? `kraj: ${owner.krajZamieszkania}` : null].filter(Boolean).join(" | ") || "-"
     ])
     : [["-", "Brak zapisanych beneficjentów rzeczywistych z CRBR."]]
   );

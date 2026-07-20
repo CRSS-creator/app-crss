@@ -1035,6 +1035,7 @@ function lineReadyForWfirma(line: InvoiceLine) {
 }
 
 function syncLabel(status: InvoiceSyncStatus) {
+  if (["wyslano", "zaimportowano"].includes(status)) return "OK";
   return SYNC_OPTIONS.find((item) => item.value === status)?.label || status;
 }
 

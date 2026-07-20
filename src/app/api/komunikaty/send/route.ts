@@ -158,6 +158,47 @@ async function readWebhookError(response: Response) {
   return `Automatyzacja zwróciła błąd HTTP ${response.status}: ${text.slice(0, 700)}`;
 }
 
+async function readWebhookConfirmation(response: Response) {
+  const text = await response.text().catch(() => "");
+  if (!text.trim()) {
+    return {
+      confirmed: false,
+      details: "n8n zwrocilo pusta odpowiedz. Dodaj na koncu workflow odpowiedz JSON po Gmailu, np. {\"success\": true}.",
+    };
+  }
+
+  try {
+    const parsed = JSON.parse(text) as Record<string, unknown>;
+    const confirmed = [
+      parsed.success,
+      parsed.emailSent,
+      parsed.gmailSent,
+      parsed.messageSent,
+    ].some((value) => value === true);
+
+    if (confirmed) return { confirmed: true, details: "" };
+
+    const details = [
+      parsed.error,
+      parsed.message,
+      parsed.details,
+      parsed.reason,
+    ].filter((value): value is string => typeof value === "string" && value.trim().length > 0);
+
+    return {
+      confirmed: false,
+      details: details.length > 0
+        ? details.join(" ")
+        : `n8n odpowiedzialo, ale nie potwierdzilo wysylki po Gmailu: ${text.slice(0, 700)}`,
+    };
+  } catch {
+    return {
+      confirmed: false,
+      details: `n8n zwrocilo odpowiedz bez JSON: ${text.slice(0, 700)}. Zwroc po Gmailu np. {\"success\": true}.`,
+    };
+  }
+}
+
 function uniqueRecipients(recipients: BulkRecipient[]) {
   const seen = new Set<string>();
   return recipients.filter((recipient) => {
@@ -259,6 +300,7 @@ export async function POST(request: NextRequest) {
         recipients: recipients.map(historyRecipient),
         requestedByName: auth.requesterName,
         appUrl: APP_URL,
+        requiresDeliveryConfirmation: true,
       }),
     });
   } catch (error) {
@@ -274,6 +316,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: `Nie udało się przekazać komunikatu zbiorczego do n8n. ${errorDetails} Sprawdź workflow wysyłki komunikatów oraz pola: toEmail, bccEmails, subject i html.`,
+        sent: 0,
+        failed: recipients.length,
+      },
+      { status: 502 }
+    );
+  }
+
+  const webhookConfirmation = await readWebhookConfirmation(response);
+  if (!webhookConfirmation.confirmed) {
+    return NextResponse.json(
+      {
+        error: `n8n odebralo komunikat, ale nie potwierdzilo wysylki po Gmailu. ${webhookConfirmation.details}`,
         sent: 0,
         failed: recipients.length,
       },

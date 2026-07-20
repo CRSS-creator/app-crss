@@ -10,6 +10,7 @@ import {
   fetchAmlRegisters,
   fetchAmlVerifications,
   getAmlReportUrl,
+  updateNextAmlVerificationDate,
   verifyClientAml,
   type AmlHistoryRecord,
   type AmlRegisterRecord,
@@ -85,6 +86,7 @@ function AmlContent() {
   const [loading, setLoading] = useState(true);
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [verifyingClientId, setVerifyingClientId] = useState<string | null>(null);
+  const [savingNextVerificationClientId, setSavingNextVerificationClientId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
@@ -132,6 +134,20 @@ function AmlContent() {
     setVerifyingClientId(row.client.id);
     const result = await verifyClientAml(row.client.id);
     setVerifyingClientId(null);
+
+    if (result.error) {
+      alert(result.error.message);
+      return;
+    }
+
+    await loadData();
+    setSelectedClientId(row.client.id);
+  }
+
+  async function handleSaveNextVerificationDate(row: AmlRow, nextVerificationDate: string | null) {
+    setSavingNextVerificationClientId(row.client.id);
+    const result = await updateNextAmlVerificationDate(row.client.id, nextVerificationDate);
+    setSavingNextVerificationClientId(null);
 
     if (result.error) {
       alert(result.error.message);
@@ -206,6 +222,7 @@ function AmlContent() {
                   <Th>Formularz wstępny</Th>
                   <Th>Ocena ryzyka</Th>
                   <WrappedTh>Oświadczenie o weryfikacji i identyfikacji klienta</WrappedTh>
+                  <Th>Następna weryfikacja</Th>
                   <Th>Szczegóły</Th>
                 </tr>
               </thead>
@@ -223,6 +240,7 @@ function AmlContent() {
                     <StatusTd><StatusPill done={amlCheckStatus(row, "initial_form")} /></StatusTd>
                     <StatusTd><StatusPill done={amlCheckStatus(row, "risk_assessment")} /></StatusTd>
                     <StatusTd><StatusPill done={amlCheckStatus(row, "identification_statement")} /></StatusTd>
+                    <Td>{formatDate(row.register?.nastepna_weryfikacja_at)}</Td>
                     <Td>
                       <button type="button" onClick={() => setSelectedClientId(row.client.id)} style={detailsButtonStyle}>
                         Szczegóły
@@ -241,7 +259,9 @@ function AmlContent() {
           row={selectedRow}
           profilesById={profilesById}
           verifying={verifyingClientId === selectedRow.client.id}
+          savingNextVerification={savingNextVerificationClientId === selectedRow.client.id}
           onVerify={() => void handleVerify(selectedRow)}
+          onSaveNextVerificationDate={(nextVerificationDate) => void handleSaveNextVerificationDate(selectedRow, nextVerificationDate)}
           onClose={() => setSelectedClientId(null)}
         />
       )}
@@ -253,18 +273,27 @@ function AmlDetailsModal({
   row,
   profilesById,
   verifying,
+  savingNextVerification,
   onVerify,
+  onSaveNextVerificationDate,
   onClose,
 }: {
   row: AmlRow;
   profilesById: Record<string, Profile>;
   verifying: boolean;
+  savingNextVerification: boolean;
   onVerify: () => void;
+  onSaveNextVerificationDate: (nextVerificationDate: string | null) => void;
   onClose: () => void;
 }) {
   const [activeTab, setActiveTab] = useState<AmlCheckKey>("verification");
+  const [nextVerificationDate, setNextVerificationDate] = useState(row.register?.nastepna_weryfikacja_at || "");
   const activeCheck = AML_CHECKS.find((check) => check.key === activeTab) || AML_CHECKS[0];
   const activeCheckDone = amlCheckStatus(row, activeCheck.key);
+
+  useEffect(() => {
+    setNextVerificationDate(row.register?.nastepna_weryfikacja_at || "");
+  }, [row.register?.nastepna_weryfikacja_at]);
 
   return (
     <div style={modalBackdropStyle}>
@@ -296,6 +325,23 @@ function AmlDetailsModal({
           <button type="button" onClick={onVerify} disabled={verifying} style={primaryButtonStyle}>
             <FileSearch size={18} />
             {verifying ? "Trwa weryfikacja..." : "Zweryfikuj AML"}
+          </button>
+          <label style={nextVerificationFieldStyle}>
+            <span style={nextVerificationLabelStyle}>Następna weryfikacja</span>
+            <input
+              type="date"
+              value={nextVerificationDate}
+              onChange={(event) => setNextVerificationDate(event.target.value)}
+              style={dateInputStyle}
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() => onSaveNextVerificationDate(nextVerificationDate || null)}
+            disabled={savingNextVerification}
+            style={secondaryButtonStyle}
+          >
+            {savingNextVerification ? "Zapisywanie..." : "Zapisz datę"}
           </button>
         </div>
 
@@ -792,7 +838,7 @@ const sectionHeaderStyle: CSSProperties = { padding: "24px 28px", borderBottom: 
 const sectionTitleStyle: CSSProperties = { margin: 0, fontSize: "22px", color: colors.navy };
 const sectionHintStyle: CSSProperties = { margin: "6px 0 0", color: colors.muted, fontSize: "14px" };
 const tableWrapStyle: CSSProperties = { width: "100%", overflowX: "auto" };
-const tableStyle: CSSProperties = { width: "100%", minWidth: "1320px", borderCollapse: "collapse" };
+const tableStyle: CSSProperties = { width: "100%", minWidth: "1440px", borderCollapse: "collapse" };
 const thStyle: CSSProperties = { padding: "16px 18px", textAlign: "left", fontSize: "12px", color: colors.text, textTransform: "uppercase", letterSpacing: "0.08em", borderBottom: `1px solid ${colors.border}`, whiteSpace: "nowrap" };
 const wrappedThStyle: CSSProperties = { ...thStyle, width: "260px", minWidth: "220px", whiteSpace: "normal", lineHeight: 1.35 };
 const tdStyle: CSSProperties = { padding: "18px", borderBottom: `1px solid ${colors.border}`, color: colors.text, verticalAlign: "middle", fontSize: "15px" };
@@ -815,8 +861,12 @@ const modalStyle: CSSProperties = { width: "min(1180px, calc(100vw - 48px))", ma
 const modalHeaderStyle: CSSProperties = { position: "sticky", top: 0, zIndex: 2, background: colors.white, display: "flex", justifyContent: "space-between", gap: "20px", padding: "26px 30px", borderBottom: `1px solid ${colors.border}` };
 const modalTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "28px" };
 const iconButtonStyle: CSSProperties = { width: "44px", height: "44px", borderRadius: radius.button, border: `1px solid ${colors.border}`, background: colors.white, color: colors.navy, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer" };
-const modalActionsStyle: CSSProperties = { padding: "20px 30px", borderBottom: `1px solid ${colors.border}` };
+const modalActionsStyle: CSSProperties = { padding: "20px 30px", borderBottom: `1px solid ${colors.border}`, display: "flex", alignItems: "flex-end", gap: "12px", flexWrap: "wrap" };
 const primaryButtonStyle: CSSProperties = { minHeight: "46px", padding: "0 18px", border: "none", borderRadius: radius.button, background: colors.red, color: colors.white, fontWeight: 850, display: "inline-flex", alignItems: "center", gap: "10px", cursor: "pointer" };
+const secondaryButtonStyle: CSSProperties = { minHeight: "46px", padding: "0 16px", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.navy, fontWeight: 850, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer" };
+const nextVerificationFieldStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "6px", minWidth: "210px" };
+const nextVerificationLabelStyle: CSSProperties = { color: colors.muted, fontSize: "12px", fontWeight: 850, textTransform: "uppercase" };
+const dateInputStyle: CSSProperties = { minHeight: "46px", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.inputBackground, color: colors.navy, padding: "0 12px", fontSize: "15px", fontWeight: 800, outline: "none" };
 const modalGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "12px", padding: "22px 30px" };
 const infoBoxStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "14px", background: colors.inputBackground };
 const infoLabelStyle: CSSProperties = { display: "block", color: colors.muted, fontSize: "12px", fontWeight: 800, textTransform: "uppercase" };

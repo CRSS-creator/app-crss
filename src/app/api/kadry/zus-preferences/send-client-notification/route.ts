@@ -145,8 +145,8 @@ export async function POST(request: NextRequest) {
     const amount = toNumber(contribution.skladka_miesieczna);
     const amountLabel = formatMoney(amount);
     const subject = `Koniec preferencji ZUS - ${client.nazwa || "CRSS"}`;
-    const message = buildPlainMessage(client, nextMonth, amountLabel, contribution.schemat_zus);
-    const html = buildHtmlMessage(client, nextMonth, amountLabel, contribution.schemat_zus);
+    const message = buildPlainMessage(client, nextMonth, amountLabel);
+    const html = buildHtmlMessage(client, nextMonth, amountLabel);
     const caregiver = Array.isArray(client.profiles) ? client.profiles[0] : client.profiles;
     const recipients = splitEmails(client.email);
 
@@ -257,25 +257,25 @@ function normalizeScheme(value: string) {
     .trim();
 }
 
-function buildPlainMessage(client: ClientRow, nextMonth: Date, amountLabel: string, nextZusScheme: string) {
-  const contributionSentence = nextZusScheme === "Mały ZUS Plus"
-    ? `Od ${formatMonth(nextMonth)} składki społeczne na Małym ZUS Plus wyniosą ${amountLabel} miesięcznie.`
-    : `Od ${formatMonth(nextMonth)} składki na ubezpieczenie wyniosą ${amountLabel} miesięcznie.`;
+function buildPlainMessage(client: ClientRow, nextMonth: Date, amountLabel: string) {
+  const endDateLabel = client.zus_preferencja_koniec ? formatDate(client.zus_preferencja_koniec) : "wskazanego dnia";
+  const contributionFromLabel = formatDate(isoDate(nextMonth));
 
   return `Dzień dobry,
 
-informujemy, że kończy się preferencja ZUS${client.schemat_zus ? `: ${client.schemat_zus}` : ""}${client.zus_preferencja_koniec ? `, której data końca przypada na ${formatDate(client.zus_preferencja_koniec)}` : ""}.
+informujemy, że dnia ${endDateLabel} kończy się preferencja ZUS${client.schemat_zus ? `: ${client.schemat_zus}` : ""}.
 
-${contributionSentence}
+Od dnia ${contributionFromLabel} składki na ubezpieczenia społeczne wynoszą: ${amountLabel} miesięcznie.
+
+Uwaga: do tej kwoty trzeba doliczyć składkę zdrowotną.
 
 Pozdrawiamy serdecznie,
 Zespół CRSS`;
 }
 
-function buildHtmlMessage(client: ClientRow, nextMonth: Date, amountLabel: string, nextZusScheme: string) {
-  const contributionSentence = nextZusScheme === "Mały ZUS Plus"
-    ? `Od <strong>${escapeHtml(formatMonth(nextMonth))}</strong> składki społeczne na Małym ZUS Plus wyniosą <strong>${escapeHtml(amountLabel)}</strong> miesięcznie.`
-    : `Od <strong>${escapeHtml(formatMonth(nextMonth))}</strong> składki na ubezpieczenie wyniosą <strong>${escapeHtml(amountLabel)}</strong> miesięcznie.`;
+function buildHtmlMessage(client: ClientRow, nextMonth: Date, amountLabel: string) {
+  const endDateLabel = client.zus_preferencja_koniec ? formatDate(client.zus_preferencja_koniec) : "wskazanego dnia";
+  const contributionFromLabel = formatDate(isoDate(nextMonth));
 
   return `
 <div style="margin:0;padding:0;background:#f6f8fb;font-family:Arial,sans-serif;color:#173b73;">
@@ -285,8 +285,9 @@ function buildHtmlMessage(client: ClientRow, nextMonth: Date, amountLabel: strin
         <img src="${APP_URL}/logo-crss-mail.png?v=7" alt="CRSS" width="180" style="display:block;width:180px;max-width:180px;height:auto;border:0;outline:none;text-decoration:none;">
       </div>
       <p style="margin:0 0 16px 0;">Dzień dobry,</p>
-      <p style="margin:0 0 16px 0;">informujemy, że kończy się preferencja ZUS${client.schemat_zus ? `: <strong>${escapeHtml(client.schemat_zus)}</strong>` : ""}${client.zus_preferencja_koniec ? `, której data końca przypada na <strong>${escapeHtml(formatDate(client.zus_preferencja_koniec))}</strong>` : ""}.</p>
-      <p style="margin:0 0 16px 0;">${contributionSentence}</p>
+      <p style="margin:0 0 16px 0;">informujemy, że dnia <strong>${escapeHtml(endDateLabel)}</strong> kończy się preferencja ZUS${client.schemat_zus ? `: <strong>${escapeHtml(client.schemat_zus)}</strong>` : ""}.</p>
+      <p style="margin:0 0 10px 0;">Od dnia <strong>${escapeHtml(contributionFromLabel)}</strong> składki na ubezpieczenia społeczne wynoszą: <strong>${escapeHtml(amountLabel)}</strong> miesięcznie.</p>
+      <p style="margin:0 0 16px 0;"><strong>Uwaga:</strong> do tej kwoty trzeba doliczyć składkę zdrowotną.</p>
       <p style="margin:24px 0 0 0;">Pozdrawiamy serdecznie,<br><strong>Zespół CRSS</strong></p>
     </div>
     <p style="margin:18px 4px 0;color:#7a8598;font-size:13px;">Wiadomość wysłana automatycznie.</p>
@@ -296,10 +297,6 @@ function buildHtmlMessage(client: ClientRow, nextMonth: Date, amountLabel: strin
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("pl-PL").format(new Date(`${value}T12:00:00`));
-}
-
-function formatMonth(value: Date) {
-  return new Intl.DateTimeFormat("pl-PL", { month: "long", year: "numeric" }).format(value);
 }
 
 function toNumber(value: number | string | null | undefined) {

@@ -104,7 +104,7 @@ const CONTRACT_TYPE_OPTIONS: { value: PayrollContractType; label: string }[] = [
   { value: "student", label: "Student" },
 ];
 
-const ZUS_CONTRIBUTION_BASE_SCHEMES = ["Pełny ZUS", "Preferencyjny ZUS", "Mały ZUS Plus", "Ulga na start", "Brak", "Tylko zdrowotna", "Inny"];
+const ZUS_CONTRIBUTION_BASE_SCHEMES = ["Preferencyjny ZUS"];
 
 export default function PayrollPage() {
   return (
@@ -205,7 +205,7 @@ function PayrollContent() {
   const selectedA1ClientToAdd = availableA1Clients.find((client) => client.id === a1ClientToAdd) || null;
   const selectedA1Row = selectedA1RecordId ? a1Rows.find((row) => row.record.id === selectedA1RecordId) || null : null;
   const zusEntrepreneurClients = useMemo(() => clients.filter(isZusPreferenceJdgClient), [clients]);
-  const zusContributionSchemes = useMemo(() => zusContributionSchemeOptions(clients), [clients]);
+  const zusContributionSchemes = useMemo(() => zusContributionSchemeOptions(), []);
   const filteredZusEntrepreneurClients = useMemo(() => filterClients(zusEntrepreneurClients, searchTerm), [zusEntrepreneurClients, searchTerm]);
   const latestZusNotificationByClient = useMemo(
     () => latestZusPreferenceNotificationByClient(zusPreferenceNotificationHistory),
@@ -605,7 +605,7 @@ function ZusEntrepreneursTable({
                 style={checkboxStyle}
               />
             </Th>
-            <Th align="center">Klient</Th>
+            <Th>Klient</Th>
             <Th align="center">Opiekun</Th>
             <Th align="center">Rodzaj preferencji</Th>
             <Th align="center">Data rozpoczęcia</Th>
@@ -627,7 +627,7 @@ function ZusEntrepreneursTable({
                     style={checkboxStyle}
                   />
                 </Td>
-                <Td align="center">
+                <Td>
                   <strong style={clientNameStyle}>{client.nazwa || "Klient bez nazwy"}</strong>
                   <span style={clientMetaStyle}>{client.nip || "Brak NIP"}</span>
                 </Td>
@@ -751,8 +751,8 @@ function ZusContributionsModal({ schemes, onClose }: { schemes: string[]; onClos
       <section style={zusContributionsModalStyle} onClick={(event) => event.stopPropagation()}>
         <div style={modalHeaderStyle}>
           <div>
-            <h2 style={modalTitleStyle}>Wysokość składek ZUS</h2>
-            <p style={modalSubtitleStyle}>Stawki miesięczne dla schematów ZUS przedsiębiorcy.</p>
+            <h2 style={modalTitleStyle}>Wysokość składki ZUS</h2>
+            <p style={modalSubtitleStyle}>Stawka miesięczna dla Preferencyjnego ZUS.</p>
           </div>
           <div style={modalActionsStyle}>
             <button type="button" style={primaryButtonStyle} onClick={() => void saveRates()} disabled={saving || loading}>
@@ -782,7 +782,7 @@ function ZusContributionsModal({ schemes, onClose }: { schemes: string[]; onClos
               <thead>
                 <tr>
                   <Th>Rodzaj preferencji</Th>
-                  <Th align="center">Wysokość składek miesięcznie</Th>
+                  <Th align="center">Wysokość składki miesięcznie</Th>
                   <Th>Uwagi</Th>
                 </tr>
               </thead>
@@ -1500,13 +1500,8 @@ function isFullZusScheme(value: string | null | undefined) {
   return normalized.includes("duzy zus") || normalized.includes("pelny zus") || normalized.includes("pelen zus");
 }
 
-function zusContributionSchemeOptions(clients: PayrollClient[]) {
-  const schemeSet = new Set(ZUS_CONTRIBUTION_BASE_SCHEMES);
-  clients.forEach((client) => {
-    const scheme = client.schemat_zus?.trim();
-    if (scheme) schemeSet.add(scheme);
-  });
-  return Array.from(schemeSet);
+function zusContributionSchemeOptions() {
+  return ZUS_CONTRIBUTION_BASE_SCHEMES;
 }
 
 function emptyZusContributionDrafts(schemes: string[]) {

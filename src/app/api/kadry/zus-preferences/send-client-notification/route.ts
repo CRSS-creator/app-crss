@@ -4,7 +4,7 @@ import { splitEmails } from "@/lib/contactFields";
 
 const ALLOWED_ROLES = new Set(["owner", "manager", "admin", "accountant"]);
 const APP_URL = "https://app.crss.com.pl";
-const FULL_ZUS_SCHEME = "Pełny ZUS";
+const PREFERENTIAL_ZUS_SCHEME = "Preferencyjny ZUS";
 
 type Payload = {
   clientIds?: string[];
@@ -117,7 +117,7 @@ export async function POST(request: NextRequest) {
   if (missingRate) {
     const year = nextContributionMonth(missingRate.zus_preferencja_koniec).getFullYear();
     return NextResponse.json(
-      { error: `Brakuje wpisanej składki ZUS dla ${FULL_ZUS_SCHEME} na rok ${year}. Uzupełnij ją przyciskiem "Wysokość składek".` },
+      { error: `Brakuje wpisanej składki ZUS dla ${PREFERENTIAL_ZUS_SCHEME} na rok ${year}. Uzupełnij ją przyciskiem "Wysokość składek".` },
       { status: 400 }
     );
   }
@@ -213,8 +213,7 @@ export async function POST(request: NextRequest) {
 function rateForClient(rateMap: Map<string, RateRow>, client: ClientRow) {
   const year = nextContributionMonth(client.zus_preferencja_koniec).getFullYear();
   return (
-    rateMap.get(`${year}::${normalizeScheme(FULL_ZUS_SCHEME)}`) ||
-    rateMap.get(`${year}::${normalizeScheme(client.schemat_zus || "")}`) ||
+    rateMap.get(`${year}::${normalizeScheme(PREFERENTIAL_ZUS_SCHEME)}`) ||
     null
   );
 }

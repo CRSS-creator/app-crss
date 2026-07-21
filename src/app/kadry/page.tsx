@@ -1808,6 +1808,7 @@ function filterClients(clients: PayrollClient[], searchTerm: string) {
     client.nip,
     client.email,
     caregiverLabel(client),
+    client.schemat_zus,
   ].some((value) => String(value || "").toLowerCase().includes(normalized)));
 }
 

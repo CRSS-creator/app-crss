@@ -486,77 +486,43 @@ function SettlementDrawer({ settlement, progress, recurringTasks, recurringTimeE
             <section style={drawerSectionStyle}>
               <h3 style={drawerSectionTitleStyle}>Status miesiąca</h3>
               <Field label="Status księgowości"><AppSelect style={{ ...inputStyle, ...statusSelectStyle(settlement.status_ksiegowosci) }} value={settlement.status_ksiegowosci} disabled={saving} options={STATUS_OPTIONS} onChange={(value) => onSave(settlement, { status_ksiegowosci: value as SettlementStatus })} /></Field>
-              <div style={countFieldsGridStyle}>
+              <Field label="Data dostarczenia dokumentów"><PolishDateInput value={settlement.data_dostarczenia_dokumentow} disabled={saving} onChange={(value) => onSave(settlement, { data_dostarczenia_dokumentow: value })} /></Field>
+              <button type="button" style={sendingReminder || Boolean(settlement.data_dostarczenia_dokumentow) ? disabledReminderButtonStyle : reminderButtonStyle} disabled={sendingReminder || Boolean(settlement.data_dostarczenia_dokumentow)} onClick={requestDocumentsReminder}>
+                {sendingReminder ? "Wysyłanie..." : "Przypomnij o dokumentach"}
+              </button>
+              {settlement.przypomnienie_dokumenty_wyslane_at && (
+                <p style={reminderMetaStyle}>
+                  Przypomnienie wysłane {formatReminderTimestamp(settlement.przypomnienie_dokumenty_wyslane_at)} przez {settlement.przypomnienie_dokumenty_wyslane_przez_nazwa || "nieustalonego użytkownika"}.
+                </p>
+              )}
+              <div style={hasPayroll ? countFieldsGridStyle : oneColumnStyle}>
                 <Field label="Liczba dokumentów"><NumberInput value={settlement.liczba_dokumentow} disabled={false} onChange={(value) => onSave(settlement, { liczba_dokumentow: value })} /></Field>
-                <Field label="Data dostarczenia dokumentów"><AppDateInput style={inputStyle} value={settlement.data_dostarczenia_dokumentow} disabled={saving} onChange={(value) => onSave(settlement, { data_dostarczenia_dokumentow: value })} /></Field>
-                <Field label="Przypomnienie o dokumentach">
-                  <div>
-                    <button type="button" style={sendingReminder ? disabledReminderButtonStyle : reminderButtonStyle} disabled={sendingReminder} onClick={requestDocumentsReminder}>{sendingReminder ? "Wysyłanie..." : "Wyślij przypomnienie"}</button>
-                    {settlement.przypomnienie_dokumenty_wyslane_at && <p style={reminderMetaStyle}>Ostatnio wysłane {formatReminderTimestamp(settlement.przypomnienie_dokumenty_wyslane_at)} przez {settlement.przypomnienie_dokumenty_wyslane_przez_nazwa || "użytkownika"}.</p>}
-                  </div>
-                </Field>
                 {hasPayroll && <Field label="Liczba pracowników"><NumberInput value={settlement.liczba_pracownikow} disabled={false} onChange={(value) => onSave(settlement, { liczba_pracownikow: value })} /></Field>}
                 {hasPayroll && <Field label="Liczba zleceniobiorców"><NumberInput value={settlement.liczba_zleceniobiorcow} disabled={false} onChange={(value) => onSave(settlement, { liczba_zleceniobiorcow: value })} /></Field>}
               </div>
-              <Field label="Uwagi"><textarea style={textareaStyle} value={settlement.uwagi || ""} onChange={(event) => onSave(settlement, { uwagi: event.target.value })} /></Field>
+              <Field label="Uwagi"><textarea style={textareaStyle} value={settlement.uwagi || ""} disabled={false} onChange={(event) => onSave(settlement, { uwagi: event.target.value })} /></Field>
             </section>
 
-            <section style={drawerSectionStyle}>
-              <h3 style={drawerSectionTitleStyle}>Zadania cykliczne</h3>
-              <ProgressBadge progress={progress.progress} done={progress.done_tasks} total={progress.total_tasks} large />
-              <div style={clientContextStyle}>
-                <span>Forma prawna: <strong>{client?.forma_prawna || "Brak"}</strong></span>
-                <span>Opodatkowanie: <strong>{client?.forma_opodatkowania || "Brak"}</strong></span>
-                <span>VAT: <strong>{client?.czynny_vat ? "czynny" : "nie"}</strong></span>
-                <span>VAT: <strong>{vatSettlementPeriodLabel(client?.vat_okres_rozliczeniowy)}</strong></span>
-              </div>
-              <div style={recurringListStyle}>
-                {recurringTasks.length === 0 ? <div style={emptyStateStyle}>Brak zadań cyklicznych dla tego klienta.</div> : recurringTasks.map((task) => {
-                  const activeTimer = activeTimers.find((entry) => entry.zadanie_cykliczne_id === task.zadanie_cykliczne_id && entry.klient_id === client?.id && entry.miesiac_rozliczeniowy === settlement.okres);
-                  const totalSeconds = recurringTimeByTask[task.zadanie_cykliczne_id] || 0;
-                  return (
-                    <article key={task.id} style={task.status === "zrobione" ? recurringDoneItemStyle : recurringItemStyle}>
-                      <div style={recurringTitleRowStyle}>
-                        <input style={checkboxStyle} type="checkbox" checked={task.status === "zrobione"} onChange={() => onToggleRecurringDone(task)} />
-                        <div style={recurringTextStyle}>
-                          <strong>{task.tytul}</strong>
-                          <p style={recurringMetaStyle}>Termin: {formatDate(task.termin)} · Status: {task.status === "zrobione" ? "zrobione" : "do zrobienia"}</p>
-                          <p style={recurringTimeSummaryStyle}>Czas: {formatDuration(totalSeconds)}</p>
-                          {editingRecurringTimeId === task.id && <RecurringTimeEditor totalSeconds={totalSeconds} onCancel={() => setEditingRecurringTimeId(null)} onSave={(seconds) => { onSaveRecurringManualTime(settlement, task, seconds); setEditingRecurringTimeId(null); }} />}
-                        </div>
-                      </div>
-                      <div style={recurringActionsStyle}>
-                        <button type="button" style={activeTimer ? timerActiveButtonStyle : timerButtonStyle} onClick={() => onToggleRecurringTimer(settlement, task)} title={activeTimer ? "Zatrzymaj liczenie czasu" : "Rozpocznij liczenie czasu"}>{activeTimer ? <Square size={16} /> : <Play size={16} />}{activeTimer ? "Stop" : "Start"}</button>
-                        <button type="button" style={secondarySmallButtonStyle} onClick={() => setEditingRecurringTimeId(task.id)}>Edytuj czas</button>
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-            </section>
-          </div>
-
-          <div style={drawerColumnStyle}>
             <section style={drawerSectionStyle}>
               <div style={sectionHeaderRowStyle}>
                 <h3 style={drawerSectionTitleStyle}>Zobowiązania publicznoprawne</h3>
-                <span style={mutedBadgeStyle}>{taxObligations.length} pozycji</span>
+                <span style={mutedBadgeStyle}>Ręczne uzupełnianie</span>
               </div>
-              <div style={taxObligationListStyle}>
-                {taxObligations.length === 0 ? <div style={emptyStateStyle}>Brak zobowiązań dla tego rozliczenia.</div> : taxObligations.map((obligation) => {
-                  const emailDetails = sendStatusDetails(obligation.email_sent_at, obligation.email_sent_by_name);
-                  const smsDetails = sendStatusDetails(obligation.sms_sent_at, obligation.sms_sent_by_name);
-                  return (
+              {taxObligations.length === 0 ? (
+                <div style={emptyStateStyle}>Brak zobowiązań dla tego miesiąca.</div>
+              ) : (
+                <div style={taxObligationListStyle}>
+                  {taxObligations.map((obligation) => (
                     <article key={obligation.id} style={taxObligationItemStyle}>
                       <div style={taxObligationMainStyle}>
                         <label style={taxObligationSelectStyle}>
                           <input
-                            style={checkboxStyle}
                             type="checkbox"
                             checked={selectedTaxObligationIds.includes(obligation.id)}
                             onChange={() => toggleTaxObligationSelection(obligation.id)}
+                            style={checkboxStyle}
                           />
-                          <span>{obligation.nazwa}</span>
+                          <strong>{obligation.nazwa}</strong>
                         </label>
                         <span>{formatCurrency(obligation.kwota)}</span>
                       </div>
@@ -564,40 +530,92 @@ function SettlementDrawer({ settlement, progress, recurringTasks, recurringTimeE
                         <Field label="Kwota">
                           <AmountInput value={obligation.kwota} onChange={(value) => onTaxObligationUpdate(obligation.id, { kwota: value })} />
                         </Field>
-                        <Field label="Termin płatności">
-                          <PolishDateInput
-                            value={obligation.termin_platnosci}
-                            disabled={false}
-                            onChange={(value) => onTaxObligationUpdate(obligation.id, { termin_platnosci: value })}
+                        <Field label="Termin">
+                          <AppDateInput
+                            style={taxFieldInputStyle}
+                            value={formatDateForInput(obligation.termin_platnosci)}
+                            onChange={(value) => onTaxObligationUpdate(obligation.id, { termin_platnosci: value || null })}
                           />
                         </Field>
                       </div>
                       <div style={taxStatusGridStyle}>
-                        <span style={sendStatusStyle(obligation.status_email)}>E-mail: {sendStatusLabel(obligation.status_email)}</span>
-                        <span style={sendStatusStyle(obligation.status_sms)}>SMS: {sendStatusLabel(obligation.status_sms)}</span>
-                        <span style={mutedBadgeStyle}>{requiredDayLabel(obligation.termin_platnosci)}</span>
+                        <div>
+                          <span style={sendStatusStyle(obligation.status_email)}>E-mail: {sendStatusLabel(obligation.status_email)}</span>
+                          {sendStatusDetails(obligation.email_sent_at, obligation.email_sent_by_name) ? <p style={taxSentInfoStyle}>{sendStatusDetails(obligation.email_sent_at, obligation.email_sent_by_name)}</p> : null}
+                        </div>
+                        <div>
+                          <span style={sendStatusStyle(obligation.status_sms)}>SMS: {sendStatusLabel(obligation.status_sms)}</span>
+                          {sendStatusDetails(obligation.sms_sent_at, obligation.sms_sent_by_name) ? <p style={taxSentInfoStyle}>{sendStatusDetails(obligation.sms_sent_at, obligation.sms_sent_by_name)}</p> : null}
+                        </div>
+                        <button type="button" style={deleteTaxButtonStyle} onClick={() => onTaxObligationDelete(obligation.id)}>Usuń</button>
                       </div>
-                      {(emailDetails || smsDetails) && <p style={taxSentInfoStyle}>{[emailDetails, smsDetails].filter(Boolean).join(" ")}</p>}
-                      <button type="button" style={deleteTaxButtonStyle} onClick={() => onTaxObligationDelete(obligation.id)}>Usuń</button>
+                    </article>
+                  ))}
+                  <div style={taxBulkActionsStyle}>
+                    <span style={taxBulkHintStyle}>
+                      Zaznacz zobowiązania, które mają trafić do klienta e-mailem i SMS-em.
+                    </span>
+                    <button
+                      type="button"
+                      style={selectedTaxObligationIds.length === 0 || sendingTaxObligations ? disabledSendTaxInfoButtonStyle : sendTaxInfoButtonStyle}
+                      disabled={selectedTaxObligationIds.length === 0 || sendingTaxObligations}
+                      onClick={requestTaxObligationSend}
+                    >
+                      {sendingTaxObligations ? "Wysyłanie..." : `Wyślij informacje (${selectedTaxObligationIds.length})`}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </section>
+
+            <SettlementAdditionalFeesPanel settlement={settlement} />
+          </div>
+
+          <div style={drawerColumnStyle}>
+            <section style={drawerSectionStyle}>
+              <h3 style={drawerSectionTitleStyle}>Zadania cykliczne</h3>
+              <ProgressBadge progress={progress.progress} done={progress.done_tasks} total={progress.total_tasks} large />
+              <div style={clientContextStyle}><span>Forma prawna: <strong>{client?.forma_prawna || "Brak"}</strong></span><span>Opodatkowanie: <strong>{client?.forma_opodatkowania || "Brak"}</strong></span><span>VAT: <strong>{client?.czynny_vat ? "czynny" : "nie"}</strong></span>{client?.czynny_vat && <span>Okres VAT: <strong>{vatSettlementPeriodLabel(client.vat_okres_rozliczeniowy)}</strong></span>}<span>VAT-UE: <strong>{client?.vat_ue ? "tak" : "nie"}</strong></span><span>Kadry: <strong>{client?.obsluga_kadrowa ? "tak" : "nie"}</strong></span></div>
+              <div style={recurringListStyle}>
+                {recurringTasks.length === 0 ? <div style={emptyStateStyle}>Brak zadań cyklicznych dla tego klienta.</div> : recurringTasks.map((task) => {
+                  const activeTimer = activeTimers.find((entry) => entry.zadanie_cykliczne_id === task.zadanie_cykliczne_id && entry.klient_id === client?.id && entry.miesiac_rozliczeniowy === settlement.okres);
+                  const done = task.status === "zrobione";
+                  const totalSeconds = recurringTimeByTask[task.zadanie_cykliczne_id] || 0;
+                  const isEditingTime = editingRecurringTimeId === task.id;
+
+                  return (
+                    <article key={task.id} style={done ? recurringDoneItemStyle : recurringItemStyle}>
+                      <div style={recurringTitleRowStyle}>
+                        <input type="checkbox" checked={done} onChange={() => onToggleRecurringDone(task)} style={checkboxStyle} />
+                        <div style={recurringTextStyle}>
+                          <strong>{task.tytul}</strong>
+                          <p style={recurringMetaStyle}>{requiredDayLabel(task.termin)}</p>
+                          <p style={recurringTimeSummaryStyle}>Czas pracy: {formatDuration(totalSeconds)}</p>
+                          {isEditingTime ? (
+                            <RecurringTimeEditor
+                              totalSeconds={totalSeconds}
+                              onCancel={() => setEditingRecurringTimeId(null)}
+                              onSave={(seconds) => {
+                                onSaveRecurringManualTime(settlement, task, seconds);
+                                setEditingRecurringTimeId(null);
+                              }}
+                            />
+                          ) : null}
+                        </div>
+                      </div>
+                      <div style={recurringActionsStyle}>
+                        <button type="button" style={secondarySmallButtonStyle} onClick={() => setEditingRecurringTimeId(isEditingTime ? null : task.id)}>
+                          {isEditingTime ? "Ukryj edycję" : "Edytuj czas"}
+                        </button>
+                        <button style={activeTimer ? timerActiveButtonStyle : timerButtonStyle} onClick={() => onToggleRecurringTimer(settlement, task)} title={activeTimer ? "Zatrzymaj liczenie czasu" : "Rozpocznij liczenie czasu"}>
+                          {activeTimer ? <Square size={16} /> : <Play size={16} />}{activeTimer ? "Stop" : "Start"}
+                        </button>
+                      </div>
                     </article>
                   );
                 })}
               </div>
-              {taxObligations.length > 0 && (
-                <div style={taxBulkActionsStyle}>
-                  <span style={taxBulkHintStyle}>{selectedTaxObligationIds.length ? `Zaznaczono: ${selectedTaxObligationIds.length}` : "Zaznacz zobowiązania do wysłania."}</span>
-                  <button
-                    type="button"
-                    style={selectedTaxObligationIds.length === 0 || sendingTaxObligations ? disabledSendTaxInfoButtonStyle : sendTaxInfoButtonStyle}
-                    disabled={selectedTaxObligationIds.length === 0 || sendingTaxObligations}
-                    onClick={requestTaxObligationSend}
-                  >
-                    {sendingTaxObligations ? "Wysyłanie..." : `Wyślij informacje (${selectedTaxObligationIds.length})`}
-                  </button>
-                </div>
-              )}
             </section>
-            <SettlementAdditionalFeesPanel settlement={settlement} />
           </div>
         </div>
       </aside>
@@ -885,3 +903,4 @@ const disabledSendTaxInfoButtonStyle: CSSProperties = { ...sendTaxInfoButtonStyl
 const deleteTaxButtonStyle: CSSProperties = { alignSelf: "flex-end", border: `1px solid #fecaca`, borderRadius: radius.button, background: "#fff1f2", color: "#b91c1c", padding: "8px 12px", fontWeight: 850, cursor: "pointer" };
 const taxBulkActionsStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", padding: "12px 2px 0", flexWrap: "wrap" };
 const taxBulkHintStyle: CSSProperties = { color: colors.muted, fontSize: "12px", fontWeight: 750 };
+

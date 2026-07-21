@@ -5,6 +5,7 @@ import { splitEmails } from "@/lib/contactFields";
 const ALLOWED_ROLES = new Set(["owner", "manager", "admin", "accountant"]);
 const APP_URL = "https://app.crss.com.pl";
 const PREFERENTIAL_ZUS_SCHEME = "Preferencyjny ZUS";
+const ZUS_PREFERENCE_WEBHOOK_ENV = "N8N_ZUS_PREFERENCE_NOTIFICATIONS_WEBHOOK_URL";
 
 type Payload = {
   clientIds?: string[];
@@ -32,10 +33,10 @@ export async function POST(request: NextRequest) {
   const auth = await getAuthorizedServerUser(request, ALLOWED_ROLES, "Brak uprawnień do wysyłki powiadomień ZUS.");
   if (auth.error) return auth.error;
 
-  const webhookUrl = process.env.N8N_BULK_NOTIFICATIONS_WEBHOOK_URL?.trim();
+  const webhookUrl = process.env[ZUS_PREFERENCE_WEBHOOK_ENV]?.trim();
   if (!webhookUrl) {
     return NextResponse.json(
-      { error: "Brak konfiguracji wysyłki komunikatów. Uzupełnij N8N_BULK_NOTIFICATIONS_WEBHOOK_URL." },
+      { error: `Brak konfiguracji wysyłki powiadomień ZUS. Uzupełnij ${ZUS_PREFERENCE_WEBHOOK_ENV}.` },
       { status: 500 }
     );
   }

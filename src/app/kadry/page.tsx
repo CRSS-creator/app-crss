@@ -41,6 +41,10 @@ type PayrollClient = {
   nip: string | null;
   email: string | null;
   telefon: string | null;
+  forma_prawna: string | null;
+  schemat_zus: string | null;
+  zus_preferencja_start: string | null;
+  zus_preferencja_koniec: string | null;
   obsluga_kadrowa: boolean | null;
   opiekun_id: string | null;
   profiles?: { full_name: string | null; email: string | null } | { full_name: string | null; email: string | null }[] | null;
@@ -175,6 +179,8 @@ function PayrollContent() {
   const filteredA1Clients = useMemo(() => filterClients(availableA1Clients, a1AddSearch), [availableA1Clients, a1AddSearch]);
   const selectedA1ClientToAdd = availableA1Clients.find((client) => client.id === a1ClientToAdd) || null;
   const selectedA1Row = selectedA1RecordId ? a1Rows.find((row) => row.record.id === selectedA1RecordId) || null : null;
+  const zusEntrepreneurClients = useMemo(() => clients.filter(isZusPreferenceJdgClient), [clients]);
+  const filteredZusEntrepreneurClients = useMemo(() => filterClients(zusEntrepreneurClients, searchTerm), [zusEntrepreneurClients, searchTerm]);
   const selectedContracts = selectedClient ? contractsByClient[selectedClient.id] || [] : [];
   const tab = PAYROLL_TABS.find((item) => item.value === activeTab) || PAYROLL_TABS[0];
 
@@ -245,7 +251,7 @@ function PayrollContent() {
           )}
         </div>
 
-        {(activeTab === "kadry" || activeTab === "a1") && (
+        {(activeTab === "kadry" || activeTab === "a1" || activeTab === "zus_przedsiebiorcy") && (
           <div style={searchRowStyle}>
             <input
               type="search"
@@ -321,10 +327,7 @@ function PayrollContent() {
             onDetails={(recordId) => setSelectedA1RecordId(recordId)}
           />
         ) : (
-          <div style={emptyStateStyle}>
-            <strong>{tab.label}</strong>
-            <span>Widok gotowy do uzupełnienia.</span>
-          </div>
+          <ZusEntrepreneursTable clients={filteredZusEntrepreneurClients} loading={loading} />
         )}
       </section>
 
@@ -451,6 +454,41 @@ function A1Table({
               </tr>
             );
           })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ZusEntrepreneursTable({ clients, loading }: { clients: PayrollClient[]; loading: boolean }) {
+  if (loading) return <p style={emptyStyle}>Ładowanie przedsiębiorców ZUS...</p>;
+  if (clients.length === 0) return <p style={emptyStyle}>Brak JDG ze schematem ZUS innym niż pełny ZUS.</p>;
+
+  return (
+    <div style={tableWrapStyle}>
+      <table style={zusEntrepreneursTableStyle}>
+        <thead>
+          <tr>
+            <Th>Klient</Th>
+            <Th>Opiekun</Th>
+            <Th>Rodzaj preferencji</Th>
+            <Th>Data rozpoczęcia</Th>
+            <Th>Data końca</Th>
+          </tr>
+        </thead>
+        <tbody>
+          {clients.map((client) => (
+            <tr key={client.id}>
+              <Td>
+                <strong style={clientNameStyle}>{client.nazwa || "Klient bez nazwy"}</strong>
+                <span style={clientMetaStyle}>{client.nip || "Brak NIP"}</span>
+              </Td>
+              <Td>{caregiverLabel(client)}</Td>
+              <Td><strong>{client.schemat_zus || "-"}</strong></Td>
+              <Td>{formatDate(client.zus_preferencja_start)}</Td>
+              <Td>{formatDate(client.zus_preferencja_koniec)}</Td>
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>
@@ -1119,6 +1157,23 @@ function filterA1Rows(rows: A1Row[], searchTerm: string) {
   ].some((value) => String(value || "").toLowerCase().includes(normalized)));
 }
 
+function isZusPreferenceJdgClient(client: PayrollClient) {
+  return isJdgLegalForm(client.forma_prawna) && Boolean(client.schemat_zus?.trim()) && !isFullZusScheme(client.schemat_zus);
+}
+
+function isJdgLegalForm(value: string | null | undefined) {
+  const normalized = String(value || "").toLowerCase();
+  return normalized.includes("jdg") || normalized.includes("jednoosob");
+}
+
+function isFullZusScheme(value: string | null | undefined) {
+  const normalized = String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  return normalized.includes("duzy zus") || normalized.includes("pelny zus") || normalized.includes("pelen zus");
+}
+
 function caregiverLabel(client: PayrollClient | null | undefined) {
   const profile = Array.isArray(client?.profiles) ? client.profiles[0] : client?.profiles;
   return profile?.full_name || profile?.email || "Brak opiekuna";
@@ -1282,7 +1337,7 @@ function buildA1Totals(krajowy: number, zagraniczny: number): A1Totals {
 function tabHint(tab: PayrollTab) {
   if (tab === "kadry") return "Klienci z zaznaczoną obsługą kadrową.";
   if (tab === "a1") return "Obsługa zaświadczeń A1.";
-  return "ZUS przedsiębiorcy i powiązane terminy.";
+  return "JDG ze schematem ZUS innym niż pełny ZUS.";
 }
 
 const pageStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "22px" };
@@ -1313,6 +1368,7 @@ const emptyInlineStyle: CSSProperties = { margin: 0, color: colors.muted, fontWe
 const tableWrapStyle: CSSProperties = { width: "100%", overflowX: "auto" };
 const tableStyle: CSSProperties = { width: "100%", minWidth: "980px", borderCollapse: "collapse" };
 const a1RegisterTableStyle: CSSProperties = { ...tableStyle, minWidth: "1120px" };
+const zusEntrepreneursTableStyle: CSSProperties = { ...tableStyle, minWidth: "1040px" };
 const detailsTableStyle: CSSProperties = { width: "100%", minWidth: "1240px", borderCollapse: "collapse" };
 const a1MonthlyTableStyle: CSSProperties = { width: "100%", minWidth: "760px", borderCollapse: "collapse" };
 const a1MonthlyScrollStyle: CSSProperties = { width: "100%", maxHeight: "min(48vh, 520px)", overflow: "auto" };

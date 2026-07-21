@@ -63,6 +63,8 @@ type Client = {
   vat_okres_rozliczeniowy: string | null;
   vat_ue: boolean | null;
   schemat_zus: string | null;
+  zus_preferencja_start: string | null;
+  zus_preferencja_koniec: string | null;
   limit_dokumentow: number | null;
   koszt_dodatkowego_dokumentu: number | null;
   pierwszy_okres_rozliczeniowy: string | null;
@@ -94,6 +96,8 @@ type ClientDraft = {
   vat_okres_rozliczeniowy: string;
   vat_ue: boolean;
   schemat_zus: string;
+  zus_preferencja_start: string;
+  zus_preferencja_koniec: string;
   limit_dokumentow: string;
   koszt_dodatkowego_dokumentu: string;
   pierwszy_okres_rozliczeniowy: string;
@@ -689,6 +693,8 @@ function ClientDrawer({
       vat_okres_rozliczeniowy: draft.czynny_vat ? draft.vat_okres_rozliczeniowy : "miesieczny",
       vat_ue: draft.vat_ue,
       schemat_zus: isDraftJdg ? draft.schemat_zus.trim() || null : null,
+      zus_preferencja_start: isDraftJdg ? emptyToNull(draft.zus_preferencja_start) : null,
+      zus_preferencja_koniec: isDraftJdg ? emptyToNull(draft.zus_preferencja_koniec) : null,
       limit_dokumentow: draft.limit_dokumentow
         ? Number(draft.limit_dokumentow)
         : null,
@@ -882,7 +888,11 @@ function ClientDrawer({
                   value={draft.forma_prawna}
                   onChange={(value) => {
                     updateDraft("forma_prawna", value);
-                    if (!isJdgLegalForm(value)) updateDraft("schemat_zus", "");
+                    if (!isJdgLegalForm(value)) {
+                      updateDraft("schemat_zus", "");
+                      updateDraft("zus_preferencja_start", "");
+                      updateDraft("zus_preferencja_koniec", "");
+                    }
                   }}
                   options={LEGAL_FORM_OPTIONS}
                 />
@@ -956,6 +966,12 @@ function ClientDrawer({
                     ]}
                   />
                 )}
+                {isDraftJdg && (
+                  <>
+                    <EditableInput label="Data rozpoczęcia preferencji ZUS" type="date" value={draft.zus_preferencja_start} onChange={(value) => updateDraft("zus_preferencja_start", value)} />
+                    <EditableInput label="Data końca preferencji ZUS" type="date" value={draft.zus_preferencja_koniec} onChange={(value) => updateDraft("zus_preferencja_koniec", value)} />
+                  </>
+                )}
               </>
             ) : (
               <>
@@ -971,6 +987,8 @@ function ClientDrawer({
                 )}
                 <InfoRow label="VAT UE" value={client.vat_ue ? "Tak" : "Nie"} />
                 {isClientJdg && <InfoRow label="Schemat ZUS" value={client.schemat_zus} />}
+                {isClientJdg && <InfoRow label="Data rozpoczęcia preferencji ZUS" value={formatDate(client.zus_preferencja_start)} />}
+                {isClientJdg && <InfoRow label="Data końca preferencji ZUS" value={formatDate(client.zus_preferencja_koniec)} />}
               </>
             )}
 
@@ -1239,6 +1257,8 @@ function CreateClientDrawer({
     vat_okres_rozliczeniowy: "miesieczny",
     vat_ue: false,
     schemat_zus: "",
+    zus_preferencja_start: "",
+    zus_preferencja_koniec: "",
     limit_dokumentow: "",
     koszt_dodatkowego_dokumentu: "",
     pierwszy_okres_rozliczeniowy: "",
@@ -1305,6 +1325,8 @@ function CreateClientDrawer({
       vat_okres_rozliczeniowy: draft.czynny_vat ? draft.vat_okres_rozliczeniowy : "miesieczny",
       vat_ue: draft.vat_ue,
       schemat_zus: isJdg ? draft.schemat_zus.trim() || null : null,
+      zus_preferencja_start: isJdg ? emptyToNull(draft.zus_preferencja_start) : null,
+      zus_preferencja_koniec: isJdg ? emptyToNull(draft.zus_preferencja_koniec) : null,
       limit_dokumentow: draft.limit_dokumentow
         ? Number(draft.limit_dokumentow)
         : null,
@@ -1441,6 +1463,8 @@ function CreateClientDrawer({
         !v.toLowerCase().includes("jednoosob")
       ) {
         updateDraft("schemat_zus", "");
+        updateDraft("zus_preferencja_start", "");
+        updateDraft("zus_preferencja_koniec", "");
       }
     }}
     options={[
@@ -1502,20 +1526,34 @@ function CreateClientDrawer({
   />
 
   {isJdg && (
-    <EditableSelect
-      label="Schemat ZUS"
-      value={draft.schemat_zus}
-      onChange={(v) => updateDraft("schemat_zus", v)}
-      options={[
-        { value: "", label: "Wybierz" },
-        { value: "Duży ZUS", label: "Duży ZUS" },
-        { value: "Preferencyjny ZUS", label: "Preferencyjny ZUS" },
-        { value: "Mały ZUS Plus", label: "Mały ZUS Plus" },
-        { value: "Ulga na start", label: "Ulga na start" },
-        { value: "Brak ZUS", label: "Brak ZUS" },
-        { value: "Inny", label: "Inny" },
-      ]}
-    />
+    <>
+      <EditableSelect
+        label="Schemat ZUS"
+        value={draft.schemat_zus}
+        onChange={(v) => updateDraft("schemat_zus", v)}
+        options={[
+          { value: "", label: "Wybierz" },
+          { value: "Duży ZUS", label: "Duży ZUS" },
+          { value: "Preferencyjny ZUS", label: "Preferencyjny ZUS" },
+          { value: "Mały ZUS Plus", label: "Mały ZUS Plus" },
+          { value: "Ulga na start", label: "Ulga na start" },
+          { value: "Brak ZUS", label: "Brak ZUS" },
+          { value: "Inny", label: "Inny" },
+        ]}
+      />
+      <EditableInput
+        label="Data rozpoczęcia preferencji ZUS"
+        type="date"
+        value={draft.zus_preferencja_start}
+        onChange={(v) => updateDraft("zus_preferencja_start", v)}
+      />
+      <EditableInput
+        label="Data końca preferencji ZUS"
+        type="date"
+        value={draft.zus_preferencja_koniec}
+        onChange={(v) => updateDraft("zus_preferencja_koniec", v)}
+      />
+    </>
   )}
 
   <EditableCheckbox
@@ -1683,6 +1721,8 @@ function createDraft(client: Client): ClientDraft {
     vat_okres_rozliczeniowy: client.vat_okres_rozliczeniowy === "kwartalny" ? "kwartalny" : "miesieczny",
     vat_ue: Boolean(client.vat_ue),
     schemat_zus: client.schemat_zus || "",
+    zus_preferencja_start: client.zus_preferencja_start || "",
+    zus_preferencja_koniec: client.zus_preferencja_koniec || "",
     limit_dokumentow:
       client.limit_dokumentow !== null && client.limit_dokumentow !== undefined
         ? String(client.limit_dokumentow)
@@ -1721,6 +1761,10 @@ function normalizeMonthInput(value: string) {
   return value ? `${value}-01` : null;
 }
 
+function emptyToNull(value: string) {
+  return value.trim() ? value.trim() : null;
+}
+
 function formatSettlementPeriod(value: string | null | undefined) {
   if (!value) return null;
 
@@ -1731,6 +1775,10 @@ function formatSettlementPeriod(value: string | null | undefined) {
     month: "long",
     year: "numeric",
   });
+}
+
+function formatDate(value: string | null | undefined) {
+  return value ? new Intl.DateTimeFormat("pl-PL").format(new Date(`${value}T12:00:00`)) : null;
 }
 
 function formatMoney(value: number | null | undefined) {
@@ -1765,7 +1813,7 @@ function EditableInput({
   label: string;
   value: string;
   onChange: (value: string) => void;
-  type?: "text" | "number" | "email" | "month";
+  type?: "text" | "number" | "email" | "month" | "date";
   placeholder?: string;
 }) {
   return (

@@ -823,7 +823,7 @@ function buildStages(
         primaryOwnerResponsible,
         latestWfirmaAccountNotificationInfo(onboardingHistory, profilesById)
       ),
-      descriptionNote: "Wraz z powiadomieniem o utworzeniu konta wysyłana jest instrukcja integracji KSeF z wFirmą.",
+      descriptionNote: "Wyłącz możliwość księgowania przez przedsiębiorcę.",
     },
     {
       ...buildManualStage("wfirma", "Konfiguracja konta klienta i ustawień operacyjnych w systemie wFirma.", recordByKey.wfirma, undefined, undefined, undefined, undefined, caregiverResponsible),
@@ -896,8 +896,7 @@ const WFIRMA_COMMON_TASKS: Omit<OnboardingChecklistItem, "done">[] = [
   { id: "declarant_data", label: "Zmień dane osoby wysyłającej deklaracje: Mateusz Marcinkowski, tel. 600-950-940, e-mail: biuro@crss.com.pl.", group: "Wspólne" },
   { id: "tax_microaccount", label: "Potwierdź mikrorachunek podatkowy oraz rachunek do składek ZUS.", group: "Wspólne" },
   { id: "vat_scheme", label: "Ustaw schemat podatku VAT zgodnie ze statusem klienta.", group: "Wspólne" },
-  { id: "tax_office_permissions", label: "Ustaw urząd skarbowy i uprawnienia użytkownika: księgowanie, plik JPK, wydatki.", group: "Wspólne" },
-  { id: "bank_account", label: "Dodaj konto przedsiębiorcy i wyłącz możliwość księgowania.", group: "Wspólne" },
+  { id: "tax_office_permissions", label: "Ustaw urząd skarbowy.", group: "Wspólne" },
   { id: "ksef_integration_check", label: "Sprawdź integrację wFirmy z KSeF, w razie problemów skontaktuj się z Klientem.", group: "Wspólne" },
 ];
 

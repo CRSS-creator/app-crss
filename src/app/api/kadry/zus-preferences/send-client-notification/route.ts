@@ -4,7 +4,7 @@ import { splitEmails } from "@/lib/contactFields";
 
 const ALLOWED_ROLES = new Set(["owner", "manager", "admin", "accountant"]);
 const APP_URL = "https://app.crss.com.pl";
-const FULL_ZUS_SCHEME = "Pełny ZUS";
+const FULL_ZUS_SCHEME = "Duży ZUS";
 const PREFERENTIAL_ZUS_SCHEME = "Preferencyjny ZUS";
 const ZUS_PREFERENCE_WEBHOOK_ENV = "N8N_ZUS_PREFERENCE_NOTIFICATIONS_WEBHOOK_URL";
 

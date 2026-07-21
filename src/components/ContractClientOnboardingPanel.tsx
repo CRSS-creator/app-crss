@@ -43,7 +43,7 @@ type Props = {
 };
 
 const CLIENT_STATUSES = ["Onboarding", "Aktywny", "Zawieszony", "Do zamknięcia", "Archiwalny"];
-const ZUS_OPTIONS = ["", "Brak", "Preferencyjny", "Mały ZUS Plus", "Pełny ZUS", "Tylko zdrowotna"];
+const ZUS_OPTIONS = ["", "Brak", "Preferencyjny", "Mały ZUS Plus", "Duży ZUS", "Tylko zdrowotna"];
 const BILLING_MODEL_OPTIONS = [
   { value: "z_dolu", label: "Z dołu" },
   { value: "z_gory", label: "Z góry" },

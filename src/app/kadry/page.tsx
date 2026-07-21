@@ -110,12 +110,11 @@ const CONTRACT_TYPE_OPTIONS: { value: PayrollContractType; label: string }[] = [
   { value: "student", label: "Student" },
 ];
 
-const FULL_ZUS_SCHEME = "Pełny ZUS";
+const FULL_ZUS_SCHEME = "Duży ZUS";
 const PREFERENTIAL_ZUS_SCHEME = "Preferencyjny ZUS";
 const ZUS_CONTRIBUTION_BASE_SCHEMES = [FULL_ZUS_SCHEME, PREFERENTIAL_ZUS_SCHEME];
 const ZUS_SCHEME_OPTIONS = [
   { value: "Duży ZUS", label: "Duży ZUS" },
-  { value: "Pełny ZUS", label: "Pełny ZUS" },
   { value: "Preferencyjny ZUS", label: "Preferencyjny ZUS" },
   { value: "Mały ZUS Plus", label: "Mały ZUS Plus" },
   { value: "Ulga na start", label: "Ulga na start" },

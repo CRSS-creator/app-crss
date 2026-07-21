@@ -109,7 +109,9 @@ const CONTRACT_TYPE_OPTIONS: { value: PayrollContractType; label: string }[] = [
   { value: "student", label: "Student" },
 ];
 
-const ZUS_CONTRIBUTION_BASE_SCHEMES = ["Preferencyjny ZUS"];
+const FULL_ZUS_SCHEME = "Pełny ZUS";
+const PREFERENTIAL_ZUS_SCHEME = "Preferencyjny ZUS";
+const ZUS_CONTRIBUTION_BASE_SCHEMES = [FULL_ZUS_SCHEME, PREFERENTIAL_ZUS_SCHEME];
 
 export default function PayrollPage() {
   return (
@@ -626,7 +628,7 @@ function ZusEntrepreneursTable({
   onToggleAllVisible: (checked: boolean) => void;
 }) {
   if (loading) return <p style={emptyStyle}>Ładowanie przedsiębiorców ZUS...</p>;
-  if (clients.length === 0) return <p style={emptyStyle}>Brak JDG ze schematem ZUS innym niż pełny ZUS.</p>;
+  if (clients.length === 0) return <p style={emptyStyle}>Brak JDG ze schematem ZUS.</p>;
 
   const selectedSet = new Set(selectedClientIds);
   const allVisibleSelected = clients.length > 0 && clients.every((client) => selectedSet.has(client.id));
@@ -658,6 +660,7 @@ function ZusEntrepreneursTable({
         <tbody>
           {clients.map((client) => {
             const latestNotification = latestNotificationByClient[client.id];
+            const isFullZus = isFullZusScheme(client.schemat_zus);
             return (
               <tr key={client.id}>
                 <Td align="center">
@@ -676,18 +679,26 @@ function ZusEntrepreneursTable({
                 <Td align="center">{caregiverLabel(client)}</Td>
                 <Td align="center"><strong>{client.schemat_zus || "-"}</strong></Td>
                 <Td align="center">
-                  <InlineDateInput
-                    ariaLabel={`Data rozpoczęcia preferencji ZUS dla ${client.nazwa || "klienta"}`}
-                    value={client.zus_preferencja_start || ""}
-                    onChange={(value) => onDateChange(client.id, "zus_preferencja_start", value)}
-                  />
+                  {isFullZus ? (
+                    <span style={emptySmallPlusAmountStyle}>-</span>
+                  ) : (
+                    <InlineDateInput
+                      ariaLabel={`Data rozpoczęcia preferencji ZUS dla ${client.nazwa || "klienta"}`}
+                      value={client.zus_preferencja_start || ""}
+                      onChange={(value) => onDateChange(client.id, "zus_preferencja_start", value)}
+                    />
+                  )}
                 </Td>
                 <Td align="center">
-                  <InlineDateInput
-                    ariaLabel={`Data końca preferencji ZUS dla ${client.nazwa || "klienta"}`}
-                    value={client.zus_preferencja_koniec || ""}
-                    onChange={(value) => onDateChange(client.id, "zus_preferencja_koniec", value)}
-                  />
+                  {isFullZus ? (
+                    <span style={emptySmallPlusAmountStyle}>-</span>
+                  ) : (
+                    <InlineDateInput
+                      ariaLabel={`Data końca preferencji ZUS dla ${client.nazwa || "klienta"}`}
+                      value={client.zus_preferencja_koniec || ""}
+                      onChange={(value) => onDateChange(client.id, "zus_preferencja_koniec", value)}
+                    />
+                  )}
                 </Td>
                 <Td align="center">
                   <input
@@ -931,7 +942,7 @@ function ZusContributionsModal({ schemes, onClose }: { schemes: string[]; onClos
         <div style={modalHeaderStyle}>
           <div>
             <h2 style={modalTitleStyle}>Wysokość składki ZUS</h2>
-            <p style={modalSubtitleStyle}>Stawka miesięczna dla Preferencyjnego ZUS.</p>
+            <p style={modalSubtitleStyle}>Stawki miesięczne dla Pełnego ZUS i Preferencyjnego ZUS.</p>
           </div>
           <div style={modalActionsStyle}>
             <button type="button" style={primaryButtonStyle} onClick={() => void saveRates()} disabled={saving || loading}>
@@ -1006,6 +1017,7 @@ function ZusContributionsModal({ schemes, onClose }: { schemes: string[]; onClos
                     <tr>
                       <Th>Data</Th>
                       <Th>Operacja</Th>
+                      <Th>Rodzaj</Th>
                       <Th align="center">Składka</Th>
                       <Th>Poprzednio</Th>
                       <Th>Użytkownik</Th>
@@ -1016,6 +1028,7 @@ function ZusContributionsModal({ schemes, onClose }: { schemes: string[]; onClos
                       <tr key={entry.id}>
                         <Td>{formatDateTime(entry.created_at)}</Td>
                         <Td>{zusContributionHistoryOperationLabel(entry.operacja)}</Td>
+                        <Td><strong>{entry.schemat_zus}</strong></Td>
                         <Td align="center"><strong>{formatMoney(toNumber(entry.skladka_miesieczna))}</strong></Td>
                         <Td>{entry.poprzednia_skladka_miesieczna === null ? "-" : formatMoney(toNumber(entry.poprzednia_skladka_miesieczna))}</Td>
                         <Td>{entry.changed_by_name || "-"}</Td>
@@ -1695,7 +1708,7 @@ function filterA1Rows(rows: A1Row[], searchTerm: string) {
 }
 
 function isZusPreferenceJdgClient(client: PayrollClient) {
-  return isJdgLegalForm(client.forma_prawna) && Boolean(client.schemat_zus?.trim()) && !isFullZusScheme(client.schemat_zus);
+  return isJdgLegalForm(client.forma_prawna) && Boolean(client.schemat_zus?.trim());
 }
 
 function isJdgLegalForm(value: string | null | undefined) {
@@ -1953,7 +1966,7 @@ function buildA1Totals(krajowy: number, zagraniczny: number): A1Totals {
 function tabHint(tab: PayrollTab) {
   if (tab === "kadry") return "Klienci z zaznaczoną obsługą kadrową.";
   if (tab === "a1") return "Obsługa zaświadczeń A1.";
-  return "JDG ze schematem ZUS innym niż pełny ZUS.";
+  return "JDG ze schematem ZUS przedsiębiorcy.";
 }
 
 const pageStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "22px" };

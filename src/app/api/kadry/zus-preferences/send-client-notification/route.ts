@@ -4,6 +4,7 @@ import { splitEmails } from "@/lib/contactFields";
 
 const ALLOWED_ROLES = new Set(["owner", "manager", "admin", "accountant"]);
 const APP_URL = "https://app.crss.com.pl";
+const FULL_ZUS_SCHEME = "Pełny ZUS";
 const PREFERENTIAL_ZUS_SCHEME = "Preferencyjny ZUS";
 const ZUS_PREFERENCE_WEBHOOK_ENV = "N8N_ZUS_PREFERENCE_NOTIFICATIONS_WEBHOOK_URL";
 
@@ -129,8 +130,9 @@ export async function POST(request: NextRequest) {
   const missingRate = rows.find((client) => !contributionForClient(rateMap, client));
   if (missingRate) {
     const year = nextContributionMonth(missingRate.zus_preferencja_koniec).getFullYear();
+    const scheme = baseContributionSchemeForClient(missingRate);
     return NextResponse.json(
-      { error: `Brakuje wpisanej składki ZUS dla ${PREFERENTIAL_ZUS_SCHEME} na rok ${year}. Uzupełnij ją przyciskiem "Wysokość składek".` },
+      { error: `Brakuje wpisanej składki ZUS dla ${scheme} na rok ${year}. Uzupełnij ją przyciskiem "Wysokość składek".` },
       { status: 400 }
     );
   }
@@ -145,9 +147,10 @@ export async function POST(request: NextRequest) {
 
     const amount = toNumber(contribution.skladka_miesieczna);
     const amountLabel = formatMoney(amount);
-    const subject = `Koniec preferencji ZUS - ${client.nazwa || "CRSS"}`;
-    const plainMessage = buildPlainMessage(client, nextMonth, amountLabel);
-    const html = buildHtmlMessage(client, nextMonth, amountLabel);
+    const isFullZus = isFullZusScheme(client.schemat_zus);
+    const subject = isFullZus ? `Wysokość składek ZUS - ${client.nazwa || "CRSS"}` : `Koniec preferencji ZUS - ${client.nazwa || "CRSS"}`;
+    const plainMessage = buildPlainMessage(client, nextMonth, amountLabel, isFullZus);
+    const html = buildHtmlMessage(client, nextMonth, amountLabel, isFullZus);
     const caregiver = Array.isArray(client.profiles) ? client.profiles[0] : client.profiles;
     const recipients = splitEmails(client.email);
 
@@ -235,10 +238,23 @@ function contributionForClient(rateMap: Map<string, RateRow>, client: ClientRow)
   }
 
   const year = nextContributionMonth(client.zus_preferencja_koniec).getFullYear();
+  const scheme = baseContributionSchemeForClient(client);
   return (
-    rateMap.get(`${year}::${normalizeScheme(PREFERENTIAL_ZUS_SCHEME)}`) ||
+    rateMap.get(`${year}::${normalizeScheme(scheme)}`) ||
     null
   );
+}
+
+function baseContributionSchemeForClient(client: ClientRow) {
+  return isFullZusScheme(client.schemat_zus) ? FULL_ZUS_SCHEME : PREFERENTIAL_ZUS_SCHEME;
+}
+
+function isFullZusScheme(value: string | null | undefined) {
+  const normalized = String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  return normalized.includes("duzy zus") || normalized.includes("pelny zus") || normalized.includes("pelen zus");
 }
 
 function nextContributionMonth(endDate: string | null) {
@@ -259,9 +275,20 @@ function normalizeScheme(value: string) {
     .trim();
 }
 
-function buildPlainMessage(client: ClientRow, nextMonth: Date, amountLabel: string) {
+function buildPlainMessage(client: ClientRow, nextMonth: Date, amountLabel: string, isFullZus: boolean) {
   const endDateLabel = client.zus_preferencja_koniec ? formatDate(client.zus_preferencja_koniec) : "wskazanego dnia";
   const contributionFromLabel = formatDate(isoDate(nextMonth));
+
+  if (isFullZus) {
+    return `Dzień dobry,
+
+informujemy, że od dnia ${contributionFromLabel} składki na ubezpieczenia społeczne wynoszą: ${amountLabel} miesięcznie.
+
+Uwaga: do tej kwoty trzeba doliczyć składkę zdrowotną.
+
+Pozdrawiamy serdecznie,
+Zespół CRSS`;
+  }
 
   return `Dzień dobry,
 
@@ -275,9 +302,12 @@ Pozdrawiamy serdecznie,
 Zespół CRSS`;
 }
 
-function buildHtmlMessage(client: ClientRow, nextMonth: Date, amountLabel: string) {
+function buildHtmlMessage(client: ClientRow, nextMonth: Date, amountLabel: string, isFullZus: boolean) {
   const endDateLabel = client.zus_preferencja_koniec ? formatDate(client.zus_preferencja_koniec) : "wskazanego dnia";
   const contributionFromLabel = formatDate(isoDate(nextMonth));
+  const introParagraph = isFullZus
+    ? ""
+    : `<p style="margin:0 0 16px 0;">informujemy, że dnia <strong>${escapeHtml(endDateLabel)}</strong> kończy się preferencja ZUS${client.schemat_zus ? `: <strong>${escapeHtml(client.schemat_zus)}</strong>` : ""}.</p>`;
 
   return `
 <div style="margin:0;padding:0;background:#f6f8fb;font-family:Arial,sans-serif;color:#173b73;">
@@ -287,7 +317,7 @@ function buildHtmlMessage(client: ClientRow, nextMonth: Date, amountLabel: strin
         <img src="${APP_URL}/logo-crss-mail.png?v=7" alt="CRSS" width="180" style="display:block;width:180px;max-width:180px;height:auto;border:0;outline:none;text-decoration:none;">
       </div>
       <p style="margin:0 0 16px 0;">Dzień dobry,</p>
-      <p style="margin:0 0 16px 0;">informujemy, że dnia <strong>${escapeHtml(endDateLabel)}</strong> kończy się preferencja ZUS${client.schemat_zus ? `: <strong>${escapeHtml(client.schemat_zus)}</strong>` : ""}.</p>
+      ${introParagraph}
       <p style="margin:0 0 10px 0;">Od dnia <strong>${escapeHtml(contributionFromLabel)}</strong> składki na ubezpieczenia społeczne wynoszą: <strong>${escapeHtml(amountLabel)}</strong> miesięcznie.</p>
       <p style="margin:0 0 16px 0;"><strong>Uwaga:</strong> do tej kwoty trzeba doliczyć składkę zdrowotną.</p>
       <p style="margin:24px 0 0 0;">Pozdrawiamy serdecznie,<br><strong>Zespół CRSS</strong></p>

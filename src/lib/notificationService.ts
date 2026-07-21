@@ -89,8 +89,12 @@ export async function createDueZusPreferenceExpiryNotifications() {
   return supabase.rpc("create_due_zus_preference_expiry_notifications");
 }
 
+export async function createDueZusSmallPlusCheckNotifications() {
+  return supabase.rpc("create_due_zus_small_plus_check_notifications");
+}
+
 export async function createDueNotifications() {
-  const [taskResult, crmFollowUpResult, recurringTaskResult, clientCardResult, rodoReviewResult, onboardingCompletionResult, payrollContractResult, payrollA1Result, zusPreferentialRateResult, zusPreferenceExpiryResult] = await Promise.all([
+  const [taskResult, crmFollowUpResult, recurringTaskResult, clientCardResult, rodoReviewResult, onboardingCompletionResult, payrollContractResult, payrollA1Result, zusPreferentialRateResult, zusPreferenceExpiryResult, zusSmallPlusCheckResult] = await Promise.all([
     createDueTaskNotifications(),
     createDueCrmFollowUpNotifications(),
     createDueRecurringTaskNotifications(),
@@ -101,6 +105,7 @@ export async function createDueNotifications() {
     createDuePayrollA1Notifications(),
     createDueZusPreferentialRateNotifications(),
     createDueZusPreferenceExpiryNotifications(),
+    createDueZusSmallPlusCheckNotifications(),
   ]);
 
   return {
@@ -115,6 +120,7 @@ export async function createDueNotifications() {
       payrollA1Notifications: payrollA1Result.data || 0,
       zusPreferentialRateNotifications: zusPreferentialRateResult.data || 0,
       zusPreferenceExpiryNotifications: zusPreferenceExpiryResult.data || 0,
+      zusSmallPlusCheckNotifications: zusSmallPlusCheckResult.data || 0,
     },
     error:
       taskResult.error ||
@@ -126,7 +132,8 @@ export async function createDueNotifications() {
       payrollContractResult.error ||
       payrollA1Result.error ||
       zusPreferentialRateResult.error ||
-      zusPreferenceExpiryResult.error,
+      zusPreferenceExpiryResult.error ||
+      zusSmallPlusCheckResult.error,
   };
 }
 

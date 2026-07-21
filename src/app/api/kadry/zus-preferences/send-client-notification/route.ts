@@ -146,7 +146,7 @@ export async function POST(request: NextRequest) {
     const amount = toNumber(contribution.skladka_miesieczna);
     const amountLabel = formatMoney(amount);
     const subject = `Koniec preferencji ZUS - ${client.nazwa || "CRSS"}`;
-    const message = buildPlainMessage(client, nextMonth, amountLabel);
+    const plainMessage = buildPlainMessage(client, nextMonth, amountLabel);
     const html = buildHtmlMessage(client, nextMonth, amountLabel);
     const caregiver = Array.isArray(client.profiles) ? client.profiles[0] : client.profiles;
     const recipients = splitEmails(client.email);
@@ -169,7 +169,8 @@ export async function POST(request: NextRequest) {
           smallZusPlusEligible: Boolean(client.zus_maly_plus_spelnia_warunki),
           recipientEmail,
           subject,
-          message,
+          message: html,
+          textMessage: plainMessage,
           html,
           caregiverName: caregiver?.full_name || null,
           caregiverEmail: caregiver?.email || null,
@@ -188,7 +189,7 @@ export async function POST(request: NextRequest) {
         klient_id: client.id,
         recipient_email: recipientEmail,
         subject,
-        message,
+        message: plainMessage,
         html,
         schemat_zus: client.schemat_zus,
         nastepny_schemat_zus: contribution.schemat_zus,

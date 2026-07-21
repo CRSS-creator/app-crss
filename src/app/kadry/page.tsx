@@ -6,7 +6,7 @@ import AccessGuard from "@/components/AccessGuard";
 import AppLayout from "@/components/AppLayout";
 import AppSelect from "@/components/AppSelect";
 import { colors, radius, shadow } from "@/app/design";
-import { fetchClients } from "@/lib/clientService";
+import { fetchClients, updateClient } from "@/lib/clientService";
 import {
   createPayrollContract,
   fetchPayrollContracts,
@@ -80,6 +80,8 @@ type A1Totals = {
   razem: number;
   procentZagraniczny: number;
 };
+
+type ZusPreferenceDateField = "zus_preferencja_start" | "zus_preferencja_koniec";
 
 const PAYROLL_TABS: PayrollTabDefinition[] = [
   { value: "kadry", label: "Kadry" },
@@ -216,6 +218,25 @@ function PayrollContent() {
     });
   }
 
+  async function handleZusPreferenceDateChange(clientId: string, field: ZusPreferenceDateField, value: string) {
+    const previousClient = clients.find((client) => client.id === clientId) || null;
+    setClients((current) => current.map((client) => client.id === clientId ? { ...client, [field]: value || null } : client));
+
+    const result = await updateClient(clientId, { [field]: value || null });
+    if (result.error) {
+      if (previousClient) {
+        setClients((current) => current.map((client) => client.id === clientId ? previousClient : client));
+      }
+      console.error("Błąd zapisu daty preferencji ZUS:", result.error);
+      alert("Nie udało się zapisać daty preferencji ZUS.");
+      return;
+    }
+
+    if (result.data) {
+      setClients((current) => current.map((client) => client.id === clientId ? { ...client, ...(result.data as PayrollClient) } : client));
+    }
+  }
+
   return (
     <div style={pageStyle}>
       <header style={headerStyle}>
@@ -327,7 +348,7 @@ function PayrollContent() {
             onDetails={(recordId) => setSelectedA1RecordId(recordId)}
           />
         ) : (
-          <ZusEntrepreneursTable clients={filteredZusEntrepreneurClients} loading={loading} />
+          <ZusEntrepreneursTable clients={filteredZusEntrepreneurClients} loading={loading} onDateChange={handleZusPreferenceDateChange} />
         )}
       </section>
 
@@ -460,7 +481,15 @@ function A1Table({
   );
 }
 
-function ZusEntrepreneursTable({ clients, loading }: { clients: PayrollClient[]; loading: boolean }) {
+function ZusEntrepreneursTable({
+  clients,
+  loading,
+  onDateChange,
+}: {
+  clients: PayrollClient[];
+  loading: boolean;
+  onDateChange: (clientId: string, field: ZusPreferenceDateField, value: string) => void;
+}) {
   if (loading) return <p style={emptyStyle}>Ładowanie przedsiębiorców ZUS...</p>;
   if (clients.length === 0) return <p style={emptyStyle}>Brak JDG ze schematem ZUS innym niż pełny ZUS.</p>;
 
@@ -469,29 +498,56 @@ function ZusEntrepreneursTable({ clients, loading }: { clients: PayrollClient[];
       <table style={zusEntrepreneursTableStyle}>
         <thead>
           <tr>
-            <Th>Klient</Th>
-            <Th>Opiekun</Th>
-            <Th>Rodzaj preferencji</Th>
-            <Th>Data rozpoczęcia</Th>
-            <Th>Data końca</Th>
+            <Th align="center">Klient</Th>
+            <Th align="center">Opiekun</Th>
+            <Th align="center">Rodzaj preferencji</Th>
+            <Th align="center">Data rozpoczęcia</Th>
+            <Th align="center">Data końca</Th>
           </tr>
         </thead>
         <tbody>
           {clients.map((client) => (
             <tr key={client.id}>
-              <Td>
+              <Td align="center">
                 <strong style={clientNameStyle}>{client.nazwa || "Klient bez nazwy"}</strong>
                 <span style={clientMetaStyle}>{client.nip || "Brak NIP"}</span>
               </Td>
-              <Td>{caregiverLabel(client)}</Td>
-              <Td><strong>{client.schemat_zus || "-"}</strong></Td>
-              <Td>{formatDate(client.zus_preferencja_start)}</Td>
-              <Td>{formatDate(client.zus_preferencja_koniec)}</Td>
+              <Td align="center">{caregiverLabel(client)}</Td>
+              <Td align="center"><strong>{client.schemat_zus || "-"}</strong></Td>
+              <Td align="center">
+                <InlineDateInput
+                  ariaLabel={`Data rozpoczęcia preferencji ZUS dla ${client.nazwa || "klienta"}`}
+                  value={client.zus_preferencja_start || ""}
+                  onChange={(value) => onDateChange(client.id, "zus_preferencja_start", value)}
+                />
+              </Td>
+              <Td align="center">
+                <InlineDateInput
+                  ariaLabel={`Data końca preferencji ZUS dla ${client.nazwa || "klienta"}`}
+                  value={client.zus_preferencja_koniec || ""}
+                  onChange={(value) => onDateChange(client.id, "zus_preferencja_koniec", value)}
+                />
+              </Td>
             </tr>
           ))}
         </tbody>
       </table>
     </div>
+  );
+}
+
+function InlineDateInput({ value, onChange, ariaLabel }: { value: string; onChange: (value: string) => void; ariaLabel: string }) {
+  return (
+    <label style={inlineDateWrapStyle}>
+      <input
+        aria-label={ariaLabel}
+        type="date"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        style={inlineDateInputStyle}
+      />
+      <CalendarDays size={16} style={inlineDateIconStyle} />
+    </label>
   );
 }
 
@@ -1410,6 +1466,9 @@ const formActionsStyle: CSSProperties = { display: "flex", justifyContent: "flex
 const fieldStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "8px" };
 const fieldLabelStyle: CSSProperties = { color: colors.muted, fontSize: "12px", fontWeight: 850, textTransform: "uppercase" };
 const inputStyle: CSSProperties = { minHeight: "42px", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.text, padding: "0 12px", fontSize: "14px", fontWeight: 750 };
+const inlineDateWrapStyle: CSSProperties = { position: "relative", display: "inline-flex", alignItems: "center", width: "156px", maxWidth: "100%" };
+const inlineDateInputStyle: CSSProperties = { ...inputStyle, width: "100%", minHeight: "38px", padding: "0 34px 0 10px", fontSize: "13px", fontWeight: 800, colorScheme: "light" };
+const inlineDateIconStyle: CSSProperties = { position: "absolute", right: "10px", pointerEvents: "none", color: colors.navy };
 const datePickerWrapStyle: CSSProperties = { position: "relative" };
 const dateInputButtonStyle: CSSProperties = { ...inputStyle, width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", cursor: "pointer", textAlign: "left" };
 const dateInputValueStyle: CSSProperties = { color: colors.text, fontWeight: 800 };

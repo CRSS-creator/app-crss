@@ -55,6 +55,8 @@ type PayrollClient = {
   schemat_zus: string | null;
   zus_preferencja_start: string | null;
   zus_preferencja_koniec: string | null;
+  zus_maly_plus_spelnia_warunki: boolean | null;
+  zus_maly_plus_skladka_spoleczna: number | string | null;
   obsluga_kadrowa: boolean | null;
   opiekun_id: string | null;
   profiles?: { full_name: string | null; email: string | null } | { full_name: string | null; email: string | null }[] | null;
@@ -92,6 +94,7 @@ type A1Totals = {
 };
 
 type ZusPreferenceDateField = "zus_preferencja_start" | "zus_preferencja_koniec";
+type ZusSmallPlusField = "zus_maly_plus_spelnia_warunki" | "zus_maly_plus_skladka_spoleczna";
 type ZusContributionDraft = { amount: string; notes: string };
 
 const PAYROLL_TABS: PayrollTabDefinition[] = [
@@ -267,6 +270,38 @@ function PayrollContent() {
     }
   }
 
+  async function handleZusSmallPlusChange(clientId: string, field: ZusSmallPlusField, value: boolean | string) {
+    const previousClient = clients.find((client) => client.id === clientId) || null;
+    const payloadValue = field === "zus_maly_plus_skladka_spoleczna" ? parseNullableAmount(String(value)) : value;
+
+    setClients((current) => current.map((client) => {
+      if (client.id !== clientId) return client;
+      return {
+        ...client,
+        [field]: payloadValue,
+        ...(field === "zus_maly_plus_spelnia_warunki" && value === false ? { zus_maly_plus_skladka_spoleczna: null } : {}),
+      };
+    }));
+
+    const result = await updateClient(clientId, {
+      [field]: payloadValue,
+      ...(field === "zus_maly_plus_spelnia_warunki" && value === false ? { zus_maly_plus_skladka_spoleczna: null } : {}),
+    });
+
+    if (result.error) {
+      if (previousClient) {
+        setClients((current) => current.map((client) => client.id === clientId ? previousClient : client));
+      }
+      console.error("Błąd zapisu Małego ZUS Plus:", result.error);
+      alert("Nie udało się zapisać informacji o Małym ZUS Plus.");
+      return;
+    }
+
+    if (result.data) {
+      setClients((current) => current.map((client) => client.id === clientId ? { ...client, ...(result.data as PayrollClient) } : client));
+    }
+  }
+
   function toggleZusClientSelection(clientId: string, checked: boolean) {
     setSelectedZusClientIds((current) => checked
       ? Array.from(new Set([...current, clientId]))
@@ -431,6 +466,7 @@ function PayrollContent() {
             latestNotificationByClient={latestZusNotificationByClient}
             selectedClientIds={selectedZusClientIds}
             onDateChange={handleZusPreferenceDateChange}
+            onSmallPlusChange={handleZusSmallPlusChange}
             onToggleClient={toggleZusClientSelection}
             onToggleAllVisible={toggleAllVisibleZusClients}
           />
@@ -576,6 +612,7 @@ function ZusEntrepreneursTable({
   latestNotificationByClient,
   selectedClientIds,
   onDateChange,
+  onSmallPlusChange,
   onToggleClient,
   onToggleAllVisible,
 }: {
@@ -584,6 +621,7 @@ function ZusEntrepreneursTable({
   latestNotificationByClient: Record<string, ZusPreferenceNotificationHistory>;
   selectedClientIds: string[];
   onDateChange: (clientId: string, field: ZusPreferenceDateField, value: string) => void;
+  onSmallPlusChange: (clientId: string, field: ZusSmallPlusField, value: boolean | string) => void;
   onToggleClient: (clientId: string, checked: boolean) => void;
   onToggleAllVisible: (checked: boolean) => void;
 }) {
@@ -612,6 +650,8 @@ function ZusEntrepreneursTable({
             <Th align="center">Rodzaj preferencji</Th>
             <Th align="center">Data rozpoczęcia</Th>
             <Th align="center">Data końca</Th>
+            <Th align="center"><span style={wrappedHeaderTextStyle}>Spełnia warunki do Mały ZUS Plus</span></Th>
+            <Th align="center"><span style={wrappedHeaderTextStyle}>Wysokość składek społecznych na Małym ZUS Plus</span></Th>
             <Th align="center">Powiadomienie</Th>
           </tr>
         </thead>
@@ -650,6 +690,26 @@ function ZusEntrepreneursTable({
                   />
                 </Td>
                 <Td align="center">
+                  <input
+                    aria-label={`Spełnia warunki do Mały ZUS Plus: ${client.nazwa || "klient"}`}
+                    type="checkbox"
+                    checked={Boolean(client.zus_maly_plus_spelnia_warunki)}
+                    onChange={(event) => onSmallPlusChange(client.id, "zus_maly_plus_spelnia_warunki", event.target.checked)}
+                    style={checkboxStyle}
+                  />
+                </Td>
+                <Td align="center">
+                  {client.zus_maly_plus_spelnia_warunki ? (
+                    <SmallPlusAmountInput
+                      ariaLabel={`Wysokość składek społecznych na Małym ZUS Plus: ${client.nazwa || "klient"}`}
+                      value={client.zus_maly_plus_skladka_spoleczna}
+                      onCommit={(value) => onSmallPlusChange(client.id, "zus_maly_plus_skladka_spoleczna", value)}
+                    />
+                  ) : (
+                    <span style={emptySmallPlusAmountStyle}>-</span>
+                  )}
+                </Td>
+                <Td align="center">
                   <ZusPreferenceNotificationStatus history={latestNotification} />
                 </Td>
               </tr>
@@ -669,6 +729,29 @@ function ZusPreferenceNotificationStatus({ history }: { history: ZusPreferenceNo
       Wysłano {formatDateTime(history.created_at)}
       <span style={zusNotificationMetaStyle}>przez {history.sent_by_name || history.sent_by_email || "nieustalonego użytkownika"}</span>
     </span>
+  );
+}
+
+function SmallPlusAmountInput({ value, onCommit, ariaLabel }: { value: number | string | null; onCommit: (value: string) => void; ariaLabel: string }) {
+  const [draft, setDraft] = useState(() => formatAmountInput(value));
+
+  function commit() {
+    const nextAmount = parseNullableAmount(draft);
+    const currentAmount = parseNullableAmount(formatAmountInput(value));
+    setDraft(nextAmount === null ? "" : formatAmountInput(nextAmount));
+    if (nextAmount !== currentAmount) onCommit(draft);
+  }
+
+  return (
+    <input
+      aria-label={ariaLabel}
+      value={draft}
+      onChange={(event) => setDraft(maskAmountInput(event.target.value))}
+      onBlur={commit}
+      inputMode="decimal"
+      placeholder="0,00"
+      style={smallPlusAmountInputStyle}
+    />
   );
 }
 
@@ -1704,6 +1787,24 @@ function formatMoney(value: number) {
   return new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN" }).format(value);
 }
 
+function formatAmountInput(value: number | string | null | undefined) {
+  if (value === null || value === undefined || value === "") return "";
+  const amount = toNumber(value);
+  if (!amount) return "";
+  return new Intl.NumberFormat("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
+}
+
+function maskAmountInput(value: string) {
+  return value.replace(/[^\d,.]/g, "").replace(".", ",");
+}
+
+function parseNullableAmount(value: string) {
+  const normalized = value.replace(/\s/g, "").replace(",", ".");
+  if (!normalized) return null;
+  const amount = Number(normalized);
+  return Number.isFinite(amount) && amount > 0 ? amount : null;
+}
+
 function parseAmount(value: string) {
   const normalized = value.replace(/\s/g, "").replace(",", ".");
   const amount = Number(normalized);
@@ -1884,7 +1985,7 @@ const emptyInlineStyle: CSSProperties = { margin: 0, color: colors.muted, fontWe
 const tableWrapStyle: CSSProperties = { width: "100%", overflowX: "auto" };
 const tableStyle: CSSProperties = { width: "100%", minWidth: "980px", borderCollapse: "collapse" };
 const a1RegisterTableStyle: CSSProperties = { ...tableStyle, minWidth: "1120px" };
-const zusEntrepreneursTableStyle: CSSProperties = { ...tableStyle, minWidth: "1220px" };
+const zusEntrepreneursTableStyle: CSSProperties = { ...tableStyle, minWidth: "1460px" };
 const detailsTableStyle: CSSProperties = { width: "100%", minWidth: "1240px", borderCollapse: "collapse" };
 const a1MonthlyTableStyle: CSSProperties = { width: "100%", minWidth: "760px", borderCollapse: "collapse" };
 const a1MonthlyScrollStyle: CSSProperties = { width: "100%", maxHeight: "min(48vh, 520px)", overflow: "auto" };
@@ -1903,6 +2004,8 @@ const monthlyMissingStyle: CSSProperties = { display: "inline-flex", alignItems:
 const zusNotificationStatusStyle: CSSProperties = { display: "inline-flex", flexDirection: "column", alignItems: "center", gap: "2px", minHeight: "34px", padding: "6px 10px", borderRadius: radius.badge, background: "rgba(22, 163, 74, 0.12)", color: colors.success, fontSize: "12px", fontWeight: 850, lineHeight: 1.25 };
 const zusNotificationMetaStyle: CSSProperties = { color: colors.muted, fontSize: "11px", fontWeight: 750 };
 const checkboxStyle: CSSProperties = { width: "18px", height: "18px", accentColor: colors.navy, cursor: "pointer" };
+const wrappedHeaderTextStyle: CSSProperties = { display: "inline-block", maxWidth: "150px", whiteSpace: "normal", lineHeight: 1.25 };
+const emptySmallPlusAmountStyle: CSSProperties = { color: colors.muted, fontWeight: 850 };
 const detailsButtonStyle: CSSProperties = { minHeight: "38px", padding: "0 14px", borderRadius: radius.button, border: `1px solid ${colors.border}`, background: colors.white, color: colors.navy, fontWeight: 850, cursor: "pointer" };
 const modalOverlayStyle: CSSProperties = { position: "fixed", inset: 0, zIndex: 60, background: "rgba(15, 23, 42, 0.38)", display: "flex", justifyContent: "center", alignItems: "flex-start", padding: "28px", overflowY: "auto" };
 const wideModalStyle: CSSProperties = { width: "min(1380px, calc(100vw - 56px))", maxHeight: "calc(100vh - 56px)", borderRadius: radius.card, background: colors.white, border: `1px solid ${colors.border}`, boxShadow: "0 32px 90px rgba(15, 23, 42, 0.28)", overflow: "hidden", display: "flex", flexDirection: "column" };
@@ -1930,6 +2033,7 @@ const formActionsStyle: CSSProperties = { display: "flex", justifyContent: "flex
 const fieldStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "8px" };
 const fieldLabelStyle: CSSProperties = { color: colors.muted, fontSize: "12px", fontWeight: 850, textTransform: "uppercase" };
 const inputStyle: CSSProperties = { minHeight: "42px", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.text, padding: "0 12px", fontSize: "14px", fontWeight: 750 };
+const smallPlusAmountInputStyle: CSSProperties = { ...inputStyle, width: "128px", maxWidth: "100%", minHeight: "38px", textAlign: "center", fontSize: "13px", fontWeight: 800 };
 const zusContributionYearStyle: CSSProperties = { ...fieldStyle, maxWidth: "180px" };
 const yearInputStyle: CSSProperties = { ...inputStyle, width: "100%" };
 const zusContributionsTableStyle: CSSProperties = { width: "100%", minWidth: "760px", borderCollapse: "collapse" };

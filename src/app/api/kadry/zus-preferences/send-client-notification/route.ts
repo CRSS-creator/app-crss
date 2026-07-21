@@ -18,6 +18,8 @@ type ClientRow = {
   opiekun_id: string | null;
   schemat_zus: string | null;
   zus_preferencja_koniec: string | null;
+  zus_maly_plus_spelnia_warunki: boolean | null;
+  zus_maly_plus_skladka_spoleczna: number | string | null;
   profiles?: { full_name: string | null; email: string | null }[] | { full_name: string | null; email: string | null } | null;
 };
 
@@ -73,6 +75,8 @@ export async function POST(request: NextRequest) {
       opiekun_id,
       schemat_zus,
       zus_preferencja_koniec,
+      zus_maly_plus_spelnia_warunki,
+      zus_maly_plus_skladka_spoleczna,
       profiles!klienci_opiekun_id_fkey (
         full_name,
         email
@@ -113,7 +117,15 @@ export async function POST(request: NextRequest) {
     rateMap.set(`${rate.rok}::${normalizeScheme(rate.schemat_zus)}`, rate);
   });
 
-  const missingRate = rows.find((client) => !rateForClient(rateMap, client));
+  const missingSmallPlusAmount = rows.find((client) => client.zus_maly_plus_spelnia_warunki && toNumber(client.zus_maly_plus_skladka_spoleczna) <= 0);
+  if (missingSmallPlusAmount) {
+    return NextResponse.json(
+      { error: `Klient ${missingSmallPlusAmount.nazwa || "bez nazwy"} ma zaznaczony Mały ZUS Plus, ale nie ma wpisanej kwoty składek społecznych.` },
+      { status: 400 }
+    );
+  }
+
+  const missingRate = rows.find((client) => !contributionForClient(rateMap, client));
   if (missingRate) {
     const year = nextContributionMonth(missingRate.zus_preferencja_koniec).getFullYear();
     return NextResponse.json(
@@ -127,14 +139,14 @@ export async function POST(request: NextRequest) {
 
   for (const client of rows) {
     const nextMonth = nextContributionMonth(client.zus_preferencja_koniec);
-    const rate = rateForClient(rateMap, client);
-    if (!rate) continue;
+    const contribution = contributionForClient(rateMap, client);
+    if (!contribution) continue;
 
-    const amount = toNumber(rate.skladka_miesieczna);
+    const amount = toNumber(contribution.skladka_miesieczna);
     const amountLabel = formatMoney(amount);
     const subject = `Koniec preferencji ZUS - ${client.nazwa || "CRSS"}`;
-    const message = buildPlainMessage(client, nextMonth, amountLabel);
-    const html = buildHtmlMessage(client, nextMonth, amountLabel);
+    const message = buildPlainMessage(client, nextMonth, amountLabel, contribution.schemat_zus);
+    const html = buildHtmlMessage(client, nextMonth, amountLabel, contribution.schemat_zus);
     const caregiver = Array.isArray(client.profiles) ? client.profiles[0] : client.profiles;
     const recipients = splitEmails(client.email);
 
@@ -148,11 +160,12 @@ export async function POST(request: NextRequest) {
           clientName: client.nazwa,
           clientNip: client.nip,
           zusScheme: client.schemat_zus,
-          nextZusScheme: rate.schemat_zus,
+          nextZusScheme: contribution.schemat_zus,
           zusPreferenceEndDate: client.zus_preferencja_koniec,
           contributionMonthFrom: isoDate(nextMonth),
           contributionYear: nextMonth.getFullYear(),
           monthlyContributionAmount: amount,
+          smallZusPlusEligible: Boolean(client.zus_maly_plus_spelnia_warunki),
           recipientEmail,
           subject,
           message,
@@ -177,7 +190,7 @@ export async function POST(request: NextRequest) {
         message,
         html,
         schemat_zus: client.schemat_zus,
-        nastepny_schemat_zus: rate.schemat_zus,
+        nastepny_schemat_zus: contribution.schemat_zus,
         data_konca_ulgi: client.zus_preferencja_koniec,
         miesiac_od: isoDate(nextMonth),
         rok_skladki: nextMonth.getFullYear(),
@@ -189,6 +202,7 @@ export async function POST(request: NextRequest) {
           event: "payroll_zus_preference_expiry_notification_requested",
           client_name: client.nazwa,
           client_nip: client.nip,
+          small_zus_plus_eligible: Boolean(client.zus_maly_plus_spelnia_warunki),
         },
       });
     }
@@ -210,7 +224,14 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({ ok: true, sentAt: new Date().toISOString(), history, sentCount: historyRows.length });
 }
 
-function rateForClient(rateMap: Map<string, RateRow>, client: ClientRow) {
+function contributionForClient(rateMap: Map<string, RateRow>, client: ClientRow) {
+  if (client.zus_maly_plus_spelnia_warunki && toNumber(client.zus_maly_plus_skladka_spoleczna) > 0) {
+    return {
+      schemat_zus: "Mały ZUS Plus",
+      skladka_miesieczna: client.zus_maly_plus_skladka_spoleczna,
+    };
+  }
+
   const year = nextContributionMonth(client.zus_preferencja_koniec).getFullYear();
   return (
     rateMap.get(`${year}::${normalizeScheme(PREFERENTIAL_ZUS_SCHEME)}`) ||
@@ -236,18 +257,26 @@ function normalizeScheme(value: string) {
     .trim();
 }
 
-function buildPlainMessage(client: ClientRow, nextMonth: Date, amountLabel: string) {
+function buildPlainMessage(client: ClientRow, nextMonth: Date, amountLabel: string, nextZusScheme: string) {
+  const contributionSentence = nextZusScheme === "Mały ZUS Plus"
+    ? `Od ${formatMonth(nextMonth)} składki społeczne na Małym ZUS Plus wyniosą ${amountLabel} miesięcznie.`
+    : `Od ${formatMonth(nextMonth)} składki na ubezpieczenie wyniosą ${amountLabel} miesięcznie.`;
+
   return `Dzień dobry,
 
 informujemy, że kończy się preferencja ZUS${client.schemat_zus ? `: ${client.schemat_zus}` : ""}${client.zus_preferencja_koniec ? `, której data końca przypada na ${formatDate(client.zus_preferencja_koniec)}` : ""}.
 
-Od ${formatMonth(nextMonth)} składki na ubezpieczenie wyniosą ${amountLabel} miesięcznie.
+${contributionSentence}
 
 Pozdrawiamy serdecznie,
 Zespół CRSS`;
 }
 
-function buildHtmlMessage(client: ClientRow, nextMonth: Date, amountLabel: string) {
+function buildHtmlMessage(client: ClientRow, nextMonth: Date, amountLabel: string, nextZusScheme: string) {
+  const contributionSentence = nextZusScheme === "Mały ZUS Plus"
+    ? `Od <strong>${escapeHtml(formatMonth(nextMonth))}</strong> składki społeczne na Małym ZUS Plus wyniosą <strong>${escapeHtml(amountLabel)}</strong> miesięcznie.`
+    : `Od <strong>${escapeHtml(formatMonth(nextMonth))}</strong> składki na ubezpieczenie wyniosą <strong>${escapeHtml(amountLabel)}</strong> miesięcznie.`;
+
   return `
 <div style="margin:0;padding:0;background:#f6f8fb;font-family:Arial,sans-serif;color:#173b73;">
   <div style="max-width:640px;margin:0 auto;padding:28px 18px;">
@@ -257,7 +286,7 @@ function buildHtmlMessage(client: ClientRow, nextMonth: Date, amountLabel: strin
       </div>
       <p style="margin:0 0 16px 0;">Dzień dobry,</p>
       <p style="margin:0 0 16px 0;">informujemy, że kończy się preferencja ZUS${client.schemat_zus ? `: <strong>${escapeHtml(client.schemat_zus)}</strong>` : ""}${client.zus_preferencja_koniec ? `, której data końca przypada na <strong>${escapeHtml(formatDate(client.zus_preferencja_koniec))}</strong>` : ""}.</p>
-      <p style="margin:0 0 16px 0;">Od <strong>${escapeHtml(formatMonth(nextMonth))}</strong> składki na ubezpieczenie wyniosą <strong>${escapeHtml(amountLabel)}</strong> miesięcznie.</p>
+      <p style="margin:0 0 16px 0;">${contributionSentence}</p>
       <p style="margin:24px 0 0 0;">Pozdrawiamy serdecznie,<br><strong>Zespół CRSS</strong></p>
     </div>
     <p style="margin:18px 4px 0;color:#7a8598;font-size:13px;">Wiadomość wysłana automatycznie.</p>

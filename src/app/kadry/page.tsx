@@ -673,17 +673,100 @@ function ZusPreferenceNotificationStatus({ history }: { history: ZusPreferenceNo
 }
 
 function InlineDateInput({ value, onChange, ariaLabel }: { value: string; onChange: (value: string) => void; ariaLabel: string }) {
+  const [open, setOpen] = useState(false);
+  const [textValue, setTextValue] = useState(() => formatDateInputText(value));
+  const [viewDate, setViewDate] = useState(() => dateFromInput(value) || new Date());
+  const days = calendarDays(viewDate);
+
+  useEffect(() => {
+    setTextValue(formatDateInputText(value));
+    if (value) setViewDate(dateFromInput(value) || new Date());
+  }, [value]);
+
+  function changeMonth(delta: number) {
+    setViewDate((current) => new Date(current.getFullYear(), current.getMonth() + delta, 1, 12));
+  }
+
+  function selectDate(date: Date) {
+    onChange(dateToInputValue(date));
+    setTextValue(formatDateInputText(dateToInputValue(date)));
+    setViewDate(new Date(date.getFullYear(), date.getMonth(), 1, 12));
+    setOpen(false);
+  }
+
+  function handleTextChange(nextValue: string) {
+    const masked = maskPolishDateText(nextValue);
+    setTextValue(masked);
+    const parsed = parsePolishDateText(masked);
+    if (parsed !== null) {
+      onChange(parsed);
+      setViewDate(dateFromInput(parsed) || new Date());
+    }
+  }
+
+  function handleBlur() {
+    if (!textValue.trim()) {
+      onChange("");
+      return;
+    }
+
+    const parsed = parsePolishDateText(textValue);
+    if (parsed === null) setTextValue(formatDateInputText(value));
+  }
+
   return (
-    <label style={inlineDateWrapStyle}>
+    <div style={inlineDateWrapStyle}>
       <input
         aria-label={ariaLabel}
-        type="date"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
+        type="text"
+        value={textValue}
+        onChange={(event) => handleTextChange(event.target.value)}
+        onBlur={handleBlur}
+        inputMode="numeric"
+        placeholder="dd.mm.rrrr"
         style={inlineDateInputStyle}
       />
-      <CalendarDays size={16} style={inlineDateIconStyle} />
-    </label>
+      <button type="button" style={inlineDateIconButtonStyle} onClick={() => setOpen((current) => !current)} aria-label={`Otwórz kalendarz: ${ariaLabel}`}>
+        <CalendarDays size={16} />
+      </button>
+      {open && (
+        <div style={inlineDateCalendarStyle}>
+          <div style={dateCalendarHeaderStyle}>
+            <button type="button" style={dateNavButtonStyle} onClick={() => changeMonth(-1)} aria-label="Poprzedni miesiąc">
+              <ChevronLeft size={18} />
+            </button>
+            <strong>{formatCalendarMonth(viewDate)}</strong>
+            <button type="button" style={dateNavButtonStyle} onClick={() => changeMonth(1)} aria-label="Następny miesiąc">
+              <ChevronRight size={18} />
+            </button>
+          </div>
+          <div style={dateWeekdaysStyle}>
+            {["pon", "wt", "śr", "czw", "pt", "sob", "nie"].map((day) => <span key={day}>{day}</span>)}
+          </div>
+          <div style={dateDaysGridStyle}>
+            {days.map((day) => {
+              const inputValue = dateToInputValue(day.date);
+              const selected = value === inputValue;
+              const muted = day.date.getMonth() !== viewDate.getMonth();
+              return (
+                <button
+                  key={inputValue}
+                  type="button"
+                  style={selected ? selectedDateDayStyle : muted ? mutedDateDayStyle : dateDayStyle}
+                  onClick={() => selectDate(day.date)}
+                >
+                  {day.date.getDate()}
+                </button>
+              );
+            })}
+          </div>
+          <div style={dateCalendarFooterStyle}>
+            <button type="button" style={dateFooterButtonStyle} onClick={() => { onChange(""); setTextValue(""); setOpen(false); }}>Wyczyść</button>
+            <button type="button" style={dateFooterButtonStyle} onClick={() => selectDate(new Date())}>Dzisiaj</button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -1700,6 +1783,32 @@ function dateToInputValue(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
+function formatDateInputText(value: string) {
+  if (!value) return "";
+  const [year, month, day] = value.split("-");
+  return year && month && day ? `${day}.${month}.${year}` : "";
+}
+
+function maskPolishDateText(value: string) {
+  const digits = value.replace(/\D/g, "").slice(0, 8);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0, 2)}.${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}.${digits.slice(2, 4)}.${digits.slice(4)}`;
+}
+
+function parsePolishDateText(value: string) {
+  const match = value.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  if (!match) return null;
+
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const year = Number(match[3]);
+  const date = new Date(year, month - 1, day, 12);
+
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null;
+  return dateToInputValue(date);
+}
+
 function calendarDays(viewDate: Date) {
   const firstDay = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1, 12);
   const mondayOffset = (firstDay.getDay() + 6) % 7;
@@ -1829,8 +1938,9 @@ const zusContributionAmountInputStyle: CSSProperties = { ...inputStyle, width: "
 const zusContributionNotesInputStyle: CSSProperties = { ...inputStyle, width: "100%" };
 const historyTitleStyle: CSSProperties = { margin: "6px 0 12px", color: colors.navy, fontSize: "16px", fontWeight: 900 };
 const inlineDateWrapStyle: CSSProperties = { position: "relative", display: "inline-flex", alignItems: "center", width: "156px", maxWidth: "100%" };
-const inlineDateInputStyle: CSSProperties = { ...inputStyle, width: "100%", minHeight: "38px", padding: "0 34px 0 10px", fontSize: "13px", fontWeight: 800, colorScheme: "light" };
-const inlineDateIconStyle: CSSProperties = { position: "absolute", right: "10px", pointerEvents: "none", color: colors.navy };
+const inlineDateInputStyle: CSSProperties = { ...inputStyle, width: "100%", minHeight: "38px", padding: "0 38px 0 10px", fontSize: "13px", fontWeight: 800, colorScheme: "light" };
+const inlineDateIconButtonStyle: CSSProperties = { position: "absolute", right: "4px", width: "30px", height: "30px", border: "none", borderRadius: radius.button, background: "transparent", color: colors.navy, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer" };
+const inlineDateCalendarStyle: CSSProperties = { position: "absolute", top: "calc(100% + 8px)", left: 0, zIndex: 80, width: "300px", border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.white, boxShadow: shadow.card, padding: "12px", textAlign: "left" };
 const datePickerWrapStyle: CSSProperties = { position: "relative" };
 const dateInputButtonStyle: CSSProperties = { ...inputStyle, width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", cursor: "pointer", textAlign: "left" };
 const dateInputValueStyle: CSSProperties = { color: colors.text, fontWeight: 800 };

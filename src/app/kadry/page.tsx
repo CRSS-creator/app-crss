@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { CalendarDays, Check, ChevronLeft, ChevronRight, Plus, Save, Send, X } from "lucide-react";
+import { CalendarDays, Check, ChevronLeft, ChevronRight, History as HistoryIcon, Plus, Save, Send, X } from "lucide-react";
 import AccessGuard from "@/components/AccessGuard";
 import AppLayout from "@/components/AppLayout";
 import AppSelect from "@/components/AppSelect";
@@ -148,6 +148,7 @@ function PayrollContent() {
   const [selectedZusClientIds, setSelectedZusClientIds] = useState<string[]>([]);
   const [showA1AddForm, setShowA1AddForm] = useState(false);
   const [showZusContributionsModal, setShowZusContributionsModal] = useState(false);
+  const [showZusNotificationHistory, setShowZusNotificationHistory] = useState(false);
   const [sendingZusNotifications, setSendingZusNotifications] = useState(false);
   const [selectedClient, setSelectedClient] = useState<PayrollClient | null>(null);
   const [selectedA1RecordId, setSelectedA1RecordId] = useState<string | null>(null);
@@ -382,6 +383,7 @@ function PayrollContent() {
     const historyRows = (result.data?.history || []) as ZusPreferenceNotificationHistory[];
     setZusPreferenceNotificationHistory((current) => [...historyRows, ...current]);
     setSelectedZusClientIds((current) => current.filter((id) => !visibleIdSet.has(id)));
+    alert(`Powiadomienie ZUS zostało przekazane do wysyłki. Liczba wysyłek: ${historyRows.length}.`);
   }
 
   return (
@@ -424,6 +426,9 @@ function PayrollContent() {
               </button>
               <button type="button" onClick={() => setShowZusContributionsModal(true)} style={secondaryButtonStyle}>
                 <CalendarDays size={18} /> Wysokość składek
+              </button>
+              <button type="button" onClick={() => setShowZusNotificationHistory(true)} style={secondaryButtonStyle}>
+                <HistoryIcon size={18} /> Historia powiadomień
               </button>
             </div>
           )}
@@ -539,6 +544,14 @@ function PayrollContent() {
 
       {showZusContributionsModal && (
         <ZusContributionsModal schemes={zusContributionSchemes} onClose={() => setShowZusContributionsModal(false)} />
+      )}
+
+      {showZusNotificationHistory && (
+        <ZusNotificationHistoryModal
+          history={zusPreferenceNotificationHistory}
+          clients={clients}
+          onClose={() => setShowZusNotificationHistory(false)}
+        />
       )}
     </div>
   );
@@ -791,6 +804,67 @@ function ZusPreferenceNotificationStatus({ history }: { history: ZusPreferenceNo
       Wysłano {formatDateTime(history.created_at)}
       <span style={zusNotificationMetaStyle}>przez {history.sent_by_name || history.sent_by_email || "nieustalonego użytkownika"}</span>
     </span>
+  );
+}
+
+function ZusNotificationHistoryModal({ history, clients, onClose }: { history: ZusPreferenceNotificationHistory[]; clients: PayrollClient[]; onClose: () => void }) {
+  const clientById = useMemo(() => new Map(clients.map((client) => [client.id, client])), [clients]);
+
+  return (
+    <div style={modalOverlayStyle} onClick={onClose}>
+      <section style={detailsModalStyle} onClick={(event) => event.stopPropagation()}>
+        <div style={modalHeaderStyle}>
+          <div>
+            <h2 style={modalTitleStyle}>Historia powiadomień ZUS</h2>
+            <p style={modalSubtitleStyle}>Powiadomienia wysłane z zakładki ZUS Przedsiębiorcy.</p>
+          </div>
+          <button type="button" style={iconButtonStyle} onClick={onClose} aria-label="Zamknij">
+            <X size={20} />
+          </button>
+        </div>
+
+        <div style={modalBodyStyle}>
+          {history.length === 0 ? (
+            <p style={emptyInlineStyle}>Brak wysłanych powiadomień ZUS.</p>
+          ) : (
+            <div style={tableWrapStyle}>
+              <table style={zusNotificationHistoryTableStyle}>
+                <thead>
+                  <tr>
+                    <Th>Data</Th>
+                    <Th>Klient</Th>
+                    <Th>Odbiorca</Th>
+                    <Th>Schemat</Th>
+                    <Th align="center">Kwota</Th>
+                    <Th>Wysłane przez</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {history.map((entry) => {
+                    const client = clientById.get(entry.klient_id);
+                    const clientName = client?.nazwa || stringMeta(entry.metadata?.client_name) || "Klient bez nazwy";
+                    const clientNip = client?.nip || stringMeta(entry.metadata?.client_nip) || "";
+                    return (
+                      <tr key={entry.id}>
+                        <Td>{formatDateTime(entry.created_at)}</Td>
+                        <Td>
+                          <strong style={clientNameStyle}>{clientName}</strong>
+                          <span style={clientMetaStyle}>{clientNip || "Brak NIP"}</span>
+                        </Td>
+                        <Td>{entry.recipient_email}</Td>
+                        <Td>{entry.nastepny_schemat_zus || entry.schemat_zus || "-"}</Td>
+                        <Td align="center"><strong>{entry.skladka_miesieczna === null ? "-" : formatMoney(toNumber(entry.skladka_miesieczna))}</strong></Td>
+                        <Td>{entry.sent_by_name || entry.sent_by_email || "-"}</Td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -2103,6 +2177,7 @@ const zusContributionYearStyle: CSSProperties = { ...fieldStyle, maxWidth: "180p
 const yearInputStyle: CSSProperties = { ...inputStyle, width: "100%" };
 const zusContributionsTableStyle: CSSProperties = { width: "100%", minWidth: "760px", borderCollapse: "collapse" };
 const zusContributionHistoryTableStyle: CSSProperties = { width: "100%", minWidth: "760px", borderCollapse: "collapse" };
+const zusNotificationHistoryTableStyle: CSSProperties = { width: "100%", minWidth: "980px", borderCollapse: "collapse" };
 const zusContributionAmountInputStyle: CSSProperties = { ...inputStyle, width: "180px", maxWidth: "100%", textAlign: "center" };
 const zusContributionNotesInputStyle: CSSProperties = { ...inputStyle, width: "100%" };
 const historyTitleStyle: CSSProperties = { margin: "6px 0 12px", color: colors.navy, fontSize: "16px", fontWeight: 900 };

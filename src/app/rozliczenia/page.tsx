@@ -330,9 +330,22 @@ function SettlementsContent() {
                   const progress = progressBySettlement[settlement.id] || { progress: 0, total_tasks: 0, done_tasks: 0 };
                   const invoiceMarker = client?.id ? invoiceMarkerByClientId[client.id] : null;
                   const taxObligationMarker = taxObligationMarkerBySettlementId[settlement.id];
+                  const taxMarkerTypes = getTaxMarkerTypes(taxObligationMarker?.typy || []);
+                  const hasMarkers = Boolean(invoiceMarker || taxMarkerTypes.length > 0);
                   return (
                     <tr key={settlement.id} style={rowStyle}>
-                      <Td><div style={clientCellStyle}><span style={clientNameRowStyle}><span style={clientNameStyle}>{client?.nazwa || "Klient"}</span>{invoiceMarker ? <InvoiceMarker number={invoiceMarker.numer} /> : null}{taxObligationMarker ? <TaxObligationMarker types={taxObligationMarker.typy} /> : null}</span><small>{client?.nip || "Brak NIP"} · {getCaregiverName(client)}</small></div></Td>
+                      <Td>
+                        <div style={clientCellStyle}>
+                          <span style={clientNameStyle}>{client?.nazwa || "Klient"}</span>
+                          {hasMarkers ? (
+                            <span style={clientMarkersRowStyle}>
+                              {invoiceMarker ? <InvoiceMarker number={invoiceMarker.numer} /> : null}
+                              {taxMarkerTypes.map((type) => <TaxObligationMarker key={type} type={type} />)}
+                            </span>
+                          ) : null}
+                          <small>{client?.nip || "Brak NIP"} · {getCaregiverName(client)}</small>
+                        </div>
+                      </Td>
                       <Td><AppSelect style={{ ...statusInputStyle, ...statusSelectStyle(settlement.status_ksiegowosci) }} value={settlement.status_ksiegowosci} disabled={savingId === settlement.id} options={STATUS_OPTIONS} onChange={(value) => patchSettlement(settlement, { status_ksiegowosci: value as SettlementStatus })} /></Td>
                       <Td><NumberInput value={settlement.liczba_dokumentow} disabled={false} onChange={(value) => patchSettlement(settlement, { liczba_dokumentow: value })} /></Td>
                       <Td>{client?.obsluga_kadrowa ? <NumberInput value={settlement.liczba_pracownikow} disabled={false} onChange={(value) => patchSettlement(settlement, { liczba_pracownikow: value })} /> : <span style={emptyCellStyle}>-</span>}</Td>
@@ -714,11 +727,11 @@ function InvoiceMarker({ number }: { number: string | null }) {
     </span>
   );
 }
-function TaxObligationMarker({ types }: { types: string[] }) {
+function TaxObligationMarker({ type }: { type: string }) {
   return (
-    <span style={taxObligationMarkerStyle} title={`Zobowiązania wysłane: ${types.join(", ")}`}>
+    <span style={taxObligationMarkerStyle} title={`Zobowiązanie wysłane: ${type}`}>
       <Landmark size={13} />
-      ZOB
+      {type}
     </span>
   );
 }
@@ -731,6 +744,17 @@ function getClient(value: MonthlySettlement["klienci"]) { return Array.isArray(v
 function getCaregiverName(client: ReturnType<typeof getClient>) {
   const profile = Array.isArray(client?.profiles) ? client?.profiles[0] : client?.profiles;
   return profile?.full_name || profile?.email || "Brak opiekuna";
+}
+const TAX_MARKER_ORDER = ["ZUS", "PIT-4", "PIT", "CIT", "VAT", "VAT-UE", "VAT-9M"];
+function getTaxMarkerTypes(types: string[]) {
+  return [...new Set(types.filter(Boolean))].sort((first, second) => {
+    const firstIndex = TAX_MARKER_ORDER.indexOf(first);
+    const secondIndex = TAX_MARKER_ORDER.indexOf(second);
+    if (firstIndex === -1 && secondIndex === -1) return first.localeCompare(second, "pl");
+    if (firstIndex === -1) return 1;
+    if (secondIndex === -1) return -1;
+    return firstIndex - secondIndex;
+  });
 }
 function sortSettlementsByClientName(first: MonthlySettlement, second: MonthlySettlement) {
   const firstClient = getClient(first.klienci);
@@ -845,7 +869,7 @@ const statusInputStyle: CSSProperties = { ...inputStyle, minWidth: 0, maxWidth: 
 const smallInputStyle: CSSProperties = { ...inputStyle, width: "100%", maxWidth: "150px", minWidth: "94px", background: colors.inputBackground, textAlign: "center", fontWeight: 500 };
 const textareaStyle: CSSProperties = { ...inputStyle, minHeight: "96px", resize: "vertical", background: colors.inputBackground };
 const clientCellStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "5px", minWidth: 0, fontWeight: 400 };
-const clientNameRowStyle: CSSProperties = { display: "inline-flex", alignItems: "center", gap: "8px", minWidth: 0, flexWrap: "wrap" };
+const clientMarkersRowStyle: CSSProperties = { display: "inline-flex", alignItems: "center", gap: "6px", minWidth: 0, flexWrap: "wrap" };
 const clientNameStyle: CSSProperties = { fontWeight: 800 };
 const invoiceMarkerStyle: CSSProperties = { display: "inline-flex", alignItems: "center", gap: "4px", borderRadius: "999px", background: "#dcfce7", color: "#15803d", padding: "3px 7px", fontSize: "11px", lineHeight: 1, fontWeight: 800 };
 const taxObligationMarkerStyle: CSSProperties = { ...invoiceMarkerStyle };

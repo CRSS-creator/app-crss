@@ -261,7 +261,7 @@ export default function ClientCardPage() {
                 <option value="">Wybierz</option>
                 <option value="ulga na start">Ulga na start</option>
                 <option value="składki preferencyjne">Składki preferencyjne</option>
-                <option value="mały ZUS plus">Mały ZUS plus</option>
+                <option value="Mały ZUS Plus">Mały ZUS Plus</option>
               </select>
             </Field>
           )}

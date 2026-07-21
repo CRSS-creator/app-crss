@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/supabaseClient";
 
-export type LimitType = "vat" | "wnt" | "kasa_fiskalna";
+export type LimitType = "vat" | "wnt" | "kasa_fiskalna" | "maly_podatnik_cit";
 
 export type LimitRegisterRecord = {
   id: string;
@@ -30,6 +30,7 @@ const DEFAULT_ANNUAL_LIMITS: Record<LimitType, number> = {
   vat: 240000,
   wnt: 50000,
   kasa_fiskalna: 0,
+  maly_podatnik_cit: 0,
 };
 
 export async function fetchLimitRegisters() {
@@ -55,7 +56,7 @@ export async function addClientToLimit(clientId: string, type: LimitType) {
       klient_id: clientId,
       typ: type,
       limit_roczny: DEFAULT_ANNUAL_LIMITS[type],
-      status_zwolnienia: type === "wnt" ? null : "podmiotowe",
+      status_zwolnienia: type === "wnt" || type === "maly_podatnik_cit" ? null : "podmiotowe",
       created_by: userId,
       updated_by: userId,
     })

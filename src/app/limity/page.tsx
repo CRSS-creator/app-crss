@@ -39,6 +39,7 @@ const LIMIT_TABS: LimitTab[] = [
   { value: "vat", label: "VAT" },
   { value: "wnt", label: "WNT" },
   { value: "kasa_fiskalna", label: "Kasa fiskalna" },
+  { value: "maly_podatnik_cit", label: "Mały podatnik CIT" },
 ];
 
 const MONTHS = ["Styczeń", "Luty", "Marzec", "Kwiecień", "Maj", "Czerwiec", "Lipiec", "Sierpień", "Wrzesień", "Październik", "Listopad", "Grudzień"];
@@ -97,7 +98,7 @@ function LimitsContent() {
   const filteredAvailableClients = filterClientsForPicker(availableClients, clientAddSearch);
   const selectedClientToAdd = availableClients.find((client) => client.id === clientToAdd) || null;
   const isAutomaticRegister = activeType === "vat" || activeType === "wnt";
-  const showExemptionStatus = activeType !== "wnt";
+  const showExemptionStatus = hasExemptionStatus(activeType);
 
   async function handleAddClient() {
     if (!clientToAdd) return;
@@ -401,7 +402,7 @@ function LimitDetailsModal({ row, year, onClose, onSaved }: { row: LimitRow; yea
     setSaving(true);
     const registerResult = await updateLimitRegister(row.register.id, {
       limit_roczny: parseAmount(annualLimit),
-      status_zwolnienia: row.register.typ === "wnt" ? null : row.register.typ === "vat" ? serializeExemptionStatuses(vatExemptionStatuses) : exemptionStatus,
+      status_zwolnienia: !hasExemptionStatus(row.register.typ) ? null : row.register.typ === "vat" ? serializeExemptionStatuses(vatExemptionStatuses) : exemptionStatus,
       uwagi: notes.trim() || null,
     });
 
@@ -467,7 +468,7 @@ function LimitDetailsModal({ row, year, onClose, onSaved }: { row: LimitRow; yea
                 />
               </div>
             </div>
-          ) : row.register.typ !== "wnt" && (
+          ) : hasExemptionStatus(row.register.typ) && (
             <label style={fieldStyle}>
               <span style={fieldLabelStyle}>Status zwolnienia</span>
               <select value={exemptionStatus} onChange={(event) => setExemptionStatus(event.target.value)} style={inputStyle}>
@@ -701,13 +702,19 @@ function toggleExemptionStatus(current: string[], status: string, checked: boole
 function registerHint(type: LimitType) {
   if (type === "vat") return "Klienci zwolnieni z VAT są dodawani automatycznie. Szczegóły służą do uzupełnienia miesięcy.";
   if (type === "wnt") return "Klienci bez VAT i z rejestracją VAT-UE są dodawani automatycznie. Szczegóły służą do uzupełnienia limitu i miesięcy.";
+  if (type === "maly_podatnik_cit") return "Lista firm dodanych ręcznie do limitu małego podatnika CIT. Szczegóły służą do wpisania limitu rocznego i miesięcy.";
   return "Lista klientów dodanych do tego limitu. Szczegóły służą do uzupełnienia limitu rocznego i miesięcy.";
 }
 
 function emptyRegisterText(type: LimitType) {
   if (type === "vat") return "Brak klientów zwolnionych z VAT.";
   if (type === "wnt") return "Brak klientów bez VAT z rejestracją VAT-UE.";
+  if (type === "maly_podatnik_cit") return "Brak firm w limicie małego podatnika CIT. Dodaj pierwszą firmę przyciskiem powyżej.";
   return "Brak klientów w tym limicie. Dodaj pierwszego klienta przyciskiem powyżej.";
+}
+
+function hasExemptionStatus(type: LimitType) {
+  return type === "vat" || type === "kasa_fiskalna";
 }
 
 function caregiverLabel(client: Client | null) {

@@ -31,12 +31,39 @@ export type ZusPreferenceNotificationHistory = {
   metadata: Record<string, unknown>;
 };
 
+export type ZusContributionRateHistory = {
+  id: string;
+  created_at: string;
+  skladka_id: string | null;
+  operacja: "insert" | "update" | "snapshot";
+  rok: number;
+  schemat_zus: string;
+  poprzednia_skladka_miesieczna: number | string | null;
+  skladka_miesieczna: number | string;
+  poprzednie_uwagi: string | null;
+  uwagi: string | null;
+  changed_by: string | null;
+  changed_by_name: string | null;
+  metadata: Record<string, unknown>;
+};
+
 export async function fetchZusContributionRates(year: number) {
   return supabase
     .from("zus_przedsiebiorcy_skladki")
     .select("*")
     .eq("rok", year)
     .order("schemat_zus", { ascending: true });
+}
+
+export async function fetchZusContributionRateHistory(year?: number) {
+  let query = supabase
+    .from("zus_przedsiebiorcy_skladki_historia")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(100);
+
+  if (year) query = query.eq("rok", year);
+  return query;
 }
 
 export async function fetchZusPreferenceNotificationHistory() {

@@ -147,6 +147,7 @@ function NotificationsContent() {
               const isRecurringTaskNotification = notification.type === "recurring_task_due_today";
               const isPayrollContractNotification = notification.type === "payroll_contract_expiry";
               const isPayrollA1Notification = notification.type === "payroll_a1_due_today";
+              const isZusPreferentialRateNotification = notification.type === "zus_preferential_rate_due";
               const detailsExpanded = expandedNotificationIds.includes(notification.id);
               const clientEmailSent = isPayrollContractNotification && payrollClientEmailSent(notification);
               return (
@@ -172,6 +173,7 @@ function NotificationsContent() {
                     {isCrmFollowUpNotification && <a style={secondaryButtonStyle} href="/crm">Otwórz CRM</a>}
                     {isRecurringTaskNotification && <a style={secondaryButtonStyle} href="/rozliczenia">Otwórz rozliczenia</a>}
                     {isPayrollA1Notification && <a style={secondaryButtonStyle} href="/kadry">Otwórz Kadry</a>}
+                    {isZusPreferentialRateNotification && <a style={secondaryButtonStyle} href="/kadry">Otwórz Kadry</a>}
                     {isPayrollContractNotification && (
                       <>
                         <button type="button" style={secondaryButtonStyle} onClick={() => toggleDetails(notification.id)}>

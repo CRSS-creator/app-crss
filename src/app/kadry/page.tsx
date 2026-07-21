@@ -28,10 +28,12 @@ import {
 } from "@/lib/payrollA1Service";
 import { fetchPayrollNotificationsForClient, type AppNotification } from "@/lib/notificationService";
 import {
+  fetchZusContributionRateHistory,
   fetchZusPreferenceNotificationHistory,
   fetchZusContributionRates,
   sendZusPreferenceClientNotifications,
   upsertZusContributionRate,
+  type ZusContributionRateHistory,
   type ZusPreferenceNotificationHistory,
   type ZusContributionRate,
 } from "@/lib/zusContributionRatesService";
@@ -689,6 +691,7 @@ function ZusContributionsModal({ schemes, onClose }: { schemes: string[]; onClos
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
   const [values, setValues] = useState<Record<string, ZusContributionDraft>>(() => emptyZusContributionDrafts(schemes));
+  const [history, setHistory] = useState<ZusContributionRateHistory[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -701,7 +704,10 @@ function ZusContributionsModal({ schemes, onClose }: { schemes: string[]; onClos
 
     async function loadRates() {
       setLoading(true);
-      const result = await fetchZusContributionRates(year);
+      const [result, historyResult] = await Promise.all([
+        fetchZusContributionRates(year),
+        fetchZusContributionRateHistory(year),
+      ]);
       if (cancelled) return;
 
       if (result.error) {
@@ -712,6 +718,12 @@ function ZusContributionsModal({ schemes, onClose }: { schemes: string[]; onClos
       }
 
       setValues(zusContributionDraftsFromRates(schemes, (result.data || []) as ZusContributionRate[]));
+      if (historyResult.error) {
+        console.error("Błąd pobierania historii wysokości składek ZUS:", historyResult.error);
+        setHistory([]);
+      } else {
+        setHistory((historyResult.data || []) as ZusContributionRateHistory[]);
+      }
       setLoading(false);
     }
 
@@ -736,7 +748,8 @@ function ZusContributionsModal({ schemes, onClose }: { schemes: string[]; onClos
     }
 
     setSaving(false);
-    onClose();
+    const historyResult = await fetchZusContributionRateHistory(year);
+    if (!historyResult.error) setHistory((historyResult.data || []) as ZusContributionRateHistory[]);
   }
 
   function updateDraft(scheme: string, patch: Partial<ZusContributionDraft>) {
@@ -814,6 +827,38 @@ function ZusContributionsModal({ schemes, onClose }: { schemes: string[]; onClos
                 })}
               </tbody>
             </table>
+          </div>
+
+          <div>
+            <h3 style={historyTitleStyle}>Historia wpisów</h3>
+            {history.length === 0 ? (
+              <p style={emptyInlineStyle}>Brak historycznych wpisów dla tego roku.</p>
+            ) : (
+              <div style={tableWrapStyle}>
+                <table style={zusContributionHistoryTableStyle}>
+                  <thead>
+                    <tr>
+                      <Th>Data</Th>
+                      <Th>Operacja</Th>
+                      <Th align="center">Składka</Th>
+                      <Th>Poprzednio</Th>
+                      <Th>Użytkownik</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {history.map((entry) => (
+                      <tr key={entry.id}>
+                        <Td>{formatDateTime(entry.created_at)}</Td>
+                        <Td>{zusContributionHistoryOperationLabel(entry.operacja)}</Td>
+                        <Td align="center"><strong>{formatMoney(toNumber(entry.skladka_miesieczna))}</strong></Td>
+                        <Td>{entry.poprzednia_skladka_miesieczna === null ? "-" : formatMoney(toNumber(entry.poprzednia_skladka_miesieczna))}</Td>
+                        <Td>{entry.changed_by_name || "-"}</Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       </section>
@@ -1529,6 +1574,12 @@ function latestZusPreferenceNotificationByClient(history: ZusPreferenceNotificat
   }, {});
 }
 
+function zusContributionHistoryOperationLabel(operation: ZusContributionRateHistory["operacja"]) {
+  if (operation === "insert") return "Dodano";
+  if (operation === "update") return "Zmieniono";
+  return "Stan początkowy";
+}
+
 function caregiverLabel(client: PayrollClient | null | undefined) {
   const profile = Array.isArray(client?.profiles) ? client.profiles[0] : client?.profiles;
   return profile?.full_name || profile?.email || "Brak opiekuna";
@@ -1773,8 +1824,10 @@ const inputStyle: CSSProperties = { minHeight: "42px", border: `1px solid ${colo
 const zusContributionYearStyle: CSSProperties = { ...fieldStyle, maxWidth: "180px" };
 const yearInputStyle: CSSProperties = { ...inputStyle, width: "100%" };
 const zusContributionsTableStyle: CSSProperties = { width: "100%", minWidth: "760px", borderCollapse: "collapse" };
+const zusContributionHistoryTableStyle: CSSProperties = { width: "100%", minWidth: "760px", borderCollapse: "collapse" };
 const zusContributionAmountInputStyle: CSSProperties = { ...inputStyle, width: "180px", maxWidth: "100%", textAlign: "center" };
 const zusContributionNotesInputStyle: CSSProperties = { ...inputStyle, width: "100%" };
+const historyTitleStyle: CSSProperties = { margin: "6px 0 12px", color: colors.navy, fontSize: "16px", fontWeight: 900 };
 const inlineDateWrapStyle: CSSProperties = { position: "relative", display: "inline-flex", alignItems: "center", width: "156px", maxWidth: "100%" };
 const inlineDateInputStyle: CSSProperties = { ...inputStyle, width: "100%", minHeight: "38px", padding: "0 34px 0 10px", fontSize: "13px", fontWeight: 800, colorScheme: "light" };
 const inlineDateIconStyle: CSSProperties = { position: "absolute", right: "10px", pointerEvents: "none", color: colors.navy };

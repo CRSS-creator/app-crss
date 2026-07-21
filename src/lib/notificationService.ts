@@ -81,8 +81,12 @@ export async function createDuePayrollA1Notifications() {
   return supabase.rpc("create_due_payroll_a1_notifications");
 }
 
+export async function createDueZusPreferentialRateNotifications() {
+  return supabase.rpc("create_due_zus_preferential_rate_notifications");
+}
+
 export async function createDueNotifications() {
-  const [taskResult, crmFollowUpResult, recurringTaskResult, clientCardResult, rodoReviewResult, onboardingCompletionResult, payrollContractResult, payrollA1Result] = await Promise.all([
+  const [taskResult, crmFollowUpResult, recurringTaskResult, clientCardResult, rodoReviewResult, onboardingCompletionResult, payrollContractResult, payrollA1Result, zusPreferentialRateResult] = await Promise.all([
     createDueTaskNotifications(),
     createDueCrmFollowUpNotifications(),
     createDueRecurringTaskNotifications(),
@@ -91,6 +95,7 @@ export async function createDueNotifications() {
     createDueOnboardingCompletionNotifications(),
     createDuePayrollContractNotifications(),
     createDuePayrollA1Notifications(),
+    createDueZusPreferentialRateNotifications(),
   ]);
 
   return {
@@ -103,6 +108,7 @@ export async function createDueNotifications() {
       onboardingCompletionNotifications: onboardingCompletionResult.data || 0,
       payrollContractNotifications: payrollContractResult.data || 0,
       payrollA1Notifications: payrollA1Result.data || 0,
+      zusPreferentialRateNotifications: zusPreferentialRateResult.data || 0,
     },
     error:
       taskResult.error ||
@@ -112,7 +118,8 @@ export async function createDueNotifications() {
       rodoReviewResult.error ||
       onboardingCompletionResult.error ||
       payrollContractResult.error ||
-      payrollA1Result.error,
+      payrollA1Result.error ||
+      zusPreferentialRateResult.error,
   };
 }
 

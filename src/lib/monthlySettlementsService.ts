@@ -71,6 +71,7 @@ export type SettlementInvoiceMarker = {
 export type SettlementTaxObligationMarker = {
   rozliczenie_id: string;
   typy: string[];
+  niewyslane_typy: string[];
 };
 
 const SETTLEMENT_SELECT = `

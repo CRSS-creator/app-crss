@@ -330,8 +330,9 @@ function SettlementsContent() {
                   const progress = progressBySettlement[settlement.id] || { progress: 0, total_tasks: 0, done_tasks: 0 };
                   const invoiceMarker = client?.id ? invoiceMarkerByClientId[client.id] : null;
                   const taxObligationMarker = taxObligationMarkerBySettlementId[settlement.id];
-                  const taxMarkerTypes = getTaxMarkerTypes(taxObligationMarker?.typy || []);
-                  const hasMarkers = Boolean(invoiceMarker || taxMarkerTypes.length > 0);
+                  const sentTaxMarkerTypes = getTaxMarkerTypes(taxObligationMarker?.typy || []);
+                  const unsentTaxMarkerTypes = getTaxMarkerTypes(taxObligationMarker?.niewyslane_typy || []);
+                  const hasMarkers = Boolean(invoiceMarker || sentTaxMarkerTypes.length > 0 || unsentTaxMarkerTypes.length > 0);
                   return (
                     <tr key={settlement.id} style={rowStyle}>
                       <Td>
@@ -340,7 +341,8 @@ function SettlementsContent() {
                           {hasMarkers ? (
                             <span style={clientMarkersRowStyle}>
                               {invoiceMarker ? <InvoiceMarker number={invoiceMarker.numer} /> : null}
-                              {taxMarkerTypes.map((type) => <TaxObligationMarker key={type} type={type} />)}
+                              {sentTaxMarkerTypes.map((type) => <TaxObligationMarker key={`sent-${type}`} type={type} status="sent" />)}
+                              {unsentTaxMarkerTypes.map((type) => <TaxObligationMarker key={`unsent-${type}`} type={type} status="unsent" />)}
                             </span>
                           ) : null}
                           <small>{client?.nip || "Brak NIP"} · {getCaregiverName(client)}</small>
@@ -727,9 +729,10 @@ function InvoiceMarker({ number }: { number: string | null }) {
     </span>
   );
 }
-function TaxObligationMarker({ type }: { type: string }) {
+function TaxObligationMarker({ type, status }: { type: string; status: "sent" | "unsent" }) {
+  const isSent = status === "sent";
   return (
-    <span style={taxObligationMarkerStyle} title={`Zobowiązanie wysłane: ${type}`}>
+    <span style={isSent ? taxObligationMarkerStyle : unsentTaxObligationMarkerStyle} title={`Zobowiązanie ${isSent ? "wysłane" : "niewysłane"}: ${type}`}>
       <Landmark size={13} />
       {type}
     </span>
@@ -873,6 +876,7 @@ const clientMarkersRowStyle: CSSProperties = { display: "inline-flex", alignItem
 const clientNameStyle: CSSProperties = { fontWeight: 800 };
 const invoiceMarkerStyle: CSSProperties = { display: "inline-flex", alignItems: "center", gap: "4px", borderRadius: "999px", background: "#dcfce7", color: "#15803d", padding: "3px 7px", fontSize: "11px", lineHeight: 1, fontWeight: 800 };
 const taxObligationMarkerStyle: CSSProperties = { ...invoiceMarkerStyle };
+const unsentTaxObligationMarkerStyle: CSSProperties = { ...invoiceMarkerStyle, background: "#fef3c7", color: "#92400e" };
 const progressStyle: CSSProperties = { display: "inline-flex", flexDirection: "column", gap: "4px", borderRadius: radius.input, background: "#e8eef8", color: colors.navy, padding: "8px 10px", fontWeight: 500, minWidth: "86px", fontSize: "14px" };
 const progressLargeStyle: CSSProperties = { ...progressStyle, width: "100%", padding: "18px", fontSize: "20px" };
 const progressCompleteStyle: CSSProperties = { background: "#dcfce7", color: "#166534" };

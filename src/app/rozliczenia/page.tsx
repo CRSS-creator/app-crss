@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { FileText, Landmark, Play, Square } from "lucide-react";

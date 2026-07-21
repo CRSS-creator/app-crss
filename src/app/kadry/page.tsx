@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { CalendarDays, Check, ChevronLeft, ChevronRight, Plus, X } from "lucide-react";
+import { CalendarDays, Check, ChevronLeft, ChevronRight, Plus, Save, X } from "lucide-react";
 import AccessGuard from "@/components/AccessGuard";
 import AppLayout from "@/components/AppLayout";
 import AppSelect from "@/components/AppSelect";
@@ -27,6 +27,11 @@ import {
   type PayrollA1Record,
 } from "@/lib/payrollA1Service";
 import { fetchPayrollNotificationsForClient, type AppNotification } from "@/lib/notificationService";
+import {
+  fetchZusContributionRates,
+  upsertZusContributionRate,
+  type ZusContributionRate,
+} from "@/lib/zusContributionRatesService";
 
 type PayrollTab = "kadry" | "a1" | "zus_przedsiebiorcy";
 
@@ -82,6 +87,7 @@ type A1Totals = {
 };
 
 type ZusPreferenceDateField = "zus_preferencja_start" | "zus_preferencja_koniec";
+type ZusContributionDraft = { amount: string; notes: string };
 
 const PAYROLL_TABS: PayrollTabDefinition[] = [
   { value: "kadry", label: "Kadry" },
@@ -94,6 +100,8 @@ const CONTRACT_TYPE_OPTIONS: { value: PayrollContractType; label: string }[] = [
   { value: "umowa_cywilnoprawna", label: "Umowa cywilnoprawna" },
   { value: "student", label: "Student" },
 ];
+
+const ZUS_CONTRIBUTION_BASE_SCHEMES = ["Pełny ZUS", "Preferencyjny ZUS", "Mały ZUS Plus", "Ulga na start", "Brak", "Tylko zdrowotna", "Inny"];
 
 export default function PayrollPage() {
   return (
@@ -116,6 +124,7 @@ function PayrollContent() {
   const [a1AddSearch, setA1AddSearch] = useState("");
   const [a1ClientToAdd, setA1ClientToAdd] = useState("");
   const [showA1AddForm, setShowA1AddForm] = useState(false);
+  const [showZusContributionsModal, setShowZusContributionsModal] = useState(false);
   const [selectedClient, setSelectedClient] = useState<PayrollClient | null>(null);
   const [selectedA1RecordId, setSelectedA1RecordId] = useState<string | null>(null);
 
@@ -182,6 +191,7 @@ function PayrollContent() {
   const selectedA1ClientToAdd = availableA1Clients.find((client) => client.id === a1ClientToAdd) || null;
   const selectedA1Row = selectedA1RecordId ? a1Rows.find((row) => row.record.id === selectedA1RecordId) || null : null;
   const zusEntrepreneurClients = useMemo(() => clients.filter(isZusPreferenceJdgClient), [clients]);
+  const zusContributionSchemes = useMemo(() => zusContributionSchemeOptions(clients), [clients]);
   const filteredZusEntrepreneurClients = useMemo(() => filterClients(zusEntrepreneurClients, searchTerm), [zusEntrepreneurClients, searchTerm]);
   const selectedContracts = selectedClient ? contractsByClient[selectedClient.id] || [] : [];
   const tab = PAYROLL_TABS.find((item) => item.value === activeTab) || PAYROLL_TABS[0];
@@ -268,6 +278,11 @@ function PayrollContent() {
           {activeTab === "a1" && (
             <button type="button" onClick={() => setShowA1AddForm((value) => !value)} style={primaryButtonStyle}>
               <Plus size={18} /> Dodaj klienta
+            </button>
+          )}
+          {activeTab === "zus_przedsiebiorcy" && (
+            <button type="button" onClick={() => setShowZusContributionsModal(true)} style={secondaryButtonStyle}>
+              <CalendarDays size={18} /> Wysokość składek
             </button>
           )}
         </div>
@@ -368,6 +383,10 @@ function PayrollContent() {
           onUpdated={handleA1Updated}
           onMonthlyUpdated={handleA1MonthlyUpdated}
         />
+      )}
+
+      {showZusContributionsModal && (
+        <ZusContributionsModal schemes={zusContributionSchemes} onClose={() => setShowZusContributionsModal(false)} />
       )}
     </div>
   );
@@ -548,6 +567,142 @@ function InlineDateInput({ value, onChange, ariaLabel }: { value: string; onChan
       />
       <CalendarDays size={16} style={inlineDateIconStyle} />
     </label>
+  );
+}
+
+function ZusContributionsModal({ schemes, onClose }: { schemes: string[]; onClose: () => void }) {
+  const currentYear = new Date().getFullYear();
+  const [year, setYear] = useState(currentYear);
+  const [values, setValues] = useState<Record<string, ZusContributionDraft>>(() => emptyZusContributionDrafts(schemes));
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setValues((current) => ({ ...emptyZusContributionDrafts(schemes), ...current }));
+  }, [schemes]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadRates() {
+      setLoading(true);
+      const result = await fetchZusContributionRates(year);
+      if (cancelled) return;
+
+      if (result.error) {
+        console.error("Błąd pobierania wysokości składek ZUS:", result.error);
+        setValues(emptyZusContributionDrafts(schemes));
+        setLoading(false);
+        return;
+      }
+
+      setValues(zusContributionDraftsFromRates(schemes, (result.data || []) as ZusContributionRate[]));
+      setLoading(false);
+    }
+
+    void loadRates();
+    return () => {
+      cancelled = true;
+    };
+  }, [schemes, year]);
+
+  async function saveRates() {
+    setSaving(true);
+
+    for (const scheme of schemes) {
+      const draft = values[scheme] || { amount: "", notes: "" };
+      const result = await upsertZusContributionRate(year, scheme, parseAmount(draft.amount), draft.notes);
+      if (result.error) {
+        setSaving(false);
+        console.error("Błąd zapisu wysokości składek ZUS:", result.error);
+        alert("Nie udało się zapisać wysokości składek ZUS.");
+        return;
+      }
+    }
+
+    setSaving(false);
+    onClose();
+  }
+
+  function updateDraft(scheme: string, patch: Partial<ZusContributionDraft>) {
+    setValues((current) => ({
+      ...current,
+      [scheme]: { ...(current[scheme] || { amount: "", notes: "" }), ...patch },
+    }));
+  }
+
+  return (
+    <div style={modalOverlayStyle} onClick={onClose}>
+      <section style={zusContributionsModalStyle} onClick={(event) => event.stopPropagation()}>
+        <div style={modalHeaderStyle}>
+          <div>
+            <h2 style={modalTitleStyle}>Wysokość składek ZUS</h2>
+            <p style={modalSubtitleStyle}>Stawki miesięczne dla schematów ZUS przedsiębiorcy.</p>
+          </div>
+          <div style={modalActionsStyle}>
+            <button type="button" style={primaryButtonStyle} onClick={() => void saveRates()} disabled={saving || loading}>
+              <Save size={18} /> {saving ? "Zapisywanie..." : "Zapisz"}
+            </button>
+            <button type="button" style={iconButtonStyle} onClick={onClose} aria-label="Zamknij">
+              <X size={20} />
+            </button>
+          </div>
+        </div>
+
+        <div style={modalBodyStyle}>
+          <label style={zusContributionYearStyle}>
+            <span style={fieldLabelStyle}>Rok</span>
+            <input
+              type="number"
+              min={2000}
+              max={2100}
+              value={year}
+              onChange={(event) => setYear(Number(event.target.value) || currentYear)}
+              style={yearInputStyle}
+            />
+          </label>
+
+          <div style={tableWrapStyle}>
+            <table style={zusContributionsTableStyle}>
+              <thead>
+                <tr>
+                  <Th>Rodzaj preferencji</Th>
+                  <Th align="center">Wysokość składek miesięcznie</Th>
+                  <Th>Uwagi</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {schemes.map((scheme) => {
+                  const draft = values[scheme] || { amount: "", notes: "" };
+                  return (
+                    <tr key={scheme}>
+                      <Td><strong>{scheme}</strong></Td>
+                      <Td align="center">
+                        <input
+                          value={draft.amount}
+                          onChange={(event) => updateDraft(scheme, { amount: event.target.value })}
+                          inputMode="decimal"
+                          placeholder="0,00"
+                          style={zusContributionAmountInputStyle}
+                        />
+                      </Td>
+                      <Td>
+                        <input
+                          value={draft.notes}
+                          onChange={(event) => updateDraft(scheme, { notes: event.target.value })}
+                          placeholder="Opcjonalnie"
+                          style={zusContributionNotesInputStyle}
+                        />
+                      </Td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -1230,6 +1385,30 @@ function isFullZusScheme(value: string | null | undefined) {
   return normalized.includes("duzy zus") || normalized.includes("pelny zus") || normalized.includes("pelen zus");
 }
 
+function zusContributionSchemeOptions(clients: PayrollClient[]) {
+  const schemeSet = new Set(ZUS_CONTRIBUTION_BASE_SCHEMES);
+  clients.forEach((client) => {
+    const scheme = client.schemat_zus?.trim();
+    if (scheme) schemeSet.add(scheme);
+  });
+  return Array.from(schemeSet);
+}
+
+function emptyZusContributionDrafts(schemes: string[]) {
+  return Object.fromEntries(schemes.map((scheme) => [scheme, { amount: "", notes: "" }])) as Record<string, ZusContributionDraft>;
+}
+
+function zusContributionDraftsFromRates(schemes: string[], rates: ZusContributionRate[]) {
+  const drafts = emptyZusContributionDrafts(schemes);
+  rates.forEach((rate) => {
+    drafts[rate.schemat_zus] = {
+      amount: toNumber(rate.skladka_miesieczna) ? String(rate.skladka_miesieczna).replace(".", ",") : "",
+      notes: rate.uwagi || "",
+    };
+  });
+  return drafts;
+}
+
 function caregiverLabel(client: PayrollClient | null | undefined) {
   const profile = Array.isArray(client?.profiles) ? client.profiles[0] : client?.profiles;
   return profile?.full_name || profile?.email || "Brak opiekuna";
@@ -1445,6 +1624,7 @@ const modalOverlayStyle: CSSProperties = { position: "fixed", inset: 0, zIndex: 
 const wideModalStyle: CSSProperties = { width: "min(1380px, calc(100vw - 56px))", maxHeight: "calc(100vh - 56px)", borderRadius: radius.card, background: colors.white, border: `1px solid ${colors.border}`, boxShadow: "0 32px 90px rgba(15, 23, 42, 0.28)", overflow: "hidden", display: "flex", flexDirection: "column" };
 const detailsModalStyle: CSSProperties = { width: "min(980px, calc(100vw - 56px))", maxHeight: "calc(100vh - 56px)", borderRadius: radius.card, background: colors.white, border: `1px solid ${colors.border}`, boxShadow: "0 32px 90px rgba(15, 23, 42, 0.28)", overflow: "hidden", display: "flex", flexDirection: "column" };
 const a1DetailsModalStyle: CSSProperties = { ...detailsModalStyle, height: "calc(100vh - 56px)" };
+const zusContributionsModalStyle: CSSProperties = { ...detailsModalStyle, width: "min(920px, calc(100vw - 56px))" };
 const modalHeaderStyle: CSSProperties = { padding: "22px 24px", borderBottom: `1px solid ${colors.border}`, display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "flex-start" };
 const modalTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "26px", lineHeight: 1.2 };
 const modalSubtitleStyle: CSSProperties = { margin: "8px 0 0", color: colors.muted, fontSize: "13px", fontWeight: 750 };
@@ -1455,7 +1635,7 @@ const stickyModalFooterStyle: CSSProperties = { flex: "0 0 auto", display: "flex
 const iconButtonStyle: CSSProperties = { width: "42px", height: "42px", borderRadius: radius.button, border: `1px solid ${colors.border}`, background: colors.white, color: colors.navy, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer" };
 const primaryButtonStyle: CSSProperties = { minHeight: "42px", padding: "0 16px", border: "none", borderRadius: radius.button, background: colors.red, color: colors.white, fontWeight: 850, display: "inline-flex", alignItems: "center", gap: "8px", cursor: "pointer" };
 const smallPrimaryButtonStyle: CSSProperties = { ...primaryButtonStyle, minHeight: "44px", alignSelf: "start" };
-const secondaryButtonStyle: CSSProperties = { minHeight: "42px", padding: "0 14px", borderRadius: radius.button, border: `1px solid ${colors.border}`, background: colors.white, color: colors.navy, fontWeight: 850, cursor: "pointer" };
+const secondaryButtonStyle: CSSProperties = { minHeight: "42px", padding: "0 14px", borderRadius: radius.button, border: `1px solid ${colors.border}`, background: colors.white, color: colors.navy, fontWeight: 850, display: "inline-flex", alignItems: "center", gap: "8px", cursor: "pointer" };
 const formBoxStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.inputBackground, padding: "18px" };
 const summaryGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "12px" };
 const summaryTileStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, padding: "14px", display: "flex", flexDirection: "column", gap: "8px", color: colors.muted, fontSize: "12px", fontWeight: 850, textTransform: "uppercase" };
@@ -1466,6 +1646,11 @@ const formActionsStyle: CSSProperties = { display: "flex", justifyContent: "flex
 const fieldStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "8px" };
 const fieldLabelStyle: CSSProperties = { color: colors.muted, fontSize: "12px", fontWeight: 850, textTransform: "uppercase" };
 const inputStyle: CSSProperties = { minHeight: "42px", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.text, padding: "0 12px", fontSize: "14px", fontWeight: 750 };
+const zusContributionYearStyle: CSSProperties = { ...fieldStyle, maxWidth: "180px" };
+const yearInputStyle: CSSProperties = { ...inputStyle, width: "100%" };
+const zusContributionsTableStyle: CSSProperties = { width: "100%", minWidth: "760px", borderCollapse: "collapse" };
+const zusContributionAmountInputStyle: CSSProperties = { ...inputStyle, width: "180px", maxWidth: "100%", textAlign: "center" };
+const zusContributionNotesInputStyle: CSSProperties = { ...inputStyle, width: "100%" };
 const inlineDateWrapStyle: CSSProperties = { position: "relative", display: "inline-flex", alignItems: "center", width: "156px", maxWidth: "100%" };
 const inlineDateInputStyle: CSSProperties = { ...inputStyle, width: "100%", minHeight: "38px", padding: "0 34px 0 10px", fontSize: "13px", fontWeight: 800, colorScheme: "light" };
 const inlineDateIconStyle: CSSProperties = { position: "absolute", right: "10px", pointerEvents: "none", color: colors.navy };

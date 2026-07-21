@@ -12,12 +12,14 @@ import { supabase } from "@/lib/supabaseClient";
 import {
   ensureCurrentMonthSettlements,
   fetchSettlementInvoiceMarkers,
+  fetchSettlementTaxObligationMarkers,
   fetchMonthlySettlements,
   fetchSettlementTaskProgress,
   sendDocumentsReminder,
   updateMonthlySettlement,
   type MonthlySettlement,
   type SettlementInvoiceMarker,
+  type SettlementTaxObligationMarker,
   type SettlementProgress,
   type SettlementStatus,
 } from "@/lib/monthlySettlementsService";
@@ -67,6 +69,7 @@ function SettlementsContent() {
   const [settlements, setSettlements] = useState<MonthlySettlement[]>([]);
   const [progressRows, setProgressRows] = useState<SettlementProgress[]>([]);
   const [invoiceMarkers, setInvoiceMarkers] = useState<SettlementInvoiceMarker[]>([]);
+  const [taxObligationMarkers, setTaxObligationMarkers] = useState<SettlementTaxObligationMarker[]>([]);
   const [recurringRealizations, setRecurringRealizations] = useState<RecurringTaskRealization[]>([]);
   const [recurringTimeEntries, setRecurringTimeEntries] = useState<TimeEntry[]>([]);
   const [taxObligations, setTaxObligations] = useState<TaxObligation[]>([]);
@@ -86,17 +89,10 @@ function SettlementsContent() {
     () => Object.fromEntries(invoiceMarkers.map((marker) => [marker.klient_id, marker])),
     [invoiceMarkers]
   );
-  const sentTaxObligationStatsBySettlement = useMemo(() => {
-    return taxObligations.reduce<Record<string, { count: number; types: string[] }>>((stats, obligation) => {
-      if (obligation.status_email !== "wyslane" && obligation.status_sms !== "wyslane") return stats;
-      const existing = stats[obligation.rozliczenie_id] || { count: 0, types: [] };
-      stats[obligation.rozliczenie_id] = {
-        count: existing.count + 1,
-        types: [...existing.types, obligation.typ],
-      };
-      return stats;
-    }, {});
-  }, [taxObligations]);
+  const taxObligationMarkerBySettlementId = useMemo(
+    () => Object.fromEntries(taxObligationMarkers.map((marker) => [marker.rozliczenie_id, marker])),
+    [taxObligationMarkers]
+  );
 
   const visibleSettlements = [...settlements].filter((settlement) => {
     const client = getClient(settlement.klienci);
@@ -123,10 +119,11 @@ function SettlementsContent() {
     const userId = userResult.data.user?.id || null;
     setCurrentUserId(userId);
 
-    const [settlementsResult, progressResult, invoiceMarkersResult, recurringResult, recurringTimeResult, taxResult, timersResult] = await Promise.all([
+    const [settlementsResult, progressResult, invoiceMarkersResult, taxMarkersResult, recurringResult, recurringTimeResult, taxResult, timersResult] = await Promise.all([
       fetchMonthlySettlements(normalizedPeriod),
       fetchSettlementTaskProgress(normalizedPeriod),
       fetchSettlementInvoiceMarkers(normalizedPeriod),
+      fetchSettlementTaxObligationMarkers(normalizedPeriod),
       fetchRecurringTaskRealizations(normalizedPeriod),
       fetchRecurringTaskTimeEntries(normalizedPeriod),
       fetchTaxObligations(normalizedPeriod),
@@ -135,6 +132,8 @@ function SettlementsContent() {
 
     if (settlementsResult.error) console.error("Błąd pobierania rozliczeń:", settlementsResult.error);
     if (progressResult.error) console.error("Błąd pobierania postępu zadań:", progressResult.error);
+    if (invoiceMarkersResult.error) console.error("Błąd pobierania oznaczeń faktur:", invoiceMarkersResult.error);
+    if (taxMarkersResult.error) console.error("Błąd pobierania oznaczeń zobowiązań:", taxMarkersResult.error);
     if (recurringResult.error) console.error("Błąd pobierania zadań cyklicznych:", recurringResult.error);
     if (taxResult.error) console.error("Błąd pobierania zobowiązań podatkowych:", taxResult.error);
     if (timersResult.error) console.error("Błąd pobierania aktywnych liczników:", timersResult.error);
@@ -142,6 +141,7 @@ function SettlementsContent() {
     setSettlements((settlementsResult.data || []) as MonthlySettlement[]);
     setProgressRows((progressResult.data || []) as SettlementProgress[]);
     setInvoiceMarkers((invoiceMarkersResult.data || []) as SettlementInvoiceMarker[]);
+    setTaxObligationMarkers((taxMarkersResult.data || []) as SettlementTaxObligationMarker[]);
     setRecurringRealizations((recurringResult.data || []) as RecurringTaskRealization[]);
     setRecurringTimeEntries((recurringTimeResult.data || []) as TimeEntry[]);
     setTaxObligations((taxResult.data || []) as TaxObligation[]);
@@ -329,10 +329,10 @@ function SettlementsContent() {
                   const client = getClient(settlement.klienci);
                   const progress = progressBySettlement[settlement.id] || { progress: 0, total_tasks: 0, done_tasks: 0 };
                   const invoiceMarker = client?.id ? invoiceMarkerByClientId[client.id] : null;
-                  const sentTaxStats = sentTaxObligationStatsBySettlement[settlement.id];
+                  const taxObligationMarker = taxObligationMarkerBySettlementId[settlement.id];
                   return (
                     <tr key={settlement.id} style={rowStyle}>
-                      <Td><div style={clientCellStyle}><span style={clientNameRowStyle}><span style={clientNameStyle}>{client?.nazwa || "Klient"}</span>{invoiceMarker ? <InvoiceMarker number={invoiceMarker.numer} /> : null}{sentTaxStats ? <TaxObligationMarker types={sentTaxStats.types} /> : null}</span><small>{client?.nip || "Brak NIP"} · {getCaregiverName(client)}</small></div></Td>
+                      <Td><div style={clientCellStyle}><span style={clientNameRowStyle}><span style={clientNameStyle}>{client?.nazwa || "Klient"}</span>{invoiceMarker ? <InvoiceMarker number={invoiceMarker.numer} /> : null}{taxObligationMarker ? <TaxObligationMarker types={taxObligationMarker.typy} /> : null}</span><small>{client?.nip || "Brak NIP"} · {getCaregiverName(client)}</small></div></Td>
                       <Td><AppSelect style={{ ...statusInputStyle, ...statusSelectStyle(settlement.status_ksiegowosci) }} value={settlement.status_ksiegowosci} disabled={savingId === settlement.id} options={STATUS_OPTIONS} onChange={(value) => patchSettlement(settlement, { status_ksiegowosci: value as SettlementStatus })} /></Td>
                       <Td><NumberInput value={settlement.liczba_dokumentow} disabled={false} onChange={(value) => patchSettlement(settlement, { liczba_dokumentow: value })} /></Td>
                       <Td>{client?.obsluga_kadrowa ? <NumberInput value={settlement.liczba_pracownikow} disabled={false} onChange={(value) => patchSettlement(settlement, { liczba_pracownikow: value })} /> : <span style={emptyCellStyle}>-</span>}</Td>

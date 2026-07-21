@@ -68,6 +68,11 @@ export type SettlementInvoiceMarker = {
   numer: string | null;
 };
 
+export type SettlementTaxObligationMarker = {
+  rozliczenie_id: string;
+  typy: string[];
+};
+
 const SETTLEMENT_SELECT = `
   *,
   klienci!rozliczenia_miesieczne_klient_id_fkey (
@@ -117,15 +122,11 @@ export async function fetchSettlementTaskProgress(period: string) {
 }
 
 export async function fetchSettlementInvoiceMarkers(period: string) {
-  return supabase
-    .from("faktury")
-    .select("klient_id,numer")
-    .eq("okres", period)
-    .eq("kategoria", "standardowa")
-    .in("automatyczna", [true, false])
-    .not("klient_id", "is", null)
-    .not("numer", "is", null)
-    .in("status", ["wystawiona", "wyslana", "oplacona", "przeterminowana"]);
+  return supabase.rpc("settlement_invoice_markers", { public_period: period });
+}
+
+export async function fetchSettlementTaxObligationMarkers(period: string) {
+  return supabase.rpc("settlement_tax_obligation_markers", { public_period: period });
 }
 
 export async function sendDocumentsReminder(settlementId: string) {

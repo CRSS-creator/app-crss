@@ -74,6 +74,7 @@ export async function POST(request: NextRequest) {
 
   const clients = await loadClientMatches(auth.admin);
   const imported: string[] = [];
+  let skippedExisting = 0;
   const failed: { wfirmaId: string | null; error: string }[] = [];
   let page = 1;
   const limit = 25;
@@ -97,8 +98,10 @@ export async function POST(request: NextRequest) {
         try {
           if (!isInvoiceDateInRange(invoice, range.dateFrom, range.dateTo)) continue;
           if (isCorrectionInvoice(invoice)) continue;
-          const savedId = await saveImportedInvoice(auth.admin, invoice, clients);
-          if (savedId) imported.push(savedId);
+          const result = await saveImportedInvoice(auth.admin, invoice, clients);
+          if (!result) continue;
+          if (result.status === "imported") imported.push(result.id);
+          if (result.status === "skipped_existing") skippedExisting += 1;
         } catch (error) {
           failed.push({
             wfirmaId: stringify(invoice.id),
@@ -130,6 +133,7 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({
     imported: imported.length,
+    skippedExisting,
     failed,
     dateFrom: range.dateFrom,
     dateTo: range.dateTo,
@@ -199,22 +203,29 @@ async function saveImportedInvoice(
     wfirma_sync_error: null,
   };
 
-  const { data: existing } = await admin
+  const { data: existingByWfirmaId } = await admin
     .from("faktury")
     .select("id")
     .eq("wfirma_id", wfirmaId)
     .maybeSingle();
 
-  const result = existing?.id
-    ? await admin.from("faktury").update(payload).eq("id", existing.id).select("id").single()
-    : await admin.from("faktury").insert(payload).select("id").single();
+  const existingByNumber = existingByWfirmaId
+    ? null
+    : await findExistingInvoiceByNumber(admin, payload.numer);
+  const existing = existingByWfirmaId || existingByNumber;
+
+  if (existing?.id) {
+    return { status: "skipped_existing" as const, id: existing.id as string };
+  }
+
+  const result = await admin.from("faktury").insert(payload).select("id").single();
 
   if (result.error || !result.data?.id) {
     throw new Error(result.error?.message || "Nie udało się zapisać faktury z wFirmy.");
   }
 
   await replaceInvoiceLines(admin, result.data.id, extractWfirmaInvoiceLines(invoice));
-  return result.data.id as string;
+  return { status: "imported" as const, id: result.data.id as string };
 }
 
 function resolveContractorInfo(invoice: WfirmaInvoice, clients: ClientMatch[]): ContractorInfo {
@@ -321,6 +332,18 @@ async function replaceInvoiceLines(
 
 function normalizeNip(value: unknown) {
   return typeof value === "string" ? value.replace(/\D/g, "") : "";
+}
+
+async function findExistingInvoiceByNumber(admin: SupabaseClient, number: unknown) {
+  const normalizedNumber = stringify(number);
+  if (!normalizedNumber) return null;
+
+  const { data } = await admin
+    .from("faktury")
+    .select("id")
+    .eq("numer", normalizedNumber)
+    .maybeSingle();
+  return data || null;
 }
 
 function stringify(value: unknown) {

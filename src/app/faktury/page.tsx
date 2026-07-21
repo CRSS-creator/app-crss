@@ -324,7 +324,7 @@ function InvoicesContent() {
     }
 
     await loadData();
-    alert(`Zaimportowano lub zaktualizowano faktury za ${formatMonth(monthToDate(invoiceMonth))}: ${result.data?.imported || 0}.`);
+    alert(`Zaimportowano nowe faktury za ${formatMonth(monthToDate(invoiceMonth))}: ${result.data?.imported || 0}. Pominięto już istniejące: ${result.data?.skippedExisting || 0}.`);
   }
 
   async function changeInvoiceCategory(invoice: Invoice, category: InvoiceCategory) {

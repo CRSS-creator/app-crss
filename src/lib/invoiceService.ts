@@ -204,6 +204,7 @@ export async function queueInvoicesForWfirma(invoiceIds: string[]) {
 export async function importWfirmaInvoices(month: string) {
   return callWfirmaEndpoint<{
     imported: number;
+    skippedExisting: number;
     failed: { wfirmaId: string | null; error: string }[];
     dateFrom: string;
     dateTo: string;

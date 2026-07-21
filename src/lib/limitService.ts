@@ -56,7 +56,7 @@ export async function addClientToLimit(clientId: string, type: LimitType) {
       klient_id: clientId,
       typ: type,
       limit_roczny: DEFAULT_ANNUAL_LIMITS[type],
-      status_zwolnienia: type === "wnt" || type === "maly_podatnik_cit" ? null : "podmiotowe",
+      status_zwolnienia: type === "vat" ? "podmiotowe" : null,
       created_by: userId,
       updated_by: userId,
     })

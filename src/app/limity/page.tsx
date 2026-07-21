@@ -714,7 +714,7 @@ function emptyRegisterText(type: LimitType) {
 }
 
 function hasExemptionStatus(type: LimitType) {
-  return type === "vat" || type === "kasa_fiskalna";
+  return type === "vat";
 }
 
 function caregiverLabel(client: Client | null) {

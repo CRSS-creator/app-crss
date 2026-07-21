@@ -96,6 +96,7 @@ type A1Totals = {
 type ZusPreferenceDateField = "zus_preferencja_start" | "zus_preferencja_koniec";
 type ZusSmallPlusField = "zus_maly_plus_spelnia_warunki" | "zus_maly_plus_skladka_spoleczna";
 type ZusContributionDraft = { amount: string; notes: string };
+type ZusSchemeField = "schemat_zus";
 
 const PAYROLL_TABS: PayrollTabDefinition[] = [
   { value: "kadry", label: "Kadry" },
@@ -112,6 +113,16 @@ const CONTRACT_TYPE_OPTIONS: { value: PayrollContractType; label: string }[] = [
 const FULL_ZUS_SCHEME = "Pełny ZUS";
 const PREFERENTIAL_ZUS_SCHEME = "Preferencyjny ZUS";
 const ZUS_CONTRIBUTION_BASE_SCHEMES = [FULL_ZUS_SCHEME, PREFERENTIAL_ZUS_SCHEME];
+const ZUS_SCHEME_OPTIONS = [
+  { value: "Duży ZUS", label: "Duży ZUS" },
+  { value: "Pełny ZUS", label: "Pełny ZUS" },
+  { value: "Preferencyjny ZUS", label: "Preferencyjny ZUS" },
+  { value: "Mały ZUS Plus", label: "Mały ZUS Plus" },
+  { value: "Ulga na start", label: "Ulga na start" },
+  { value: "Brak ZUS", label: "Brak ZUS" },
+  { value: "Tylko zdrowotna", label: "Tylko zdrowotna" },
+  { value: "Inny", label: "Inny" },
+];
 
 export default function PayrollPage() {
   return (
@@ -304,6 +315,38 @@ function PayrollContent() {
     }
   }
 
+  async function handleZusSchemeChange(clientId: string, field: ZusSchemeField, value: string) {
+    const previousClient = clients.find((client) => client.id === clientId) || null;
+    const isFullZus = isFullZusScheme(value);
+    const patch: Record<string, unknown> = {
+      [field]: value || null,
+      ...(isFullZus
+        ? {
+          zus_preferencja_start: null,
+          zus_preferencja_koniec: null,
+          zus_maly_plus_spelnia_warunki: false,
+          zus_maly_plus_skladka_spoleczna: null,
+        }
+        : {}),
+    };
+
+    setClients((current) => current.map((client) => client.id === clientId ? { ...client, ...patch } : client));
+
+    const result = await updateClient(clientId, patch);
+    if (result.error) {
+      if (previousClient) {
+        setClients((current) => current.map((client) => client.id === clientId ? previousClient : client));
+      }
+      console.error("Błąd zapisu schematu ZUS:", result.error);
+      alert("Nie udało się zapisać schematu ZUS.");
+      return;
+    }
+
+    if (result.data) {
+      setClients((current) => current.map((client) => client.id === clientId ? { ...client, ...(result.data as PayrollClient) } : client));
+    }
+  }
+
   function toggleZusClientSelection(clientId: string, checked: boolean) {
     setSelectedZusClientIds((current) => checked
       ? Array.from(new Set([...current, clientId]))
@@ -468,6 +511,7 @@ function PayrollContent() {
             latestNotificationByClient={latestZusNotificationByClient}
             selectedClientIds={selectedZusClientIds}
             onDateChange={handleZusPreferenceDateChange}
+            onSchemeChange={handleZusSchemeChange}
             onSmallPlusChange={handleZusSmallPlusChange}
             onToggleClient={toggleZusClientSelection}
             onToggleAllVisible={toggleAllVisibleZusClients}
@@ -614,6 +658,7 @@ function ZusEntrepreneursTable({
   latestNotificationByClient,
   selectedClientIds,
   onDateChange,
+  onSchemeChange,
   onSmallPlusChange,
   onToggleClient,
   onToggleAllVisible,
@@ -623,6 +668,7 @@ function ZusEntrepreneursTable({
   latestNotificationByClient: Record<string, ZusPreferenceNotificationHistory>;
   selectedClientIds: string[];
   onDateChange: (clientId: string, field: ZusPreferenceDateField, value: string) => void;
+  onSchemeChange: (clientId: string, field: ZusSchemeField, value: string) => void;
   onSmallPlusChange: (clientId: string, field: ZusSmallPlusField, value: boolean | string) => void;
   onToggleClient: (clientId: string, checked: boolean) => void;
   onToggleAllVisible: (checked: boolean) => void;
@@ -648,8 +694,7 @@ function ZusEntrepreneursTable({
               />
             </Th>
             <Th>Klient</Th>
-            <Th align="center">Opiekun</Th>
-            <Th align="center">Rodzaj preferencji</Th>
+            <Th>Schemat ZUS</Th>
             <Th align="center">Data rozpoczęcia</Th>
             <Th align="center">Data końca</Th>
             <Th align="center"><span style={wrappedHeaderTextStyle}>Spełnia warunki do Mały ZUS Plus</span></Th>
@@ -674,10 +719,16 @@ function ZusEntrepreneursTable({
                 </Td>
                 <Td>
                   <strong style={clientNameStyle}>{client.nazwa || "Klient bez nazwy"}</strong>
-                  <span style={clientMetaStyle}>{client.nip || "Brak NIP"}</span>
+                  <span style={clientMetaStyle}>{client.nip || "Brak NIP"} · {caregiverLabel(client)}</span>
                 </Td>
-                <Td align="center">{caregiverLabel(client)}</Td>
-                <Td align="center"><strong>{client.schemat_zus || "-"}</strong></Td>
+                <Td>
+                  <AppSelect
+                    value={client.schemat_zus || ""}
+                    onChange={(value) => onSchemeChange(client.id, "schemat_zus", value)}
+                    options={ZUS_SCHEME_OPTIONS}
+                    style={zusSchemeSelectStyle}
+                  />
+                </Td>
                 <Td align="center">
                   {isFullZus ? (
                     <span style={emptySmallPlusAmountStyle}>-</span>
@@ -1998,7 +2049,7 @@ const emptyInlineStyle: CSSProperties = { margin: 0, color: colors.muted, fontWe
 const tableWrapStyle: CSSProperties = { width: "100%", overflowX: "auto" };
 const tableStyle: CSSProperties = { width: "100%", minWidth: "980px", borderCollapse: "collapse" };
 const a1RegisterTableStyle: CSSProperties = { ...tableStyle, minWidth: "1120px" };
-const zusEntrepreneursTableStyle: CSSProperties = { ...tableStyle, minWidth: "1460px" };
+const zusEntrepreneursTableStyle: CSSProperties = { ...tableStyle, minWidth: "1360px" };
 const detailsTableStyle: CSSProperties = { width: "100%", minWidth: "1240px", borderCollapse: "collapse" };
 const a1MonthlyTableStyle: CSSProperties = { width: "100%", minWidth: "760px", borderCollapse: "collapse" };
 const a1MonthlyScrollStyle: CSSProperties = { width: "100%", maxHeight: "min(48vh, 520px)", overflow: "auto" };
@@ -2046,6 +2097,7 @@ const formActionsStyle: CSSProperties = { display: "flex", justifyContent: "flex
 const fieldStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "8px" };
 const fieldLabelStyle: CSSProperties = { color: colors.muted, fontSize: "12px", fontWeight: 850, textTransform: "uppercase" };
 const inputStyle: CSSProperties = { minHeight: "42px", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.text, padding: "0 12px", fontSize: "14px", fontWeight: 750 };
+const zusSchemeSelectStyle: CSSProperties = { ...inputStyle, width: "190px", minHeight: "38px", fontSize: "13px", fontWeight: 850 };
 const smallPlusAmountInputStyle: CSSProperties = { ...inputStyle, width: "128px", maxWidth: "100%", minHeight: "38px", textAlign: "center", fontSize: "13px", fontWeight: 800 };
 const zusContributionYearStyle: CSSProperties = { ...fieldStyle, maxWidth: "180px" };
 const yearInputStyle: CSSProperties = { ...inputStyle, width: "100%" };

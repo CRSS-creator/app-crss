@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { CalendarDays, Check, ChevronLeft, ChevronRight, Plus, Save, X } from "lucide-react";
+import { CalendarDays, Check, ChevronLeft, ChevronRight, Plus, Save, Send, X } from "lucide-react";
 import AccessGuard from "@/components/AccessGuard";
 import AppLayout from "@/components/AppLayout";
 import AppSelect from "@/components/AppSelect";
@@ -28,8 +28,11 @@ import {
 } from "@/lib/payrollA1Service";
 import { fetchPayrollNotificationsForClient, type AppNotification } from "@/lib/notificationService";
 import {
+  fetchZusPreferenceNotificationHistory,
   fetchZusContributionRates,
+  sendZusPreferenceClientNotifications,
   upsertZusContributionRate,
+  type ZusPreferenceNotificationHistory,
   type ZusContributionRate,
 } from "@/lib/zusContributionRatesService";
 
@@ -119,23 +122,27 @@ function PayrollContent() {
   const [contracts, setContracts] = useState<PayrollContract[]>([]);
   const [a1Records, setA1Records] = useState<PayrollA1Record[]>([]);
   const [a1MonthlyRevenues, setA1MonthlyRevenues] = useState<PayrollA1MonthlyRevenue[]>([]);
+  const [zusPreferenceNotificationHistory, setZusPreferenceNotificationHistory] = useState<ZusPreferenceNotificationHistory[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [a1AddSearch, setA1AddSearch] = useState("");
   const [a1ClientToAdd, setA1ClientToAdd] = useState("");
+  const [selectedZusClientIds, setSelectedZusClientIds] = useState<string[]>([]);
   const [showA1AddForm, setShowA1AddForm] = useState(false);
   const [showZusContributionsModal, setShowZusContributionsModal] = useState(false);
+  const [sendingZusNotifications, setSendingZusNotifications] = useState(false);
   const [selectedClient, setSelectedClient] = useState<PayrollClient | null>(null);
   const [selectedA1RecordId, setSelectedA1RecordId] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadData() {
       setLoading(true);
-      const [clientsResult, contractsResult, a1Result, a1MonthlyResult] = await Promise.all([
+      const [clientsResult, contractsResult, a1Result, a1MonthlyResult, zusNotificationHistoryResult] = await Promise.all([
         fetchClients(),
         fetchPayrollContracts(),
         fetchPayrollA1Records(),
         fetchPayrollA1MonthlyRevenues(),
+        fetchZusPreferenceNotificationHistory(),
       ]);
 
       if (clientsResult.error) {
@@ -166,6 +173,13 @@ function PayrollContent() {
         setA1MonthlyRevenues((a1MonthlyResult.data || []) as PayrollA1MonthlyRevenue[]);
       }
 
+      if (zusNotificationHistoryResult.error) {
+        console.error("Błąd pobierania historii powiadomień ZUS:", zusNotificationHistoryResult.error);
+        setZusPreferenceNotificationHistory([]);
+      } else {
+        setZusPreferenceNotificationHistory((zusNotificationHistoryResult.data || []) as ZusPreferenceNotificationHistory[]);
+      }
+
       setLoading(false);
     }
 
@@ -193,6 +207,10 @@ function PayrollContent() {
   const zusEntrepreneurClients = useMemo(() => clients.filter(isZusPreferenceJdgClient), [clients]);
   const zusContributionSchemes = useMemo(() => zusContributionSchemeOptions(clients), [clients]);
   const filteredZusEntrepreneurClients = useMemo(() => filterClients(zusEntrepreneurClients, searchTerm), [zusEntrepreneurClients, searchTerm]);
+  const latestZusNotificationByClient = useMemo(
+    () => latestZusPreferenceNotificationByClient(zusPreferenceNotificationHistory),
+    [zusPreferenceNotificationHistory]
+  );
   const selectedContracts = selectedClient ? contractsByClient[selectedClient.id] || [] : [];
   const tab = PAYROLL_TABS.find((item) => item.value === activeTab) || PAYROLL_TABS[0];
 
@@ -247,6 +265,43 @@ function PayrollContent() {
     }
   }
 
+  function toggleZusClientSelection(clientId: string, checked: boolean) {
+    setSelectedZusClientIds((current) => checked
+      ? Array.from(new Set([...current, clientId]))
+      : current.filter((id) => id !== clientId)
+    );
+  }
+
+  function toggleAllVisibleZusClients(checked: boolean) {
+    const visibleIds = filteredZusEntrepreneurClients.map((client) => client.id);
+    setSelectedZusClientIds((current) => {
+      if (checked) return Array.from(new Set([...current, ...visibleIds]));
+      return current.filter((id) => !visibleIds.includes(id));
+    });
+  }
+
+  async function handleSendZusPreferenceNotifications() {
+    const visibleIdSet = new Set(filteredZusEntrepreneurClients.map((client) => client.id));
+    const selectedVisibleIds = selectedZusClientIds.filter((id) => visibleIdSet.has(id));
+    if (selectedVisibleIds.length === 0) {
+      alert("Zaznacz przynajmniej jednego klienta.");
+      return;
+    }
+
+    setSendingZusNotifications(true);
+    const result = await sendZusPreferenceClientNotifications(selectedVisibleIds);
+    setSendingZusNotifications(false);
+
+    if (result.error) {
+      alert(result.error.message);
+      return;
+    }
+
+    const historyRows = (result.data?.history || []) as ZusPreferenceNotificationHistory[];
+    setZusPreferenceNotificationHistory((current) => [...historyRows, ...current]);
+    setSelectedZusClientIds((current) => current.filter((id) => !visibleIdSet.has(id)));
+  }
+
   return (
     <div style={pageStyle}>
       <header style={headerStyle}>
@@ -281,9 +336,14 @@ function PayrollContent() {
             </button>
           )}
           {activeTab === "zus_przedsiebiorcy" && (
-            <button type="button" onClick={() => setShowZusContributionsModal(true)} style={secondaryButtonStyle}>
-              <CalendarDays size={18} /> Wysokość składek
-            </button>
+            <div style={headerActionsStyle}>
+              <button type="button" onClick={() => void handleSendZusPreferenceNotifications()} disabled={sendingZusNotifications || selectedZusClientIds.length === 0} style={primaryButtonStyle}>
+                <Send size={18} /> {sendingZusNotifications ? "Wysyłanie..." : "Wyślij powiadomienie"}
+              </button>
+              <button type="button" onClick={() => setShowZusContributionsModal(true)} style={secondaryButtonStyle}>
+                <CalendarDays size={18} /> Wysokość składek
+              </button>
+            </div>
           )}
         </div>
 
@@ -363,7 +423,15 @@ function PayrollContent() {
             onDetails={(recordId) => setSelectedA1RecordId(recordId)}
           />
         ) : (
-          <ZusEntrepreneursTable clients={filteredZusEntrepreneurClients} loading={loading} onDateChange={handleZusPreferenceDateChange} />
+          <ZusEntrepreneursTable
+            clients={filteredZusEntrepreneurClients}
+            loading={loading}
+            latestNotificationByClient={latestZusNotificationByClient}
+            selectedClientIds={selectedZusClientIds}
+            onDateChange={handleZusPreferenceDateChange}
+            onToggleClient={toggleZusClientSelection}
+            onToggleAllVisible={toggleAllVisibleZusClients}
+          />
         )}
       </section>
 
@@ -503,55 +571,102 @@ function A1Table({
 function ZusEntrepreneursTable({
   clients,
   loading,
+  latestNotificationByClient,
+  selectedClientIds,
   onDateChange,
+  onToggleClient,
+  onToggleAllVisible,
 }: {
   clients: PayrollClient[];
   loading: boolean;
+  latestNotificationByClient: Record<string, ZusPreferenceNotificationHistory>;
+  selectedClientIds: string[];
   onDateChange: (clientId: string, field: ZusPreferenceDateField, value: string) => void;
+  onToggleClient: (clientId: string, checked: boolean) => void;
+  onToggleAllVisible: (checked: boolean) => void;
 }) {
   if (loading) return <p style={emptyStyle}>Ładowanie przedsiębiorców ZUS...</p>;
   if (clients.length === 0) return <p style={emptyStyle}>Brak JDG ze schematem ZUS innym niż pełny ZUS.</p>;
+
+  const selectedSet = new Set(selectedClientIds);
+  const allVisibleSelected = clients.length > 0 && clients.every((client) => selectedSet.has(client.id));
 
   return (
     <div style={tableWrapStyle}>
       <table style={zusEntrepreneursTableStyle}>
         <thead>
           <tr>
+            <Th align="center">
+              <input
+                aria-label="Zaznacz wszystkich widocznych klientów ZUS"
+                type="checkbox"
+                checked={allVisibleSelected}
+                onChange={(event) => onToggleAllVisible(event.target.checked)}
+                style={checkboxStyle}
+              />
+            </Th>
             <Th align="center">Klient</Th>
             <Th align="center">Opiekun</Th>
             <Th align="center">Rodzaj preferencji</Th>
             <Th align="center">Data rozpoczęcia</Th>
             <Th align="center">Data końca</Th>
+            <Th align="center">Powiadomienie</Th>
           </tr>
         </thead>
         <tbody>
-          {clients.map((client) => (
-            <tr key={client.id}>
-              <Td align="center">
-                <strong style={clientNameStyle}>{client.nazwa || "Klient bez nazwy"}</strong>
-                <span style={clientMetaStyle}>{client.nip || "Brak NIP"}</span>
-              </Td>
-              <Td align="center">{caregiverLabel(client)}</Td>
-              <Td align="center"><strong>{client.schemat_zus || "-"}</strong></Td>
-              <Td align="center">
-                <InlineDateInput
-                  ariaLabel={`Data rozpoczęcia preferencji ZUS dla ${client.nazwa || "klienta"}`}
-                  value={client.zus_preferencja_start || ""}
-                  onChange={(value) => onDateChange(client.id, "zus_preferencja_start", value)}
-                />
-              </Td>
-              <Td align="center">
-                <InlineDateInput
-                  ariaLabel={`Data końca preferencji ZUS dla ${client.nazwa || "klienta"}`}
-                  value={client.zus_preferencja_koniec || ""}
-                  onChange={(value) => onDateChange(client.id, "zus_preferencja_koniec", value)}
-                />
-              </Td>
-            </tr>
-          ))}
+          {clients.map((client) => {
+            const latestNotification = latestNotificationByClient[client.id];
+            return (
+              <tr key={client.id}>
+                <Td align="center">
+                  <input
+                    aria-label={`Zaznacz klienta ${client.nazwa || "bez nazwy"}`}
+                    type="checkbox"
+                    checked={selectedSet.has(client.id)}
+                    onChange={(event) => onToggleClient(client.id, event.target.checked)}
+                    style={checkboxStyle}
+                  />
+                </Td>
+                <Td align="center">
+                  <strong style={clientNameStyle}>{client.nazwa || "Klient bez nazwy"}</strong>
+                  <span style={clientMetaStyle}>{client.nip || "Brak NIP"}</span>
+                </Td>
+                <Td align="center">{caregiverLabel(client)}</Td>
+                <Td align="center"><strong>{client.schemat_zus || "-"}</strong></Td>
+                <Td align="center">
+                  <InlineDateInput
+                    ariaLabel={`Data rozpoczęcia preferencji ZUS dla ${client.nazwa || "klienta"}`}
+                    value={client.zus_preferencja_start || ""}
+                    onChange={(value) => onDateChange(client.id, "zus_preferencja_start", value)}
+                  />
+                </Td>
+                <Td align="center">
+                  <InlineDateInput
+                    ariaLabel={`Data końca preferencji ZUS dla ${client.nazwa || "klienta"}`}
+                    value={client.zus_preferencja_koniec || ""}
+                    onChange={(value) => onDateChange(client.id, "zus_preferencja_koniec", value)}
+                  />
+                </Td>
+                <Td align="center">
+                  <ZusPreferenceNotificationStatus history={latestNotification} />
+                </Td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
+  );
+}
+
+function ZusPreferenceNotificationStatus({ history }: { history: ZusPreferenceNotificationHistory | undefined }) {
+  if (!history) return <span style={monthlyMissingStyle}>Nie wysłano</span>;
+
+  return (
+    <span style={zusNotificationStatusStyle}>
+      Wysłano {formatDateTime(history.created_at)}
+      <span style={zusNotificationMetaStyle}>przez {history.sent_by_name || history.sent_by_email || "nieustalonego użytkownika"}</span>
+    </span>
   );
 }
 
@@ -1409,6 +1524,16 @@ function zusContributionDraftsFromRates(schemes: string[], rates: ZusContributio
   return drafts;
 }
 
+function latestZusPreferenceNotificationByClient(history: ZusPreferenceNotificationHistory[]) {
+  return history.reduce<Record<string, ZusPreferenceNotificationHistory>>((acc, entry) => {
+    const current = acc[entry.klient_id];
+    if (!current || new Date(entry.created_at).getTime() > new Date(current.created_at).getTime()) {
+      acc[entry.klient_id] = entry;
+    }
+    return acc;
+  }, {});
+}
+
 function caregiverLabel(client: PayrollClient | null | undefined) {
   const profile = Array.isArray(client?.profiles) ? client.profiles[0] : client?.profiles;
   return profile?.full_name || profile?.email || "Brak opiekuna";
@@ -1584,6 +1709,7 @@ const tabStyle: CSSProperties = { minHeight: "42px", padding: "0 18px", borderRa
 const activeTabStyle: CSSProperties = { ...tabStyle, background: colors.navy, color: colors.white, borderColor: colors.navy };
 const cardStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.card, boxShadow: shadow.card, overflow: "hidden" };
 const sectionHeaderStyle: CSSProperties = { padding: "22px 24px", borderBottom: `1px solid ${colors.border}`, display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "flex-start" };
+const headerActionsStyle: CSSProperties = { display: "flex", gap: "10px", alignItems: "center", justifyContent: "flex-end", flexWrap: "wrap" };
 const sectionTitleStyle: CSSProperties = { margin: 0, fontSize: "22px", color: colors.navy };
 const sectionHintStyle: CSSProperties = { margin: "6px 0 0", color: colors.muted, fontSize: "14px" };
 const searchRowStyle: CSSProperties = { display: "flex", alignItems: "center", gap: "12px", padding: "18px 24px 18px" };
@@ -1603,7 +1729,7 @@ const emptyInlineStyle: CSSProperties = { margin: 0, color: colors.muted, fontWe
 const tableWrapStyle: CSSProperties = { width: "100%", overflowX: "auto" };
 const tableStyle: CSSProperties = { width: "100%", minWidth: "980px", borderCollapse: "collapse" };
 const a1RegisterTableStyle: CSSProperties = { ...tableStyle, minWidth: "1120px" };
-const zusEntrepreneursTableStyle: CSSProperties = { ...tableStyle, minWidth: "1040px" };
+const zusEntrepreneursTableStyle: CSSProperties = { ...tableStyle, minWidth: "1220px" };
 const detailsTableStyle: CSSProperties = { width: "100%", minWidth: "1240px", borderCollapse: "collapse" };
 const a1MonthlyTableStyle: CSSProperties = { width: "100%", minWidth: "760px", borderCollapse: "collapse" };
 const a1MonthlyScrollStyle: CSSProperties = { width: "100%", maxHeight: "min(48vh, 520px)", overflow: "auto" };
@@ -1619,6 +1745,9 @@ const a1OkBadgeStyle: CSSProperties = { ...yesBadgeStyle, minWidth: "64px" };
 const a1WarningBadgeStyle: CSSProperties = { ...a1OkBadgeStyle, background: "rgba(239, 68, 68, 0.12)", color: colors.red };
 const monthlyDoneStyle: CSSProperties = { display: "inline-flex", alignItems: "center", gap: "6px", minHeight: "30px", padding: "6px 10px", borderRadius: radius.badge, background: "rgba(22, 163, 74, 0.12)", color: colors.success, fontSize: "12px", fontWeight: 850 };
 const monthlyMissingStyle: CSSProperties = { display: "inline-flex", alignItems: "center", minHeight: "30px", padding: "6px 10px", borderRadius: radius.badge, background: "rgba(100, 116, 139, 0.12)", color: colors.muted, fontSize: "12px", fontWeight: 850 };
+const zusNotificationStatusStyle: CSSProperties = { display: "inline-flex", flexDirection: "column", alignItems: "center", gap: "2px", minHeight: "34px", padding: "6px 10px", borderRadius: radius.badge, background: "rgba(22, 163, 74, 0.12)", color: colors.success, fontSize: "12px", fontWeight: 850, lineHeight: 1.25 };
+const zusNotificationMetaStyle: CSSProperties = { color: colors.muted, fontSize: "11px", fontWeight: 750 };
+const checkboxStyle: CSSProperties = { width: "18px", height: "18px", accentColor: colors.navy, cursor: "pointer" };
 const detailsButtonStyle: CSSProperties = { minHeight: "38px", padding: "0 14px", borderRadius: radius.button, border: `1px solid ${colors.border}`, background: colors.white, color: colors.navy, fontWeight: 850, cursor: "pointer" };
 const modalOverlayStyle: CSSProperties = { position: "fixed", inset: 0, zIndex: 60, background: "rgba(15, 23, 42, 0.38)", display: "flex", justifyContent: "center", alignItems: "flex-start", padding: "28px", overflowY: "auto" };
 const wideModalStyle: CSSProperties = { width: "min(1380px, calc(100vw - 56px))", maxHeight: "calc(100vh - 56px)", borderRadius: radius.card, background: colors.white, border: `1px solid ${colors.border}`, boxShadow: "0 32px 90px rgba(15, 23, 42, 0.28)", overflow: "hidden", display: "flex", flexDirection: "column" };

@@ -154,11 +154,13 @@ function LegalEntityForm({ draft, setDraft, response }: FormProps) {
           <span>Adres głównego miejsca prowadzenia działalności taki sam jak adres siedziby</span>
         </label>
         {!legal.businessAddressSameAsRegistered ? <Field label="Adres głównego miejsca prowadzenia działalności"><input style={inputStyle} value={legal.businessAddress} onChange={(event) => update("businessAddress", event.target.value)} /></Field> : null}
+        <Field label="Adres oddziału w Polsce">
+          <input style={inputStyle} disabled={legal.polishBranchNotApplicable} value={legal.polishBranchAddress} onChange={(event) => update("polishBranchAddress", event.target.value)} />
+        </Field>
         <label style={confirmationStyle}>
           <input type="checkbox" checked={legal.polishBranchNotApplicable} onChange={(event) => update("polishBranchNotApplicable", event.target.checked)} />
-          <span>Adres oddziału w Polsce nie dotyczy</span>
+          <span>Nie dotyczy</span>
         </label>
-        {!legal.polishBranchNotApplicable ? <Field label="Adres oddziału w Polsce"><input style={inputStyle} value={legal.polishBranchAddress} onChange={(event) => update("polishBranchAddress", event.target.value)} /></Field> : null}
         <ReadOnlyField label="Główne kody PKD" value={registry.pkd} />
         <Field label="Przedmiot prowadzonej działalności" required><textarea style={textareaSmallStyle} value={legal.businessSubject} onChange={(event) => update("businessSubject", event.target.value)} /></Field>
         <Field label="Krótki opis modelu działalności" required><textarea style={textareaSmallStyle} value={legal.businessModel} onChange={(event) => update("businessModel", event.target.value)} /></Field>
@@ -559,14 +561,14 @@ const hintStyle: CSSProperties = { margin: 0, color: colors.muted, lineHeight: 1
 const gridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "12px" };
 const twoColumnStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "12px" };
 const questionsGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))", gap: "12px" };
-const fieldStyle: CSSProperties = { display: "grid", gap: "8px", color: colors.navy, fontWeight: 850 };
+const fieldStyle: CSSProperties = { display: "grid", gap: "8px", color: colors.navy, fontWeight: 700 };
 const inputStyle: CSSProperties = { minHeight: "44px", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.inputBackground, padding: "0 12px", color: colors.text, fontSize: "15px", outline: "none" };
 const textareaSmallStyle: CSSProperties = { ...inputStyle, minHeight: "92px", resize: "vertical", padding: "12px", lineHeight: 1.5 };
 const readOnlyFieldStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: "#f8fbff", padding: "12px", display: "grid", gap: "6px", minHeight: "64px" };
 const readOnlyLabelStyle: CSSProperties = { color: colors.muted, fontSize: "12px", fontWeight: 900, textTransform: "uppercase" };
-const readOnlyValueStyle: CSSProperties = { color: colors.text, fontSize: "14px", lineHeight: 1.4, overflowWrap: "anywhere" };
+const readOnlyValueStyle: CSSProperties = { color: colors.text, fontSize: "14px", lineHeight: 1.4, overflowWrap: "anywhere", fontWeight: 700 };
 const yesNoFieldStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.inputBackground, padding: "12px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "14px", flexWrap: "wrap" };
-const yesNoLabelStyle: CSSProperties = { color: colors.navy, fontWeight: 850, lineHeight: 1.4, flex: "1 1 360px" };
+const yesNoLabelStyle: CSSProperties = { color: colors.navy, fontWeight: 700, lineHeight: 1.4, flex: "1 1 360px" };
 const segmentedStyle: CSSProperties = { display: "inline-flex", border: `1px solid ${colors.border}`, borderRadius: radius.button, overflow: "hidden", background: colors.white };
 const segmentStyle: CSSProperties = { minWidth: "64px", minHeight: "36px", border: 0, background: colors.white, color: colors.navy, fontWeight: 900, cursor: "pointer" };
 const activeSegmentStyle: CSSProperties = { ...segmentStyle, background: colors.navy, color: colors.white };
@@ -576,7 +578,7 @@ const personCardHeaderStyle: CSSProperties = { display: "flex", alignItems: "cen
 const personTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "16px" };
 const removeButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.danger, fontWeight: 900, padding: "8px 12px", cursor: "pointer" };
 const secondaryButtonStyle: CSSProperties = { minHeight: "42px", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.navy, fontWeight: 900, padding: "0 14px", cursor: "pointer", justifySelf: "start" };
-const confirmationStyle: CSSProperties = { display: "flex", gap: "10px", alignItems: "flex-start", color: colors.text, lineHeight: 1.5, fontWeight: 750 };
+const confirmationStyle: CSSProperties = { display: "flex", gap: "10px", alignItems: "flex-start", color: colors.text, lineHeight: 1.5, fontWeight: 650 };
 const statementStyle: CSSProperties = { margin: 0, border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "12px", background: "#f8fbff", color: colors.text, lineHeight: 1.5 };
 const primaryButtonStyle: CSSProperties = { minHeight: "50px", border: 0, borderRadius: radius.button, background: colors.danger, color: colors.white, fontWeight: 900, fontSize: "16px", cursor: "pointer" };
 const disabledButtonStyle: CSSProperties = { ...primaryButtonStyle, opacity: 0.65, cursor: "not-allowed" };

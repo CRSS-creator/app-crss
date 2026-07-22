@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { resolveAmlInitialFormType } from "@/lib/amlInitialFormTypes";
 
 export const runtime = "nodejs";
 
@@ -20,6 +21,7 @@ type ClientWithCaregiver = {
   nip: string | null;
   email: string | null;
   osoba_kontaktowa: string | null;
+  forma_prawna: string | null;
   opiekun_id: string | null;
   profiles?: { full_name: string | null; email: string | null }[] | { full_name: string | null; email: string | null } | null;
 };
@@ -157,6 +159,7 @@ export async function POST(request: NextRequest) {
       nip,
       email,
       osoba_kontaktowa,
+      forma_prawna,
       opiekun_id,
       profiles!klienci_opiekun_id_fkey (
         full_name,
@@ -218,6 +221,7 @@ export async function POST(request: NextRequest) {
   if (webhookConfig.error) return webhookConfig.error;
 
   const caregiver = caregiverFromClient(clientRecord);
+  const formType = resolveAmlInitialFormType(clientRecord.forma_prawna);
 
   try {
     const response = await fetch(webhookConfig.webhookUrl, {
@@ -228,6 +232,8 @@ export async function POST(request: NextRequest) {
         clientId: clientRecord.id,
         clientName: clientRecord.nazwa,
         clientNip: clientRecord.nip,
+        clientLegalForm: clientRecord.forma_prawna,
+        formType,
         recipientEmail: clientRecord.email,
         recipientName: clientRecord.osoba_kontaktowa,
         subject: "Formularz wstępny AML do uzupełnienia",

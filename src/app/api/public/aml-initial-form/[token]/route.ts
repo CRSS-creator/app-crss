@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { buildAmlInitialFormPdf } from "@/lib/amlInitialFormPdf";
-import { validateAmlInitialFormData, type AmlInitialFormData } from "@/lib/amlInitialFormTypes";
+import { resolveAmlInitialFormType, validateAmlInitialFormData, type AmlInitialFormData } from "@/lib/amlInitialFormTypes";
 
 export const runtime = "nodejs";
 
@@ -17,6 +17,9 @@ type ClientRecord = {
   nip: string | null;
   email: string | null;
   opiekun_id: string | null;
+  telefon: string | null;
+  forma_prawna: string | null;
+  osoba_kontaktowa: string | null;
 };
 
 type FormRecord = {
@@ -63,7 +66,10 @@ async function getForm(token: string) {
         nazwa,
         nip,
         email,
-        opiekun_id
+        opiekun_id,
+        telefon,
+        forma_prawna,
+        osoba_kontaktowa
       )
     `)
     .eq("public_token", token)
@@ -90,14 +96,27 @@ export async function GET(_request: NextRequest, context: RouteContext) {
   const client = getClient(form);
   if (!client) return NextResponse.json({ status: "missing" }, { status: 404 });
 
+  const { data: register } = form.aml_rejestr_id
+    ? await result.admin!
+      .from("aml_rejestr_klientow")
+      .select("id, numer_regon, numer_krs, dane_rejestrowe, beneficjenci_rzeczywisci, kody_pkd")
+      .eq("id", form.aml_rejestr_id)
+      .maybeSingle()
+    : { data: null };
+
   return NextResponse.json({
     status: "active",
+    formType: resolveAmlInitialFormType(client.forma_prawna),
     client: {
       id: client.id,
       nazwa: client.nazwa,
       nip: client.nip,
       email: client.email,
+      telefon: client.telefon,
+      forma_prawna: client.forma_prawna,
+      osoba_kontaktowa: client.osoba_kontaktowa,
     },
+    register: register || null,
   });
 }
 

@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
   const subjects = buildPepSubjects(owners, String(client.nazwa || ""));
 
   if (subjects.length === 0) {
-    return NextResponse.json({ error: "Brak osób do sprawdzenia PEP OSINT. Najpierw pobierz beneficjentów z CRBR albo uzupełnij dane klienta." }, { status: 400 });
+    return NextResponse.json({ error: "Brak osób do sprawdzenia PEP OSINT. Najpierw pobierz beneficjentów z właściwego źródła albo uzupełnij formularz wstępny AML." }, { status: 400 });
   }
 
   const checkedAt = new Date().toISOString();

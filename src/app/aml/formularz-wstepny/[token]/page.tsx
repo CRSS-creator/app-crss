@@ -456,6 +456,9 @@ function buildInitialDraft(response: PublicAmlInitialFormResponse) {
   draft.individual.businessName = response.client?.nazwa || "";
   draft.individual.regon = registry.regon;
   draft.individual.businessAddress = registry.businessAddress || registry.registeredAddress;
+  if (formType === "individual") {
+    draft.individual.isOnlyBeneficialOwner = "tak";
+  }
   return draft;
 }
 

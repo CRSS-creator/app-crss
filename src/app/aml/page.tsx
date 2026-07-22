@@ -869,6 +869,8 @@ function RegistryDetails({
   const crbrCompany = crbrCompanies[0] || {};
   const pepOsint = asRecord(registry.pepOsint);
   const owners = Array.isArray(register?.beneficjenci_rzeczywisci) ? register.beneficjenci_rzeczywisci : [];
+  const ownersFromInitialForm = owners.some((owner) => String(asRecord(owner).source || "").toLowerCase().includes("formularz"));
+  const ownersHeading = ownersFromInitialForm ? "Beneficjenci rzeczywiści z formularza wstępnego" : "Beneficjenci rzeczywiści z CRBR";
   const pkdCodes = Array.isArray(register?.kody_pkd) ? register.kody_pkd : [];
 
   return (
@@ -888,12 +890,12 @@ function RegistryDetails({
             <Definition label="KRS" value={asText(identifiers.krs || register.numer_krs)} />
             <Definition label="Rejestr" value={asText(identifiers.rejestr)} />
             <Definition label="VAT" value={vat.statusVat ? `VAT ${String(vat.statusVat).toLowerCase()}` : "-"} />
-            <Definition label="Nazwa" value={asText(crbrCompany.nazwa)} />
-            <Definition label="Adres" value={asText(crbrCompany.adres)} />
+            <Definition label="Nazwa" value={asText(crbrCompany.nazwa || vat.nazwa)} />
+            <Definition label="Adres" value={asText(crbrCompany.adres || vat.adresDzialalnosci || vat.adresSiedziby)} />
             <Definition label="Forma" value={asText(crbrCompany.formaOrganizacyjna)} />
           </div>
           <div style={beneficialOwnersPanelStyle}>
-            <h4 style={registryTitleStyle}>Beneficjenci rzeczywiści z CRBR</h4>
+            <h4 style={registryTitleStyle}>{ownersHeading}</h4>
             {owners.length > 0 ? (
               <div style={beneficialOwnersListStyle}>
                 {owners.map((owner, index) => (
@@ -906,7 +908,7 @@ function RegistryDetails({
                 ))}
               </div>
             ) : (
-              <p style={emptySmallStyle}>Brak zapisanych beneficjentów z CRBR.</p>
+              <p style={emptySmallStyle}>Brak zapisanych beneficjentów rzeczywistych.</p>
             )}
           </div>
           <div style={registryPanelWideStyle}>

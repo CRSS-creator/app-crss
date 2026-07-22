@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { PDFDocument, PDFFont, PDFPage, rgb } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
+import { resolveAmlInitialFormType } from "@/lib/amlInitialFormTypes";
 
 export const runtime = "nodejs";
 
@@ -53,7 +54,7 @@ export async function POST(request: NextRequest) {
 
   const { data: client, error: clientError } = await auth.admin
     .from("klienci")
-    .select("id, nazwa, nip, status_klienta, czynny_vat, vat_ue")
+    .select("id, nazwa, nip, status_klienta, czynny_vat, vat_ue, forma_prawna")
     .eq("id", payload.clientId)
     .single();
 
@@ -68,6 +69,7 @@ export async function POST(request: NextRequest) {
 
   const register = await ensureAmlRegister(auth.admin, client.id);
   const checks: OfficialCheck[] = [];
+  const isIndividualForm = resolveAmlInitialFormType(client.forma_prawna) === "individual";
 
   const checksVat = Boolean(client.czynny_vat);
   const checksVies = Boolean(client.vat_ue);
@@ -99,15 +101,18 @@ export async function POST(request: NextRequest) {
     : skippedCheck("KRS", "Brak numeru KRS w danych z Białej Listy VAT i CEIDG. Dla JDG wpis KRS zwykle nie występuje.");
   checks.push(krsCheck);
 
-  const crbrCheck = await verifyCrbr(nip, krsNumber);
+  const crbrCheck = isIndividualForm
+    ? skippedCheck("CRBR", "CRBR nie dotyczy osób fizycznych ani JDG.")
+    : await verifyCrbr(nip, krsNumber);
   checks.push(crbrCheck);
 
   const sanctionsCheck = await verifySanctionsLists(client.nazwa || "", nip);
   checks.push(sanctionsCheck);
   const now = new Date();
   const pkdCodes = collectPkdCodes(ceidgCheck, krsCheck);
-  const beneficialOwners = extractCrbrBeneficialOwners(crbrCheck, now, krsCheck);
+  const beneficialOwners = isIndividualForm ? [] : extractCrbrBeneficialOwners(crbrCheck, now, krsCheck);
   const result = summarizeResult(checks);
+  const visibleSourceChecks = checks.filter((check) => !(isIndividualForm && check.source === "CRBR"));
   const registryDetails = buildRegistryDetails({
     nip,
     vatSubject,
@@ -150,7 +155,7 @@ export async function POST(request: NextRequest) {
       wykonana_by: auth.requesterId,
       status: "wykonana",
       wynik: result,
-      zrodla: checks.map((check) => ({ source: check.source, status: check.status, label: check.label })),
+      zrodla: visibleSourceChecks.map((check) => ({ source: check.source, status: check.status, label: check.label })),
       dane: { checks, dane_rejestrowe: registryDetails, beneficjenci_rzeczywisci: beneficialOwners, kody_pkd: pkdCodes },
       vat_status: checksVat ? (vatCheck.status === "ok" ? String(vatSubject?.statusVat || "sprawdzono") : vatCheck.status) : "potwierdzono_zwolnienie",
       vies_status: checksVies ? statusForSource(checks, "VIES") : "potwierdzono_brak_vat_ue",
@@ -171,25 +176,29 @@ export async function POST(request: NextRequest) {
   }
 
   const nextStatus = result === "pozytywna" ? "zweryfikowano_automatycznie" : "wymaga_analizy";
+  const registerUpdate: Record<string, unknown> = {
+    status: nextStatus,
+    ostatnia_weryfikacja_at: now.toISOString(),
+    ostatnia_weryfikacja_by: auth.requesterId,
+    ostatnia_weryfikacja_id: verification.id,
+    pep_status: "nie_sprawdzono",
+    sankcje_status: "do_dopiecia",
+    dane_rejestrowe: registryDetails,
+    numer_regon: regonNumber,
+    numer_krs: krsNumber || null,
+    gus_status: "nie_uzyto",
+    krs_status: statusForSource(checks, "KRS"),
+    crbr_status: statusForSource(checks, "CRBR"),
+    kody_pkd: pkdCodes,
+    updated_at: now.toISOString(),
+  };
+  if (!isIndividualForm) {
+    registerUpdate.beneficjenci_rzeczywisci = beneficialOwners;
+  }
+
   await auth.admin
     .from("aml_rejestr_klientow")
-    .update({
-      status: nextStatus,
-      ostatnia_weryfikacja_at: now.toISOString(),
-      ostatnia_weryfikacja_by: auth.requesterId,
-      ostatnia_weryfikacja_id: verification.id,
-      pep_status: "nie_sprawdzono",
-      sankcje_status: "do_dopiecia",
-      dane_rejestrowe: registryDetails,
-      beneficjenci_rzeczywisci: beneficialOwners,
-      numer_regon: regonNumber,
-      numer_krs: krsNumber || null,
-      gus_status: "nie_uzyto",
-      krs_status: statusForSource(checks, "KRS"),
-      crbr_status: statusForSource(checks, "CRBR"),
-      kody_pkd: pkdCodes,
-      updated_at: now.toISOString(),
-    })
+    .update(registerUpdate)
     .eq("id", register.id);
 
   await auth.admin.from("aml_historia").insert({
@@ -201,7 +210,7 @@ export async function POST(request: NextRequest) {
     zmiany: {
       status: nextStatus,
       wynik: result,
-      sources: checks.map((check) => ({ source: check.source, status: check.status, label: check.label })),
+      sources: visibleSourceChecks.map((check) => ({ source: check.source, status: check.status, label: check.label })),
       dane_rejestrowe: registryDetails,
       beneficjenci_rzeczywisci: beneficialOwners,
       kody_pkd: pkdCodes,
@@ -1115,6 +1124,7 @@ async function buildAmlReportPdf(input: {
   const ceidgCheck = input.checks.find((check) => check.source.includes("CEIDG"));
   const krsCheck = input.checks.find((check) => check.source.includes("KRS"));
   const crbrCheck = input.checks.find((check) => check.source.includes("CRBR"));
+  const crbrWasUsed = Boolean(crbrCheck && crbrCheck.status !== "skipped");
   const sanctionsCheck = input.checks.find((check) => check.source.includes("sankcyjne"));
   const crbrDetails = input.registryDetails.crbr && typeof input.registryDetails.crbr === "object"
     ? input.registryDetails.crbr as Record<string, unknown>
@@ -1130,7 +1140,7 @@ async function buildAmlReportPdf(input: {
     ["REGON", asPdfText(identifiers.regon)],
     ["KRS", asPdfText(identifiers.krs)],
     ["Rejestr", asPdfText(identifiers.rejestr || "Rejestr przedsiębiorców")],
-    ["Id wniosku", asPdfText(crbrMeta.identyfikatorWniosku || crbrDetails.identyfikatorZapytania)],
+    ...(crbrWasUsed ? [["Id wniosku", asPdfText(crbrMeta.identyfikatorWniosku || crbrDetails.identyfikatorZapytania)] as [string, string]] : []),
     ["Nazwa", asPdfText(crbrCompany.nazwa)],
     ["Adres", asPdfText(crbrCompany.adres)],
     ["Forma", asPdfText(crbrCompany.formaOrganizacyjna)],
@@ -1139,21 +1149,23 @@ async function buildAmlReportPdf(input: {
   drawInfoBox("Informacje o płatniku VAT", vatReportRows(vatData, vatCheck));
   drawReportSection("Rejestr VIES", [["VIES", viesCheck]]);
   drawReportSection("Wyniki weryfikacji na listach sankcyjnych", [["Listy sankcyjne", sanctionsCheck]]);
-  drawReportSection("Beneficjenci rzeczywiści", [["CRBR", crbrCheck]]);
-  drawInfoBox("Beneficjenci rzeczywiści", input.beneficialOwners.length > 0
-    ? input.beneficialOwners.slice(0, 8).map((owner, index) => [
-      `${index + 1}.`,
-      [
-        owner.label,
-        owner.pesel ? `PESEL: ${owner.pesel}` : null,
-        owner.liczbaUdzialow || owner.procentUdzialow || owner.wartoscUdzialow ? `udziały: ${[owner.liczbaUdzialow, owner.procentUdzialow, owner.wartoscUdzialow].filter(Boolean).join(" / ")}` : null,
-        owner.liczbaGlosow || owner.procentGlosow ? `głosy: ${[owner.liczbaGlosow, owner.procentGlosow].filter(Boolean).join(" / ")}` : null,
-        owner.obywatelstwo ? `obywatelstwo: ${owner.obywatelstwo}` : null,
-        owner.krajZamieszkania ? `kraj: ${owner.krajZamieszkania}` : null,
-      ].filter(Boolean).join(" | ") || "-"
-    ])
-    : [["-", "Brak zapisanych beneficjentów rzeczywistych z CRBR."]]
-  );
+  if (crbrWasUsed) {
+    drawReportSection("Beneficjenci rzeczywiści", [["CRBR", crbrCheck]]);
+    drawInfoBox("Beneficjenci rzeczywiści", input.beneficialOwners.length > 0
+      ? input.beneficialOwners.slice(0, 8).map((owner, index) => [
+        `${index + 1}.`,
+        [
+          owner.label,
+          owner.pesel ? `PESEL: ${owner.pesel}` : null,
+          owner.liczbaUdzialow || owner.procentUdzialow || owner.wartoscUdzialow ? `udziały: ${[owner.liczbaUdzialow, owner.procentUdzialow, owner.wartoscUdzialow].filter(Boolean).join(" / ")}` : null,
+          owner.liczbaGlosow || owner.procentGlosow ? `głosy: ${[owner.liczbaGlosow, owner.procentGlosow].filter(Boolean).join(" / ")}` : null,
+          owner.obywatelstwo ? `obywatelstwo: ${owner.obywatelstwo}` : null,
+          owner.krajZamieszkania ? `kraj: ${owner.krajZamieszkania}` : null,
+        ].filter(Boolean).join(" | ") || "-"
+      ])
+      : [["-", "Brak zapisanych beneficjentów rzeczywistych z CRBR."]]
+    );
+  }
   drawInfoBox("Kody PKD", input.pkdCodes.length > 0
     ? input.pkdCodes.slice(0, 12).map((pkd) => [
       pkd.kod,
@@ -1166,9 +1178,15 @@ async function buildAmlReportPdf(input: {
   drawText("Metryka raportu", 14, margin, navy, 60);
   drawText(`Raport pobrano i zapisano: ${input.createdAt.toLocaleString("pl-PL")}`, 9, margin, muted);
   drawText(`Użytkownik generujący: ${input.requesterName}`, 9, margin, muted);
-  const sourceSummary = ceidgCheck
-    ? "Źródła: CEIDG, Biała Lista VAT MF, VIES, KRS MS, CRBR MF i publiczna lista sankcyjna ONZ."
-    : "Źródła: Biała Lista VAT MF, VIES, KRS MS, CRBR MF i publiczna lista sankcyjna ONZ.";
+  const sources = [
+    ceidgCheck ? "CEIDG" : null,
+    "Biała Lista VAT MF",
+    "VIES",
+    krsCheck?.status !== "skipped" ? "KRS MS" : null,
+    crbrWasUsed ? "CRBR MF" : null,
+    "publiczna lista sankcyjna ONZ",
+  ].filter(Boolean);
+  const sourceSummary = `Źródła: ${sources.join(", ")}.`;
   drawText(sourceSummary, 9, margin, muted, 92);
 
   drawFooter(page, font);

@@ -220,9 +220,15 @@ async function saveInitialForm(request: NextRequest, context: RouteContext) {
     .eq("id", form.id);
 
   if (form.aml_rejestr_id) {
+    const registerUpdate: Record<string, unknown> = { status: "formularz_odebrany" };
+    if (resolveAmlInitialFormType(client.forma_prawna) === "individual") {
+      registerUpdate.beneficjenci_rzeczywisci = buildIndividualBeneficialOwnersFromForm(data, completedAt);
+      registerUpdate.updated_at = completedAt.toISOString();
+    }
+
     await admin
       .from("aml_rejestr_klientow")
-      .update({ status: "formularz_odebrany" })
+      .update(registerUpdate)
       .eq("id", form.aml_rejestr_id);
   }
 
@@ -300,4 +306,69 @@ function dateBefore(value: string) {
   const date = new Date(`${value.slice(0, 10)}T12:00:00.000Z`);
   date.setUTCDate(date.getUTCDate() - 1);
   return date.toISOString().slice(0, 10);
+}
+
+function buildIndividualBeneficialOwnersFromForm(data: AmlInitialFormData, completedAt: Date) {
+  const individual = data.individual;
+  const checkedAt = completedAt.toISOString();
+  const entrepreneur = {
+    source: "Formularz wstępny AML",
+    status: "pobrano_z_formularza",
+    label: individual.fullName || individual.businessName || "Przedsiębiorca",
+    pierwszeImie: null,
+    kolejneImiona: null,
+    nazwisko: null,
+    pesel: individual.peselOrBirthDate || null,
+    dataUrodzenia: null,
+    obywatelstwo: individual.citizenship || null,
+    krajZamieszkania: individual.residenceAddress || null,
+    adresZamieszkania: individual.residenceAddress || null,
+    dokumentTozsamosci: individual.identityDocument || null,
+    krajUrodzenia: individual.birthCountry || null,
+    rola: "Przedsiębiorca",
+    reprezentant: true,
+    udzialowiec: false,
+    procentUdzialow: null,
+    wartoscUdzialow: null,
+    liczbaGlosow: null,
+    procentGlosow: null,
+    udzialy: [],
+    pep: individualPepStatus(data),
+    checkedAt,
+  };
+
+  if (individual.isOnlyBeneficialOwner !== "nie") return [entrepreneur];
+
+  const additionalOwners = individual.beneficialOwners.map((owner) => ({
+    source: "Formularz wstępny AML",
+    status: "pobrano_z_formularza",
+    label: owner.fullName || "Beneficjent rzeczywisty",
+    pierwszeImie: null,
+    kolejneImiona: null,
+    nazwisko: null,
+    pesel: owner.peselOrBirthDate || null,
+    dataUrodzenia: null,
+    obywatelstwo: owner.citizenship || null,
+    krajZamieszkania: owner.residenceAddress || null,
+    adresZamieszkania: owner.residenceAddress || null,
+    krajUrodzenia: owner.birthCountry || null,
+    rola: owner.controlType || "Beneficjent rzeczywisty",
+    reprezentant: false,
+    udzialowiec: false,
+    procentUdzialow: null,
+    wartoscUdzialow: null,
+    liczbaGlosow: null,
+    procentGlosow: null,
+    udzialy: [],
+    pep: owner.pep,
+    checkedAt,
+  }));
+
+  return [entrepreneur, ...additionalOwners];
+}
+
+function individualPepStatus(data: AmlInitialFormData) {
+  return data.common.pepPublicFunction === "tak" || data.common.pepFamily === "tak" || data.common.pepAssociate === "tak"
+    ? "tak"
+    : "nie";
 }

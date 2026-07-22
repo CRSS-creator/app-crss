@@ -1146,9 +1146,6 @@ async function buildAmlReportPdf(input: {
       [
         owner.label,
         owner.pesel ? `PESEL: ${owner.pesel}` : null,
-        owner.rola ? `rola: ${owner.rola}` : null,
-        owner.udzialowiec !== null && owner.udzialowiec !== undefined ? `udziałowiec: ${owner.udzialowiec ? "TAK" : "NIE"}` : null,
-        owner.reprezentant !== null && owner.reprezentant !== undefined ? `reprezentant: ${owner.reprezentant ? "TAK" : "NIE"}` : null,
         owner.liczbaUdzialow || owner.procentUdzialow || owner.wartoscUdzialow ? `udziały: ${[owner.liczbaUdzialow, owner.procentUdzialow, owner.wartoscUdzialow].filter(Boolean).join(" / ")}` : null,
         owner.liczbaGlosow || owner.procentGlosow ? `głosy: ${[owner.liczbaGlosow, owner.procentGlosow].filter(Boolean).join(" / ")}` : null,
         owner.obywatelstwo ? `obywatelstwo: ${owner.obywatelstwo}` : null,

@@ -79,8 +79,8 @@ type BeneficialOwnerEditValues = {
 const AML_CHECKS: AmlCheck[] = [
   { key: "verification", label: "Weryfikacja AML" },
   { key: "initial_form", label: "Formularz wstępny" },
-  { key: "risk_assessment", label: "Ocena ryzyka" },
   { key: "identification_statement", label: "Oświadczenie o weryfikacji i identyfikacji klienta" },
+  { key: "risk_assessment", label: "Ocena ryzyka" },
 ];
 
 export default function AmlPage() {
@@ -333,8 +333,8 @@ function AmlContent() {
                   <Th>Opiekun</Th>
                   <Th>Weryfikacja AML</Th>
                   <Th>Formularz wstępny</Th>
-                  <Th>Ocena ryzyka</Th>
                   <WrappedTh>Oświadczenie o weryfikacji i identyfikacji klienta</WrappedTh>
+                  <Th>Ocena ryzyka</Th>
                   <Th>Następna weryfikacja</Th>
                   <Th>Szczegóły</Th>
                 </tr>
@@ -351,8 +351,8 @@ function AmlContent() {
                     <Td>{caregiverLabel(row.client)}</Td>
                     <StatusTd><StatusPill done={amlCheckStatus(row, "verification")} /></StatusTd>
                     <StatusTd><StatusPill done={amlCheckStatus(row, "initial_form")} /></StatusTd>
-                    <StatusTd><StatusPill done={amlCheckStatus(row, "risk_assessment")} /></StatusTd>
                     <StatusTd><StatusPill done={amlCheckStatus(row, "identification_statement")} /></StatusTd>
+                    <StatusTd><StatusPill done={amlCheckStatus(row, "risk_assessment")} /></StatusTd>
                     <Td>{formatDate(row.register?.nastepna_weryfikacja_at)}</Td>
                     <Td>
                       <button type="button" onClick={() => setSelectedClientId(row.client.id)} style={detailsButtonStyle}>

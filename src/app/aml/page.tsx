@@ -1131,8 +1131,8 @@ function beneficiarySharesLabel(owner: Record<string, unknown>) {
 
 function roleFromCheckboxes(representative: boolean, shareholder: boolean) {
   const roles = [
-    representative ? "reprezentant" : null,
-    shareholder ? "udziałowiec" : null,
+    representative ? "Reprezentant" : null,
+    shareholder ? "Udziałowiec" : null,
   ].filter(Boolean);
   return roles.join("; ");
 }

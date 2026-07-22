@@ -655,7 +655,6 @@ function RegistryDetails({
   const identifiers = asRecord(registry.identyfikatory);
   const vat = asRecord(registry.bialaListaVat);
   const crbr = asRecord(registry.crbr);
-  const crbrMeta = asRecord(crbr.requestMeta);
   const crbrCompanies = Array.isArray(crbr.companies) ? crbr.companies as Array<Record<string, unknown>> : [];
   const crbrCompany = crbrCompanies[0] || {};
   const pepOsint = asRecord(registry.pepOsint);
@@ -680,7 +679,6 @@ function RegistryDetails({
             <Definition label="KRS" value={asText(identifiers.krs || register.numer_krs)} />
             <Definition label="Rejestr" value={asText(identifiers.rejestr)} />
             <Definition label="VAT" value={vat.statusVat ? `VAT ${String(vat.statusVat).toLowerCase()}` : "-"} />
-            <Definition label="Id wniosku" value={asText(crbrMeta.identyfikatorWniosku || crbr.identyfikatorZapytania)} />
             <Definition label="Nazwa" value={asText(crbrCompany.nazwa)} />
             <Definition label="Adres" value={asText(crbrCompany.adres)} />
             <Definition label="Forma" value={asText(crbrCompany.formaOrganizacyjna)} />
@@ -787,16 +785,17 @@ function BeneficialOwnerCard({
   saving: boolean;
   onSave: (changes: BeneficialOwnerEditValues) => void;
 }) {
-  const [role, setRole] = useState(beneficiaryRoleLabel(owner) === "-" ? "" : beneficiaryRoleLabel(owner));
-  const [representative, setRepresentative] = useState(Boolean(owner.reprezentant));
-  const [shareholder, setShareholder] = useState(Boolean(owner.udzialowiec));
+  const ownerRole = beneficiaryRoleLabel(owner) === "-" ? "" : beneficiaryRoleLabel(owner);
+  const [representative, setRepresentative] = useState(isRepresentativeOwner(owner, ownerRole));
+  const [shareholder, setShareholder] = useState(isShareholderOwner(owner, ownerRole));
   const [sharePercent, setSharePercent] = useState(owner.procentUdzialow ? String(owner.procentUdzialow) : "");
   const [shareValue, setShareValue] = useState(owner.wartoscUdzialow ? String(owner.wartoscUdzialow) : "");
+  const selectedRole = roleFromCheckboxes(representative, shareholder);
 
   useEffect(() => {
-    setRole(beneficiaryRoleLabel(owner) === "-" ? "" : beneficiaryRoleLabel(owner));
-    setRepresentative(Boolean(owner.reprezentant));
-    setShareholder(Boolean(owner.udzialowiec));
+    const nextRole = beneficiaryRoleLabel(owner) === "-" ? "" : beneficiaryRoleLabel(owner);
+    setRepresentative(isRepresentativeOwner(owner, nextRole));
+    setShareholder(isShareholderOwner(owner, nextRole));
     setSharePercent(owner.procentUdzialow ? String(owner.procentUdzialow) : "");
     setShareValue(owner.wartoscUdzialow ? String(owner.wartoscUdzialow) : "");
   }, [owner]);
@@ -812,15 +811,10 @@ function BeneficialOwnerCard({
         <span>Kraj zamieszkania: {asText(owner.krajZamieszkania)}</span>
       </div>
       <div style={beneficialOwnerEditStyle}>
-        <label style={ownerFieldStyle}>
+        <div style={ownerFieldStyle}>
           <span style={ownerFieldLabelStyle}>Rola</span>
-          <input
-            value={role}
-            onChange={(event) => setRole(event.target.value)}
-            placeholder="np. beneficjent, reprezentant, udziałowiec"
-            style={ownerInputStyle}
-          />
-        </label>
+          <span style={ownerReadonlyValueStyle}>{selectedRole || "Zaznacz rolę poniżej"}</span>
+        </div>
         <div style={ownerToggleRowStyle}>
           <label style={ownerToggleStyle}>
             <input type="checkbox" checked={representative} onChange={(event) => setRepresentative(event.target.checked)} />
@@ -846,7 +840,7 @@ function BeneficialOwnerCard({
           style={ownerSaveButtonStyle}
           disabled={saving}
           onClick={() => onSave({
-            rola: role,
+            rola: selectedRole,
             reprezentant: representative,
             udzialowiec: shareholder,
             procentUdzialow: sharePercent || null,
@@ -933,6 +927,23 @@ function beneficiarySharesLabel(owner: Record<string, unknown>) {
     .map((share) => share.procentUdzialow ? formatPercentValue(share.procentUdzialow) : "")
     .filter(Boolean);
   return values.join(", ") || "Do uzupełnienia w formularzu";
+}
+
+function roleFromCheckboxes(representative: boolean, shareholder: boolean) {
+  const roles = [
+    representative ? "reprezentant" : null,
+    shareholder ? "udziałowiec" : null,
+  ].filter(Boolean);
+  return roles.join("; ");
+}
+
+function isRepresentativeOwner(owner: Record<string, unknown>, role: string) {
+  return Boolean(owner.reprezentant) || normalizeUiText(role).includes("reprezentant");
+}
+
+function isShareholderOwner(owner: Record<string, unknown>, role: string) {
+  const normalizedRole = normalizeUiText(role);
+  return Boolean(owner.udzialowiec) || normalizedRole.includes("udzialowiec") || normalizedRole.includes("wspolnik");
 }
 
 function pepOsintHistorySources(checkedSources: Array<Record<string, unknown>>, findings: Array<Record<string, unknown>>) {
@@ -1361,11 +1372,11 @@ const tabPanelStyle: CSSProperties = { minHeight: "54px", border: `1px solid ${c
 const tabPanelLabelStyle: CSSProperties = { color: colors.navy, fontSize: "14px", fontWeight: 850 };
 const tabContentPlaceholderStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.inputBackground, padding: "18px", display: "grid", gap: "8px" };
 const tabContentTitleStyle: CSSProperties = { color: colors.navy, fontSize: "16px" };
-const registryGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "12px", alignItems: "stretch" };
+const registryGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(360px, 0.9fr) minmax(560px, 1.5fr)", gap: "12px", alignItems: "stretch" };
 const registryPanelStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "16px", background: colors.inputBackground };
 const registryPanelWideStyle: CSSProperties = { ...registryPanelStyle, gridColumn: "1 / -1" };
 const beneficialOwnersPanelStyle: CSSProperties = { ...registryPanelStyle, minHeight: "180px" };
-const beneficialOwnersListStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "10px", alignItems: "stretch" };
+const beneficialOwnersListStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))", gap: "10px", alignItems: "stretch" };
 const beneficialOwnerItemStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, padding: "12px" };
 const beneficialOwnerNameStyle: CSSProperties = { display: "block", color: colors.navy, fontSize: "14px", lineHeight: 1.35 };
 const beneficialOwnerMetaStyle: CSSProperties = { display: "grid", gap: "5px", marginTop: "8px", color: colors.muted, fontSize: "12px", fontWeight: 750, lineHeight: 1.35 };
@@ -1374,6 +1385,7 @@ const ownerEditGridStyle: CSSProperties = { display: "grid", gridTemplateColumns
 const ownerFieldStyle: CSSProperties = { display: "grid", gap: "5px" };
 const ownerFieldLabelStyle: CSSProperties = { color: colors.muted, fontSize: "11px", fontWeight: 850, textTransform: "uppercase" };
 const ownerInputStyle: CSSProperties = { minHeight: "38px", width: "100%", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.inputBackground, color: colors.text, fontSize: "13px", fontWeight: 750, outline: "none", padding: "0 10px" };
+const ownerReadonlyValueStyle: CSSProperties = { minHeight: "38px", display: "flex", alignItems: "center", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.inputBackground, color: colors.text, fontSize: "13px", fontWeight: 850, padding: "0 10px" };
 const ownerToggleRowStyle: CSSProperties = { display: "flex", flexWrap: "wrap", gap: "8px" };
 const ownerToggleStyle: CSSProperties = { minHeight: "34px", display: "inline-flex", alignItems: "center", gap: "7px", border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "0 10px", background: colors.inputBackground, color: colors.navy, fontSize: "12px", fontWeight: 850 };
 const ownerSaveButtonStyle: CSSProperties = { minHeight: "38px", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.navy, color: colors.white, fontWeight: 850, cursor: "pointer" };

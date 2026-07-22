@@ -376,29 +376,34 @@ function CommonRiskSection({ draft, setDraft }: { draft: AmlInitialFormData; set
   const common = draft.common;
   const update = <K extends keyof typeof common>(key: K, value: (typeof common)[K]) => setDraft((current) => ({ ...current, common: { ...current.common, [key]: value } }));
   const updateActivity = (key: string, value: YesNoValue) => update("highAttentionActivities", { ...common.highAttentionActivities, [key]: value });
+  const subjectLabel = draft.formType === "individual" ? "przedsiębiorcy" : "podmiotu";
+  const subjectQuestionLabel = draft.formType === "individual" ? "przedsiębiorca" : "podmiot";
+  const pepPersonsLabel = draft.formType === "individual"
+    ? "przedsiębiorca, osoba upoważniona lub beneficjent rzeczywisty"
+    : "reprezentant, osoba upoważniona lub beneficjent rzeczywisty";
 
   return (
     <>
       <section style={sectionStyle}>
-        <h2 style={sectionTitleStyle}>Charakter działalności podmiotu</h2>
-        <YesNoField label="Czy podmiot prowadzi działalność wyłącznie w Polsce?" value={common.onlyPoland} onChange={(value) => update("onlyPoland", value)} />
-        <YesNoField label="Czy podmiot prowadzi działalność w innych państwach UE lub EOG?" value={common.activityEuEea} onChange={(value) => update("activityEuEea", value)} />
-        <YesNoField label="Czy podmiot prowadzi działalność poza UE lub EOG?" value={common.activityOutsideEuEea} onChange={(value) => update("activityOutsideEuEea", value)} />
+        <h2 style={sectionTitleStyle}>Charakter działalności {subjectLabel}</h2>
+        <YesNoField label={`Czy ${subjectQuestionLabel} prowadzi działalność wyłącznie w Polsce?`} value={common.onlyPoland} onChange={(value) => update("onlyPoland", value)} />
+        <YesNoField label={`Czy ${subjectQuestionLabel} prowadzi działalność w innych państwach UE lub EOG?`} value={common.activityEuEea} onChange={(value) => update("activityEuEea", value)} />
+        <YesNoField label={`Czy ${subjectQuestionLabel} prowadzi działalność poza UE lub EOG?`} value={common.activityOutsideEuEea} onChange={(value) => update("activityOutsideEuEea", value)} />
         {(common.activityEuEea === "tak" || common.activityOutsideEuEea === "tak") ? <Field label="Państwa działalności"><input style={inputStyle} value={common.activityCountries} onChange={(event) => update("activityCountries", event.target.value)} /></Field> : null}
         <div style={questionsStackStyle}>
-          <YesNoField label="Czy podmiot dokonuje importu towarów lub usług?" value={common.imports} onChange={(value) => update("imports", value)} />
-          <YesNoField label="Czy podmiot dokonuje eksportu towarów lub usług?" value={common.exports} onChange={(value) => update("exports", value)} />
-          <YesNoField label="Czy podmiot dokonuje istotnych transakcji gotówkowych?" value={common.significantCashTransactions} onChange={(value) => update("significantCashTransactions", value)} />
-          <YesNoField label="Czy podmiot korzysta z walut obcych w istotnym zakresie?" value={common.foreignCurrencies} onChange={(value) => update("foreignCurrencies", value)} />
-          <YesNoField label="Czy podmiot korzysta z rachunków bankowych poza Polską?" value={common.foreignBankAccounts} onChange={(value) => update("foreignBankAccounts", value)} />
-          <YesNoField label="Czy podmiot korzysta z pośredników płatniczych lub rozwiązań utrudniających identyfikację stron?" value={common.paymentIntermediaries} onChange={(value) => update("paymentIntermediaries", value)} />
+          <YesNoField label={`Czy ${subjectQuestionLabel} dokonuje importu towarów lub usług?`} value={common.imports} onChange={(value) => update("imports", value)} />
+          <YesNoField label={`Czy ${subjectQuestionLabel} dokonuje eksportu towarów lub usług?`} value={common.exports} onChange={(value) => update("exports", value)} />
+          <YesNoField label={`Czy ${subjectQuestionLabel} dokonuje istotnych transakcji gotówkowych?`} value={common.significantCashTransactions} onChange={(value) => update("significantCashTransactions", value)} />
+          <YesNoField label={`Czy ${subjectQuestionLabel} korzysta z walut obcych w istotnym zakresie?`} value={common.foreignCurrencies} onChange={(value) => update("foreignCurrencies", value)} />
+          <YesNoField label={`Czy ${subjectQuestionLabel} korzysta z rachunków bankowych poza Polską?`} value={common.foreignBankAccounts} onChange={(value) => update("foreignBankAccounts", value)} />
+          <YesNoField label={`Czy ${subjectQuestionLabel} korzysta z pośredników płatniczych lub rozwiązań utrudniających identyfikację stron?`} value={common.paymentIntermediaries} onChange={(value) => update("paymentIntermediaries", value)} />
         </div>
         {common.paymentIntermediaries === "tak" ? <Field label="Opis pośredników lub rozwiązań płatniczych"><textarea style={textareaSmallStyle} value={common.paymentIntermediariesDescription} onChange={(event) => update("paymentIntermediariesDescription", event.target.value)} /></Field> : null}
       </section>
 
       <section style={sectionStyle}>
         <h2 style={sectionTitleStyle}>Branże i działalności wymagające zwiększonej uwagi</h2>
-        <p style={sectionQuestionStyle}>Czy podmiot działa w niżej wymienionych branżach?</p>
+        <p style={sectionQuestionStyle}>Czy {subjectQuestionLabel} działa w niżej wymienionych branżach?</p>
         <div style={questionsStackStyle}>
           {HIGH_ATTENTION_ACTIVITY_LABELS.map((item) => <YesNoField key={item.key} label={item.label} value={common.highAttentionActivities[item.key] || ""} onChange={(value) => updateActivity(item.key, value)} />)}
         </div>
@@ -408,11 +413,11 @@ function CommonRiskSection({ draft, setDraft }: { draft: AmlInitialFormData; set
       <section style={sectionStyle}>
         <h2 style={sectionTitleStyle}>Obszary geograficzne i status PEP</h2>
         <HighRiskCountriesNotice />
-        <YesNoField label="Czy podmiot, beneficjent, kontrahent lub istotny element działalności jest powiązany z państwem wysokiego ryzyka, sankcyjnym lub o podwyższonym poziomie korupcji?" value={common.geographicRisk} onChange={(value) => update("geographicRisk", value)} />
+        <YesNoField label={`Czy ${subjectQuestionLabel}, beneficjent, kontrahent lub istotny element działalności jest powiązany z państwem wysokiego ryzyka, sankcyjnym lub o podwyższonym poziomie korupcji?`} value={common.geographicRisk} onChange={(value) => update("geographicRisk", value)} />
         {common.geographicRisk === "tak" ? <Field label="Państwo oraz charakter powiązania"><textarea style={textareaSmallStyle} value={common.geographicRiskCountries} onChange={(event) => update("geographicRiskCountries", event.target.value)} /></Field> : null}
-        <YesNoField label="Czy reprezentant, osoba upoważniona lub beneficjent rzeczywisty jest osobą zajmującą eksponowane stanowisko polityczne?" value={common.pepPublicFunction} onChange={(value) => update("pepPublicFunction", value)} />
-        <YesNoField label="Czy reprezentant, osoba upoważniona lub beneficjent rzeczywisty jest członkiem rodziny osoby zajmującej eksponowane stanowisko polityczne?" value={common.pepFamily} onChange={(value) => update("pepFamily", value)} />
-        <YesNoField label="Czy reprezentant, osoba upoważniona lub beneficjent rzeczywisty jest osobą znaną jako bliski współpracownik osoby zajmującej eksponowane stanowisko polityczne?" value={common.pepAssociate} onChange={(value) => update("pepAssociate", value)} />
+        <YesNoField label={`Czy ${pepPersonsLabel} jest osobą zajmującą eksponowane stanowisko polityczne?`} value={common.pepPublicFunction} onChange={(value) => update("pepPublicFunction", value)} />
+        <YesNoField label={`Czy ${pepPersonsLabel} jest członkiem rodziny osoby zajmującej eksponowane stanowisko polityczne?`} value={common.pepFamily} onChange={(value) => update("pepFamily", value)} />
+        <YesNoField label={`Czy ${pepPersonsLabel} jest osobą znaną jako bliski współpracownik osoby zajmującej eksponowane stanowisko polityczne?`} value={common.pepAssociate} onChange={(value) => update("pepAssociate", value)} />
         {(common.pepPublicFunction === "tak" || common.pepFamily === "tak" || common.pepAssociate === "tak") ? <Field label="Osoba, funkcja lub relacja oraz państwo powiązane ze statusem PEP"><textarea style={textareaSmallStyle} value={common.pepDetails} onChange={(event) => update("pepDetails", event.target.value)} /></Field> : null}
       </section>
     </>

@@ -330,15 +330,15 @@ function BeneficialOwnersSection({ owners, onChange }: { owners: AmlBeneficialOw
             <Field label="Wielkość udziału w kapitale (zł)">
               <input style={inputStyle} disabled={owner.capitalShareNotApplicable} value={owner.capitalShare} onChange={(event) => onChange(updateAt(owners, index, { ...owner, capitalShare: event.target.value }))} />
             </Field>
-            <CheckLine checked={owner.capitalShareNotApplicable} onChange={(checked) => onChange(updateAt(owners, index, { ...owner, capitalShareNotApplicable: checked }))}>Nie dotyczy udziału w kapitale</CheckLine>
+            <CheckLine checked={owner.capitalShareNotApplicable} onChange={(checked) => onChange(updateAt(owners, index, { ...owner, capitalShareNotApplicable: checked }))}>Nie dotyczy</CheckLine>
             <Field label="Liczba albo procent głosów">
               <input style={inputStyle} disabled={owner.votesNotApplicable} value={owner.votes} onChange={(event) => onChange(updateAt(owners, index, { ...owner, votes: event.target.value }))} />
             </Field>
-            <CheckLine checked={owner.votesNotApplicable} onChange={(checked) => onChange(updateAt(owners, index, { ...owner, votesNotApplicable: checked }))}>Nie dotyczy głosów</CheckLine>
+            <CheckLine checked={owner.votesNotApplicable} onChange={(checked) => onChange(updateAt(owners, index, { ...owner, votesNotApplicable: checked }))}>Nie dotyczy</CheckLine>
             <Field label="Inny sposób sprawowania kontroli">
               <input style={inputStyle} disabled={owner.otherControlNotApplicable} value={owner.otherControl} onChange={(event) => onChange(updateAt(owners, index, { ...owner, otherControl: event.target.value }))} />
             </Field>
-            <CheckLine checked={owner.otherControlNotApplicable} onChange={(checked) => onChange(updateAt(owners, index, { ...owner, otherControlNotApplicable: checked }))}>Nie dotyczy innego sposobu kontroli</CheckLine>
+            <CheckLine checked={owner.otherControlNotApplicable} onChange={(checked) => onChange(updateAt(owners, index, { ...owner, otherControlNotApplicable: checked }))}>Nie dotyczy</CheckLine>
             <YesNoField label="Czy beneficjent jest PEP, członkiem rodziny PEP albo bliskim współpracownikiem PEP?" value={owner.pep} onChange={(value) => onChange(updateAt(owners, index, { ...owner, pep: value }))} />
           </PersonCard>
         )}

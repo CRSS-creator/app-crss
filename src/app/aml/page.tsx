@@ -869,7 +869,7 @@ function RegistryDetails({
             <h4 style={registryTitleStyle}>PEP OSINT</h4>
             {Object.keys(pepOsint).length > 0 ? (
               <div style={pepOsintContentStyle}>
-                <Definition label="Status" value={pepOsintStatusLabel(asText(pepOsint.status))} />
+                <PepOsintStatusDefinition status={asText(pepOsint.status)} />
                 <Definition label="Data" value={formatDateTime(asText(pepOsint.checkedAt))} />
               </div>
             ) : (
@@ -1461,6 +1461,15 @@ function Definition({ label, value }: { label: string; value: string }) {
   );
 }
 
+function PepOsintStatusDefinition({ status }: { status: string }) {
+  return (
+    <div style={definitionStyle}>
+      <span style={definitionLabelStyle}>Status</span>
+      <strong style={pepOsintStatusValueStyle(status)}>{pepOsintStatusLabel(status)}</strong>
+    </div>
+  );
+}
+
 function Th({ children }: { children: React.ReactNode }) {
   return <th style={thStyle}>{children}</th>;
 }
@@ -1593,6 +1602,12 @@ const registryTitleStyle: CSSProperties = { margin: "0 0 12px", color: colors.na
 const definitionStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(86px, 0.42fr) minmax(0, 1fr)", gap: "10px", padding: "8px 0", borderTop: `1px solid ${colors.border}` };
 const definitionLabelStyle: CSSProperties = { color: colors.muted, fontSize: "12px", fontWeight: 850, textTransform: "uppercase" };
 const definitionValueStyle: CSSProperties = { color: colors.text, fontSize: "13px", lineHeight: 1.45, overflowWrap: "anywhere" };
+function pepOsintStatusValueStyle(status: string): CSSProperties {
+  if (status === "ok") return { ...definitionValueStyle, color: colors.success, fontWeight: 900 };
+  if (status === "warning") return { ...definitionValueStyle, color: "#9a5b00", fontWeight: 900 };
+  if (status === "error") return { ...definitionValueStyle, color: colors.danger, fontWeight: 900 };
+  return definitionValueStyle;
+}
 const pkdListStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "8px" };
 const pkdBadgeStyle: CSSProperties = { display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "4px", minHeight: "66px", padding: "10px 12px", borderRadius: radius.button, background: "rgba(23, 59, 115, 0.08)", color: colors.navy, fontSize: "12px", fontWeight: 850, lineHeight: 1.35 };
 const pkdCodeStyle: CSSProperties = { fontSize: "13px", color: colors.navy };

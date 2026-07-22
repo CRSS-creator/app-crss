@@ -91,7 +91,7 @@ export default function AmlInitialFormPage() {
           <div>
             <p style={eyebrowStyle}>Aplikacja CRSS</p>
             <h1 style={titleStyle}>Formularz wstępny AML</h1>
-            <p style={subtitleStyle}>{response.client.nazwa || "Klient"}{response.client.nip ? ` · NIP ${response.client.nip}` : ""}</p>
+            <p style={subtitleStyle}>{response.client.nazwa || "Podmiot"}{response.client.nip ? ` · NIP ${response.client.nip}` : ""}</p>
           </div>
           <span style={typeBadgeStyle}>Formularz {formLabel}</span>
         </div>
@@ -105,7 +105,7 @@ export default function AmlInitialFormPage() {
         <CommonRiskSection draft={draft} setDraft={setDraft} />
 
         <section style={sectionStyle}>
-          <h2 style={sectionTitleStyle}>Oświadczenia klienta</h2>
+          <h2 style={sectionTitleStyle}>Oświadczenia podmiotu</h2>
           <Statement>Osoba wypełniająca formularz oświadcza, że dane przekazane w formularzu są zgodne z jej wiedzą, prawdziwe i kompletne.</Statement>
           <Statement>Osoba wypełniająca formularz zobowiązuje się poinformować CRSS o zmianie danych przekazanych w formularzu, w szczególności o zmianie reprezentacji, beneficjenta rzeczywistego, struktury własności, statusu PEP, obszarów geograficznych działalności oraz charakteru działalności.</Statement>
           <Statement>Osoba wypełniająca formularz potwierdza, że została poinformowana, iż przekazanie danych jest niezbędne do wykonania przez CRSS obowiązków wynikających z przepisów AML/CFT.</Statement>
@@ -136,7 +136,7 @@ function LegalEntityForm({ draft, setDraft, response }: FormProps) {
   return (
     <>
       <section style={sectionStyle}>
-        <h2 style={sectionTitleStyle}>Dane klienta</h2>
+        <h2 style={sectionTitleStyle}>Dane podmiotu</h2>
         <div style={gridStyle}>
           <ReadOnlyField label="Nazwa" value={client?.nazwa} />
           <ReadOnlyField label="Forma prawna" value={client?.forma_prawna} />
@@ -147,7 +147,7 @@ function LegalEntityForm({ draft, setDraft, response }: FormProps) {
           <ReadOnlyField label="E-mail do kontaktu" value={client?.email} />
           <ReadOnlyField label="Telefon do kontaktu" value={client?.telefon} />
         </div>
-        <YesNoField label={`Czy ${client?.nazwa || "klient"} jest podmiotem zagranicznym?`} value={legal.foreignEntity} onChange={(value) => update("foreignEntity", value)} />
+        <YesNoField label={`Czy ${client?.nazwa || "podmiot"} jest podmiotem zagranicznym?`} value={legal.foreignEntity} onChange={(value) => update("foreignEntity", value)} />
         {legal.foreignEntity === "tak" ? <Field label="Kraj rejestracji, rejestr oraz numer rejestru"><textarea style={textareaSmallStyle} value={legal.foreignRegistration} onChange={(event) => update("foreignRegistration", event.target.value)} /></Field> : null}
         <label style={confirmationStyle}>
           <input type="checkbox" checked={legal.businessAddressSameAsRegistered} onChange={(event) => update("businessAddressSameAsRegistered", event.target.checked)} />
@@ -168,7 +168,7 @@ function LegalEntityForm({ draft, setDraft, response }: FormProps) {
 
       <PeopleSection
         title="Osoby reprezentujące podmiot"
-        hint="Wskaż osoby uprawnione do działania w imieniu klienta zgodnie z rejestrem, umową, statutem, pełnomocnictwem albo innym dokumentem."
+        hint="Wskaż osoby uprawnione do działania w imieniu podmiotu zgodnie z rejestrem, umową, statutem, pełnomocnictwem albo innym dokumentem."
         people={legal.representatives}
         onChange={(people) => update("representatives", people)}
       />
@@ -201,7 +201,7 @@ function LegalEntityForm({ draft, setDraft, response }: FormProps) {
 
       <section style={sectionStyle}>
         <h2 style={sectionTitleStyle}>Struktura własności i kontroli</h2>
-        <YesNoField label="Czy klient posiada wspólników, udziałowców jako osoby fizyczne albo akcjonariuszy będących osobami prawnymi albo innymi jednostkami organizacyjnymi?" value={legal.hasShareholders} onChange={(value) => update("hasShareholders", value)} />
+        <YesNoField label="Czy podmiot posiada wspólników, udziałowców jako osoby fizyczne albo akcjonariuszy będących osobami prawnymi albo innymi jednostkami organizacyjnymi?" value={legal.hasShareholders} onChange={(value) => update("hasShareholders", value)} />
         <Field label="Opis struktury własności do poziomu osób fizycznych sprawujących kontrolę"><textarea style={textareaSmallStyle} value={legal.ownershipStructure} onChange={(event) => update("ownershipStructure", event.target.value)} /></Field>
         <YesNoField label="Czy struktura własności obejmuje podmioty zagraniczne?" value={legal.hasForeignOwnershipEntities} onChange={(value) => update("hasForeignOwnershipEntities", value)} />
         {legal.hasForeignOwnershipEntities === "tak" ? <Field label="Państwa rejestracji podmiotów zagranicznych"><input style={inputStyle} value={legal.foreignOwnershipCountries} onChange={(event) => update("foreignOwnershipCountries", event.target.value)} /></Field> : null}
@@ -221,7 +221,7 @@ function IndividualForm({ draft, setDraft, response }: FormProps) {
   return (
     <>
       <section style={sectionStyle}>
-        <h2 style={sectionTitleStyle}>Dane klienta</h2>
+        <h2 style={sectionTitleStyle}>Dane podmiotu</h2>
         <div style={gridStyle}>
           <Field label="Imię i nazwisko" required><input style={inputStyle} value={individual.fullName} onChange={(event) => update("fullName", event.target.value)} /></Field>
           <Field label="Obywatelstwo"><input style={inputStyle} value={individual.citizenship} onChange={(event) => update("citizenship", event.target.value)} /></Field>
@@ -243,7 +243,7 @@ function IndividualForm({ draft, setDraft, response }: FormProps) {
 
       <section style={sectionStyle}>
         <h2 style={sectionTitleStyle}>Osoby upoważnione do działania albo kontaktu</h2>
-        <YesNoField label="Czy klient ustanowił osobę upoważnioną do działania w jego imieniu albo do kontaktu z CRSS?" value={individual.hasAuthorizedPersons} onChange={(value) => update("hasAuthorizedPersons", value)} />
+        <YesNoField label="Czy podmiot ustanowił osobę upoważnioną do działania w jego imieniu albo do kontaktu z CRSS?" value={individual.hasAuthorizedPersons} onChange={(value) => update("hasAuthorizedPersons", value)} />
         {individual.hasAuthorizedPersons === "tak" ? (
           <Repeater
             items={individual.authorizedPersons}
@@ -264,7 +264,7 @@ function IndividualForm({ draft, setDraft, response }: FormProps) {
 
       <section style={sectionStyle}>
         <h2 style={sectionTitleStyle}>Beneficjent rzeczywisty</h2>
-        <YesNoField label="Czy klient jest jedyną osobą fizyczną sprawującą bezpośrednio albo pośrednio kontrolę nad prowadzoną działalnością?" value={individual.isOnlyBeneficialOwner} onChange={(value) => update("isOnlyBeneficialOwner", value)} />
+        <YesNoField label="Czy podmiot jest jedyną osobą fizyczną sprawującą bezpośrednio albo pośrednio kontrolę nad prowadzoną działalnością?" value={individual.isOnlyBeneficialOwner} onChange={(value) => update("isOnlyBeneficialOwner", value)} />
         {individual.isOnlyBeneficialOwner === "nie" ? (
           <Repeater
             items={individual.beneficialOwners}
@@ -355,10 +355,10 @@ function CommonRiskSection({ draft, setDraft }: { draft: AmlInitialFormData; set
   return (
     <>
       <section style={sectionStyle}>
-        <h2 style={sectionTitleStyle}>Charakter działalności klienta</h2>
-        <YesNoField label="Czy klient prowadzi działalność wyłącznie w Polsce?" value={common.onlyPoland} onChange={(value) => update("onlyPoland", value)} />
-        <YesNoField label="Czy klient prowadzi działalność w innych państwach UE albo EOG?" value={common.activityEuEea} onChange={(value) => update("activityEuEea", value)} />
-        <YesNoField label="Czy klient prowadzi działalność poza UE albo EOG?" value={common.activityOutsideEuEea} onChange={(value) => update("activityOutsideEuEea", value)} />
+        <h2 style={sectionTitleStyle}>Charakter działalności podmiotu</h2>
+        <YesNoField label="Czy podmiot prowadzi działalność wyłącznie w Polsce?" value={common.onlyPoland} onChange={(value) => update("onlyPoland", value)} />
+        <YesNoField label="Czy podmiot prowadzi działalność w innych państwach UE albo EOG?" value={common.activityEuEea} onChange={(value) => update("activityEuEea", value)} />
+        <YesNoField label="Czy podmiot prowadzi działalność poza UE albo EOG?" value={common.activityOutsideEuEea} onChange={(value) => update("activityOutsideEuEea", value)} />
         {(common.activityEuEea === "tak" || common.activityOutsideEuEea === "tak") ? <Field label="Państwa działalności"><input style={inputStyle} value={common.activityCountries} onChange={(event) => update("activityCountries", event.target.value)} /></Field> : null}
         <div style={twoColumnStyle}>
           <YesNoField label="Import towarów albo usług" value={common.imports} onChange={(value) => update("imports", value)} />
@@ -381,9 +381,9 @@ function CommonRiskSection({ draft, setDraft }: { draft: AmlInitialFormData; set
 
       <section style={sectionStyle}>
         <h2 style={sectionTitleStyle}>Obszary geograficzne i status PEP</h2>
-        <YesNoField label="Czy klient, beneficjent, kontrahent albo istotny element działalności jest powiązany z państwem wysokiego ryzyka, sankcyjnym albo o podwyższonym poziomie korupcji?" value={common.geographicRisk} onChange={(value) => update("geographicRisk", value)} />
+        <YesNoField label="Czy podmiot, beneficjent, kontrahent albo istotny element działalności jest powiązany z państwem wysokiego ryzyka, sankcyjnym albo o podwyższonym poziomie korupcji?" value={common.geographicRisk} onChange={(value) => update("geographicRisk", value)} />
         {common.geographicRisk === "tak" ? <Field label="Państwo oraz charakter powiązania"><textarea style={textareaSmallStyle} value={common.geographicRiskCountries} onChange={(event) => update("geographicRiskCountries", event.target.value)} /></Field> : null}
-        <YesNoField label="Czy klient, reprezentant, osoba upoważniona albo beneficjent rzeczywisty jest osobą zajmującą eksponowane stanowisko polityczne?" value={common.pepPublicFunction} onChange={(value) => update("pepPublicFunction", value)} />
+        <YesNoField label="Czy podmiot, reprezentant, osoba upoważniona albo beneficjent rzeczywisty jest osobą zajmującą eksponowane stanowisko polityczne?" value={common.pepPublicFunction} onChange={(value) => update("pepPublicFunction", value)} />
         <YesNoField label="Czy jest członkiem rodziny osoby zajmującej eksponowane stanowisko polityczne?" value={common.pepFamily} onChange={(value) => update("pepFamily", value)} />
         <YesNoField label="Czy jest osobą znaną jako bliski współpracownik osoby zajmującej eksponowane stanowisko polityczne?" value={common.pepAssociate} onChange={(value) => update("pepAssociate", value)} />
         {(common.pepPublicFunction === "tak" || common.pepFamily === "tak" || common.pepAssociate === "tak") ? <Field label="Osoba, funkcja albo relacja oraz państwo powiązane ze statusem PEP"><textarea style={textareaSmallStyle} value={common.pepDetails} onChange={(event) => update("pepDetails", event.target.value)} /></Field> : null}
@@ -566,7 +566,7 @@ const beneficialOwnerLabels = {
   peselOrBirthDate: "PESEL albo data urodzenia",
   birthCountry: "Państwo urodzenia",
   residenceCountry: "Kraj zamieszkania",
-  controlType: "Rodzaj kontroli sprawowanej nad klientem",
+  controlType: "Rodzaj kontroli sprawowanej nad podmiotem",
 };
 
 const individualAuthorizedLabels = {
@@ -600,7 +600,7 @@ const subtitleStyle: CSSProperties = { margin: "8px 0 0", color: colors.muted, l
 const typeBadgeStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.badge, padding: "10px 14px", color: colors.navy, background: colors.inputBackground, fontWeight: 850 };
 const sectionStyle: CSSProperties = { borderTop: `1px solid ${colors.border}`, paddingTop: "20px", display: "grid", gap: "16px" };
 const sectionTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "20px" };
-const hintStyle: CSSProperties = { margin: 0, color: colors.muted, lineHeight: 1.5, fontWeight: 700 };
+const hintStyle: CSSProperties = { margin: 0, color: colors.muted, lineHeight: 1.5, fontWeight: 400 };
 const gridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "12px" };
 const twoColumnStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "12px" };
 const questionsGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))", gap: "12px" };

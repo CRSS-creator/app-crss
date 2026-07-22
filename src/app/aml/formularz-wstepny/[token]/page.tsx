@@ -172,7 +172,7 @@ function LegalEntityForm({ draft, setDraft, response }: FormProps) {
 
       <PeopleSection
         title="Osoby reprezentujące podmiot"
-        hint="Wskaż osoby uprawnione do działania w imieniu podmiotu zgodnie z rejestrem, umową, statutem, pełnomocnictwem lub innym dokumentem."
+        hint="Poniższe osoby reprezentujące podmiot zostały &quot;zaimportowane&quot; z Centralnego Rejestru Beneficjentów Rzeczywistych."
         people={legal.representatives}
         onChange={(people) => update("representatives", people)}
       />
@@ -292,7 +292,7 @@ function IndividualForm({ draft, setDraft, response }: FormProps) {
 function PeopleSection({ title, hint, people, onChange }: { title: string; hint: string; people: AmlPersonEntry[]; onChange: (people: AmlPersonEntry[]) => void }) {
   return (
     <section style={sectionStyle}>
-      <h2 style={sectionTitleStyle}>{title}</h2>
+      <h2 style={strongSectionTitleStyle}>{title}</h2>
       <p style={hintStyle}>{hint}</p>
       <Repeater
         items={people}

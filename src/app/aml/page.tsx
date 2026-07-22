@@ -470,6 +470,8 @@ function AmlDetailsModal({
           </button>
         </div>
 
+        {activeTab === "verification" ? (
+          <>
         <div style={modalActionsStyle}>
           <button type="button" onClick={onVerify} disabled={verifying} style={primaryButtonStyle}>
             <FileSearch size={18} />
@@ -499,6 +501,8 @@ function AmlDetailsModal({
           <InfoBox label="Wykonał" value={profileLabel(row.register?.ostatnia_weryfikacja_by, profilesById)} />
           <InfoBox label="Następna weryfikacja" value={formatDate(row.register?.nastepna_weryfikacja_at)} />
         </div>
+          </>
+        ) : null}
 
         <AmlTabContent
           activeTab={activeTab}

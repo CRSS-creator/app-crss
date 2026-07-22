@@ -379,13 +379,13 @@ function CommonRiskSection({ draft, setDraft }: { draft: AmlInitialFormData; set
         <YesNoField label="Czy podmiot prowadzi działalność w innych państwach UE lub EOG?" value={common.activityEuEea} onChange={(value) => update("activityEuEea", value)} />
         <YesNoField label="Czy podmiot prowadzi działalność poza UE lub EOG?" value={common.activityOutsideEuEea} onChange={(value) => update("activityOutsideEuEea", value)} />
         {(common.activityEuEea === "tak" || common.activityOutsideEuEea === "tak") ? <Field label="Państwa działalności"><input style={inputStyle} value={common.activityCountries} onChange={(event) => update("activityCountries", event.target.value)} /></Field> : null}
-        <div style={twoColumnStyle}>
-          <YesNoField label="Import towarów lub usług" value={common.imports} onChange={(value) => update("imports", value)} />
-          <YesNoField label="Eksport towarów lub usług" value={common.exports} onChange={(value) => update("exports", value)} />
-          <YesNoField label="Istotne transakcje gotówkowe" value={common.significantCashTransactions} onChange={(value) => update("significantCashTransactions", value)} />
-          <YesNoField label="Waluty obce w istotnym zakresie" value={common.foreignCurrencies} onChange={(value) => update("foreignCurrencies", value)} />
-          <YesNoField label="Rachunki bankowe poza Polską" value={common.foreignBankAccounts} onChange={(value) => update("foreignBankAccounts", value)} />
-          <YesNoField label="Pośrednicy płatniczy lub rozwiązania utrudniające identyfikację stron" value={common.paymentIntermediaries} onChange={(value) => update("paymentIntermediaries", value)} />
+        <div style={questionsStackStyle}>
+          <YesNoField label="Czy podmiot dokonuje importu towarów lub usług?" value={common.imports} onChange={(value) => update("imports", value)} />
+          <YesNoField label="Czy podmiot dokonuje eksportu towarów lub usług?" value={common.exports} onChange={(value) => update("exports", value)} />
+          <YesNoField label="Czy podmiot dokonuje istotnych transakcji gotówkowych?" value={common.significantCashTransactions} onChange={(value) => update("significantCashTransactions", value)} />
+          <YesNoField label="Czy podmiot korzysta z walut obcych w istotnym zakresie?" value={common.foreignCurrencies} onChange={(value) => update("foreignCurrencies", value)} />
+          <YesNoField label="Czy podmiot korzysta z rachunków bankowych poza Polską?" value={common.foreignBankAccounts} onChange={(value) => update("foreignBankAccounts", value)} />
+          <YesNoField label="Czy podmiot korzysta z pośredników płatniczych lub rozwiązań utrudniających identyfikację stron?" value={common.paymentIntermediaries} onChange={(value) => update("paymentIntermediaries", value)} />
         </div>
         {common.paymentIntermediaries === "tak" ? <Field label="Opis pośredników lub rozwiązań płatniczych"><textarea style={textareaSmallStyle} value={common.paymentIntermediariesDescription} onChange={(event) => update("paymentIntermediariesDescription", event.target.value)} /></Field> : null}
       </section>
@@ -635,11 +635,12 @@ const titleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "30
 const subtitleStyle: CSSProperties = { margin: "8px 0 0", color: colors.muted, lineHeight: 1.5 };
 const typeBadgeStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.badge, padding: "10px 14px", color: colors.navy, background: colors.inputBackground, fontWeight: 850 };
 const sectionStyle: CSSProperties = { borderTop: `1px solid ${colors.border}`, paddingTop: "20px", display: "grid", gap: "16px" };
-const sectionTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "20px" };
+const sectionTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "20px", fontWeight: 900 };
 const strongSectionTitleStyle: CSSProperties = { ...sectionTitleStyle, fontWeight: 900 };
 const hintStyle: CSSProperties = { margin: 0, color: colors.muted, lineHeight: 1.5, fontWeight: 400 };
 const gridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "12px" };
 const twoColumnStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "12px" };
+const questionsStackStyle: CSSProperties = { display: "grid", gap: "12px" };
 const questionsGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))", gap: "12px" };
 const fieldStyle: CSSProperties = { display: "grid", gap: "8px", color: colors.navy, fontWeight: 700 };
 const inputStyle: CSSProperties = { minHeight: "44px", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, padding: "0 12px", color: colors.text, fontSize: "15px", outline: "none" };

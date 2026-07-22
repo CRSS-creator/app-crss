@@ -48,3 +48,7 @@ body > div [style*="position: fixed"][style*="z-index: 50"] aside p,
 body > div [style*="position: fixed"][style*="zIndex: 50"] aside p {
   font-weight: 500 !important;
 }
+
+section[data-active-page="uzytkownicy"] span[style*="text-transform: lowercase"] {
+  text-transform: none !important;
+}

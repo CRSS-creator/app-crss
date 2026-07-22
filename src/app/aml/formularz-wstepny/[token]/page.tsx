@@ -154,9 +154,11 @@ function LegalEntityForm({ draft, setDraft, response }: FormProps) {
           <span>Adres głównego miejsca prowadzenia działalności taki sam jak adres siedziby</span>
         </label>
         {!legal.businessAddressSameAsRegistered ? <Field label="Adres głównego miejsca prowadzenia działalności"><input style={inputStyle} value={legal.businessAddress} onChange={(event) => update("businessAddress", event.target.value)} /></Field> : null}
-        <Field label="Adres oddziału w Polsce">
-          <input style={inputStyle} disabled={legal.polishBranchNotApplicable} value={legal.polishBranchAddress} onChange={(event) => update("polishBranchAddress", event.target.value)} />
-        </Field>
+        {!legal.polishBranchNotApplicable ? (
+          <Field label="Adres oddziału w Polsce">
+            <input style={inputStyle} value={legal.polishBranchAddress} onChange={(event) => update("polishBranchAddress", event.target.value)} />
+          </Field>
+        ) : null}
         <label style={confirmationStyle}>
           <input type="checkbox" checked={legal.polishBranchNotApplicable} onChange={(event) => update("polishBranchNotApplicable", event.target.checked)} />
           <span>Nie dotyczy</span>

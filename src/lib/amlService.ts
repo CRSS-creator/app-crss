@@ -123,6 +123,38 @@ export async function updateNextAmlVerificationDate(clientId: string, nextVerifi
   return { data: body?.register || null, error: null };
 }
 
+export async function updateAmlBeneficialOwner(
+  clientId: string,
+  ownerIndex: number,
+  changes: {
+    rola: string;
+    reprezentant: boolean;
+    udzialowiec: boolean;
+    procentUdzialow: string | null;
+    wartoscUdzialow: string | null;
+  }
+) {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
+  if (!token) return { data: null, error: new Error("Brak aktywnej sesji u\u017cytkownika.") };
+
+  const response = await fetch("/api/aml/beneficial-owner", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ clientId, ownerIndex, changes }),
+  });
+
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    return { data: null, error: new Error(body?.error || "Nie uda\u0142o si\u0119 zapisa\u0107 danych beneficjenta rzeczywistego.") };
+  }
+
+  return { data: body?.register || null, error: null };
+}
+
 export async function uploadArchivedAmlReport(clientId: string, file: File) {
   const { data: sessionData } = await supabase.auth.getSession();
   const token = sessionData.session?.access_token;

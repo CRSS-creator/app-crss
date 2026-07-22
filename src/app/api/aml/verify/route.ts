@@ -1124,31 +1124,22 @@ async function buildAmlReportPdf(input: {
     : {};
   const crbrCompanies = Array.isArray(crbrDetails.companies) ? crbrDetails.companies as Array<Record<string, unknown>> : [];
   const crbrCompany = crbrCompanies[0] || {};
-  const crbrRepresentatives: Array<Record<string, unknown>> = crbrCompanies.flatMap((company) => {
-    const representatives = Array.isArray(company.reprezentanci) ? company.reprezentanci as Array<Record<string, unknown>> : [];
-    return representatives.map((representative) => ({ ...representative, spolka: company.nazwa || null }));
-  });
 
   drawInfoBox("Identyfikatory", [
     ["NIP", asPdfText(identifiers.nip || input.nip)],
     ["REGON", asPdfText(identifiers.regon)],
     ["KRS", asPdfText(identifiers.krs)],
     ["Rejestr", asPdfText(identifiers.rejestr || "Rejestr przedsiębiorców")],
+    ["Id wniosku", asPdfText(crbrMeta.identyfikatorWniosku || crbrDetails.identyfikatorZapytania)],
+    ["Nazwa", asPdfText(crbrCompany.nazwa)],
+    ["Adres", asPdfText(crbrCompany.adres)],
+    ["Forma", asPdfText(crbrCompany.formaOrganizacyjna)],
   ]);
   drawReportSection("Dane rejestrowe podmiotu", ceidgCheck ? [["CEIDG", ceidgCheck], ["KRS", krsCheck]] : [["KRS", krsCheck]]);
   drawInfoBox("Informacje o płatniku VAT", vatReportRows(vatData, vatCheck));
   drawReportSection("Rejestr VIES", [["VIES", viesCheck]]);
   drawReportSection("Wyniki weryfikacji na listach sankcyjnych", [["Listy sankcyjne", sanctionsCheck]]);
   drawReportSection("Beneficjenci rzeczywiści", [["CRBR", crbrCheck]]);
-  drawInfoBox("Metryka CRBR", [
-    ["Id wniosku", asPdfText(crbrMeta.identyfikatorWniosku || crbrDetails.identyfikatorZapytania)],
-    ["Z\u0142o\u017cenie", asPdfText(crbrMeta.dataICzasZlozeniaWniosku)],
-    ["Udost\u0119pnienie", asPdfText(crbrMeta.dataICzasUdostepnieniaWniosku)],
-    ["Kryterium", asPdfText([crbrMeta.kryterium, crbrMeta.wartoscKryterium].filter(Boolean).join(": "))],
-    ["Nazwa", asPdfText(crbrCompany.nazwa)],
-    ["Adres", asPdfText(crbrCompany.adres)],
-    ["Forma", asPdfText(crbrCompany.formaOrganizacyjna)],
-  ]);
   drawInfoBox("Beneficjenci rzeczywiści", input.beneficialOwners.length > 0
     ? input.beneficialOwners.slice(0, 8).map((owner, index) => [
       `${index + 1}.`,
@@ -1165,20 +1156,6 @@ async function buildAmlReportPdf(input: {
       ].filter(Boolean).join(" | ") || "-"
     ])
     : [["-", "Brak zapisanych beneficjentów rzeczywistych z CRBR."]]
-  );
-  drawInfoBox("Reprezentanci z CRBR", crbrRepresentatives.length > 0
-    ? crbrRepresentatives.slice(0, 8).map((representative, index) => [
-      `${index + 1}.`,
-      [
-        [representative.pierwszeImie, representative.kolejneImiona, representative.nazwisko].filter(Boolean).join(" ").trim(),
-        representative.pesel ? `PESEL: ${representative.pesel}` : null,
-        representative.dataUrodzenia ? `data urodzenia: ${representative.dataUrodzenia}` : null,
-        representative.funkcja ? `funkcja: ${representative.funkcja}` : null,
-        representative.obywatelstwo ? `obywatelstwo: ${representative.obywatelstwo}` : null,
-        representative.krajZamieszkania ? `kraj: ${representative.krajZamieszkania}` : null,
-      ].filter(Boolean).join(" | ") || "-"
-    ])
-    : [["-", "Brak zapisanych reprezentant\u00f3w z CRBR."]]
   );
   drawInfoBox("Kody PKD", input.pkdCodes.length > 0
     ? input.pkdCodes.slice(0, 12).map((pkd) => [

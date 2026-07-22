@@ -11,6 +11,7 @@ import {
   fetchAmlVerifications,
   getAmlReportUrl,
   runPepOsintCheck,
+  updateAmlBeneficialOwner,
   updateNextAmlVerificationDate,
   uploadArchivedAmlReport,
   verifyClientAml,
@@ -61,6 +62,14 @@ type AmlCheck = {
   label: string;
 };
 
+type BeneficialOwnerEditValues = {
+  rola: string;
+  reprezentant: boolean;
+  udzialowiec: boolean;
+  procentUdzialow: string | null;
+  wartoscUdzialow: string | null;
+};
+
 const AML_CHECKS: AmlCheck[] = [
   { key: "verification", label: "Weryfikacja AML" },
   { key: "initial_form", label: "Formularz wstępny" },
@@ -90,6 +99,7 @@ function AmlContent() {
   const [verifyingClientId, setVerifyingClientId] = useState<string | null>(null);
   const [checkingPepOsintClientId, setCheckingPepOsintClientId] = useState<string | null>(null);
   const [savingNextVerificationClientId, setSavingNextVerificationClientId] = useState<string | null>(null);
+  const [savingBeneficialOwnerKey, setSavingBeneficialOwnerKey] = useState<string | null>(null);
   const [uploadingArchiveClientId, setUploadingArchiveClientId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -180,6 +190,21 @@ function AmlContent() {
     setUploadingArchiveClientId(row.client.id);
     const result = await uploadArchivedAmlReport(row.client.id, file);
     setUploadingArchiveClientId(null);
+
+    if (result.error) {
+      alert(result.error.message);
+      return;
+    }
+
+    await loadData();
+    setSelectedClientId(row.client.id);
+  }
+
+  async function handleUpdateBeneficialOwner(row: AmlRow, ownerIndex: number, changes: BeneficialOwnerEditValues) {
+    const saveKey = `${row.client.id}:${ownerIndex}`;
+    setSavingBeneficialOwnerKey(saveKey);
+    const result = await updateAmlBeneficialOwner(row.client.id, ownerIndex, changes);
+    setSavingBeneficialOwnerKey(null);
 
     if (result.error) {
       alert(result.error.message);
@@ -298,6 +323,8 @@ function AmlContent() {
           onRunPepOsint={() => void handleRunPepOsint(selectedRow)}
           onSaveNextVerificationDate={(nextVerificationDate) => void handleSaveNextVerificationDate(selectedRow, nextVerificationDate)}
           onUploadArchivedReport={(file) => void handleUploadArchivedReport(selectedRow, file)}
+          onUpdateBeneficialOwner={(ownerIndex, changes) => void handleUpdateBeneficialOwner(selectedRow, ownerIndex, changes)}
+          savingBeneficialOwnerKey={savingBeneficialOwnerKey}
           onClose={() => setSelectedClientId(null)}
         />
       )}
@@ -312,10 +339,12 @@ function AmlDetailsModal({
   checkingPepOsint,
   savingNextVerification,
   uploadingArchive,
+  savingBeneficialOwnerKey,
   onVerify,
   onRunPepOsint,
   onSaveNextVerificationDate,
   onUploadArchivedReport,
+  onUpdateBeneficialOwner,
   onClose,
 }: {
   row: AmlRow;
@@ -324,10 +353,12 @@ function AmlDetailsModal({
   checkingPepOsint: boolean;
   savingNextVerification: boolean;
   uploadingArchive: boolean;
+  savingBeneficialOwnerKey: string | null;
   onVerify: () => void;
   onRunPepOsint: () => void;
   onSaveNextVerificationDate: (nextVerificationDate: string | null) => void;
   onUploadArchivedReport: (file: File) => void;
+  onUpdateBeneficialOwner: (ownerIndex: number, changes: BeneficialOwnerEditValues) => void;
   onClose: () => void;
 }) {
   const [activeTab, setActiveTab] = useState<AmlCheckKey>("verification");
@@ -402,7 +433,9 @@ function AmlDetailsModal({
           row={row}
           profilesById={profilesById}
           uploadingArchive={uploadingArchive}
+          savingBeneficialOwnerKey={savingBeneficialOwnerKey}
           onUploadArchivedReport={onUploadArchivedReport}
+          onUpdateBeneficialOwner={onUpdateBeneficialOwner}
         />
       </aside>
     </div>
@@ -416,7 +449,9 @@ function AmlTabContent({
   row,
   profilesById,
   uploadingArchive,
+  savingBeneficialOwnerKey,
   onUploadArchivedReport,
+  onUpdateBeneficialOwner,
 }: {
   activeTab: AmlCheckKey;
   activeCheck: AmlCheck;
@@ -424,7 +459,9 @@ function AmlTabContent({
   row: AmlRow;
   profilesById: Record<string, Profile>;
   uploadingArchive: boolean;
+  savingBeneficialOwnerKey: string | null;
   onUploadArchivedReport: (file: File) => void;
+  onUpdateBeneficialOwner: (ownerIndex: number, changes: BeneficialOwnerEditValues) => void;
 }) {
   if (activeTab === "verification") {
     return (
@@ -435,7 +472,12 @@ function AmlTabContent({
             <StatusPill done={activeCheckDone} />
           </div>
         </section>
-        <RegistryDetails register={row.register} />
+        <RegistryDetails
+          register={row.register}
+          clientId={row.client.id}
+          savingBeneficialOwnerKey={savingBeneficialOwnerKey}
+          onUpdateBeneficialOwner={onUpdateBeneficialOwner}
+        />
         <section style={detailsSectionStyle}>
           <div style={detailsSectionHeaderStyle}>
             <h3 style={detailsTitleStyle}>Weryfikacje i raporty</h3>
@@ -598,7 +640,17 @@ function tabEmptyMessage(tab: AmlCheckKey) {
   return "Brak zapisanego oświadczenia o weryfikacji i identyfikacji klienta.";
 }
 
-function RegistryDetails({ register }: { register: AmlRegisterRecord | null }) {
+function RegistryDetails({
+  register,
+  clientId,
+  savingBeneficialOwnerKey,
+  onUpdateBeneficialOwner,
+}: {
+  register: AmlRegisterRecord | null;
+  clientId: string;
+  savingBeneficialOwnerKey: string | null;
+  onUpdateBeneficialOwner: (ownerIndex: number, changes: BeneficialOwnerEditValues) => void;
+}) {
   const registry = asRecord(register?.dane_rejestrowe);
   const identifiers = asRecord(registry.identyfikatory);
   const vat = asRecord(registry.bialaListaVat);
@@ -606,7 +658,6 @@ function RegistryDetails({ register }: { register: AmlRegisterRecord | null }) {
   const crbrMeta = asRecord(crbr.requestMeta);
   const crbrCompanies = Array.isArray(crbr.companies) ? crbr.companies as Array<Record<string, unknown>> : [];
   const crbrCompany = crbrCompanies[0] || {};
-  const crbrRepresentatives = crbrRepresentativesFromCompanies(crbrCompanies);
   const pepOsint = asRecord(registry.pepOsint);
   const pepFindings = Array.isArray(pepOsint.findings) ? pepOsint.findings as Array<Record<string, unknown>> : [];
   const pepCheckedSources = Array.isArray(pepOsint.checkedSources) ? pepOsint.checkedSources as Array<Record<string, unknown>> : [];
@@ -627,57 +678,26 @@ function RegistryDetails({ register }: { register: AmlRegisterRecord | null }) {
             <Definition label="KRS" value={asText(identifiers.krs || register.numer_krs)} />
             <Definition label="Rejestr" value={asText(identifiers.rejestr)} />
             <Definition label="VAT" value={vat.statusVat ? `VAT ${String(vat.statusVat).toLowerCase()}` : "-"} />
+            <Definition label="Id wniosku" value={asText(crbrMeta.identyfikatorWniosku || crbr.identyfikatorZapytania)} />
+            <Definition label="Nazwa" value={asText(crbrCompany.nazwa)} />
+            <Definition label="Adres" value={asText(crbrCompany.adres)} />
+            <Definition label="Forma" value={asText(crbrCompany.formaOrganizacyjna)} />
           </div>
           <div style={beneficialOwnersPanelStyle}>
             <h4 style={registryTitleStyle}>Beneficjenci rzeczywiści z CRBR</h4>
             {owners.length > 0 ? (
               <div style={beneficialOwnersListStyle}>
                 {owners.map((owner, index) => (
-                  <div key={`${asText(owner.label)}-${index}`} style={beneficialOwnerItemStyle}>
-                    <strong style={beneficialOwnerNameStyle}>{asText(owner.label)}</strong>
-                    <div style={beneficialOwnerMetaStyle}>
-                      <span>PESEL: {asText(owner.pesel)}</span>
-                      <span>Rola: {beneficiaryRoleLabel(owner)}</span>
-                      <span>Udziały: {beneficiarySharesLabel(owner)}</span>
-                      <span>Obywatelstwo: {asText(owner.obywatelstwo)}</span>
-                      <span>Kraj zamieszkania: {asText(owner.krajZamieszkania)}</span>
-                    </div>
-                  </div>
+                  <BeneficialOwnerCard
+                    key={`${asText(owner.label)}-${index}`}
+                    owner={owner}
+                    saving={savingBeneficialOwnerKey === `${clientId}:${index}`}
+                    onSave={(changes) => onUpdateBeneficialOwner(index, changes)}
+                  />
                 ))}
               </div>
             ) : (
               <p style={emptySmallStyle}>Brak zapisanych beneficjentów z CRBR.</p>
-            )}
-          </div>
-          <div style={registryPanelStyle}>
-            <h4 style={registryTitleStyle}>Metryka CRBR</h4>
-            <Definition label="Id wniosku" value={asText(crbrMeta.identyfikatorWniosku || crbr.identyfikatorZapytania)} />
-            <Definition label={"Z\u0142o\u017cenie"} value={formatCrbrDateTime(crbrMeta.dataICzasZlozeniaWniosku)} />
-            <Definition label={"Udost\u0119pnienie"} value={formatCrbrDateTime(crbrMeta.dataICzasUdostepnieniaWniosku)} />
-            <Definition label="Kryterium" value={[crbrMeta.kryterium, crbrMeta.wartoscKryterium].filter(Boolean).join(": ") || "-"} />
-            <Definition label="Nazwa" value={asText(crbrCompany.nazwa)} />
-            <Definition label="Adres" value={asText(crbrCompany.adres)} />
-            <Definition label="Forma" value={asText(crbrCompany.formaOrganizacyjna)} />
-          </div>
-          <div style={beneficialOwnersPanelStyle}>
-            <h4 style={registryTitleStyle}>Reprezentanci z CRBR</h4>
-            {crbrRepresentatives.length > 0 ? (
-              <div style={beneficialOwnersListStyle}>
-                {crbrRepresentatives.map((representative, index) => (
-                  <div key={`${asText(representative.label)}-${index}`} style={beneficialOwnerItemStyle}>
-                    <strong style={beneficialOwnerNameStyle}>{asText(representative.label)}</strong>
-                    <div style={beneficialOwnerMetaStyle}>
-                      <span>PESEL: {asText(representative.pesel)}</span>
-                      <span>Data urodzenia: {asText(representative.dataUrodzenia)}</span>
-                      <span>Funkcja: {asText(representative.funkcja)}</span>
-                      <span>Obywatelstwo: {asText(representative.obywatelstwo)}</span>
-                      <span>Kraj zamieszkania: {asText(representative.krajZamieszkania)}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p style={emptySmallStyle}>{"Brak zapisanych reprezentant\u00f3w z CRBR."}</p>
             )}
           </div>
           <div style={registryPanelWideStyle}>
@@ -779,6 +799,88 @@ function ArchivedReportUpload({ uploading, onUpload }: { uploading: boolean; onU
   );
 }
 
+function BeneficialOwnerCard({
+  owner,
+  saving,
+  onSave,
+}: {
+  owner: Record<string, unknown>;
+  saving: boolean;
+  onSave: (changes: BeneficialOwnerEditValues) => void;
+}) {
+  const [role, setRole] = useState(beneficiaryRoleLabel(owner) === "-" ? "" : beneficiaryRoleLabel(owner));
+  const [representative, setRepresentative] = useState(Boolean(owner.reprezentant));
+  const [shareholder, setShareholder] = useState(Boolean(owner.udzialowiec));
+  const [sharePercent, setSharePercent] = useState(owner.procentUdzialow ? String(owner.procentUdzialow) : "");
+  const [shareValue, setShareValue] = useState(owner.wartoscUdzialow ? String(owner.wartoscUdzialow) : "");
+
+  useEffect(() => {
+    setRole(beneficiaryRoleLabel(owner) === "-" ? "" : beneficiaryRoleLabel(owner));
+    setRepresentative(Boolean(owner.reprezentant));
+    setShareholder(Boolean(owner.udzialowiec));
+    setSharePercent(owner.procentUdzialow ? String(owner.procentUdzialow) : "");
+    setShareValue(owner.wartoscUdzialow ? String(owner.wartoscUdzialow) : "");
+  }, [owner]);
+
+  return (
+    <div style={beneficialOwnerItemStyle}>
+      <strong style={beneficialOwnerNameStyle}>{asText(owner.label)}</strong>
+      <div style={beneficialOwnerMetaStyle}>
+        <span>PESEL: {asText(owner.pesel)}</span>
+        <span>Rola: {beneficiaryRoleLabel(owner)}</span>
+        <span>Udziały: {beneficiarySharesLabel(owner)}</span>
+        <span>Obywatelstwo: {asText(owner.obywatelstwo)}</span>
+        <span>Kraj zamieszkania: {asText(owner.krajZamieszkania)}</span>
+      </div>
+      <div style={beneficialOwnerEditStyle}>
+        <label style={ownerFieldStyle}>
+          <span style={ownerFieldLabelStyle}>Rola</span>
+          <input
+            value={role}
+            onChange={(event) => setRole(event.target.value)}
+            placeholder="np. beneficjent, reprezentant, udziałowiec"
+            style={ownerInputStyle}
+          />
+        </label>
+        <div style={ownerToggleRowStyle}>
+          <label style={ownerToggleStyle}>
+            <input type="checkbox" checked={representative} onChange={(event) => setRepresentative(event.target.checked)} />
+            Reprezentant
+          </label>
+          <label style={ownerToggleStyle}>
+            <input type="checkbox" checked={shareholder} onChange={(event) => setShareholder(event.target.checked)} />
+            Udziałowiec
+          </label>
+        </div>
+        <div style={ownerEditGridStyle}>
+          <label style={ownerFieldStyle}>
+            <span style={ownerFieldLabelStyle}>Udziały %</span>
+            <input value={sharePercent} onChange={(event) => setSharePercent(event.target.value)} placeholder="np. 100" style={ownerInputStyle} />
+          </label>
+          <label style={ownerFieldStyle}>
+            <span style={ownerFieldLabelStyle}>Kwota udziałów</span>
+            <input value={shareValue} onChange={(event) => setShareValue(event.target.value)} placeholder="np. 4 500 PLN" style={ownerInputStyle} />
+          </label>
+        </div>
+        <button
+          type="button"
+          style={ownerSaveButtonStyle}
+          disabled={saving}
+          onClick={() => onSave({
+            rola: role,
+            reprezentant: representative,
+            udzialowiec: shareholder,
+            procentUdzialow: sharePercent || null,
+            wartoscUdzialow: shareValue || null,
+          })}
+        >
+          {saving ? "Zapisywanie..." : "Zapisz dane"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function VerificationItem({ verification, profilesById }: { verification: AmlVerificationRecord; profilesById: Record<string, Profile> }) {
   const sources = visibleVerificationSources(verification);
   const archived = isArchivedVerification(verification);
@@ -852,17 +954,6 @@ function beneficiarySharesLabel(owner: Record<string, unknown>) {
     .map((share) => share.procentUdzialow ? formatPercentValue(share.procentUdzialow) : "")
     .filter(Boolean);
   return values.join(", ") || "Do uzupełnienia w formularzu";
-}
-
-function crbrRepresentativesFromCompanies(companies: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
-  return companies.flatMap((company) => {
-    const representatives = Array.isArray(company.reprezentanci) ? company.reprezentanci as Array<Record<string, unknown>> : [];
-    return representatives.map((representative) => ({
-      ...representative,
-      label: [representative.pierwszeImie, representative.kolejneImiona, representative.nazwisko].filter(Boolean).join(" ").trim() || "Reprezentant",
-      spolka: company.nazwa || null,
-    }));
-  });
 }
 
 function formatPercentValue(value: unknown) {
@@ -1011,14 +1102,6 @@ function profileLabel(id: string | null | undefined, profilesById: Record<string
 function formatDateTime(value: string | null | undefined) {
   if (!value) return "-";
   return new Date(value).toLocaleString("pl-PL", { dateStyle: "short", timeStyle: "short" });
-}
-
-function formatCrbrDateTime(value: unknown) {
-  const text = String(value || "").trim();
-  if (!text || text === "-") return "-";
-  const date = new Date(text.replace(" ", "T"));
-  if (Number.isNaN(date.getTime())) return text;
-  return date.toLocaleString("pl-PL", { dateStyle: "short", timeStyle: "short" });
 }
 
 function formatDate(value: string | null | undefined) {
@@ -1289,6 +1372,14 @@ const beneficialOwnersListStyle: CSSProperties = { display: "grid", gridTemplate
 const beneficialOwnerItemStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, padding: "12px" };
 const beneficialOwnerNameStyle: CSSProperties = { display: "block", color: colors.navy, fontSize: "14px", lineHeight: 1.35 };
 const beneficialOwnerMetaStyle: CSSProperties = { display: "grid", gap: "5px", marginTop: "8px", color: colors.muted, fontSize: "12px", fontWeight: 750, lineHeight: 1.35 };
+const beneficialOwnerEditStyle: CSSProperties = { display: "grid", gap: "10px", marginTop: "12px", paddingTop: "12px", borderTop: `1px solid ${colors.border}` };
+const ownerEditGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "8px" };
+const ownerFieldStyle: CSSProperties = { display: "grid", gap: "5px" };
+const ownerFieldLabelStyle: CSSProperties = { color: colors.muted, fontSize: "11px", fontWeight: 850, textTransform: "uppercase" };
+const ownerInputStyle: CSSProperties = { minHeight: "38px", width: "100%", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.inputBackground, color: colors.text, fontSize: "13px", fontWeight: 750, outline: "none", padding: "0 10px" };
+const ownerToggleRowStyle: CSSProperties = { display: "flex", flexWrap: "wrap", gap: "8px" };
+const ownerToggleStyle: CSSProperties = { minHeight: "34px", display: "inline-flex", alignItems: "center", gap: "7px", border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "0 10px", background: colors.inputBackground, color: colors.navy, fontSize: "12px", fontWeight: 850 };
+const ownerSaveButtonStyle: CSSProperties = { minHeight: "38px", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.navy, color: colors.white, fontWeight: 850, cursor: "pointer" };
 const pepOsintContentStyle: CSSProperties = { display: "grid", gap: "10px" };
 const pepSourcesPanelStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, padding: "12px", display: "grid", gap: "8px" };
 const pepSourcesTitleStyle: CSSProperties = { color: colors.navy, fontSize: "13px" };

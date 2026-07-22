@@ -317,7 +317,8 @@ function PeopleSection({ title, hint, people, onChange }: { title: string; hint:
 function BeneficialOwnersSection({ owners, onChange }: { owners: AmlBeneficialOwnerEntry[]; onChange: (owners: AmlBeneficialOwnerEntry[]) => void }) {
   return (
     <section style={sectionStyle}>
-      <h2 style={sectionTitleStyle}>Beneficjent rzeczywisty</h2>
+      <h2 style={strongSectionTitleStyle}>Beneficjenci rzeczywiści</h2>
+      <p style={hintStyle}>Poniżsi beneficjenci zostali "zaimportowani" z Centralnego Rejestru Beneficjentów Rzeczywistych.</p>
       <Repeater
         items={owners}
         addLabel="Dodaj beneficjenta"
@@ -602,6 +603,7 @@ const subtitleStyle: CSSProperties = { margin: "8px 0 0", color: colors.muted, l
 const typeBadgeStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.badge, padding: "10px 14px", color: colors.navy, background: colors.inputBackground, fontWeight: 850 };
 const sectionStyle: CSSProperties = { borderTop: `1px solid ${colors.border}`, paddingTop: "20px", display: "grid", gap: "16px" };
 const sectionTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "20px" };
+const strongSectionTitleStyle: CSSProperties = { ...sectionTitleStyle, fontWeight: 900 };
 const hintStyle: CSSProperties = { margin: 0, color: colors.muted, lineHeight: 1.5, fontWeight: 400 };
 const gridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "12px" };
 const twoColumnStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "12px" };

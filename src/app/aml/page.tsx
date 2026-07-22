@@ -326,6 +326,18 @@ function AmlContent() {
         ) : (
           <div style={tableWrapStyle}>
             <table style={tableStyle}>
+              <colgroup>
+                <col style={{ width: "4%" }} />
+                <col style={{ width: "16%" }} />
+                <col style={{ width: "9%" }} />
+                <col style={{ width: "10%" }} />
+                <col style={{ width: "10%" }} />
+                <col style={{ width: "10%" }} />
+                <col style={{ width: "14%" }} />
+                <col style={{ width: "9%" }} />
+                <col style={{ width: "9%" }} />
+                <col style={{ width: "9%" }} />
+              </colgroup>
               <thead>
                 <tr>
                   <Th>LP</Th>
@@ -1533,31 +1545,31 @@ function formatAddress(record: Record<string, unknown>) {
   return [street, city].filter(Boolean).join(", ") || "-";
 }
 
-const pageStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "22px", minWidth: 0 };
+const pageStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "22px", width: "100%", maxWidth: "100%", minWidth: 0, overflowX: "hidden" };
 const headerStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "24px", alignItems: "flex-start" };
 const eyebrowStyle: CSSProperties = { margin: "0 0 8px", fontSize: "13px", fontWeight: 850, letterSpacing: "0.08em", color: colors.red, textTransform: "uppercase" };
 const titleStyle: CSSProperties = { margin: 0, fontSize: "34px", lineHeight: 1.15, color: colors.navy };
 const searchRowStyle: CSSProperties = { display: "flex", alignItems: "center", gap: "12px", padding: "18px 24px 18px" };
 const searchInputStyle: CSSProperties = { width: "100%", flex: "1 1 auto", minWidth: 0, border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "13px 16px", background: colors.inputBackground, color: colors.text, fontSize: "15px", fontWeight: 650, outline: "none" };
 const clearSearchButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "12px 14px", background: colors.white, color: colors.navy, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" };
-const statsGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "14px" };
+const statsGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "14px" };
 const statCardStyle: CSSProperties = { minHeight: "92px", border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.card, boxShadow: shadow.soft, padding: "20px", display: "flex", alignItems: "center", gap: "16px" };
 const statIconStyle: CSSProperties = { width: "44px", height: "44px", borderRadius: radius.button, display: "inline-flex", alignItems: "center", justifyContent: "center" };
 const statValueStyle: CSSProperties = { fontSize: "28px", lineHeight: 1, fontWeight: 850, color: colors.navy };
 const statLabelStyle: CSSProperties = { marginTop: "6px", color: colors.muted, fontWeight: 750, fontSize: "13px" };
-const workflowStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "10px" };
+const workflowStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: "10px" };
 const workflowStepStyle: CSSProperties = { minHeight: "58px", display: "flex", alignItems: "center", gap: "10px", padding: "12px 14px", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.card, color: colors.navy, fontWeight: 800, fontSize: "13px" };
 const workflowIconStyle: CSSProperties = { width: "34px", height: "34px", borderRadius: radius.button, display: "inline-flex", alignItems: "center", justifyContent: "center", background: "rgba(23, 59, 115, 0.08)", color: colors.navy, flex: "0 0 auto" };
 const cardStyle: CSSProperties = { minWidth: 0, border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.card, boxShadow: shadow.card, overflow: "hidden" };
 const sectionHeaderStyle: CSSProperties = { padding: "24px 28px", borderBottom: `1px solid ${colors.border}`, display: "flex", justifyContent: "space-between", gap: "18px", alignItems: "flex-start" };
 const sectionTitleStyle: CSSProperties = { margin: 0, fontSize: "22px", color: colors.navy };
 const sectionHintStyle: CSSProperties = { margin: "6px 0 0", color: colors.muted, fontSize: "14px" };
-const tableWrapStyle: CSSProperties = { width: "100%", maxWidth: "100%", overflowX: "auto" };
-const tableStyle: CSSProperties = { width: "100%", minWidth: "1440px", borderCollapse: "collapse" };
-const thStyle: CSSProperties = { padding: "16px 18px", textAlign: "left", fontSize: "12px", color: colors.text, textTransform: "uppercase", letterSpacing: "0.08em", borderBottom: `1px solid ${colors.border}`, whiteSpace: "nowrap" };
-const wrappedThStyle: CSSProperties = { ...thStyle, width: "260px", minWidth: "220px", whiteSpace: "normal", lineHeight: 1.35 };
-const tdStyle: CSSProperties = { padding: "18px", borderBottom: `1px solid ${colors.border}`, color: colors.text, verticalAlign: "middle", fontSize: "15px" };
-const statusTdStyle: CSSProperties = { ...tdStyle, textAlign: "center" };
+const tableWrapStyle: CSSProperties = { width: "100%", maxWidth: "100%", minWidth: 0, overflowX: "auto" };
+const tableStyle: CSSProperties = { width: "100%", minWidth: "980px", tableLayout: "fixed", borderCollapse: "collapse" };
+const thStyle: CSSProperties = { padding: "14px 10px", textAlign: "left", fontSize: "11px", color: colors.text, textTransform: "uppercase", letterSpacing: "0.06em", borderBottom: `1px solid ${colors.border}`, whiteSpace: "normal", lineHeight: 1.25, overflowWrap: "anywhere" };
+const wrappedThStyle: CSSProperties = { ...thStyle };
+const tdStyle: CSSProperties = { padding: "16px 10px", borderBottom: `1px solid ${colors.border}`, color: colors.text, verticalAlign: "middle", fontSize: "14px", overflowWrap: "anywhere" };
+const statusTdStyle: CSSProperties = { ...tdStyle, textAlign: "center", whiteSpace: "nowrap" };
 const clientNameStyle: CSSProperties = { display: "block", color: colors.navy, fontWeight: 850, lineHeight: 1.35 };
 const clientMetaStyle: CSSProperties = { display: "block", marginTop: "5px", color: colors.muted, fontSize: "13px" };
 const badgeStyle: CSSProperties = { display: "inline-flex", minHeight: "30px", alignItems: "center", justifyContent: "center", padding: "6px 12px", borderRadius: radius.badge, fontSize: "13px", fontWeight: 850, whiteSpace: "nowrap" };
@@ -1569,7 +1581,7 @@ function statusPillStyle(done: boolean): CSSProperties {
     color: done ? colors.success : colors.danger,
   };
 }
-const detailsButtonStyle: CSSProperties = { minHeight: "40px", padding: "0 16px", borderRadius: radius.button, border: `1px solid ${colors.border}`, color: colors.navy, fontWeight: 850, background: colors.white, cursor: "pointer" };
+const detailsButtonStyle: CSSProperties = { minHeight: "38px", maxWidth: "100%", padding: "0 12px", borderRadius: radius.button, border: `1px solid ${colors.border}`, color: colors.navy, fontWeight: 850, background: colors.white, cursor: "pointer" };
 const emptyStyle: CSSProperties = { margin: 0, padding: "34px 28px", color: colors.muted, fontWeight: 750 };
 const modalBackdropStyle: CSSProperties = { position: "fixed", inset: 0, zIndex: 60, background: "rgba(15, 23, 42, 0.38)", display: "flex", alignItems: "center", justifyContent: "center", padding: "18px" };
 const modalStyle: CSSProperties = { width: "min(1360px, calc(100vw - 36px))", maxHeight: "calc(100vh - 36px)", overflowY: "auto", borderRadius: radius.card, background: colors.white, boxShadow: "0 32px 90px rgba(15, 23, 42, 0.28)", border: `1px solid ${colors.border}` };

@@ -496,7 +496,6 @@ function AmlDetailsModal({
         </div>
 
         <div style={modalGridStyle}>
-          <InfoBox label="Status rejestru" value={registerStatusLabel(row.register)} />
           <InfoBox label="Ostatnia weryfikacja" value={formatDateTime(row.register?.ostatnia_weryfikacja_at)} />
           <InfoBox label="Wykonał" value={profileLabel(row.register?.ostatnia_weryfikacja_by, profilesById)} />
           <InfoBox label="Następna weryfikacja" value={formatDate(row.register?.nastepna_weryfikacja_at)} />

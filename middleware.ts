@@ -6,6 +6,7 @@ export async function middleware(request: NextRequest) {
   const isLoginPage = pathname === "/login";
   const isPublicOfferPage = pathname.startsWith("/oferta/");
   const isPublicClientCardPage = pathname.startsWith("/karta-klienta/");
+  const isPublicAmlInitialFormPage = pathname.startsWith("/aml/formularz-wstepny/");
   const isPublicApiPage = pathname.startsWith("/api/public/");
 
   let response = NextResponse.next({
@@ -41,7 +42,7 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user && !isLoginPage && !isPublicOfferPage && !isPublicClientCardPage && !isPublicApiPage) {
+  if (!user && !isLoginPage && !isPublicOfferPage && !isPublicClientCardPage && !isPublicAmlInitialFormPage && !isPublicApiPage) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 

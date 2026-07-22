@@ -178,6 +178,29 @@ export async function uploadArchivedAmlReport(clientId: string, file: File) {
   return { data: body?.verification || null, error: null };
 }
 
+export async function uploadCrbrAmlPdf(clientId: string, file: File) {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
+  if (!token) return { data: null, error: new Error("Brak aktywnej sesji użytkownika.") };
+
+  const formData = new FormData();
+  formData.append("clientId", clientId);
+  formData.append("file", file);
+
+  const response = await fetch("/api/aml/crbr-report", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    return { data: null, error: new Error(body?.error || "Nie udało się dodać PDF z CRBR.") };
+  }
+
+  return { data: body?.verification || null, error: null };
+}
+
 export async function runPepOsintCheck(clientId: string) {
   const { data: sessionData } = await supabase.auth.getSession();
   const token = sessionData.session?.access_token;

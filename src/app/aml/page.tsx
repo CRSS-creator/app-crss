@@ -14,6 +14,7 @@ import {
   updateAmlBeneficialOwner,
   updateNextAmlVerificationDate,
   uploadArchivedAmlReport,
+  uploadCrbrAmlPdf,
   verifyClientAml,
   type AmlHistoryRecord,
   type AmlRegisterRecord,
@@ -101,6 +102,7 @@ function AmlContent() {
   const [savingNextVerificationClientId, setSavingNextVerificationClientId] = useState<string | null>(null);
   const [savingBeneficialOwnerKey, setSavingBeneficialOwnerKey] = useState<string | null>(null);
   const [uploadingArchiveClientId, setUploadingArchiveClientId] = useState<string | null>(null);
+  const [uploadingCrbrPdfClientId, setUploadingCrbrPdfClientId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
@@ -190,6 +192,20 @@ function AmlContent() {
     setUploadingArchiveClientId(row.client.id);
     const result = await uploadArchivedAmlReport(row.client.id, file);
     setUploadingArchiveClientId(null);
+
+    if (result.error) {
+      alert(result.error.message);
+      return;
+    }
+
+    await loadData();
+    setSelectedClientId(row.client.id);
+  }
+
+  async function handleUploadCrbrPdf(row: AmlRow, file: File) {
+    setUploadingCrbrPdfClientId(row.client.id);
+    const result = await uploadCrbrAmlPdf(row.client.id, file);
+    setUploadingCrbrPdfClientId(null);
 
     if (result.error) {
       alert(result.error.message);
@@ -319,10 +335,12 @@ function AmlContent() {
           checkingPepOsint={checkingPepOsintClientId === selectedRow.client.id}
           savingNextVerification={savingNextVerificationClientId === selectedRow.client.id}
           uploadingArchive={uploadingArchiveClientId === selectedRow.client.id}
+          uploadingCrbrPdf={uploadingCrbrPdfClientId === selectedRow.client.id}
           onVerify={() => void handleVerify(selectedRow)}
           onRunPepOsint={() => void handleRunPepOsint(selectedRow)}
           onSaveNextVerificationDate={(nextVerificationDate) => void handleSaveNextVerificationDate(selectedRow, nextVerificationDate)}
           onUploadArchivedReport={(file) => void handleUploadArchivedReport(selectedRow, file)}
+          onUploadCrbrPdf={(file) => void handleUploadCrbrPdf(selectedRow, file)}
           onUpdateBeneficialOwner={(ownerIndex, changes) => void handleUpdateBeneficialOwner(selectedRow, ownerIndex, changes)}
           savingBeneficialOwnerKey={savingBeneficialOwnerKey}
           onClose={() => setSelectedClientId(null)}
@@ -339,11 +357,13 @@ function AmlDetailsModal({
   checkingPepOsint,
   savingNextVerification,
   uploadingArchive,
+  uploadingCrbrPdf,
   savingBeneficialOwnerKey,
   onVerify,
   onRunPepOsint,
   onSaveNextVerificationDate,
   onUploadArchivedReport,
+  onUploadCrbrPdf,
   onUpdateBeneficialOwner,
   onClose,
 }: {
@@ -353,11 +373,13 @@ function AmlDetailsModal({
   checkingPepOsint: boolean;
   savingNextVerification: boolean;
   uploadingArchive: boolean;
+  uploadingCrbrPdf: boolean;
   savingBeneficialOwnerKey: string | null;
   onVerify: () => void;
   onRunPepOsint: () => void;
   onSaveNextVerificationDate: (nextVerificationDate: string | null) => void;
   onUploadArchivedReport: (file: File) => void;
+  onUploadCrbrPdf: (file: File) => void;
   onUpdateBeneficialOwner: (ownerIndex: number, changes: BeneficialOwnerEditValues) => void;
   onClose: () => void;
 }) {
@@ -433,8 +455,10 @@ function AmlDetailsModal({
           row={row}
           profilesById={profilesById}
           uploadingArchive={uploadingArchive}
+          uploadingCrbrPdf={uploadingCrbrPdf}
           savingBeneficialOwnerKey={savingBeneficialOwnerKey}
           onUploadArchivedReport={onUploadArchivedReport}
+          onUploadCrbrPdf={onUploadCrbrPdf}
           onUpdateBeneficialOwner={onUpdateBeneficialOwner}
         />
       </aside>
@@ -449,8 +473,10 @@ function AmlTabContent({
   row,
   profilesById,
   uploadingArchive,
+  uploadingCrbrPdf,
   savingBeneficialOwnerKey,
   onUploadArchivedReport,
+  onUploadCrbrPdf,
   onUpdateBeneficialOwner,
 }: {
   activeTab: AmlCheckKey;
@@ -459,8 +485,10 @@ function AmlTabContent({
   row: AmlRow;
   profilesById: Record<string, Profile>;
   uploadingArchive: boolean;
+  uploadingCrbrPdf: boolean;
   savingBeneficialOwnerKey: string | null;
   onUploadArchivedReport: (file: File) => void;
+  onUploadCrbrPdf: (file: File) => void;
   onUpdateBeneficialOwner: (ownerIndex: number, changes: BeneficialOwnerEditValues) => void;
 }) {
   if (activeTab === "verification") {
@@ -475,7 +503,9 @@ function AmlTabContent({
         <RegistryDetails
           register={row.register}
           clientId={row.client.id}
+          uploadingCrbrPdf={uploadingCrbrPdf}
           savingBeneficialOwnerKey={savingBeneficialOwnerKey}
+          onUploadCrbrPdf={onUploadCrbrPdf}
           onUpdateBeneficialOwner={onUpdateBeneficialOwner}
         />
         <section style={detailsSectionStyle}>
@@ -643,12 +673,16 @@ function tabEmptyMessage(tab: AmlCheckKey) {
 function RegistryDetails({
   register,
   clientId,
+  uploadingCrbrPdf,
   savingBeneficialOwnerKey,
+  onUploadCrbrPdf,
   onUpdateBeneficialOwner,
 }: {
   register: AmlRegisterRecord | null;
   clientId: string;
+  uploadingCrbrPdf: boolean;
   savingBeneficialOwnerKey: string | null;
+  onUploadCrbrPdf: (file: File) => void;
   onUpdateBeneficialOwner: (ownerIndex: number, changes: BeneficialOwnerEditValues) => void;
 }) {
   const registry = asRecord(register?.dane_rejestrowe);
@@ -663,7 +697,10 @@ function RegistryDetails({
 
   return (
     <section style={detailsSectionStyle}>
-      <h3 style={detailsTitleStyle}>Dane rejestrowe podmiotu</h3>
+      <div style={detailsSectionHeaderStyle}>
+        <h3 style={detailsTitleStyle}>Dane rejestrowe podmiotu</h3>
+        <CrbrPdfUpload uploading={uploadingCrbrPdf} onUpload={onUploadCrbrPdf} />
+      </div>
       {!register?.dane_rejestrowe || Object.keys(registry).length === 0 ? (
         <p style={emptySmallStyle}>Brak zapisanych danych rejestrowych. Uruchom weryfikację AML, aby je uzupełnić.</p>
       ) : (
@@ -734,6 +771,26 @@ function ArchivedReportUpload({ uploading, onUpload }: { uploading: boolean; onU
     <label style={archiveUploadButtonStyle}>
       <Upload size={16} />
       {uploading ? "Dodawanie..." : "Dodaj raport archiwalny"}
+      <input
+        type="file"
+        accept="application/pdf,.pdf"
+        disabled={uploading}
+        style={hiddenFileInputStyle}
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = "";
+          if (file) onUpload(file);
+        }}
+      />
+    </label>
+  );
+}
+
+function CrbrPdfUpload({ uploading, onUpload }: { uploading: boolean; onUpload: (file: File) => void }) {
+  return (
+    <label style={archiveUploadButtonStyle}>
+      <Upload size={16} />
+      {uploading ? "Dodawanie PDF..." : "Dodaj PDF z CRBR"}
       <input
         type="file"
         accept="application/pdf,.pdf"
@@ -935,7 +992,7 @@ function normalizeUiText(value: string) {
 }
 
 function isArchivedVerification(verification: AmlVerificationRecord) {
-  return verification.status === "archiwalny" || verification.wynik === "archiwalny" || Boolean((verification.dane as { archiwalny?: unknown })?.archiwalny);
+  return verification.status === "archiwalny" || verification.wynik === "archiwalny" || verification.wynik === "pdf_crbr" || Boolean((verification.dane as { archiwalny?: unknown })?.archiwalny);
 }
 
 function StatusPill({ done }: { done: boolean }) {
@@ -1028,6 +1085,7 @@ function verificationResultLabel(result: string) {
   if (result === "pozytywna") return "Weryfikacja pozytywna";
   if (result === "wymaga_analizy") return "Wymaga analizy";
   if (result === "archiwalny") return "Raport archiwalny";
+  if (result === "pdf_crbr") return "PDF z CRBR";
   return result || "Wykonana";
 }
 
@@ -1044,6 +1102,7 @@ function sourceStatusLabel(status: string) {
 function historyActionLabel(action: string) {
   if (action === "automatyczna_weryfikacja_aml") return "Automatyczna weryfikacja AML";
   if (action === "dodano_archiwalny_raport_aml") return "Dodano archiwalny raport AML";
+  if (action === "dodano_pdf_crbr") return "Dodano PDF z CRBR";
   if (action === "aktualizacja_nastepnej_weryfikacji") return "Aktualizacja następnej weryfikacji";
   if (action === "sprawdzenie_pep_osint") return "Sprawdzenie PEP OSINT";
   return action.replace(/_/g, " ");

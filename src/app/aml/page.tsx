@@ -7,16 +7,19 @@ import AppLayout from "@/components/AppLayout";
 import { colors, radius, shadow } from "@/app/design";
 import {
   fetchAmlHistory,
+  fetchAmlInitialForms,
   fetchAmlRegisters,
   fetchAmlVerifications,
   getAmlReportUrl,
   runPepOsintCheck,
+  sendAmlInitialForm,
   updateAmlBeneficialOwner,
   updateNextAmlVerificationDate,
   uploadArchivedAmlReport,
   uploadCrbrAmlPdf,
   verifyClientAml,
   type AmlHistoryRecord,
+  type AmlInitialFormRecord,
   type AmlRegisterRecord,
   type AmlVerificationRecord,
 } from "@/lib/amlService";
@@ -53,6 +56,7 @@ type AmlRow = {
   stage: OnboardingStageRecord | null;
   register: AmlRegisterRecord | null;
   verifications: AmlVerificationRecord[];
+  initialForms: AmlInitialFormRecord[];
   history: AmlHistoryRecord[];
 };
 
@@ -93,12 +97,14 @@ function AmlContent() {
   const [stages, setStages] = useState<OnboardingStageRecord[]>([]);
   const [registers, setRegisters] = useState<AmlRegisterRecord[]>([]);
   const [verifications, setVerifications] = useState<AmlVerificationRecord[]>([]);
+  const [initialForms, setInitialForms] = useState<AmlInitialFormRecord[]>([]);
   const [history, setHistory] = useState<AmlHistoryRecord[]>([]);
   const [profilesById, setProfilesById] = useState<Record<string, Profile>>({});
   const [loading, setLoading] = useState(true);
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [verifyingClientId, setVerifyingClientId] = useState<string | null>(null);
   const [checkingPepOsintClientId, setCheckingPepOsintClientId] = useState<string | null>(null);
+  const [sendingInitialFormClientId, setSendingInitialFormClientId] = useState<string | null>(null);
   const [savingNextVerificationClientId, setSavingNextVerificationClientId] = useState<string | null>(null);
   const [savingBeneficialOwnerKey, setSavingBeneficialOwnerKey] = useState<string | null>(null);
   const [uploadingArchiveClientId, setUploadingArchiveClientId] = useState<string | null>(null);
@@ -111,11 +117,12 @@ function AmlContent() {
 
   async function loadData() {
     setLoading(true);
-    const [clientsResult, stagesResult, registersResult, verificationsResult, historyResult, profilesResult] = await Promise.all([
+    const [clientsResult, stagesResult, registersResult, verificationsResult, initialFormsResult, historyResult, profilesResult] = await Promise.all([
       fetchClients(),
       fetchOnboardingStages(),
       fetchAmlRegisters(),
       fetchAmlVerifications(),
+      fetchAmlInitialForms(),
       fetchAmlHistory(),
       supabase.from("profiles").select("id, full_name, email"),
     ]);
@@ -127,18 +134,21 @@ function AmlContent() {
     if (historyResult.error) console.error("Błąd pobierania historii AML:", historyResult.error);
     if (profilesResult.error) console.error("Błąd pobierania użytkowników AML:", profilesResult.error);
 
+    if (initialFormsResult.error) console.error("Błąd pobierania formularzy wstępnych AML:", initialFormsResult.error);
+
     setClients(clientsResult.error ? [] : ((clientsResult.data || []) as unknown as Client[]));
     setStages(stagesResult.error ? [] : ((stagesResult.data || []) as OnboardingStageRecord[]));
     setRegisters(registersResult.error ? [] : ((registersResult.data || []) as AmlRegisterRecord[]));
     setVerifications(verificationsResult.error ? [] : ((verificationsResult.data || []) as AmlVerificationRecord[]));
+    setInitialForms(initialFormsResult.error ? [] : ((initialFormsResult.data || []) as AmlInitialFormRecord[]));
     setHistory(historyResult.error ? [] : ((historyResult.data || []) as AmlHistoryRecord[]));
     setProfilesById(indexProfiles((profilesResult.data || []) as Profile[]));
     setLoading(false);
   }
 
   const rows = useMemo(
-    () => buildRows(clients, stages, registers, verifications, history),
-    [clients, stages, registers, verifications, history]
+    () => buildRows(clients, stages, registers, verifications, initialForms, history),
+    [clients, stages, registers, verifications, initialForms, history]
   );
   const filteredRows = useMemo(() => filterRows(rows, searchTerm), [rows, searchTerm]);
   const selectedRow = rows.find((row) => row.client.id === selectedClientId) || null;
@@ -164,6 +174,20 @@ function AmlContent() {
     setCheckingPepOsintClientId(row.client.id);
     const result = await runPepOsintCheck(row.client.id);
     setCheckingPepOsintClientId(null);
+
+    if (result.error) {
+      alert(result.error.message);
+      return;
+    }
+
+    await loadData();
+    setSelectedClientId(row.client.id);
+  }
+
+  async function handleSendInitialForm(row: AmlRow) {
+    setSendingInitialFormClientId(row.client.id);
+    const result = await sendAmlInitialForm(row.client.id);
+    setSendingInitialFormClientId(null);
 
     if (result.error) {
       alert(result.error.message);
@@ -333,11 +357,13 @@ function AmlContent() {
           profilesById={profilesById}
           verifying={verifyingClientId === selectedRow.client.id}
           checkingPepOsint={checkingPepOsintClientId === selectedRow.client.id}
+          sendingInitialForm={sendingInitialFormClientId === selectedRow.client.id}
           savingNextVerification={savingNextVerificationClientId === selectedRow.client.id}
           uploadingArchive={uploadingArchiveClientId === selectedRow.client.id}
           uploadingCrbrPdf={uploadingCrbrPdfClientId === selectedRow.client.id}
           onVerify={() => void handleVerify(selectedRow)}
           onRunPepOsint={() => void handleRunPepOsint(selectedRow)}
+          onSendInitialForm={() => void handleSendInitialForm(selectedRow)}
           onSaveNextVerificationDate={(nextVerificationDate) => void handleSaveNextVerificationDate(selectedRow, nextVerificationDate)}
           onUploadArchivedReport={(file) => void handleUploadArchivedReport(selectedRow, file)}
           onUploadCrbrPdf={(file) => void handleUploadCrbrPdf(selectedRow, file)}
@@ -355,12 +381,14 @@ function AmlDetailsModal({
   profilesById,
   verifying,
   checkingPepOsint,
+  sendingInitialForm,
   savingNextVerification,
   uploadingArchive,
   uploadingCrbrPdf,
   savingBeneficialOwnerKey,
   onVerify,
   onRunPepOsint,
+  onSendInitialForm,
   onSaveNextVerificationDate,
   onUploadArchivedReport,
   onUploadCrbrPdf,
@@ -371,12 +399,14 @@ function AmlDetailsModal({
   profilesById: Record<string, Profile>;
   verifying: boolean;
   checkingPepOsint: boolean;
+  sendingInitialForm: boolean;
   savingNextVerification: boolean;
   uploadingArchive: boolean;
   uploadingCrbrPdf: boolean;
   savingBeneficialOwnerKey: string | null;
   onVerify: () => void;
   onRunPepOsint: () => void;
+  onSendInitialForm: () => void;
   onSaveNextVerificationDate: (nextVerificationDate: string | null) => void;
   onUploadArchivedReport: (file: File) => void;
   onUploadCrbrPdf: (file: File) => void;
@@ -454,9 +484,11 @@ function AmlDetailsModal({
           activeCheckDone={activeCheckDone}
           row={row}
           profilesById={profilesById}
+          sendingInitialForm={sendingInitialForm}
           uploadingArchive={uploadingArchive}
           uploadingCrbrPdf={uploadingCrbrPdf}
           savingBeneficialOwnerKey={savingBeneficialOwnerKey}
+          onSendInitialForm={onSendInitialForm}
           onUploadArchivedReport={onUploadArchivedReport}
           onUploadCrbrPdf={onUploadCrbrPdf}
           onUpdateBeneficialOwner={onUpdateBeneficialOwner}
@@ -472,9 +504,11 @@ function AmlTabContent({
   activeCheckDone,
   row,
   profilesById,
+  sendingInitialForm,
   uploadingArchive,
   uploadingCrbrPdf,
   savingBeneficialOwnerKey,
+  onSendInitialForm,
   onUploadArchivedReport,
   onUploadCrbrPdf,
   onUpdateBeneficialOwner,
@@ -484,9 +518,11 @@ function AmlTabContent({
   activeCheckDone: boolean;
   row: AmlRow;
   profilesById: Record<string, Profile>;
+  sendingInitialForm: boolean;
   uploadingArchive: boolean;
   uploadingCrbrPdf: boolean;
   savingBeneficialOwnerKey: string | null;
+  onSendInitialForm: () => void;
   onUploadArchivedReport: (file: File) => void;
   onUploadCrbrPdf: (file: File) => void;
   onUpdateBeneficialOwner: (ownerIndex: number, changes: BeneficialOwnerEditValues) => void;
@@ -546,6 +582,35 @@ function AmlTabContent({
           )}
         </section>
       </>
+    );
+  }
+
+  if (activeTab === "initial_form") {
+    return (
+      <section style={tabsSectionStyle}>
+        <div style={detailsSectionHeaderStyle}>
+          <div style={tabPanelStyle}>
+            <span style={tabPanelLabelStyle}>{activeCheck.label}</span>
+            <StatusPill done={activeCheckDone} />
+          </div>
+          <button type="button" onClick={onSendInitialForm} disabled={sendingInitialForm} style={secondaryButtonStyle}>
+            <Send size={16} />
+            {sendingInitialForm ? "Wysyłanie..." : "Wyślij formularz wstępny"}
+          </button>
+        </div>
+        {row.initialForms.length === 0 ? (
+          <div style={tabContentPlaceholderStyle}>
+            <strong style={tabContentTitleStyle}>Formularze wstępne</strong>
+            <p style={emptySmallStyle}>Brak wysłanych formularzy wstępnych AML dla tego klienta.</p>
+          </div>
+        ) : (
+          <div style={listStyle}>
+            {row.initialForms.map((form) => (
+              <InitialFormItem key={form.id} form={form} profilesById={profilesById} />
+            ))}
+          </div>
+        )}
+      </section>
     );
   }
 
@@ -668,6 +733,37 @@ function tabEmptyMessage(tab: AmlCheckKey) {
   if (tab === "initial_form") return "Brak zapisanego formularza wstępnego dla tego klienta.";
   if (tab === "risk_assessment") return "Brak zapisanej oceny ryzyka dla tego klienta.";
   return "Brak zapisanego oświadczenia o weryfikacji i identyfikacji klienta.";
+}
+
+function InitialFormItem({ form, profilesById }: { form: AmlInitialFormRecord; profilesById: Record<string, Profile> }) {
+  const active = form.status === "active";
+  const formUrl = typeof window === "undefined" ? `/aml/formularz-wstepny/${form.public_token}` : `${window.location.origin}/aml/formularz-wstepny/${form.public_token}`;
+
+  async function copyLink() {
+    await navigator.clipboard.writeText(formUrl);
+    alert("Skopiowano link do formularza wstępnego AML.");
+  }
+
+  return (
+    <article style={verificationItemStyle}>
+      <div>
+        <strong style={verificationTitleStyle}>{formatDateTime(form.created_at)} · {initialFormStatusLabel(form.status)}</strong>
+        <p style={verificationMetaStyle}>
+          Odbiorca: {form.recipient_email || "-"} · Wysłał: {form.sent_by_name || profileLabel(form.sent_by, profilesById)}
+        </p>
+        <div style={sourceGridStyle}>
+          <span style={sourceBadgeStyle(active ? "warning" : form.status === "completed" ? "ok" : "archiwalny")}>
+            Link · {active ? "aktywny" : form.status === "completed" ? "zamknięty po zapisie" : "unieważniony"}
+          </span>
+          {form.sent_at ? <span style={sourceBadgeStyle("archiwalny")}>Wysłano · {formatDateTime(form.sent_at)}</span> : null}
+          {form.completed_at ? <span style={sourceBadgeStyle("ok")}>Zapisano · {formatDateTime(form.completed_at)}</span> : null}
+        </div>
+      </div>
+      <div style={reportButtonsStyle}>
+        {active ? <button type="button" onClick={() => void copyLink()} style={smallButtonStyle}>Kopiuj link</button> : null}
+      </div>
+    </article>
+  );
 }
 
 function RegistryDetails({
@@ -1001,7 +1097,7 @@ function StatusPill({ done }: { done: boolean }) {
 
 function amlCheckStatus(row: AmlRow, check: AmlCheckKey) {
   if (check === "verification") return row.verifications.length > 0 || Boolean(row.register?.ostatnia_weryfikacja_at);
-  if (check === "initial_form") return ["formularz_wyslany", "formularz_odebrany", "zatwierdzone"].includes(String(row.register?.status || ""));
+  if (check === "initial_form") return row.initialForms.length > 0 || ["formularz_wyslany", "formularz_odebrany", "zatwierdzone"].includes(String(row.register?.status || ""));
   if (check === "risk_assessment") return Boolean(row.register?.poziom_ryzyka);
   return row.register?.status === "zatwierdzone";
 }
@@ -1011,6 +1107,7 @@ function buildRows(
   stages: OnboardingStageRecord[],
   registers: AmlRegisterRecord[],
   verifications: AmlVerificationRecord[],
+  initialForms: AmlInitialFormRecord[],
   history: AmlHistoryRecord[]
 ): AmlRow[] {
   const amlStagesByClient = new Map(stages.filter((stage) => stage.etap === "aml").map((stage) => [stage.klient_id, stage]));
@@ -1022,6 +1119,7 @@ function buildRows(
       stage: amlStagesByClient.get(client.id) || null,
       register: registersByClient.get(client.id) || null,
       verifications: verifications.filter((verification) => verification.klient_id === client.id),
+      initialForms: initialForms.filter((form) => form.klient_id === client.id),
       history: history.filter((entry) => entry.klient_id === client.id),
     }))
     .sort((first, second) => {
@@ -1089,6 +1187,13 @@ function verificationResultLabel(result: string) {
   return result || "Wykonana";
 }
 
+function initialFormStatusLabel(status: string) {
+  if (status === "active") return "Wysłany, oczekuje";
+  if (status === "completed") return "Zapisany";
+  if (status === "revoked") return "Unieważniony";
+  return status || "-";
+}
+
 function sourceStatusLabel(status: string) {
   if (status === "ok") return "OK";
   if (status === "confirmed") return "Potwierdzono";
@@ -1105,6 +1210,8 @@ function historyActionLabel(action: string) {
   if (action === "dodano_pdf_crbr") return "Dodano PDF z CRBR";
   if (action === "aktualizacja_nastepnej_weryfikacji") return "Aktualizacja następnej weryfikacji";
   if (action === "sprawdzenie_pep_osint") return "Sprawdzenie PEP OSINT";
+  if (action === "wysylka_formularza_wstepnego") return "Wysłano formularz wstępny";
+  if (action === "uzupelnienie_formularza_wstepnego") return "Uzupełniono formularz wstępny";
   return action.replace(/_/g, " ");
 }
 

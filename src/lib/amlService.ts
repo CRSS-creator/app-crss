@@ -58,6 +58,25 @@ export type AmlHistoryRecord = {
   created_by: string | null;
 };
 
+export type AmlInitialFormRecord = {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  klient_id: string;
+  aml_rejestr_id: string | null;
+  public_token: string;
+  status: "active" | "completed" | "revoked";
+  recipient_email: string | null;
+  recipient_name: string | null;
+  sent_at: string | null;
+  sent_by: string | null;
+  sent_by_name: string | null;
+  completed_at: string | null;
+  completed_by_name: string | null;
+  completed_pdf_document_id: string | null;
+  form_data: Record<string, unknown>;
+};
+
 export async function fetchAmlRegisters() {
   return supabase
     .from("aml_rejestr_klientow")
@@ -99,6 +118,13 @@ export async function verifyClientAml(clientId: string) {
   }
 
   return { data: body?.verification || null, error: null };
+}
+
+export async function fetchAmlInitialForms() {
+  return supabase
+    .from("aml_formularze_wstepne")
+    .select("*")
+    .order("created_at", { ascending: false });
 }
 
 export async function updateNextAmlVerificationDate(clientId: string, nextVerificationDate: string | null) {
@@ -153,6 +179,28 @@ export async function updateAmlBeneficialOwner(
   }
 
   return { data: body?.register || null, error: null };
+}
+
+export async function sendAmlInitialForm(clientId: string) {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
+  if (!token) return { data: null, error: new Error("Brak aktywnej sesji użytkownika.") };
+
+  const response = await fetch("/api/aml/initial-form-request", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ clientId }),
+  });
+
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    return { data: null, error: new Error(body?.error || "Nie udało się wysłać formularza wstępnego AML.") };
+  }
+
+  return { data: body as { ok: boolean; formUrl?: string }, error: null };
 }
 
 export async function uploadArchivedAmlReport(clientId: string, file: File) {

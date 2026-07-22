@@ -404,9 +404,9 @@ function CommonRiskSection({ draft, setDraft }: { draft: AmlInitialFormData; set
         <HighRiskCountriesNotice />
         <YesNoField label="Czy podmiot, beneficjent, kontrahent lub istotny element działalności jest powiązany z państwem wysokiego ryzyka, sankcyjnym lub o podwyższonym poziomie korupcji?" value={common.geographicRisk} onChange={(value) => update("geographicRisk", value)} />
         {common.geographicRisk === "tak" ? <Field label="Państwo oraz charakter powiązania"><textarea style={textareaSmallStyle} value={common.geographicRiskCountries} onChange={(event) => update("geographicRiskCountries", event.target.value)} /></Field> : null}
-        <YesNoField label="Czy podmiot, reprezentant, osoba upoważniona lub beneficjent rzeczywisty jest osobą zajmującą eksponowane stanowisko polityczne?" value={common.pepPublicFunction} onChange={(value) => update("pepPublicFunction", value)} />
-        <YesNoField label="Czy jest członkiem rodziny osoby zajmującej eksponowane stanowisko polityczne?" value={common.pepFamily} onChange={(value) => update("pepFamily", value)} />
-        <YesNoField label="Czy jest osobą znaną jako bliski współpracownik osoby zajmującej eksponowane stanowisko polityczne?" value={common.pepAssociate} onChange={(value) => update("pepAssociate", value)} />
+        <YesNoField label="Czy reprezentant, osoba upoważniona lub beneficjent rzeczywisty jest osobą zajmującą eksponowane stanowisko polityczne?" value={common.pepPublicFunction} onChange={(value) => update("pepPublicFunction", value)} />
+        <YesNoField label="Czy reprezentant, osoba upoważniona lub beneficjent rzeczywisty jest członkiem rodziny osoby zajmującej eksponowane stanowisko polityczne?" value={common.pepFamily} onChange={(value) => update("pepFamily", value)} />
+        <YesNoField label="Czy reprezentant, osoba upoważniona lub beneficjent rzeczywisty jest osobą znaną jako bliski współpracownik osoby zajmującej eksponowane stanowisko polityczne?" value={common.pepAssociate} onChange={(value) => update("pepAssociate", value)} />
         {(common.pepPublicFunction === "tak" || common.pepFamily === "tak" || common.pepAssociate === "tak") ? <Field label="Osoba, funkcja lub relacja oraz państwo powiązane ze statusem PEP"><textarea style={textareaSmallStyle} value={common.pepDetails} onChange={(event) => update("pepDetails", event.target.value)} /></Field> : null}
       </section>
     </>

@@ -139,6 +139,14 @@ async function saveInitialForm(request: NextRequest, context: RouteContext) {
   }
 
   const completedAt = new Date();
+  const { data: register } = form.aml_rejestr_id
+    ? await admin
+      .from("aml_rejestr_klientow")
+      .select("nastepna_weryfikacja_at")
+      .eq("id", form.aml_rejestr_id)
+      .maybeSingle()
+    : { data: null };
+  const validUntil = register?.nastepna_weryfikacja_at ? dateBefore(register.nastepna_weryfikacja_at) : null;
   const pdf = await buildAmlInitialFormPdf({
     clientName: client.nazwa || "Klient",
     clientNip: client.nip,
@@ -186,6 +194,7 @@ async function saveInitialForm(request: NextRequest, context: RouteContext) {
       completed_at: completedAt.toISOString(),
       completed_by_name: data.completedBy.trim(),
       completed_pdf_document_id: documentRecord.id,
+      wazny_do: validUntil,
       form_data: data,
     })
     .eq("id", form.id);
@@ -205,6 +214,7 @@ async function saveInitialForm(request: NextRequest, context: RouteContext) {
     zmiany: {
       aml_initial_form_id: form.id,
       document_id: documentRecord.id,
+      valid_until: validUntil,
     },
     created_by: null,
   });
@@ -230,4 +240,10 @@ async function saveInitialForm(request: NextRequest, context: RouteContext) {
   }
 
   return NextResponse.json({ ok: true });
+}
+
+function dateBefore(value: string) {
+  const date = new Date(`${value.slice(0, 10)}T12:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() - 1);
+  return date.toISOString().slice(0, 10);
 }

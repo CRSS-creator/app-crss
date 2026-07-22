@@ -74,6 +74,7 @@ export type AmlInitialFormRecord = {
   completed_at: string | null;
   completed_by_name: string | null;
   completed_pdf_document_id: string | null;
+  wazny_do: string | null;
   form_data: Record<string, unknown>;
 };
 
@@ -201,6 +202,30 @@ export async function sendAmlInitialForm(clientId: string) {
   }
 
   return { data: body as { ok: boolean; formUrl?: string }, error: null };
+}
+
+export async function uploadArchivedAmlInitialForm(clientId: string, file: File, completedDate: string) {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
+  if (!token) return { data: null, error: new Error("Brak aktywnej sesji użytkownika.") };
+
+  const formData = new FormData();
+  formData.append("clientId", clientId);
+  formData.append("completedDate", completedDate);
+  formData.append("file", file);
+
+  const response = await fetch("/api/aml/initial-form-archive", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    return { data: null, error: new Error(body?.error || "Nie udało się dodać archiwalnego formularza wstępnego AML.") };
+  }
+
+  return { data: body?.form || null, error: null };
 }
 
 export async function uploadArchivedAmlReport(clientId: string, file: File) {

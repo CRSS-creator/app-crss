@@ -15,6 +15,7 @@ import {
   sendAmlInitialForm,
   updateAmlBeneficialOwner,
   updateNextAmlVerificationDate,
+  uploadArchivedAmlInitialForm,
   uploadArchivedAmlReport,
   uploadCrbrAmlPdf,
   verifyClientAml,
@@ -105,6 +106,7 @@ function AmlContent() {
   const [verifyingClientId, setVerifyingClientId] = useState<string | null>(null);
   const [checkingPepOsintClientId, setCheckingPepOsintClientId] = useState<string | null>(null);
   const [sendingInitialFormClientId, setSendingInitialFormClientId] = useState<string | null>(null);
+  const [uploadingInitialFormArchiveClientId, setUploadingInitialFormArchiveClientId] = useState<string | null>(null);
   const [savingNextVerificationClientId, setSavingNextVerificationClientId] = useState<string | null>(null);
   const [savingBeneficialOwnerKey, setSavingBeneficialOwnerKey] = useState<string | null>(null);
   const [uploadingArchiveClientId, setUploadingArchiveClientId] = useState<string | null>(null);
@@ -188,6 +190,20 @@ function AmlContent() {
     setSendingInitialFormClientId(row.client.id);
     const result = await sendAmlInitialForm(row.client.id);
     setSendingInitialFormClientId(null);
+
+    if (result.error) {
+      alert(result.error.message);
+      return;
+    }
+
+    await loadData();
+    setSelectedClientId(row.client.id);
+  }
+
+  async function handleUploadArchivedInitialForm(row: AmlRow, file: File, completedDate: string) {
+    setUploadingInitialFormArchiveClientId(row.client.id);
+    const result = await uploadArchivedAmlInitialForm(row.client.id, file, completedDate);
+    setUploadingInitialFormArchiveClientId(null);
 
     if (result.error) {
       alert(result.error.message);
@@ -358,12 +374,14 @@ function AmlContent() {
           verifying={verifyingClientId === selectedRow.client.id}
           checkingPepOsint={checkingPepOsintClientId === selectedRow.client.id}
           sendingInitialForm={sendingInitialFormClientId === selectedRow.client.id}
+          uploadingInitialFormArchive={uploadingInitialFormArchiveClientId === selectedRow.client.id}
           savingNextVerification={savingNextVerificationClientId === selectedRow.client.id}
           uploadingArchive={uploadingArchiveClientId === selectedRow.client.id}
           uploadingCrbrPdf={uploadingCrbrPdfClientId === selectedRow.client.id}
           onVerify={() => void handleVerify(selectedRow)}
           onRunPepOsint={() => void handleRunPepOsint(selectedRow)}
           onSendInitialForm={() => void handleSendInitialForm(selectedRow)}
+          onUploadArchivedInitialForm={(file, completedDate) => void handleUploadArchivedInitialForm(selectedRow, file, completedDate)}
           onSaveNextVerificationDate={(nextVerificationDate) => void handleSaveNextVerificationDate(selectedRow, nextVerificationDate)}
           onUploadArchivedReport={(file) => void handleUploadArchivedReport(selectedRow, file)}
           onUploadCrbrPdf={(file) => void handleUploadCrbrPdf(selectedRow, file)}
@@ -382,6 +400,7 @@ function AmlDetailsModal({
   verifying,
   checkingPepOsint,
   sendingInitialForm,
+  uploadingInitialFormArchive,
   savingNextVerification,
   uploadingArchive,
   uploadingCrbrPdf,
@@ -389,6 +408,7 @@ function AmlDetailsModal({
   onVerify,
   onRunPepOsint,
   onSendInitialForm,
+  onUploadArchivedInitialForm,
   onSaveNextVerificationDate,
   onUploadArchivedReport,
   onUploadCrbrPdf,
@@ -400,6 +420,7 @@ function AmlDetailsModal({
   verifying: boolean;
   checkingPepOsint: boolean;
   sendingInitialForm: boolean;
+  uploadingInitialFormArchive: boolean;
   savingNextVerification: boolean;
   uploadingArchive: boolean;
   uploadingCrbrPdf: boolean;
@@ -407,6 +428,7 @@ function AmlDetailsModal({
   onVerify: () => void;
   onRunPepOsint: () => void;
   onSendInitialForm: () => void;
+  onUploadArchivedInitialForm: (file: File, completedDate: string) => void;
   onSaveNextVerificationDate: (nextVerificationDate: string | null) => void;
   onUploadArchivedReport: (file: File) => void;
   onUploadCrbrPdf: (file: File) => void;
@@ -485,10 +507,12 @@ function AmlDetailsModal({
           row={row}
           profilesById={profilesById}
           sendingInitialForm={sendingInitialForm}
+          uploadingInitialFormArchive={uploadingInitialFormArchive}
           uploadingArchive={uploadingArchive}
           uploadingCrbrPdf={uploadingCrbrPdf}
           savingBeneficialOwnerKey={savingBeneficialOwnerKey}
           onSendInitialForm={onSendInitialForm}
+          onUploadArchivedInitialForm={onUploadArchivedInitialForm}
           onUploadArchivedReport={onUploadArchivedReport}
           onUploadCrbrPdf={onUploadCrbrPdf}
           onUpdateBeneficialOwner={onUpdateBeneficialOwner}
@@ -505,10 +529,12 @@ function AmlTabContent({
   row,
   profilesById,
   sendingInitialForm,
+  uploadingInitialFormArchive,
   uploadingArchive,
   uploadingCrbrPdf,
   savingBeneficialOwnerKey,
   onSendInitialForm,
+  onUploadArchivedInitialForm,
   onUploadArchivedReport,
   onUploadCrbrPdf,
   onUpdateBeneficialOwner,
@@ -519,10 +545,12 @@ function AmlTabContent({
   row: AmlRow;
   profilesById: Record<string, Profile>;
   sendingInitialForm: boolean;
+  uploadingInitialFormArchive: boolean;
   uploadingArchive: boolean;
   uploadingCrbrPdf: boolean;
   savingBeneficialOwnerKey: string | null;
   onSendInitialForm: () => void;
+  onUploadArchivedInitialForm: (file: File, completedDate: string) => void;
   onUploadArchivedReport: (file: File) => void;
   onUploadCrbrPdf: (file: File) => void;
   onUpdateBeneficialOwner: (ownerIndex: number, changes: BeneficialOwnerEditValues) => void;
@@ -598,6 +626,7 @@ function AmlTabContent({
             {sendingInitialForm ? "Wysyłanie..." : "Wyślij formularz wstępny"}
           </button>
         </div>
+        <ArchivedInitialFormUpload uploading={uploadingInitialFormArchive} onUpload={onUploadArchivedInitialForm} />
         {row.initialForms.length === 0 ? (
           <div style={tabContentPlaceholderStyle}>
             <strong style={tabContentTitleStyle}>Formularze wstępne</strong>
@@ -737,6 +766,7 @@ function tabEmptyMessage(tab: AmlCheckKey) {
 
 function InitialFormItem({ form, profilesById }: { form: AmlInitialFormRecord; profilesById: Record<string, Profile> }) {
   const active = form.status === "active";
+  const archived = Boolean((form.form_data as { archiwalny?: unknown })?.archiwalny);
   const formUrl = typeof window === "undefined" ? `/aml/formularz-wstepny/${form.public_token}` : `${window.location.origin}/aml/formularz-wstepny/${form.public_token}`;
 
   async function copyLink() {
@@ -748,6 +778,7 @@ function InitialFormItem({ form, profilesById }: { form: AmlInitialFormRecord; p
     <article style={verificationItemStyle}>
       <div>
         <strong style={verificationTitleStyle}>{formatDateTime(form.created_at)} · {initialFormStatusLabel(form.status)}</strong>
+        {archived ? <span style={archivedBadgeStyle}>Archiwalny</span> : null}
         <p style={verificationMetaStyle}>
           Odbiorca: {form.recipient_email || "-"} · Wysłał: {form.sent_by_name || profileLabel(form.sent_by, profilesById)}
         </p>
@@ -757,6 +788,7 @@ function InitialFormItem({ form, profilesById }: { form: AmlInitialFormRecord; p
           </span>
           {form.sent_at ? <span style={sourceBadgeStyle("archiwalny")}>Wysłano · {formatDateTime(form.sent_at)}</span> : null}
           {form.completed_at ? <span style={sourceBadgeStyle("ok")}>Zapisano · {formatDateTime(form.completed_at)}</span> : null}
+          {form.wazny_do ? <span style={sourceBadgeStyle("confirmed")}>Ważny do · {formatDate(form.wazny_do)}</span> : null}
         </div>
       </div>
       <div style={reportButtonsStyle}>
@@ -879,6 +911,45 @@ function ArchivedReportUpload({ uploading, onUpload }: { uploading: boolean; onU
         }}
       />
     </label>
+  );
+}
+
+function ArchivedInitialFormUpload({
+  uploading,
+  onUpload,
+}: {
+  uploading: boolean;
+  onUpload: (file: File, completedDate: string) => void;
+}) {
+  const [completedDate, setCompletedDate] = useState("");
+
+  return (
+    <div style={archiveInitialFormStyle}>
+      <label style={archiveInitialFormDateStyle}>
+        <span style={nextVerificationLabelStyle}>Data wypełnienia</span>
+        <AmlDatePicker value={completedDate} onChange={setCompletedDate} />
+      </label>
+      <label style={archiveUploadButtonStyle}>
+        <Upload size={16} />
+        {uploading ? "Dodawanie..." : "Dodaj archiwalny formularz"}
+        <input
+          type="file"
+          accept="application/pdf,.pdf"
+          disabled={uploading}
+          style={hiddenFileInputStyle}
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            event.target.value = "";
+            if (!file) return;
+            if (!completedDate) {
+              alert("Najpierw wpisz datę wypełnienia formularza.");
+              return;
+            }
+            onUpload(file, completedDate);
+          }}
+        />
+      </label>
+    </div>
   );
 }
 
@@ -1212,6 +1283,7 @@ function historyActionLabel(action: string) {
   if (action === "sprawdzenie_pep_osint") return "Sprawdzenie PEP OSINT";
   if (action === "wysylka_formularza_wstepnego") return "Wysłano formularz wstępny";
   if (action === "uzupelnienie_formularza_wstepnego") return "Uzupełniono formularz wstępny";
+  if (action === "dodano_archiwalny_formularz_wstepny") return "Dodano archiwalny formularz wstępny";
   return action.replace(/_/g, " ");
 }
 
@@ -1493,6 +1565,8 @@ const tabPanelStyle: CSSProperties = { minHeight: "54px", border: `1px solid ${c
 const tabPanelLabelStyle: CSSProperties = { color: colors.navy, fontSize: "14px", fontWeight: 850 };
 const tabContentPlaceholderStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.inputBackground, padding: "18px", display: "grid", gap: "8px" };
 const tabContentTitleStyle: CSSProperties = { color: colors.navy, fontSize: "16px" };
+const archiveInitialFormStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.inputBackground, padding: "12px", display: "flex", alignItems: "flex-end", gap: "12px", flexWrap: "wrap" };
+const archiveInitialFormDateStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "6px", width: "210px" };
 const registryGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(360px, 0.9fr) minmax(560px, 1.5fr)", gap: "12px", alignItems: "stretch" };
 const registryPanelStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "16px", background: colors.inputBackground };
 const registryPanelWideStyle: CSSProperties = { ...registryPanelStyle, gridColumn: "1 / -1" };

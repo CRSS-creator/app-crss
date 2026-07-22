@@ -168,6 +168,8 @@ function LegalEntityForm({ draft, setDraft, response }: FormProps) {
         <Field label="Krótki opis modelu działalności" required><textarea style={textareaSmallStyle} value={legal.businessModel} onChange={(event) => update("businessModel", event.target.value)} /></Field>
       </section>
 
+      <BeneficialOwnersSection owners={legal.beneficialOwners} onChange={(owners) => update("beneficialOwners", owners)} />
+
       <PeopleSection
         title="Osoby reprezentujące podmiot"
         hint="Wskaż osoby uprawnione do działania w imieniu podmiotu zgodnie z rejestrem, umową, statutem, pełnomocnictwem albo innym dokumentem."
@@ -198,8 +200,6 @@ function LegalEntityForm({ draft, setDraft, response }: FormProps) {
           />
         ) : null}
       </section>
-
-      <BeneficialOwnersSection owners={legal.beneficialOwners} onChange={(owners) => update("beneficialOwners", owners)} />
 
       <section style={sectionStyle}>
         <h2 style={sectionTitleStyle}>Struktura własności i kontroli</h2>

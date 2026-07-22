@@ -161,11 +161,23 @@ function LegalEntityForm({ draft, setDraft, response }: FormProps) {
         ) : null}
         <label style={confirmationStyle}>
           <input type="checkbox" checked={legal.polishBranchNotApplicable} onChange={(event) => update("polishBranchNotApplicable", event.target.checked)} />
-          <span>Nie dotyczy</span>
+          <span>Adres oddziału w Polsce nie dotyczy</span>
         </label>
         <ReadOnlyField label="Główne kody PKD" value={registry.pkd} />
-        <Field label="Przedmiot prowadzonej działalności" required><textarea style={textareaSmallStyle} value={legal.businessSubject} onChange={(event) => update("businessSubject", event.target.value)} /></Field>
-        <Field label="Krótki opis modelu działalności" required><textarea style={textareaSmallStyle} value={legal.businessModel} onChange={(event) => update("businessModel", event.target.value)} /></Field>
+        <Field label="Jaki jest przedmiot prowadzonej działalności oraz model działalności?" required>
+          <textarea
+            style={textareaSmallStyle}
+            value={legal.businessSubject}
+            onChange={(event) => setDraft((current) => ({
+              ...current,
+              legalEntity: {
+                ...current.legalEntity,
+                businessSubject: event.target.value,
+                businessModel: event.target.value,
+              },
+            }))}
+          />
+        </Field>
       </section>
 
       <BeneficialOwnersSection owners={legal.beneficialOwners} onChange={(owners) => update("beneficialOwners", owners)} />

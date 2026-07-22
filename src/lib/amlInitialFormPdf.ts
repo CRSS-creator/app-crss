@@ -66,8 +66,7 @@ function drawLegalEntityData(context: PdfContext, data: AmlInitialFormData) {
   field(context, "Rejestr zagraniczny", legal.foreignRegistration);
   field(context, "Adres głównego miejsca działalności", legal.businessAddressSameAsRegistered ? "Taki sam jak adres siedziby" : legal.businessAddress);
   field(context, "Adres oddziału w Polsce", legal.polishBranchNotApplicable ? "Nie dotyczy" : legal.polishBranchAddress);
-  field(context, "Przedmiot działalności", legal.businessSubject);
-  field(context, "Model działalności", legal.businessModel);
+  field(context, "Przedmiot oraz model działalności", legal.businessSubject || legal.businessModel);
 
   section(context, "Osoby reprezentujące klienta");
   legal.representatives.forEach((person, index) => {

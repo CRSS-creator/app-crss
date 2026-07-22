@@ -296,8 +296,7 @@ export function validateAmlInitialFormData(data: AmlInitialFormData) {
   const missing: string[] = [];
   if (!data.completedBy?.trim()) missing.push("Imię i nazwisko osoby składającej formularz");
   if (data.formType === "legal_entity") {
-    if (!data.legalEntity.businessSubject?.trim()) missing.push("Przedmiot prowadzonej działalności");
-    if (!data.legalEntity.businessModel?.trim()) missing.push("Krótki opis modelu działalności");
+    if (!data.legalEntity.businessSubject?.trim()) missing.push("Przedmiot prowadzonej działalności oraz model działalności");
     if (!hasAnyCompletedPerson(data.legalEntity.beneficialOwners)) missing.push("Beneficjent rzeczywisty");
   } else {
     if (!data.individual.fullName?.trim()) missing.push("Imię i nazwisko klienta");

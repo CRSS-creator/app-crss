@@ -658,10 +658,6 @@ function RegistryDetails({
   const crbrCompanies = Array.isArray(crbr.companies) ? crbr.companies as Array<Record<string, unknown>> : [];
   const crbrCompany = crbrCompanies[0] || {};
   const pepOsint = asRecord(registry.pepOsint);
-  const pepFindings = Array.isArray(pepOsint.findings) ? pepOsint.findings as Array<Record<string, unknown>> : [];
-  const pepCheckedSources = Array.isArray(pepOsint.checkedSources) ? pepOsint.checkedSources as Array<Record<string, unknown>> : [];
-  const pepHistorySources = pepOsintHistorySources(pepCheckedSources, pepFindings);
-  const [showPepHistory, setShowPepHistory] = useState(false);
   const owners = Array.isArray(register?.beneficjenci_rzeczywisci) ? register.beneficjenci_rzeczywisci : [];
   const pkdCodes = Array.isArray(register?.kody_pkd) ? register.kody_pkd : [];
 
@@ -706,29 +702,6 @@ function RegistryDetails({
               <div style={pepOsintContentStyle}>
                 <Definition label="Status" value={pepOsintStatusLabel(asText(pepOsint.status))} />
                 <Definition label="Data" value={formatDateTime(asText(pepOsint.checkedAt))} />
-                <button type="button" style={pepHistoryButtonStyle} onClick={() => setShowPepHistory((current) => !current)}>
-                  Historia
-                </button>
-                {showPepHistory ? (
-                  <div style={pepSourcesPanelStyle}>
-                    <strong style={pepSourcesTitleStyle}>Adresy sprawdzonych stron</strong>
-                    {pepHistorySources.length > 0 ? (
-                      <div style={pepFindingSourcesStyle}>
-                        {pepHistorySources.slice(0, 20).map((source, sourceIndex) => (
-                          source.url ? (
-                            <a key={`${source.url}-${sourceIndex}`} href={source.url} target="_blank" rel="noreferrer" style={pepFindingSourceStyle}>
-                              {source.label}
-                            </a>
-                          ) : (
-                            <span key={`${source.label}-${sourceIndex}`} style={pepSourceTextBadgeStyle}>{source.label}</span>
-                          )
-                        ))}
-                      </div>
-                    ) : (
-                      <p style={emptySmallStyle}>Brak zapisanych adresów stron dla tego sprawdzenia.</p>
-                    )}
-                  </div>
-                ) : null}
               </div>
             ) : (
               <p style={emptySmallStyle}>Brak wykonanego sprawdzenia PEP OSINT.</p>
@@ -944,24 +917,6 @@ function isRepresentativeOwner(owner: Record<string, unknown>, role: string) {
 function isShareholderOwner(owner: Record<string, unknown>, role: string) {
   const normalizedRole = normalizeUiText(role);
   return Boolean(owner.udzialowiec) || normalizedRole.includes("udzialowiec") || normalizedRole.includes("wspolnik");
-}
-
-function pepOsintHistorySources(checkedSources: Array<Record<string, unknown>>, findings: Array<Record<string, unknown>>) {
-  const sources = new Map<string, { label: string; url: string | null }>();
-  const addSource = (source: Record<string, unknown>) => {
-    const url = String(source.url || "").trim();
-    const label = asText(source.title || source.name || source.source || url);
-    if (!url && label === "-") return;
-    sources.set(url || label, { label, url: url || null });
-  };
-
-  checkedSources.forEach(addSource);
-  findings.forEach((finding) => {
-    const findingSources = Array.isArray(finding.sources) ? finding.sources as Array<Record<string, unknown>> : [];
-    findingSources.forEach(addSource);
-  });
-
-  return [...sources.values()];
 }
 
 function formatPercentValue(value: unknown) {
@@ -1390,12 +1345,6 @@ const ownerToggleRowStyle: CSSProperties = { display: "flex", flexWrap: "wrap", 
 const ownerToggleStyle: CSSProperties = { minHeight: "34px", display: "inline-flex", alignItems: "center", gap: "7px", border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "0 10px", background: colors.inputBackground, color: colors.navy, fontSize: "12px", fontWeight: 850 };
 const ownerSaveButtonStyle: CSSProperties = { minHeight: "38px", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.navy, color: colors.white, fontWeight: 850, cursor: "pointer" };
 const pepOsintContentStyle: CSSProperties = { display: "grid", gap: "10px" };
-const pepHistoryButtonStyle: CSSProperties = { minHeight: "38px", justifySelf: "start", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.navy, padding: "0 12px", fontWeight: 850, cursor: "pointer" };
-const pepSourcesPanelStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, padding: "12px", display: "grid", gap: "8px" };
-const pepSourcesTitleStyle: CSSProperties = { color: colors.navy, fontSize: "13px" };
-const pepFindingSourcesStyle: CSSProperties = { display: "flex", flexWrap: "wrap", gap: "6px" };
-const pepFindingSourceStyle: CSSProperties = { color: colors.navy, fontWeight: 850, textDecoration: "none", border: `1px solid ${colors.border}`, borderRadius: radius.badge, padding: "5px 8px", background: colors.inputBackground, maxWidth: "100%", overflowWrap: "anywhere" };
-const pepSourceTextBadgeStyle: CSSProperties = { ...pepFindingSourceStyle, display: "inline-flex" };
 const registryTitleStyle: CSSProperties = { margin: "0 0 12px", color: colors.navy, fontSize: "15px" };
 const definitionStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(86px, 0.42fr) minmax(0, 1fr)", gap: "10px", padding: "8px 0", borderTop: `1px solid ${colors.border}` };
 const definitionLabelStyle: CSSProperties = { color: colors.muted, fontSize: "12px", fontWeight: 850, textTransform: "uppercase" };

@@ -277,7 +277,7 @@ function IndividualForm({ draft, setDraft, response }: FormProps) {
                     <input style={inputStyle} value={owner[key]} onChange={(event) => update("beneficialOwners", updateAt(individual.beneficialOwners, index, { ...owner, [key]: event.target.value }))} />
                   </Field>
                 ))}
-                <YesNoField label="Czy beneficjent jest PEP, członkiem rodziny PEP albo bliskim współpracownikiem PEP?" value={owner.pep} onChange={(value) => update("beneficialOwners", updateAt(individual.beneficialOwners, index, { ...owner, pep: value }))} />
+                <YesNoField label="Czy beneficjent jest osobą eksponowaną politycznie, członkiem rodziny takiej osoby lub bliskim współpracownikiem?" value={owner.pep} onChange={(value) => update("beneficialOwners", updateAt(individual.beneficialOwners, index, { ...owner, pep: value }))} />
               </PersonCard>
             )}
           />
@@ -339,7 +339,7 @@ function BeneficialOwnersSection({ owners, onChange }: { owners: AmlBeneficialOw
               <input style={inputStyle} disabled={owner.otherControlNotApplicable} value={owner.otherControl} onChange={(event) => onChange(updateAt(owners, index, { ...owner, otherControl: event.target.value }))} />
             </Field>
             <CheckLine checked={owner.otherControlNotApplicable} onChange={(checked) => onChange(updateAt(owners, index, { ...owner, otherControlNotApplicable: checked }))}>Nie dotyczy</CheckLine>
-            <YesNoField label="Czy beneficjent jest PEP, członkiem rodziny PEP albo bliskim współpracownikiem PEP?" value={owner.pep} onChange={(value) => onChange(updateAt(owners, index, { ...owner, pep: value }))} />
+            <YesNoField label="Czy beneficjent jest osobą eksponowaną politycznie, członkiem rodziny takiej osoby lub bliskim współpracownikiem?" value={owner.pep} onChange={(value) => onChange(updateAt(owners, index, { ...owner, pep: value }))} />
           </PersonCard>
         )}
       />

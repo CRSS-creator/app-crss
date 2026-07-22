@@ -392,5 +392,6 @@ const logoutButtonStyle: React.CSSProperties = {
 
 const contentStyle: React.CSSProperties = {
   flex: 1,
+  minWidth: 0,
   padding: "42px",
 };

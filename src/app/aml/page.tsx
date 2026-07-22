@@ -1506,7 +1506,7 @@ function formatAddress(record: Record<string, unknown>) {
   return [street, city].filter(Boolean).join(", ") || "-";
 }
 
-const pageStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "22px" };
+const pageStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "22px", minWidth: 0 };
 const headerStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "24px", alignItems: "flex-start" };
 const eyebrowStyle: CSSProperties = { margin: "0 0 8px", fontSize: "13px", fontWeight: 850, letterSpacing: "0.08em", color: colors.red, textTransform: "uppercase" };
 const titleStyle: CSSProperties = { margin: 0, fontSize: "34px", lineHeight: 1.15, color: colors.navy };
@@ -1521,11 +1521,11 @@ const statLabelStyle: CSSProperties = { marginTop: "6px", color: colors.muted, f
 const workflowStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "10px" };
 const workflowStepStyle: CSSProperties = { minHeight: "58px", display: "flex", alignItems: "center", gap: "10px", padding: "12px 14px", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.card, color: colors.navy, fontWeight: 800, fontSize: "13px" };
 const workflowIconStyle: CSSProperties = { width: "34px", height: "34px", borderRadius: radius.button, display: "inline-flex", alignItems: "center", justifyContent: "center", background: "rgba(23, 59, 115, 0.08)", color: colors.navy, flex: "0 0 auto" };
-const cardStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.card, boxShadow: shadow.card, overflow: "hidden" };
+const cardStyle: CSSProperties = { minWidth: 0, border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.card, boxShadow: shadow.card, overflow: "hidden" };
 const sectionHeaderStyle: CSSProperties = { padding: "24px 28px", borderBottom: `1px solid ${colors.border}`, display: "flex", justifyContent: "space-between", gap: "18px", alignItems: "flex-start" };
 const sectionTitleStyle: CSSProperties = { margin: 0, fontSize: "22px", color: colors.navy };
 const sectionHintStyle: CSSProperties = { margin: "6px 0 0", color: colors.muted, fontSize: "14px" };
-const tableWrapStyle: CSSProperties = { width: "100%", overflowX: "auto" };
+const tableWrapStyle: CSSProperties = { width: "100%", maxWidth: "100%", overflowX: "auto" };
 const tableStyle: CSSProperties = { width: "100%", minWidth: "1440px", borderCollapse: "collapse" };
 const thStyle: CSSProperties = { padding: "16px 18px", textAlign: "left", fontSize: "12px", color: colors.text, textTransform: "uppercase", letterSpacing: "0.08em", borderBottom: `1px solid ${colors.border}`, whiteSpace: "nowrap" };
 const wrappedThStyle: CSSProperties = { ...thStyle, width: "260px", minWidth: "220px", whiteSpace: "normal", lineHeight: 1.35 };

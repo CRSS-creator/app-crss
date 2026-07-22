@@ -53,7 +53,7 @@ export default function AmlInitialFormPage() {
     setInitializedFor(token);
   }, [initializedFor, response, token]);
 
-  const formLabel = draft.formType === "individual" ? "osoby fizycznej / JDG" : "osoby prawnej";
+  const formLabel = draft.formType === "individual" ? "osoby fizycznej" : "osoby prawnej";
 
   async function submitForm(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

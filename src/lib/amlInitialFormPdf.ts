@@ -38,7 +38,7 @@ export async function buildAmlInitialFormPdf(input: AmlInitialFormPdfInput): Pro
   drawPageBackground(context.page);
   drawText(context, "Formularz wstępny AML", MARGIN, 20, colors.navy);
   context.y -= 30;
-  field(context, "Typ formularza", input.data.formType === "individual" ? "Osoba fizyczna / JDG" : "Osoba prawna");
+  field(context, "Typ formularza", input.data.formType === "individual" ? "Osoba fizyczna" : "Osoba prawna");
   field(context, "Klient", input.clientName);
   field(context, "NIP", input.clientNip);
   field(context, "Token formularza", input.formToken);

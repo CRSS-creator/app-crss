@@ -392,7 +392,8 @@ function CommonRiskSection({ draft, setDraft }: { draft: AmlInitialFormData; set
 
       <section style={sectionStyle}>
         <h2 style={sectionTitleStyle}>Branże i działalności wymagające zwiększonej uwagi</h2>
-        <div style={questionsGridStyle}>
+        <p style={sectionQuestionStyle}>Czy podmiot działa w niżej wymienionych branżach?</p>
+        <div style={questionsStackStyle}>
           {HIGH_ATTENTION_ACTIVITY_LABELS.map((item) => <YesNoField key={item.key} label={item.label} value={common.highAttentionActivities[item.key] || ""} onChange={(value) => updateActivity(item.key, value)} />)}
         </div>
         <Field label="Jeżeli na którekolwiek pytanie udzielono odpowiedzi TAK, opisz zakres działalności"><textarea style={textareaSmallStyle} value={common.highAttentionDescription} onChange={(event) => update("highAttentionDescription", event.target.value)} /></Field>
@@ -641,7 +642,7 @@ const hintStyle: CSSProperties = { margin: 0, color: colors.muted, lineHeight: 1
 const gridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "12px" };
 const twoColumnStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "12px" };
 const questionsStackStyle: CSSProperties = { display: "grid", gap: "12px" };
-const questionsGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))", gap: "12px" };
+const sectionQuestionStyle: CSSProperties = { margin: 0, color: colors.navy, fontWeight: 850, lineHeight: 1.45 };
 const fieldStyle: CSSProperties = { display: "grid", gap: "8px", color: colors.navy, fontWeight: 700 };
 const inputStyle: CSSProperties = { minHeight: "44px", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, padding: "0 12px", color: colors.text, fontSize: "15px", outline: "none" };
 const textareaSmallStyle: CSSProperties = { ...inputStyle, minHeight: "92px", resize: "vertical", padding: "12px", lineHeight: 1.5 };

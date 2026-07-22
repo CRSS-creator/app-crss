@@ -1216,7 +1216,9 @@ function StatusPill({ done }: { done: boolean }) {
 
 function amlCheckStatus(row: AmlRow, check: AmlCheckKey) {
   if (check === "verification") return row.verifications.length > 0 || Boolean(row.register?.ostatnia_weryfikacja_at);
-  if (check === "initial_form") return row.initialForms.length > 0 || ["formularz_wyslany", "formularz_odebrany", "zatwierdzone"].includes(String(row.register?.status || ""));
+  if (check === "initial_form") {
+    return row.initialForms.some((form) => Boolean(form.completed_at || form.completed_pdf_document_id));
+  }
   if (check === "risk_assessment") return Boolean(row.register?.poziom_ryzyka);
   return row.register?.status === "zatwierdzone";
 }

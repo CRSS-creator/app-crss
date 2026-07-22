@@ -99,7 +99,7 @@ function drawLegalEntityData(context: PdfContext, data: AmlInitialFormData) {
 
   section(context, "Struktura własności i kontroli");
   field(context, "Kontrola innych osób niż wymienione wyżej", yesNo(legal.hasShareholders));
-  field(context, "Opis innych osób lub mechanizmów kontroli", legal.ownershipStructure);
+  if (legal.hasShareholders === "tak") field(context, "Wypisane osoby", legal.ownershipStructure);
   field(context, "Podmioty zagraniczne w strukturze", yesNo(legal.hasForeignOwnershipEntities));
   field(context, "Państwa rejestracji", legal.foreignOwnershipCountries);
   field(context, "Szczególne mechanizmy kontroli", yesNo(legal.hasSpecialControlMechanisms));

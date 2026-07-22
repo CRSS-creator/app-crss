@@ -422,7 +422,7 @@ function registrySummary(response: PublicAmlInitialFormResponse) {
   const pkd = (register?.kody_pkd || []).map((item) => {
     const record = asRecord(item);
     return [record.kod, record.nazwa].filter(Boolean).join(" - ");
-  }).filter(Boolean).join(", ");
+  }).filter(Boolean).join("\n");
   const beneficialOwners = (register?.beneficjenci_rzeczywisci || []).map((owner) => {
     const record = asRecord(owner);
     return {
@@ -439,8 +439,8 @@ function registrySummary(response: PublicAmlInitialFormResponse) {
   return {
     regon: asText(identifiers.regon || register?.numer_regon || vat.regon),
     krs: asText(identifiers.krs || register?.numer_krs || vat.krs),
-    registeredAddress: asText(company.adres || vat.adresSiedziby),
-    businessAddress: asText(vat.adresDzialalnosci),
+    registeredAddress: normalizeAddress(asText(company.adres || vat.adresSiedziby)),
+    businessAddress: normalizeAddress(asText(vat.adresDzialalnosci)),
     pkd,
     beneficialOwners,
   };
@@ -506,6 +506,13 @@ function asText(value: unknown) {
   return String(value ?? "").trim();
 }
 
+function normalizeAddress(value: string) {
+  return value
+    .replace(/\bBOROWIKWOA\b/gi, "BOROWIKOWA")
+    .replace(/\bBorowikwoa\b/g, "Borowikowa")
+    .trim();
+}
+
 const personLabels: Record<keyof Omit<AmlPersonEntry, "powerOfAttorney" | "powerOfAttorneyDetails">, string> = {
   fullName: "Imię i nazwisko",
   role: "Funkcja albo podstawa umocowania",
@@ -566,7 +573,7 @@ const inputStyle: CSSProperties = { minHeight: "44px", border: `1px solid ${colo
 const textareaSmallStyle: CSSProperties = { ...inputStyle, minHeight: "92px", resize: "vertical", padding: "12px", lineHeight: 1.5 };
 const readOnlyFieldStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: "#f8fbff", padding: "12px", display: "grid", gap: "6px", minHeight: "64px" };
 const readOnlyLabelStyle: CSSProperties = { color: colors.muted, fontSize: "12px", fontWeight: 900, textTransform: "uppercase" };
-const readOnlyValueStyle: CSSProperties = { color: colors.text, fontSize: "14px", lineHeight: 1.4, overflowWrap: "anywhere", fontWeight: 700 };
+const readOnlyValueStyle: CSSProperties = { color: colors.text, fontSize: "14px", lineHeight: 1.4, overflowWrap: "anywhere", whiteSpace: "pre-line", fontWeight: 700 };
 const yesNoFieldStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.inputBackground, padding: "12px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "14px", flexWrap: "wrap" };
 const yesNoLabelStyle: CSSProperties = { color: colors.navy, fontWeight: 700, lineHeight: 1.4, flex: "1 1 360px" };
 const segmentedStyle: CSSProperties = { display: "inline-flex", border: `1px solid ${colors.border}`, borderRadius: radius.button, overflow: "hidden", background: colors.white };

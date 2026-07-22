@@ -167,7 +167,7 @@ function LegalEntityForm({ draft, setDraft, response }: FormProps) {
       </section>
 
       <PeopleSection
-        title="Osoby reprezentujące klienta"
+        title="Osoby reprezentujące podmiot"
         hint="Wskaż osoby uprawnione do działania w imieniu klienta zgodnie z rejestrem, umową, statutem, pełnomocnictwem albo innym dokumentem."
         people={legal.representatives}
         onChange={(people) => update("representatives", people)}
@@ -316,7 +316,6 @@ function BeneficialOwnersSection({ owners, onChange }: { owners: AmlBeneficialOw
   return (
     <section style={sectionStyle}>
       <h2 style={sectionTitleStyle}>Beneficjent rzeczywisty</h2>
-      <p style={hintStyle}>Dane są wstępnie uzupełniane z CRBR, jeżeli były dostępne w analizie AML. Zweryfikuj je i uzupełnij brakujące pola.</p>
       <Repeater
         items={owners}
         addLabel="Dodaj beneficjenta"
@@ -328,7 +327,7 @@ function BeneficialOwnersSection({ owners, onChange }: { owners: AmlBeneficialOw
                 <input style={inputStyle} value={owner[key]} onChange={(event) => onChange(updateAt(owners, index, { ...owner, [key]: event.target.value }))} />
               </Field>
             ))}
-            <Field label="Wielkość udziału w kapitale">
+            <Field label="Wielkość udziału w kapitale (zł)">
               <input style={inputStyle} disabled={owner.capitalShareNotApplicable} value={owner.capitalShare} onChange={(event) => onChange(updateAt(owners, index, { ...owner, capitalShare: event.target.value }))} />
             </Field>
             <CheckLine checked={owner.capitalShareNotApplicable} onChange={(checked) => onChange(updateAt(owners, index, { ...owner, capitalShareNotApplicable: checked }))}>Nie dotyczy udziału w kapitale</CheckLine>
@@ -403,6 +402,7 @@ function buildInitialDraft(response: PublicAmlInitialFormResponse) {
   draft.completedBy = response.client?.osoba_kontaktowa || "";
   draft.legalEntity.businessAddress = registry.businessAddress || registry.registeredAddress;
   draft.legalEntity.businessAddressSameAsRegistered = Boolean(registry.registeredAddress && registry.businessAddress && registry.registeredAddress === registry.businessAddress);
+  draft.legalEntity.representatives = registry.representatives.length ? registry.representatives : draft.legalEntity.representatives;
   draft.legalEntity.beneficialOwners = registry.beneficialOwners.length ? registry.beneficialOwners : [emptyBeneficialOwnerEntry()];
   draft.individual.fullName = response.client?.osoba_kontaktowa || response.client?.nazwa || "";
   draft.individual.businessName = response.client?.nazwa || "";
@@ -425,17 +425,31 @@ function registrySummary(response: PublicAmlInitialFormResponse) {
   }).filter(Boolean).join("\n");
   const beneficialOwners = (register?.beneficjenci_rzeczywisci || []).map((owner) => {
     const record = asRecord(owner);
+    const shares = Array.isArray(record.udzialy) ? record.udzialy.map(asRecord) : [];
+    const firstShare = shares[0] || {};
+    const controlType = cleanControlType(asText(record.rola || firstShare.rodzaj));
+    const capitalShare = formatCapitalShare(record, firstShare);
     return {
       ...emptyBeneficialOwnerEntry(),
       fullName: asText(record.label || [record.pierwszeImie, record.kolejneImiona, record.nazwisko].filter(Boolean).join(" ")),
       citizenship: asText(record.obywatelstwo),
       peselOrBirthDate: asText(record.pesel || record.dataUrodzenia),
       residenceCountry: asText(record.krajZamieszkania),
-      controlType: asText(record.rola),
-      capitalShare: [record.procentUdzialow ? `${record.procentUdzialow}%` : "", record.wartoscUdzialow ? `${record.wartoscUdzialow} PLN` : ""].filter(Boolean).join(" / "),
+      controlType,
+      capitalShare,
       votes: [record.procentGlosow ? `${record.procentGlosow}%` : "", record.liczbaGlosow ? `${record.liczbaGlosow}` : ""].filter(Boolean).join(" / "),
     };
   });
+  const representatives = (register?.beneficjenci_rzeczywisci || [])
+    .map(asRecord)
+    .filter((owner) => owner.reprezentant === true)
+    .map((owner) => ({
+      ...emptyPersonEntry(),
+      fullName: asText(owner.label || [owner.pierwszeImie, owner.kolejneImiona, owner.nazwisko].filter(Boolean).join(" ")),
+      role: "Reprezentant",
+      peselOrBirthDate: asText(owner.pesel || owner.dataUrodzenia),
+      citizenship: asText(owner.obywatelstwo),
+    }));
   return {
     regon: asText(identifiers.regon || register?.numer_regon || vat.regon),
     krs: asText(identifiers.krs || register?.numer_krs || vat.krs),
@@ -443,6 +457,7 @@ function registrySummary(response: PublicAmlInitialFormResponse) {
     businessAddress: normalizeAddress(asText(vat.adresDzialalnosci)),
     pkd,
     beneficialOwners,
+    representatives,
   };
 }
 
@@ -511,6 +526,27 @@ function normalizeAddress(value: string) {
     .replace(/\bBOROWIKWOA\b/gi, "BOROWIKOWA")
     .replace(/\bBorowikwoa\b/g, "Borowikowa")
     .trim();
+}
+
+function cleanControlType(value: string) {
+  return value
+    .replace(/\s*;\s*brak\s*$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function formatCapitalShare(owner: Record<string, unknown>, firstShare: Record<string, unknown>) {
+  const rawValue = owner.wartoscUdzialow || firstShare.ilosc || firstShare.liczbaUdzialow;
+  const value = formatNumberLike(rawValue);
+  return value ? `${value} zł` : "";
+}
+
+function formatNumberLike(value: unknown) {
+  const text = asText(value);
+  if (!text) return "";
+  const numeric = Number(text.replace(",", "."));
+  if (Number.isFinite(numeric)) return new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 2 }).format(numeric);
+  return text;
 }
 
 const personLabels: Record<keyof Omit<AmlPersonEntry, "powerOfAttorney" | "powerOfAttorneyDetails">, string> = {

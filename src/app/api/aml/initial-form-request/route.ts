@@ -104,6 +104,7 @@ function buildInitialFormHtml(client: ClientWithCaregiver, formUrl: string) {
       </div>
       <p style="margin:0 0 16px 0;">Dzień dobry,</p>
       <p style="margin:0 0 16px 0;">prosimy o uzupełnienie formularza wstępnego AML dla <strong>${clientName}</strong>.</p>
+      <p style="margin:0 0 16px 0;">Jako biuro rachunkowe jesteśmy jednostką obowiązaną w myśl ustawy o przeciwdziałaniu praniu pieniędzy oraz finansowaniu terroryzmu. Z tego powodu musimy zebrać wskazane dane w celu identyfikacji i weryfikacji klienta.</p>
       <div style="background:#eef3fb;border:1px solid #c9d6e8;border-radius:14px;padding:18px;margin:24px 0;">
         <p style="margin:0 0 10px 0;font-weight:850;">Formularz wstępny AML</p>
         <p style="margin:0;">Formularz należy wypełnić online. Link jest indywidualny i wygaśnie po zapisaniu formularza.</p>

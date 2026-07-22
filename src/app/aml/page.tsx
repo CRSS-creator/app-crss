@@ -558,6 +558,8 @@ function AmlTabContent({
   onUploadCrbrPdf: (file: File) => void;
   onUpdateBeneficialOwner: (ownerIndex: number, changes: BeneficialOwnerEditValues) => void;
 }) {
+  const [showHistory, setShowHistory] = useState(false);
+
   if (activeTab === "verification") {
     return (
       <>
@@ -591,26 +593,30 @@ function AmlTabContent({
           )}
         </section>
         <section style={detailsSectionStyle}>
-          <h3 style={detailsTitleStyle}>Pełna historia zmian</h3>
-          {row.history.length === 0 ? (
-            <p style={emptySmallStyle}>Brak historii AML dla tego klienta.</p>
-          ) : (
-            <div style={historyListStyle}>
-              {row.history.map((entry) => (
-                <div key={entry.id} style={historyItemStyle}>
-                  <div style={historyIconStyle}><History size={16} /></div>
-                  <div>
-                    <div style={historyMetaStyle}>
-                      {formatDateTime(entry.created_at)} · {profileLabel(entry.created_by, profilesById)}
+          <button type="button" style={secondaryButtonStyle} onClick={() => setShowHistory((current) => !current)}>
+            <History size={16} /> {showHistory ? "Ukryj historię" : "Historia"}
+          </button>
+          {showHistory ? (
+            row.history.length === 0 ? (
+              <p style={emptySmallStyle}>Brak historii AML dla tego podmiotu.</p>
+            ) : (
+              <div style={historyListStyle}>
+                {row.history.map((entry) => (
+                  <div key={entry.id} style={historyItemStyle}>
+                    <div style={historyIconStyle}><History size={16} /></div>
+                    <div>
+                      <div style={historyMetaStyle}>
+                        {formatDateTime(entry.created_at)} · {profileLabel(entry.created_by, profilesById)}
+                      </div>
+                      <strong style={historyActionStyle}>{historyActionLabel(entry.akcja)}</strong>
+                      <p style={historyDescriptionStyle}>{entry.opis}</p>
+                      <div style={changesStyle}>{formatChanges(entry.zmiany)}</div>
                     </div>
-                    <strong style={historyActionStyle}>{historyActionLabel(entry.akcja)}</strong>
-                    <p style={historyDescriptionStyle}>{entry.opis}</p>
-                    <div style={changesStyle}>{formatChanges(entry.zmiany)}</div>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )
+          ) : null}
         </section>
       </>
     );

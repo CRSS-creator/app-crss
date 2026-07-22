@@ -93,8 +93,12 @@ export async function createDueZusSmallPlusCheckNotifications() {
   return supabase.rpc("create_due_zus_small_plus_check_notifications");
 }
 
+export async function createDueAmlNextVerificationNotifications() {
+  return supabase.rpc("create_due_aml_next_verification_notifications");
+}
+
 export async function createDueNotifications() {
-  const [taskResult, crmFollowUpResult, recurringTaskResult, clientCardResult, rodoReviewResult, onboardingCompletionResult, payrollContractResult, payrollA1Result, zusPreferentialRateResult, zusPreferenceExpiryResult, zusSmallPlusCheckResult] = await Promise.all([
+  const [taskResult, crmFollowUpResult, recurringTaskResult, clientCardResult, rodoReviewResult, onboardingCompletionResult, payrollContractResult, payrollA1Result, zusPreferentialRateResult, zusPreferenceExpiryResult, zusSmallPlusCheckResult, amlNextVerificationResult] = await Promise.all([
     createDueTaskNotifications(),
     createDueCrmFollowUpNotifications(),
     createDueRecurringTaskNotifications(),
@@ -106,6 +110,7 @@ export async function createDueNotifications() {
     createDueZusPreferentialRateNotifications(),
     createDueZusPreferenceExpiryNotifications(),
     createDueZusSmallPlusCheckNotifications(),
+    createDueAmlNextVerificationNotifications(),
   ]);
 
   return {
@@ -121,6 +126,7 @@ export async function createDueNotifications() {
       zusPreferentialRateNotifications: zusPreferentialRateResult.data || 0,
       zusPreferenceExpiryNotifications: zusPreferenceExpiryResult.data || 0,
       zusSmallPlusCheckNotifications: zusSmallPlusCheckResult.data || 0,
+      amlNextVerificationNotifications: amlNextVerificationResult.data || 0,
     },
     error:
       taskResult.error ||
@@ -133,7 +139,8 @@ export async function createDueNotifications() {
       payrollA1Result.error ||
       zusPreferentialRateResult.error ||
       zusPreferenceExpiryResult.error ||
-      zusSmallPlusCheckResult.error,
+      zusSmallPlusCheckResult.error ||
+      amlNextVerificationResult.error,
   };
 }
 

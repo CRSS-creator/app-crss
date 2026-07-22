@@ -123,7 +123,7 @@ async function saveInitialForm(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "Ten formularz został już zapisany albo link wygasł." }, { status: 409 });
   }
 
-  const client = getClient(form);
+  const client = getClient(form) as ClientRecord;
   if (!client) return NextResponse.json({ error: "Nie znaleziono klienta dla formularza." }, { status: 404 });
 
   let data: AmlInitialFormData;
@@ -180,7 +180,7 @@ async function saveInitialForm(request: NextRequest, context: RouteContext) {
       typ: "application/pdf",
     })
     .select("id")
-    .single();
+    .single() as { data: { id: string }; error: { message?: string } | null };
 
   if (documentError || !documentRecord) {
     console.error("Błąd zapisu dokumentu formularza AML:", documentError);
@@ -219,7 +219,41 @@ async function saveInitialForm(request: NextRequest, context: RouteContext) {
     created_by: null,
   });
 
-  if (client.opiekun_id) {
+  if (!client || !documentRecord) {
+    return NextResponse.json({ error: "Nie udało się przygotować danych powiadomienia AML." }, { status: 500 });
+  }
+
+  const { data: ownerProfiles } = await admin
+    .from("profiles")
+    .select("id")
+    .eq("role", "owner")
+    .eq("aktywne", true);
+
+  const ownerNotifications = (ownerProfiles || []).map((owner) => ({
+    type: "aml_initial_form_completed",
+    title: "Formularz wstępny AML został wypełniony",
+    body: `Klient ${client.nazwa || "bez nazwy"} wypełnił formularz wstępny AML. PDF zapisano w dokumentach klienta.`,
+    priority: "high",
+    related_table: "aml_formularze_wstepne",
+    related_id: form.id,
+    recipient_id: owner.id,
+    metadata: {
+      client_id: client.id,
+      client_name: client.nazwa,
+      client_nip: client.nip,
+      aml_initial_form_id: form.id,
+      document_id: documentRecord.id,
+      notification_kind: "aml_initial_form_completed",
+      recipient_kind: "owner",
+      target_module: "aml",
+    },
+  }));
+
+  if (ownerNotifications.length > 0) {
+    await admin.from("powiadomienia").insert(ownerNotifications);
+  }
+
+  if (false && client.opiekun_id) {
     await admin.from("powiadomienia").insert({
       type: "aml_initial_form_completed",
       title: "Formularz wstępny AML został wypełniony",

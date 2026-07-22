@@ -661,6 +661,8 @@ function RegistryDetails({
   const pepOsint = asRecord(registry.pepOsint);
   const pepFindings = Array.isArray(pepOsint.findings) ? pepOsint.findings as Array<Record<string, unknown>> : [];
   const pepCheckedSources = Array.isArray(pepOsint.checkedSources) ? pepOsint.checkedSources as Array<Record<string, unknown>> : [];
+  const pepHistorySources = pepOsintHistorySources(pepCheckedSources, pepFindings);
+  const [showPepHistory, setShowPepHistory] = useState(false);
   const owners = Array.isArray(register?.beneficjenci_rzeczywisci) ? register.beneficjenci_rzeczywisci : [];
   const pkdCodes = Array.isArray(register?.kody_pkd) ? register.kody_pkd : [];
 
@@ -705,51 +707,28 @@ function RegistryDetails({
             {Object.keys(pepOsint).length > 0 ? (
               <div style={pepOsintContentStyle}>
                 <Definition label="Status" value={pepOsintStatusLabel(asText(pepOsint.status))} />
-                <Definition label="Opis" value={asText(pepOsint.label)} />
                 <Definition label="Data" value={formatDateTime(asText(pepOsint.checkedAt))} />
-                {pepOsint.notes ? <Definition label="Metodyka" value={asText(pepOsint.notes)} /> : null}
-                {pepCheckedSources.length > 0 ? (
+                <button type="button" style={pepHistoryButtonStyle} onClick={() => setShowPepHistory((current) => !current)}>
+                  Historia
+                </button>
+                {showPepHistory ? (
                   <div style={pepSourcesPanelStyle}>
-                    <strong style={pepSourcesTitleStyle}>Sprawdzone źródła</strong>
-                    <div style={pepFindingSourcesStyle}>
-                      {pepCheckedSources.slice(0, 12).map((source, sourceIndex) => {
-                        const url = String(source.url || "");
-                        const label = asText(source.title || source.name || url);
-                        return url ? (
-                          <a key={`${url}-${sourceIndex}`} href={url} target="_blank" rel="noreferrer" style={pepFindingSourceStyle}>
-                            {label}
-                          </a>
-                        ) : (
-                          <span key={`${label}-${sourceIndex}`} style={pepSourceTextBadgeStyle}>{label}</span>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ) : null}
-                {pepFindings.length > 0 ? (
-                  <div style={pepFindingsListStyle}>
-                    {pepFindings.slice(0, 6).map((finding, index) => {
-                      const sources = Array.isArray(finding.sources) ? finding.sources as Array<Record<string, unknown>> : [];
-                      return (
-                        <div key={`${asText(finding.subject)}-${index}`} style={pepFindingItemStyle}>
-                          <strong style={beneficialOwnerNameStyle}>{asText(finding.subject)}</strong>
-                          <span>{asText(finding.summary || finding.risk)}</span>
-                          {sources.length > 0 ? (
-                            <div style={pepFindingSourcesStyle}>
-                              {sources.slice(0, 4).map((source, sourceIndex) => {
-                                const url = String(source.url || "");
-                                if (!url) return null;
-                                return (
-                                  <a key={`${url}-${sourceIndex}`} href={url} target="_blank" rel="noreferrer" style={pepFindingSourceStyle}>
-                                    {asText(source.title || url)}
-                                  </a>
-                                );
-                              })}
-                            </div>
-                          ) : null}
-                        </div>
-                      );
-                    })}
+                    <strong style={pepSourcesTitleStyle}>Adresy sprawdzonych stron</strong>
+                    {pepHistorySources.length > 0 ? (
+                      <div style={pepFindingSourcesStyle}>
+                        {pepHistorySources.slice(0, 20).map((source, sourceIndex) => (
+                          source.url ? (
+                            <a key={`${source.url}-${sourceIndex}`} href={source.url} target="_blank" rel="noreferrer" style={pepFindingSourceStyle}>
+                              {source.label}
+                            </a>
+                          ) : (
+                            <span key={`${source.label}-${sourceIndex}`} style={pepSourceTextBadgeStyle}>{source.label}</span>
+                          )
+                        ))}
+                      </div>
+                    ) : (
+                      <p style={emptySmallStyle}>Brak zapisanych adresów stron dla tego sprawdzenia.</p>
+                    )}
                   </div>
                 ) : null}
               </div>
@@ -954,6 +933,24 @@ function beneficiarySharesLabel(owner: Record<string, unknown>) {
     .map((share) => share.procentUdzialow ? formatPercentValue(share.procentUdzialow) : "")
     .filter(Boolean);
   return values.join(", ") || "Do uzupełnienia w formularzu";
+}
+
+function pepOsintHistorySources(checkedSources: Array<Record<string, unknown>>, findings: Array<Record<string, unknown>>) {
+  const sources = new Map<string, { label: string; url: string | null }>();
+  const addSource = (source: Record<string, unknown>) => {
+    const url = String(source.url || "").trim();
+    const label = asText(source.title || source.name || source.source || url);
+    if (!url && label === "-") return;
+    sources.set(url || label, { label, url: url || null });
+  };
+
+  checkedSources.forEach(addSource);
+  findings.forEach((finding) => {
+    const findingSources = Array.isArray(finding.sources) ? finding.sources as Array<Record<string, unknown>> : [];
+    findingSources.forEach(addSource);
+  });
+
+  return [...sources.values()];
 }
 
 function formatPercentValue(value: unknown) {
@@ -1381,10 +1378,9 @@ const ownerToggleRowStyle: CSSProperties = { display: "flex", flexWrap: "wrap", 
 const ownerToggleStyle: CSSProperties = { minHeight: "34px", display: "inline-flex", alignItems: "center", gap: "7px", border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "0 10px", background: colors.inputBackground, color: colors.navy, fontSize: "12px", fontWeight: 850 };
 const ownerSaveButtonStyle: CSSProperties = { minHeight: "38px", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.navy, color: colors.white, fontWeight: 850, cursor: "pointer" };
 const pepOsintContentStyle: CSSProperties = { display: "grid", gap: "10px" };
+const pepHistoryButtonStyle: CSSProperties = { minHeight: "38px", justifySelf: "start", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.navy, padding: "0 12px", fontWeight: 850, cursor: "pointer" };
 const pepSourcesPanelStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, padding: "12px", display: "grid", gap: "8px" };
 const pepSourcesTitleStyle: CSSProperties = { color: colors.navy, fontSize: "13px" };
-const pepFindingsListStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "10px" };
-const pepFindingItemStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, padding: "12px", display: "grid", gap: "8px", color: colors.text, fontSize: "13px", lineHeight: 1.45 };
 const pepFindingSourcesStyle: CSSProperties = { display: "flex", flexWrap: "wrap", gap: "6px" };
 const pepFindingSourceStyle: CSSProperties = { color: colors.navy, fontWeight: 850, textDecoration: "none", border: `1px solid ${colors.border}`, borderRadius: radius.badge, padding: "5px 8px", background: colors.inputBackground, maxWidth: "100%", overflowWrap: "anywhere" };
 const pepSourceTextBadgeStyle: CSSProperties = { ...pepFindingSourceStyle, display: "inline-flex" };

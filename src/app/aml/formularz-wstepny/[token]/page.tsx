@@ -282,7 +282,7 @@ function IndividualForm({ draft, setDraft, response }: FormProps) {
 
       <section style={sectionStyle}>
         <h2 style={sectionTitleStyle}>Beneficjent rzeczywisty</h2>
-        <YesNoField label="Czy podmiot jest jedyną osobą fizyczną sprawującą bezpośrednio lub pośrednio kontrolę nad prowadzoną działalnością?" value={individual.isOnlyBeneficialOwner} onChange={(value) => update("isOnlyBeneficialOwner", value)} />
+        <YesNoField label="Czy przedsiębiorca jest jedyną osobą fizyczną sprawującą bezpośrednio lub pośrednio kontrolę nad prowadzoną działalnością?" value={individual.isOnlyBeneficialOwner} onChange={(value) => update("isOnlyBeneficialOwner", value)} />
         {individual.isOnlyBeneficialOwner === "nie" ? (
           <Repeater
             items={individual.beneficialOwners}

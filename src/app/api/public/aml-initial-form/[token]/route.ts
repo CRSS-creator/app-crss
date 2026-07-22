@@ -169,6 +169,7 @@ async function saveInitialForm(request: NextRequest, context: RouteContext) {
   const pdf = await buildAmlInitialFormPdf({
     clientName: client.nazwa || "Klient",
     clientNip: client.nip,
+    formToken: form.public_token || token,
     completedAt,
     data,
   });

@@ -7,6 +7,7 @@ import { HIGH_ATTENTION_ACTIVITY_LABELS, type AmlInitialFormData } from "@/lib/a
 type AmlInitialFormPdfInput = {
   clientName: string;
   clientNip: string | null;
+  formToken: string;
   completedAt: Date;
   data: AmlInitialFormData;
 };
@@ -40,6 +41,7 @@ export async function buildAmlInitialFormPdf(input: AmlInitialFormPdfInput): Pro
   field(context, "Typ formularza", input.data.formType === "individual" ? "Osoba fizyczna / JDG" : "Osoba prawna");
   field(context, "Klient", input.clientName);
   field(context, "NIP", input.clientNip);
+  field(context, "Token formularza", input.formToken);
   field(context, "Wypełnił(a)", input.data.completedBy);
   field(context, "Data zapisu", input.completedAt.toLocaleString("pl-PL", { dateStyle: "short", timeStyle: "short" }));
 

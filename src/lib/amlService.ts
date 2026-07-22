@@ -317,3 +317,25 @@ export async function getAmlReportUrl(verificationId: string) {
 
   return { data: body as { url: string; fileName: string }, error: null };
 }
+
+export async function getAmlInitialFormPdfUrl(formId: string) {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
+  if (!token) return { data: null, error: new Error("Brak aktywnej sesji użytkownika.") };
+
+  const response = await fetch("/api/aml/initial-form-pdf-url", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ formId }),
+  });
+
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    return { data: null, error: new Error(body?.error || "Nie udało się pobrać linku do formularza wstępnego AML.") };
+  }
+
+  return { data: body as { url: string; fileName: string }, error: null };
+}

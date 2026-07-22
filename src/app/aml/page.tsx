@@ -10,6 +10,7 @@ import {
   fetchAmlInitialForms,
   fetchAmlRegisters,
   fetchAmlVerifications,
+  getAmlInitialFormPdfUrl,
   getAmlReportUrl,
   runPepOsintCheck,
   sendAmlInitialForm,
@@ -776,11 +777,35 @@ function tabEmptyMessage(tab: AmlCheckKey) {
 function InitialFormItem({ form, profilesById }: { form: AmlInitialFormRecord; profilesById: Record<string, Profile> }) {
   const active = form.status === "active";
   const archived = Boolean((form.form_data as { archiwalny?: unknown })?.archiwalny);
+  const hasPdf = Boolean(form.completed_pdf_document_id);
   const formUrl = typeof window === "undefined" ? `/aml/formularz-wstepny/${form.public_token}` : `${window.location.origin}/aml/formularz-wstepny/${form.public_token}`;
 
   async function copyLink() {
     await navigator.clipboard.writeText(formUrl);
     alert("Skopiowano link do formularza wstępnego AML.");
+  }
+
+  async function openPdf() {
+    const result = await getAmlInitialFormPdfUrl(form.id);
+    if (result.error || !result.data?.url) {
+      alert(result.error?.message || "Nie udało się otworzyć PDF formularza wstępnego AML.");
+      return;
+    }
+    window.open(result.data.url, "_blank", "noopener,noreferrer");
+  }
+
+  async function downloadPdf() {
+    const result = await getAmlInitialFormPdfUrl(form.id);
+    if (result.error || !result.data?.url) {
+      alert(result.error?.message || "Nie udało się pobrać PDF formularza wstępnego AML.");
+      return;
+    }
+    const link = document.createElement("a");
+    link.href = result.data.url;
+    link.download = result.data.fileName || "Formularz_wstepny_AML.pdf";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
   }
 
   return (
@@ -802,6 +827,8 @@ function InitialFormItem({ form, profilesById }: { form: AmlInitialFormRecord; p
       </div>
       <div style={reportButtonsStyle}>
         {active ? <button type="button" onClick={() => void copyLink()} style={smallButtonStyle}>Kopiuj link</button> : null}
+        {hasPdf ? <button type="button" onClick={() => void openPdf()} style={smallButtonStyle}><Eye size={16} /> Podgląd</button> : null}
+        {hasPdf ? <button type="button" onClick={() => void downloadPdf()} style={smallButtonStyle}><Download size={16} /> Pobierz</button> : null}
       </div>
     </article>
   );

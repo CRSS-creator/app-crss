@@ -122,7 +122,7 @@ function drawIndividualData(context: PdfContext, data: AmlInitialFormData) {
   field(context, "Dodatkowy adres działalności", individual.additionalBusinessAddress);
   field(context, "Przedmiot działalności", individual.businessSubject);
 
-  section(context, "Osoby upoważnione do działania albo kontaktu");
+  section(context, "Osoby upoważnione do działania lub kontaktu");
   field(context, "Ustanowiono osoby upoważnione", yesNo(individual.hasAuthorizedPersons));
   if (individual.hasAuthorizedPersons === "tak") {
     individual.authorizedPersons.forEach((person, index) => {

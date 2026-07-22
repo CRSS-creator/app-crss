@@ -156,15 +156,15 @@ export type AmlInitialFormData = {
 };
 
 export const HIGH_ATTENTION_ACTIVITY_LABELS: Array<{ key: string; label: string }> = [
-  { key: "currencyPaymentsCrypto", label: "Obrót walutami, przekazy pieniężne, usługi płatnicze albo kryptoaktywa" },
-  { key: "pawnUsedGoods", label: "Działalność lombardowa, komisowa albo obrót towarami używanymi o znacznej wartości" },
-  { key: "fuelsSteelScrap", label: "Paliwa, materiały opałowe, stal, złom albo towary szczególnie narażone na nadużycia podatkowe" },
-  { key: "realEstate", label: "Nieruchomości, pośrednictwo albo zarządzanie nieruchomościami" },
-  { key: "luxuryGoods", label: "Dzieła sztuki, antyki, kamienie lub metale szlachetne, biżuteria, jachty, samochody luksusowe albo inne dobra luksusowe" },
-  { key: "gambling", label: "Hazard, gry losowe albo zakłady wzajemne" },
-  { key: "loansFinanceInvestments", label: "Branża pożyczkowa, finansowa, inwestycyjna albo windykacyjna" },
-  { key: "consultingIntermediation", label: "Doradztwo, konsulting albo pośrednictwo z trudnym do ustalenia uzasadnieniem ekonomicznym transakcji" },
-  { key: "weaponsDualUse", label: "Handel bronią, sprzętem wojskowym albo towarami podwójnego zastosowania" },
+  { key: "currencyPaymentsCrypto", label: "Obrót walutami, przekazy pieniężne, usługi płatnicze lub kryptoaktywa" },
+  { key: "pawnUsedGoods", label: "Działalność lombardowa, komisowa lub obrót towarami używanymi o znacznej wartości" },
+  { key: "fuelsSteelScrap", label: "Paliwa, materiały opałowe, stal, złom lub towary szczególnie narażone na nadużycia podatkowe" },
+  { key: "realEstate", label: "Nieruchomości, pośrednictwo lub zarządzanie nieruchomościami" },
+  { key: "luxuryGoods", label: "Dzieła sztuki, antyki, kamienie lub metale szlachetne, biżuteria, jachty, samochody luksusowe lub inne dobra luksusowe" },
+  { key: "gambling", label: "Hazard, gry losowe lub zakłady wzajemne" },
+  { key: "loansFinanceInvestments", label: "Branża pożyczkowa, finansowa, inwestycyjna lub windykacyjna" },
+  { key: "consultingIntermediation", label: "Doradztwo, konsulting lub pośrednictwo z trudnym do ustalenia uzasadnieniem ekonomicznym transakcji" },
+  { key: "weaponsDualUse", label: "Handel bronią, sprzętem wojskowym lub towarami podwójnego zastosowania" },
   { key: "cashIntensive", label: "Działalność, w której istotną rolę odgrywają transakcje gotówkowe" },
 ];
 
@@ -301,7 +301,7 @@ export function validateAmlInitialFormData(data: AmlInitialFormData) {
     if (!hasAnyCompletedPerson(data.legalEntity.beneficialOwners)) missing.push("Beneficjent rzeczywisty");
   } else {
     if (!data.individual.fullName?.trim()) missing.push("Imię i nazwisko klienta");
-    if (!data.individual.peselOrBirthDate?.trim()) missing.push("PESEL albo data urodzenia klienta");
+    if (!data.individual.peselOrBirthDate?.trim()) missing.push("PESEL lub data urodzenia klienta");
     if (!data.individual.businessSubject?.trim()) missing.push("Przedmiot prowadzonej działalności");
   }
   if (!data.common.onlyPoland) missing.push("Informacja, czy działalność jest prowadzona wyłącznie w Polsce");

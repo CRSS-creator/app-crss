@@ -1217,6 +1217,7 @@ function StatusPill({ done }: { done: boolean }) {
 }
 
 function amlCheckStatus(row: AmlRow, check: AmlCheckKey) {
+  if (!isAmlStatusStillValid(row.register?.nastepna_weryfikacja_at)) return false;
   if (check === "verification") return row.verifications.length > 0 || Boolean(row.register?.ostatnia_weryfikacja_at);
   if (check === "initial_form") {
     return row.initialForms.some((form) => Boolean(form.completed_at || form.completed_pdf_document_id));
@@ -1367,6 +1368,15 @@ function dateFromInput(value: string) {
   const [year, month, day] = value.split("-").map(Number);
   if (!year || !month || !day) return null;
   return new Date(year, month - 1, day, 12);
+}
+
+function isAmlStatusStillValid(nextVerificationDate: string | null | undefined) {
+  if (!nextVerificationDate) return true;
+  const dueDate = dateFromInput(nextVerificationDate.slice(0, 10));
+  if (!dueDate) return true;
+  const today = new Date();
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12);
+  return dueDate >= todayStart;
 }
 
 function dateToInputValue(date: Date) {

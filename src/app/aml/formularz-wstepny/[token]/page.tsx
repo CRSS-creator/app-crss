@@ -184,7 +184,7 @@ function LegalEntityForm({ draft, setDraft, response }: FormProps) {
 
       <PeopleSection
         title="Osoby reprezentujące podmiot"
-        hint="Poniższe osoby reprezentujące podmiot zostały &quot;zaimportowane&quot; z Centralnego Rejestru Beneficjentów Rzeczywistych."
+        hint="Poniższe osoby reprezentujące podmiot zostały pobrane z Centralnego Rejestru Beneficjentów Rzeczywistych."
         people={legal.representatives}
         onChange={(people) => update("representatives", people)}
       />
@@ -330,7 +330,7 @@ function BeneficialOwnersSection({ owners, onChange }: { owners: AmlBeneficialOw
   return (
     <section style={sectionStyle}>
       <h2 style={strongSectionTitleStyle}>Beneficjenci rzeczywiści</h2>
-      <p style={hintStyle}>Poniżsi beneficjenci zostali "zaimportowani" z Centralnego Rejestru Beneficjentów Rzeczywistych.</p>
+      <p style={hintStyle}>Poniżsi beneficjenci zostali pobrani z Centralnego Rejestru Beneficjentów Rzeczywistych.</p>
       <Repeater
         items={owners}
         addLabel="Dodaj beneficjenta"

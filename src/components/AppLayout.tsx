@@ -217,7 +217,7 @@ export default function AppLayout({ children, activePage }: AppLayoutProps) {
         </nav>
       </aside>
 
-      <section data-active-page={activePage} style={contentStyle}>
+      <section data-active-page={activePage} style={activePage === "aml" ? amlContentStyle : contentStyle}>
         {children}
         {activePage === "crm" && <CrmDetailsLayoutFixWidget />}
         {activePage === "umowy" && <ContractRegisterSplitWidget />}
@@ -394,4 +394,9 @@ const contentStyle: React.CSSProperties = {
   flex: 1,
   minWidth: 0,
   padding: "42px",
+};
+
+const amlContentStyle: React.CSSProperties = {
+  ...contentStyle,
+  background: colors.white,
 };

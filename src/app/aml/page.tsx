@@ -1545,7 +1545,7 @@ function formatAddress(record: Record<string, unknown>) {
   return [street, city].filter(Boolean).join(", ") || "-";
 }
 
-const pageStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "22px", width: "100%", maxWidth: "100%", minWidth: 0, overflowX: "hidden" };
+const pageStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "22px", width: "100%", maxWidth: "100%", minWidth: 0, overflowX: "hidden", background: colors.white };
 const headerStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "24px", alignItems: "flex-start" };
 const eyebrowStyle: CSSProperties = { margin: "0 0 8px", fontSize: "13px", fontWeight: 850, letterSpacing: "0.08em", color: colors.red, textTransform: "uppercase" };
 const titleStyle: CSSProperties = { margin: 0, fontSize: "34px", lineHeight: 1.15, color: colors.navy };

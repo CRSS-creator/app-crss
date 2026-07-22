@@ -384,6 +384,7 @@ function CommonRiskSection({ draft, setDraft }: { draft: AmlInitialFormData; set
 
       <section style={sectionStyle}>
         <h2 style={sectionTitleStyle}>Obszary geograficzne i status PEP</h2>
+        <HighRiskCountriesNotice />
         <YesNoField label="Czy podmiot, beneficjent, kontrahent lub istotny element działalności jest powiązany z państwem wysokiego ryzyka, sankcyjnym lub o podwyższonym poziomie korupcji?" value={common.geographicRisk} onChange={(value) => update("geographicRisk", value)} />
         {common.geographicRisk === "tak" ? <Field label="Państwo oraz charakter powiązania"><textarea style={textareaSmallStyle} value={common.geographicRiskCountries} onChange={(event) => update("geographicRiskCountries", event.target.value)} /></Field> : null}
         <YesNoField label="Czy podmiot, reprezentant, osoba upoważniona lub beneficjent rzeczywisty jest osobą zajmującą eksponowane stanowisko polityczne?" value={common.pepPublicFunction} onChange={(value) => update("pepPublicFunction", value)} />
@@ -392,6 +393,22 @@ function CommonRiskSection({ draft, setDraft }: { draft: AmlInitialFormData; set
         {(common.pepPublicFunction === "tak" || common.pepFamily === "tak" || common.pepAssociate === "tak") ? <Field label="Osoba, funkcja lub relacja oraz państwo powiązane ze statusem PEP"><textarea style={textareaSmallStyle} value={common.pepDetails} onChange={(event) => update("pepDetails", event.target.value)} /></Field> : null}
       </section>
     </>
+  );
+}
+
+function HighRiskCountriesNotice() {
+  return (
+    <div style={riskNoticeStyle}>
+      <strong style={riskNoticeTitleStyle}>Przed odpowiedzią zapoznaj się z aktualnymi listami państw wysokiego ryzyka i sankcyjnymi.</strong>
+      <p style={riskNoticeTextStyle}>
+        Dotyczy to w szczególności krajów wskazanych przez FATF, Komisję Europejską oraz państw, osób i podmiotów objętych sankcjami.
+      </p>
+      <div style={riskNoticeLinksStyle}>
+        <a style={noticeLinkStyle} href="https://www.fatf-gafi.org/en/topics/high-risk-and-other-monitored-jurisdictions.html" target="_blank" rel="noreferrer">Lista FATF</a>
+        <a style={noticeLinkStyle} href="https://finance.ec.europa.eu/financial-crime/anti-money-laundering-and-countering-financing-terrorism-international-level_en" target="_blank" rel="noreferrer">Lista Komisji Europejskiej</a>
+        <a style={noticeLinkStyle} href="https://www.gov.pl/web/mswia/lista-osob-i-podmiotow-objetych-sankcjami" target="_blank" rel="noreferrer">Lista sankcyjna MSWiA</a>
+      </div>
+    </div>
   );
 }
 
@@ -627,5 +644,10 @@ const removeButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`,
 const secondaryButtonStyle: CSSProperties = { minHeight: "42px", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.navy, fontWeight: 900, padding: "0 14px", cursor: "pointer", justifySelf: "start" };
 const confirmationStyle: CSSProperties = { display: "flex", gap: "10px", alignItems: "flex-start", color: colors.text, lineHeight: 1.5, fontWeight: 650 };
 const statementStyle: CSSProperties = { margin: 0, border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "12px", background: "#f8fbff", color: colors.text, lineHeight: 1.5 };
+const riskNoticeStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: "#f8fbff", padding: "14px", display: "grid", gap: "8px" };
+const riskNoticeTitleStyle: CSSProperties = { color: colors.navy, fontWeight: 850, lineHeight: 1.45 };
+const riskNoticeTextStyle: CSSProperties = { margin: 0, color: colors.text, lineHeight: 1.5 };
+const riskNoticeLinksStyle: CSSProperties = { display: "flex", gap: "10px", flexWrap: "wrap" };
+const noticeLinkStyle: CSSProperties = { color: colors.navy, fontWeight: 850, textDecoration: "underline", textUnderlineOffset: "3px" };
 const primaryButtonStyle: CSSProperties = { minHeight: "50px", border: 0, borderRadius: radius.button, background: colors.danger, color: colors.white, fontWeight: 900, fontSize: "16px", cursor: "pointer" };
 const disabledButtonStyle: CSSProperties = { ...primaryButtonStyle, opacity: 0.65, cursor: "not-allowed" };

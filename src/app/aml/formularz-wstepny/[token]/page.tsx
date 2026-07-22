@@ -215,8 +215,8 @@ function LegalEntityForm({ draft, setDraft, response }: FormProps) {
 
       <section style={sectionStyle}>
         <h2 style={sectionTitleStyle}>Struktura własności i kontroli</h2>
-        <YesNoField label="Czy podmiot posiada wspólników, udziałowców jako osoby fizyczne lub akcjonariuszy będących osobami prawnymi lub innymi jednostkami organizacyjnymi?" value={legal.hasShareholders} onChange={(value) => update("hasShareholders", value)} />
-        <Field label="Opis struktury własności do poziomu osób fizycznych sprawujących kontrolę"><textarea style={textareaSmallStyle} value={legal.ownershipStructure} onChange={(event) => update("ownershipStructure", event.target.value)} /></Field>
+        <YesNoField label="Czy podmiot jest pod kontrolą innych osób, niż te wymienione powyżej w beneficjentach i reprezentantach?" value={legal.hasShareholders} onChange={(value) => update("hasShareholders", value)} />
+        <Field label="Opis innych osób lub mechanizmów kontroli"><textarea style={textareaSmallStyle} value={legal.ownershipStructure} onChange={(event) => update("ownershipStructure", event.target.value)} /></Field>
         <YesNoField label="Czy struktura własności obejmuje podmioty zagraniczne?" value={legal.hasForeignOwnershipEntities} onChange={(value) => update("hasForeignOwnershipEntities", value)} />
         {legal.hasForeignOwnershipEntities === "tak" ? <Field label="Państwa rejestracji podmiotów zagranicznych"><input style={inputStyle} value={legal.foreignOwnershipCountries} onChange={(event) => update("foreignOwnershipCountries", event.target.value)} /></Field> : null}
         <YesNoField label="Czy występują umowy, porozumienia, prawa osobiste, uprzywilejowanie udziałów lub inne mechanizmy kontroli?" value={legal.hasSpecialControlMechanisms} onChange={(value) => update("hasSpecialControlMechanisms", value)} />

@@ -98,8 +98,8 @@ function drawLegalEntityData(context: PdfContext, data: AmlInitialFormData) {
   legal.beneficialOwners.forEach((owner, index) => drawBeneficialOwner(context, index, owner));
 
   section(context, "Struktura własności i kontroli");
-  field(context, "Wspólnicy / udziałowcy / akcjonariusze", yesNo(legal.hasShareholders));
-  field(context, "Opis struktury własności", legal.ownershipStructure);
+  field(context, "Kontrola innych osób niż wymienione wyżej", yesNo(legal.hasShareholders));
+  field(context, "Opis innych osób lub mechanizmów kontroli", legal.ownershipStructure);
   field(context, "Podmioty zagraniczne w strukturze", yesNo(legal.hasForeignOwnershipEntities));
   field(context, "Państwa rejestracji", legal.foreignOwnershipCountries);
   field(context, "Szczególne mechanizmy kontroli", yesNo(legal.hasSpecialControlMechanisms));

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { CalendarDays, ChevronLeft, ChevronRight, ClipboardCheck, Download, Eye, FileSearch, History, Send, ShieldCheck, Upload, X } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, ClipboardCheck, Download, Eye, FileSearch, History, Plus, Send, ShieldCheck, Upload, X } from "lucide-react";
 import AccessGuard from "@/components/AccessGuard";
 import AppLayout from "@/components/AppLayout";
 import { colors, radius, shadow } from "@/app/design";
@@ -740,8 +740,8 @@ function AmlTabContent({
             <span style={tabPanelLabelStyle}>{activeCheck.label}</span>
             <StatusPill done={activeCheckDone} />
           </div>
-          <button type="button" onClick={onCreateIdentificationStatement} disabled={creatingIdentificationStatement} style={secondaryButtonStyle}>
-            <Send size={16} />
+          <button type="button" onClick={onCreateIdentificationStatement} disabled={creatingIdentificationStatement} style={primaryButtonStyle}>
+            <Plus size={16} />
             {creatingIdentificationStatement ? "Otwieranie..." : "Przejdź do oświadczenia"}
           </button>
         </div>

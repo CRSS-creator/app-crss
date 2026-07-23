@@ -14,6 +14,7 @@ import {
   fetchAmlRegisters,
   fetchAmlRiskAssessments,
   fetchAmlVerifications,
+  generateAmlInstitutionRiskPdf,
   getAmlIdentificationStatementPdfUrl,
   getAmlInitialFormPdfUrl,
   getAmlReportUrl,
@@ -130,6 +131,7 @@ function AmlContent() {
   const [savingBeneficialOwnerKey, setSavingBeneficialOwnerKey] = useState<string | null>(null);
   const [uploadingArchiveClientId, setUploadingArchiveClientId] = useState<string | null>(null);
   const [uploadingCrbrPdfClientId, setUploadingCrbrPdfClientId] = useState<string | null>(null);
+  const [generatingInstitutionRiskPdf, setGeneratingInstitutionRiskPdf] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
@@ -358,6 +360,27 @@ function AmlContent() {
     setSelectedClientId(row.client.id);
   }
 
+  async function handleGenerateInstitutionRiskPdf() {
+    setGeneratingInstitutionRiskPdf(true);
+    const result = await generateAmlInstitutionRiskPdf();
+    setGeneratingInstitutionRiskPdf(false);
+
+    if (result.error) {
+      alert(result.error.message);
+      return;
+    }
+
+    if (!result.data) return;
+    const url = URL.createObjectURL(result.data.blob);
+    const opened = window.open(url, "_blank", "noopener,noreferrer");
+    if (!opened) {
+      URL.revokeObjectURL(url);
+      alert("Nie udało się otworzyć PDF. Sprawdź, czy przeglądarka nie blokuje nowych kart.");
+      return;
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  }
+
   return (
     <div style={pageStyle}>
       <header style={headerStyle}>
@@ -386,6 +409,15 @@ function AmlContent() {
             <h2 style={sectionTitleStyle}>Wszyscy klienci</h2>
             <p style={sectionHintStyle}>Lista obejmuje wszystkich klientów w aplikacji. Szczegóły otwierają pełną historię AML i zapisane raporty weryfikacji.</p>
           </div>
+          <button
+            type="button"
+            onClick={() => void handleGenerateInstitutionRiskPdf()}
+            disabled={generatingInstitutionRiskPdf}
+            style={primaryButtonStyle}
+          >
+            <Plus size={16} />
+            {generatingInstitutionRiskPdf ? "Generowanie..." : "Weryfikacja instytucji obowiązanej"}
+          </button>
         </div>
 
         <div style={searchRowStyle}>

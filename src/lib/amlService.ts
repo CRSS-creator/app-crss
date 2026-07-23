@@ -527,3 +527,26 @@ export async function getAmlRiskAssessmentPdfUrl(assessmentId: string) {
 
   return { data: body as { url: string; fileName: string }, error: null };
 }
+
+export async function generateAmlInstitutionRiskPdf() {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
+  if (!token) return { data: null, error: new Error("Brak aktywnej sesji użytkownika.") };
+
+  const response = await fetch("/api/aml/institution-risk-pdf", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    return { data: null, error: new Error(body?.error || "Nie udało się wygenerować weryfikacji instytucji obowiązanej.") };
+  }
+
+  const blob = await response.blob();
+  const disposition = response.headers.get("content-disposition") || "";
+  const encodedFileName = disposition.match(/filename="([^"]+)"/)?.[1];
+  const fileName = encodedFileName ? decodeURIComponent(encodedFileName) : "Weryfikacja instytucji obowiązanej.pdf";
+
+  return { data: { blob, fileName }, error: null };
+}

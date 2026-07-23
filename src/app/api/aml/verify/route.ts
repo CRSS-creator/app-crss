@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
   const checksVies = Boolean(client.vat_ue);
   const vatCheck = checksVat
     ? await verifyVatWhitelist(nip)
-    : confirmedCheck("Status VAT", "Weryfikacja potwierdzona: klient jest oznaczony w aplikacji jako zwolniony z VAT.");
+    : skippedCheck("Biała Lista VAT", "Nie odpytano Białej Listy VAT, ponieważ klient nie jest oznaczony w aplikacji jako czynny podatnik VAT.");
   checks.push(vatCheck);
 
   const vatSubject = getVatSubject(vatCheck);
@@ -181,7 +181,7 @@ export async function POST(request: NextRequest) {
       wynik: result,
       zrodla: visibleSourceChecks.map((check) => ({ source: check.source, status: check.status, label: check.label })),
       dane: { checks, dane_rejestrowe: registryDetails, beneficjenci_rzeczywisci: beneficialOwners, kody_pkd: pkdCodes },
-      vat_status: checksVat ? (vatCheck.status === "ok" ? String(vatSubject?.statusVat || "sprawdzono") : vatCheck.status) : "potwierdzono_zwolnienie",
+      vat_status: checksVat ? (vatCheck.status === "ok" ? String(vatSubject?.statusVat || "sprawdzono") : vatCheck.status) : "nie_sprawdzono",
       vies_status: checksVies ? statusForSource(checks, "VIES") : "potwierdzono_brak_vat_ue",
       krs_status: statusForSource(checks, "KRS"),
       pep_status: "nie_sprawdzono",
@@ -1229,7 +1229,7 @@ async function buildAmlReportPdf(input: {
   drawText(`Użytkownik generujący: ${input.requesterName}`, 9, margin, muted);
   const sources = [
     ceidgCheck ? "CEIDG" : null,
-    "Biała Lista VAT MF",
+    vatCheck?.status !== "skipped" ? "Biała Lista VAT MF" : null,
     "VIES",
     krsCheck?.status !== "skipped" ? "KRS MS" : null,
     crbrWasUsed ? "CRBR MF" : null,

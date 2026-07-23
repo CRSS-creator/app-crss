@@ -4,12 +4,14 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAuthorizedServerUser } from "@/lib/serverAuth";
 import {
   downloadWfirmaInvoicePdf,
+  extractWfirmaInvoiceLines,
   extractWfirmaInvoices,
   findWfirmaInvoices,
   firstWfirmaInvoice,
   getWfirmaInvoice,
   getWfirmaConfig,
   type WfirmaInvoice,
+  type WfirmaInvoiceLine,
 } from "@/lib/wfirmaClient";
 
 const ALLOWED_ROLES = new Set(["owner", "admin"]);
@@ -58,6 +60,8 @@ type InvoiceRow = {
   data_wystawienia: string | null;
   okres: string | null;
   kontrahent_nip: string | null;
+  kwota_netto: number | string | null;
+  kwota_vat: number | string | null;
   kwota_brutto: number | string | null;
   wfirma_id: string | null;
   wfirma_pdf_path: string | null;
@@ -105,7 +109,7 @@ async function syncPayments(request: NextRequest) {
   const requestedRange = requestedMonth ? monthRange(requestedMonth) : null;
   let query = admin
     .from("faktury")
-    .select("id,numer,data_wystawienia,okres,kontrahent_nip,kwota_brutto,wfirma_id,wfirma_pdf_path,wfirma_pdf_name,status")
+    .select("id,numer,data_wystawienia,okres,kontrahent_nip,kwota_netto,kwota_vat,kwota_brutto,wfirma_id,wfirma_pdf_path,wfirma_pdf_name,status")
     .in("status", STATUSES_TO_CHECK)
     .not("wfirma_id", "is", null)
     .order("termin_platnosci", { ascending: true });
@@ -218,7 +222,13 @@ async function loadWfirmaInvoicesById(
     const currentMatch = invoicesById.get(wfirmaId);
     if (currentMatch && !isDraftInvoiceNumber(currentMatch)) continue;
 
-    const replacement = findMatchingFinalWfirmaInvoice(invoice, Array.from(invoicesById.values()));
+    const reservedIds = new Set(
+      invoices
+        .filter((other) => other.id !== invoice.id)
+        .map((other) => stringify(other.wfirma_id))
+        .filter(Boolean)
+    );
+    const replacement = findMatchingFinalWfirmaInvoice(invoice, Array.from(invoicesById.values()), reservedIds);
     if (replacement) invoicesById.set(wfirmaId, replacement);
   }
 
@@ -262,18 +272,37 @@ function addMonthWithNeighbours(months: Set<string>, month: string) {
   months.add(shiftMonth(month, 1));
 }
 
-function findMatchingFinalWfirmaInvoice(invoice: InvoiceRow, candidates: WfirmaInvoice[]) {
+function findMatchingFinalWfirmaInvoice(invoice: InvoiceRow, candidates: WfirmaInvoice[], reservedWfirmaIds: Set<string>) {
   const invoiceNip = normalizeNip(invoice.kontrahent_nip);
   const invoiceGross = numberValue(invoice.kwota_brutto);
-  if (!invoiceNip || invoiceGross <= 0) return null;
+  const invoiceDate = dateOnly(invoice.data_wystawienia);
+  if (!invoiceNip) return null;
 
-  const matches = candidates.filter((candidate) => {
-    const candidateNip = normalizeNip(wfirmaInvoiceContractorNip(candidate));
-    const candidateGross = numberValue(candidate.total_composed ?? candidate.total);
-    return candidateNip === invoiceNip && Math.abs(candidateGross - invoiceGross) < 0.02;
-  });
+  const matches = candidates
+    .filter((candidate) => {
+      const candidateId = stringify(candidate.id);
+      const candidateNip = normalizeNip(wfirmaInvoiceContractorNip(candidate));
+      return candidateId
+        && !reservedWfirmaIds.has(candidateId)
+        && candidateNip === invoiceNip
+        && !isDraftInvoiceNumber(candidate)
+        && !isCorrectionInvoice(candidate);
+    })
+    .map((candidate) => {
+      const candidateGross = numberValue(candidate.total_composed ?? candidate.total);
+      const candidateDate = dateOnly(candidate.date);
+      const exactGross = invoiceGross > 0 && Math.abs(candidateGross - invoiceGross) < 0.02;
+      return {
+        candidate,
+        score:
+          (exactGross ? 0 : 1_000) +
+          dateDistanceDays(invoiceDate, candidateDate) * 4 +
+          Math.min(Math.abs(candidateGross - invoiceGross), 10_000) / 10,
+      };
+    })
+    .sort((first, second) => first.score - second.score);
 
-  return matches.find((candidate) => !isDraftInvoiceNumber(candidate)) || matches[0] || null;
+  return matches[0]?.candidate || null;
 }
 
 function isDraftInvoiceNumber(invoice: WfirmaInvoice) {
@@ -336,6 +365,9 @@ async function syncWfirmaInvoiceSnapshot(
   const issueDate = dateOnly(wfirmaInvoice.date);
   const saleDate = dateOnly(wfirmaInvoice.disposaldate);
   const paymentDate = dateOnly(wfirmaInvoice.payment_date);
+  const net = numberValue(wfirmaInvoice.netto);
+  const tax = numberValue(wfirmaInvoice.tax);
+  const gross = numberValue(wfirmaInvoice.total_composed ?? wfirmaInvoice.total) || net + tax;
   const updatedNumber = Boolean(invoiceNumber && invoiceNumber !== invoice.numer);
   let pdfResult: { path: string | null; name: string | null; error: string | null } | null = null;
 
@@ -359,6 +391,9 @@ async function syncWfirmaInvoiceSnapshot(
   if (issueDate) updatePayload.data_wystawienia = issueDate;
   if (saleDate) updatePayload.data_sprzedazy = saleDate;
   if (paymentDate) updatePayload.termin_platnosci = paymentDate;
+  if (net > 0) updatePayload.kwota_netto = net;
+  if (tax > 0) updatePayload.kwota_vat = tax;
+  if (gross > 0) updatePayload.kwota_brutto = gross;
 
   if (pdfResult?.path) {
     updatePayload.wfirma_pdf_path = pdfResult.path;
@@ -376,6 +411,11 @@ async function syncWfirmaInvoiceSnapshot(
 
   if (update.error) {
     throw new Error(`Nie udaĹ‚o siÄ™ zapisaÄ‡ danych faktury z wFirmy: ${update.error.message}`);
+  }
+
+  const lines = extractWfirmaInvoiceLines(wfirmaInvoice);
+  if (lines.length > 0) {
+    await replaceInvoiceLines(admin, invoice.id, lines);
   }
 
   return {
@@ -412,6 +452,37 @@ async function saveWfirmaInvoicePdf(params: {
   } catch (error) {
     return { path: null, name: null, error: error instanceof Error ? error.message : "Nieznany bĹ‚Ä…d pobierania PDF." };
   }
+}
+
+async function replaceInvoiceLines(
+  admin: SupabaseClient,
+  invoiceId: string,
+  lines: WfirmaInvoiceLine[]
+) {
+  await admin.from("faktury_pozycje").delete().eq("faktura_id", invoiceId);
+  if (lines.length === 0) return;
+
+  const records = lines.map((line, index) => {
+    const net = numberValue(line.netto ?? line.price);
+    const tax = numberValue(line.tax);
+    const gross = numberValue(line.total) || net + tax;
+    return {
+      faktura_id: invoiceId,
+      source_key: `wfirma:${stringify(line.id) || index + 1}`,
+      nazwa: stringify(line.name) || "Pozycja faktury",
+      ilosc: numberValue(line.count) || 1,
+      jednostka: stringify(line.unit) || "szt.",
+      cena_netto: numberValue(line.price) || net,
+      stawka_vat: stringify(line.vat) || "23%",
+      kwota_netto: net,
+      kwota_vat: tax,
+      kwota_brutto: gross,
+      sort_order: index,
+    };
+  });
+
+  const { error } = await admin.from("faktury_pozycje").insert(records);
+  if (error) throw new Error("Nie udało się zapisać pozycji faktury z wFirmy.");
 }
 
 async function syncMonth(request: NextRequest) {
@@ -512,6 +583,14 @@ function numberValue(value: unknown) {
 function dateOnly(value: unknown) {
   const text = stringify(value);
   return /^\d{4}-\d{2}-\d{2}/.test(text) ? text.slice(0, 10) : null;
+}
+
+function dateDistanceDays(first: string | null, second: string | null) {
+  if (!first || !second) return 365;
+  const firstTime = new Date(`${first}T00:00:00.000Z`).getTime();
+  const secondTime = new Date(`${second}T00:00:00.000Z`).getTime();
+  if (!Number.isFinite(firstTime) || !Number.isFinite(secondTime)) return 365;
+  return Math.abs(firstTime - secondTime) / 86_400_000;
 }
 
 function monthRange(month: string) {

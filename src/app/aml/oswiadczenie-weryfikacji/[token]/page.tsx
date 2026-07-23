@@ -88,6 +88,8 @@ export default function AmlIdentificationStatementPage() {
           <div style={gridStyle}>
             <Field label="Nazwa albo imię i nazwisko klienta" required><input style={inputStyle} value={draft.clientName} onChange={(event) => update("clientName", event.target.value)} /></Field>
             <Field label="NIP, PESEL, KRS albo inny identyfikator" required><input style={inputStyle} value={draft.clientIdentifier} onChange={(event) => update("clientIdentifier", event.target.value)} /></Field>
+          </div>
+          <div style={gridStyle}>
             <Field label="Data weryfikacji" required><input type="date" style={inputStyle} value={draft.verificationDate} onChange={(event) => update("verificationDate", event.target.value)} /></Field>
             <Field label="Osoba dokonująca weryfikacji" required><input style={inputStyle} value={draft.verifiedBy} onChange={(event) => update("verifiedBy", event.target.value)} /></Field>
           </div>

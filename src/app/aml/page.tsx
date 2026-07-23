@@ -954,6 +954,10 @@ function IdentificationStatementItem({ statement, profilesById }: { statement: A
     alert("Skopiowano link do oświadczenia AML.");
   }
 
+  function openStatement() {
+    window.open(statementUrl, "_blank", "noopener,noreferrer");
+  }
+
   async function openPdf() {
     const result = await getAmlIdentificationStatementPdfUrl(statement.id);
     if (result.error || !result.data?.url) {
@@ -994,6 +998,7 @@ function IdentificationStatementItem({ statement, profilesById }: { statement: A
         </div>
       </div>
       <div style={reportButtonsStyle}>
+        {active ? <button type="button" onClick={openStatement} style={smallButtonStyle}><Eye size={16} /> Otwórz oświadczenie</button> : null}
         {active ? <button type="button" onClick={() => void copyLink()} style={smallButtonStyle}>Kopiuj link</button> : null}
         {hasPdf ? <button type="button" onClick={() => void openPdf()} style={smallButtonStyle}><Eye size={16} /> Podgląd</button> : null}
         {hasPdf ? <button type="button" onClick={() => void downloadPdf()} style={smallButtonStyle}><Download size={16} /> Pobierz</button> : null}

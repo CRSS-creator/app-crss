@@ -795,7 +795,7 @@ function extractPkdCodes(value: unknown, source: string, inPkdNode = false): Pkd
 
   const nestedCodes = Object.entries(record).flatMap(([key, item]) => {
     const lowerKey = key.toLowerCase();
-    const childInPkd = isPkdContainerKey(lowerKey);
+    const childInPkd = isPkdContainerKey(lowerKey) || (pkdRecord && isPkdActivityChildKey(lowerKey));
     const childCodes = extractPkdCodes(item, source, childInPkd);
     return lowerKey.includes("przewazajacej") ? childCodes.map((code) => ({ ...code, przewazajace: true })) : childCodes;
   });
@@ -805,6 +805,10 @@ function extractPkdCodes(value: unknown, source: string, inPkdNode = false): Pkd
 
 function isPkdContainerKey(lowerKey: string) {
   return lowerKey.includes("pkd") || lowerKey.includes("przedmiotdzialalnosci") || lowerKey.includes("przedmiotdziałalności");
+}
+
+function isPkdActivityChildKey(lowerKey: string) {
+  return (lowerKey.includes("dzialalnosci") || lowerKey.includes("działalności")) && !lowerKey.includes("adres");
 }
 
 function pkdCodesFromText(value: string, source: string): PkdCode[] {

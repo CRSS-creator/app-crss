@@ -14,7 +14,7 @@ type PdfInput = {
   politicallyExposedCount: number;
   counts: Record<InstitutionRiskLevel, number>;
   totalClients: number;
-  dominantRisk: InstitutionRiskLevel;
+  dominantRisk: InstitutionRiskLevel | null;
 };
 
 type PdfContext = {
@@ -39,7 +39,8 @@ export async function buildAmlInstitutionRiskPdf(input: PdfInput): Promise<Buffe
   const context: PdfContext = { doc, page: doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]), font, y: PAGE_HEIGHT - MARGIN };
 
   drawPageBackground(context.page);
-  paragraph(context, `${input.city}, dnia ${formatPolishLongDate(input.generatedAt)} roku`, 10.5);
+  rightAlignedText(context, `${input.city}, dnia ${formatPolishLongDate(input.generatedAt)} roku`, 10.5);
+  context.y -= 28;
   paragraph(
     context,
     "Ocena ryzyka na podstawie analizy ryzyka prania pieniędzy oraz finansowania terroryzmu związana ze stosunkami gospodarczymi lub z transakcją okazjonalną",
@@ -82,15 +83,16 @@ export async function buildAmlInstitutionRiskPdf(input: PdfInput): Promise<Buffe
   checkboxLine(context, input.dominantRisk === "wysokie", "ryzyko wysokie");
 
   context.y -= 44;
-  signatureLine(context, "(miejscowość)");
-  context.y -= 34;
-  signatureLine(context, "(data i podpis reprezentanta)");
+  signatureLine(context, MARGIN, "(miejscowość)");
+  signatureLine(context, MARGIN + 285, "(data i podpis reprezentanta)");
 
   const bytes = await doc.save();
   return Buffer.from(bytes);
 }
 
-export function dominantInstitutionRisk(counts: Record<InstitutionRiskLevel, number>): InstitutionRiskLevel {
+export function dominantInstitutionRisk(counts: Record<InstitutionRiskLevel, number>): InstitutionRiskLevel | null {
+  const total = Object.values(counts).reduce((sum, count) => sum + count, 0);
+  if (total === 0) return null;
   return RISK_ORDER.reduce((winner, level) => {
     if (counts[level] > counts[winner]) return level;
     return winner;
@@ -134,6 +136,11 @@ function paragraph(context: PdfContext, value: string, size = 10, color = colors
   context.y -= lines.length * LINE_HEIGHT + 9;
 }
 
+function rightAlignedText(context: PdfContext, value: string, size = 10, color = colors.text) {
+  const width = context.font.widthOfTextAtSize(value, size);
+  context.page.drawText(value, { x: MARGIN + CONTENT_WIDTH - width, y: context.y, size, font: context.font, color });
+}
+
 function numberedLine(context: PdfContext, number: number, value: string) {
   const text = `${number}. ${value}`;
   const lines = wrapText(text, CONTENT_WIDTH, 10, context.font);
@@ -146,16 +153,19 @@ function numberedLine(context: PdfContext, number: number, value: string) {
 
 function checkboxLine(context: PdfContext, checked: boolean, label: string) {
   ensureSpace(context, LINE_HEIGHT + 4);
-  context.page.drawText(checked ? "■" : "□", { x: MARGIN, y: context.y, size: 11, font: context.font, color: colors.text });
+  const boxY = context.y - 1;
+  context.page.drawRectangle({ x: MARGIN, y: boxY, width: 8, height: 8, borderColor: colors.text, borderWidth: 1 });
+  if (checked) {
+    context.page.drawRectangle({ x: MARGIN + 2, y: boxY + 2, width: 4, height: 4, color: colors.text });
+  }
   context.page.drawText(label, { x: MARGIN + 18, y: context.y, size: 10, font: context.font, color: colors.text });
   context.y -= LINE_HEIGHT + 2;
 }
 
-function signatureLine(context: PdfContext, label: string) {
+function signatureLine(context: PdfContext, x: number, label: string) {
   const line = "................................................";
-  context.page.drawText(line, { x: MARGIN, y: context.y, size: 11, font: context.font, color: colors.text });
-  context.y -= 14;
-  context.page.drawText(label, { x: MARGIN + 25, y: context.y, size: 9, font: context.font, color: colors.text });
+  context.page.drawText(line, { x, y: context.y, size: 11, font: context.font, color: colors.text });
+  context.page.drawText(label, { x: x + 25, y: context.y - 14, size: 9, font: context.font, color: colors.text });
 }
 
 function wrapText(value: string, width: number, size: number, font: PDFFont) {

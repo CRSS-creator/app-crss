@@ -59,8 +59,9 @@ export async function POST(request: NextRequest) {
 
   clients.forEach((client) => {
     const risk = normalizeRiskLevel(assessments.get(client.id)?.risk_level || registers.get(client.id)?.poziom_ryzyka);
-    counts[risk] += 1;
+    if (risk) counts[risk] += 1;
   });
+  const assessedClientsCount = Object.values(counts).reduce((total, count) => total + count, 0);
 
   const generatedAt = new Date();
   const pdf = await buildAmlInstitutionRiskPdf({
@@ -71,7 +72,7 @@ export async function POST(request: NextRequest) {
     foreignClientsCount: countForeignClients(clients, registers),
     politicallyExposedCount: countPepClients(clients, registers),
     counts,
-    totalClients: clients.length,
+    totalClients: assessedClientsCount,
     dominantRisk: dominantInstitutionRisk(counts),
   });
 
@@ -134,12 +135,13 @@ function latestCompletedAssessmentByClient(assessments: RiskAssessmentRecord[]) 
   return byClient;
 }
 
-function normalizeRiskLevel(value: string | null | undefined): InstitutionRiskLevel {
+function normalizeRiskLevel(value: string | null | undefined): InstitutionRiskLevel | null {
   const normalized = String(value || "").trim().toLowerCase();
   if (["niskie", "niski", "niskie_ryzyko"].includes(normalized)) return "niskie";
   if (["podwyzszone", "podwyższone", "podwyzszony", "podwyższony"].includes(normalized)) return "podwyzszone";
   if (["wysokie", "wysoki"].includes(normalized)) return "wysokie";
-  return "standardowe";
+  if (["standardowe", "normalne", "normalny", "standardowy"].includes(normalized)) return "standardowe";
+  return null;
 }
 
 function countPepClients(clients: ClientRecord[], registers: Map<string, RegisterRecord>) {

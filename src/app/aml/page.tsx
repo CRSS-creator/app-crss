@@ -1134,11 +1134,14 @@ function VerificationItem({ verification, profilesById }: { verification: AmlVer
         {archived ? <span style={archivedBadgeStyle}>Archiwalny</span> : null}
         <p style={verificationMetaStyle}>Wykonał: {profileLabel(verification.wykonana_by, profilesById)}</p>
         <div style={sourceGridStyle}>
-          {sources.map((source, index) => (
-            <span key={`${verification.id}-${index}`} style={sourceBadgeStyle(String(source.status || ""))}>
-              {String(source.source || "Źródło")} · {sourceStatusLabel(String(source.status || ""))}
-            </span>
-          ))}
+          {sources.map((source, index) => {
+            const sourceStatus = verificationSourceStatus(verification, source);
+            return (
+              <span key={`${verification.id}-${index}`} style={sourceBadgeStyle(sourceStatus)}>
+                {String(source.source || "Źródło")} · {sourceStatusLabel(sourceStatus)}
+              </span>
+            );
+          })}
         </div>
       </div>
       <div style={reportButtonsStyle}>
@@ -1209,7 +1212,14 @@ function normalizeUiText(value: string) {
 }
 
 function isArchivedVerification(verification: AmlVerificationRecord) {
-  return verification.status === "archiwalny" || verification.wynik === "archiwalny" || verification.wynik === "pdf_crbr" || Boolean((verification.dane as { archiwalny?: unknown })?.archiwalny);
+  if (verification.wynik === "pdf_crbr") return false;
+  return verification.status === "archiwalny" || verification.wynik === "archiwalny" || Boolean((verification.dane as { archiwalny?: unknown })?.archiwalny);
+}
+
+function verificationSourceStatus(verification: AmlVerificationRecord, source: Record<string, unknown>) {
+  const status = String(source.status || "");
+  if (verification.wynik === "pdf_crbr" && status === "archiwalny") return "confirmed";
+  return status;
 }
 
 function StatusPill({ done }: { done: boolean }) {

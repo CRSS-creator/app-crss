@@ -97,11 +97,10 @@ export async function POST(request: NextRequest) {
       klient_id: client.id,
       aml_rejestr_id: register.id,
       wykonana_by: requesterId,
-      status: "archiwalny",
+      status: "completed",
       wynik: "pdf_crbr",
-      zrodla: [{ source: "CRBR", status: "archiwalny", label: "PDF pobrany z Centralnego Rejestru Beneficjentów Rzeczywistych." }],
+      zrodla: [{ source: "CRBR", status: "confirmed", label: "PDF pobrany z Centralnego Rejestru Beneficjentów Rzeczywistych." }],
       dane: {
-        archiwalny: true,
         typ: "pdf_crbr",
         originalFileName,
         uploadedAt: uploadedAt.toISOString(),
@@ -125,7 +124,6 @@ export async function POST(request: NextRequest) {
     akcja: "dodano_pdf_crbr",
     opis: `Dodano PDF pobrany z CRBR: ${originalFileName}.`,
     zmiany: {
-      archiwalny: true,
       typ: "pdf_crbr",
       pdf_name: originalFileName,
       pdf_path: storagePath,

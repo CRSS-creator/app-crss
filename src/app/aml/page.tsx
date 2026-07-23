@@ -167,9 +167,9 @@ function AmlContent() {
   );
   const filteredRows = useMemo(() => filterRows(rows, searchTerm), [rows, searchTerm]);
   const selectedRow = rows.find((row) => row.client.id === selectedClientId) || null;
-  const waitingCount = rows.filter((row) => !row.register?.ostatnia_weryfikacja_at).length;
-  const requiresAnalysisCount = rows.filter((row) => row.register?.status === "wymaga_analizy").length;
-  const verifiedCount = rows.filter((row) => row.register?.status === "zweryfikowano_automatycznie").length;
+  const verifiedCount = rows.filter((row) => allAmlChecksDone(row)).length;
+  const requiresAnalysisCount = rows.filter((row) => hasAnyAmlCheckDone(row) && !allAmlChecksDone(row)).length;
+  const waitingCount = rows.filter((row) => !hasAnyAmlCheckDone(row)).length;
 
   async function handleVerify(row: AmlRow) {
     setVerifyingClientId(row.client.id);
@@ -327,7 +327,7 @@ function AmlContent() {
       <section style={statsGridStyle} aria-label="Podsumowanie AML">
         <StatCard icon={<FileSearch size={22} />} label="Do weryfikacji" value={waitingCount} tone="warning" />
         <StatCard icon={<ShieldCheck size={22} />} label="Wymaga analizy" value={requiresAnalysisCount} tone="info" />
-        <StatCard icon={<ClipboardCheck size={22} />} label="Zweryfikowano automatycznie" value={verifiedCount} tone="success" />
+        <StatCard icon={<ClipboardCheck size={22} />} label="Zweryfikowano" value={verifiedCount} tone="success" />
       </section>
 
       <section style={workflowStyle} aria-label="Proces AML">
@@ -1459,6 +1459,14 @@ function amlCheckStatus(row: AmlRow, check: AmlCheckKey) {
   }
   if (check === "risk_assessment") return Boolean(row.register?.poziom_ryzyka);
   return row.register?.status === "zatwierdzone";
+}
+
+function allAmlChecksDone(row: AmlRow) {
+  return AML_CHECKS.every((check) => amlCheckStatus(row, check.key));
+}
+
+function hasAnyAmlCheckDone(row: AmlRow) {
+  return AML_CHECKS.some((check) => amlCheckStatus(row, check.key));
 }
 
 function buildRows(

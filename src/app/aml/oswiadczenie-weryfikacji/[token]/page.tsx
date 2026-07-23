@@ -193,7 +193,7 @@ function StatusMessage({ title, text }: { title: string; text: string }) {
 }
 
 function Field({ label, required, children }: { label: string; required?: boolean; children: ReactNode }) {
-  return <label style={fieldStyle}><span style={fieldLabelStyle}>{label}{required ? " *" : ""}</span>{children}</label>;
+  return <label style={fieldStyle}><span style={fieldLabelStyle}>{label}{required ? <span style={requiredMarkStyle}>*</span> : null}</span>{children}</label>;
 }
 
 function Statement({ children }: { children: ReactNode }) {
@@ -209,9 +209,10 @@ const subtitleStyle: CSSProperties = { margin: "8px 0 0", color: colors.text, fo
 const typeBadgeStyle: CSSProperties = { flex: "0 0 auto", padding: "8px 12px", borderRadius: radius.badge, background: "rgba(23,59,115,0.08)", color: colors.navy, fontWeight: 900, fontSize: "12px" };
 const sectionStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "18px", background: "#fff", display: "flex", flexDirection: "column", gap: "14px" };
 const sectionTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "20px", fontWeight: 700 };
-const gridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "14px" };
+const gridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))", gap: "14px", alignItems: "start" };
 const fieldStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "7px", color: colors.navy, fontWeight: 850, fontSize: "13px" };
-const fieldLabelStyle: CSSProperties = { color: colors.navy, fontWeight: 850, fontSize: "13px" };
+const fieldLabelStyle: CSSProperties = { minHeight: "32px", color: colors.navy, fontWeight: 850, fontSize: "13px", lineHeight: 1.2, display: "inline-flex", alignItems: "flex-end", gap: "3px", flexWrap: "wrap" };
+const requiredMarkStyle: CSSProperties = { color: colors.navy, fontWeight: 900 };
 const inputStyle: CSSProperties = { width: "100%", minHeight: "44px", border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "10px 12px", color: colors.text, fontWeight: 700, background: "#fff" };
 const textareaStyle: CSSProperties = { ...inputStyle, minHeight: "92px", resize: "vertical", lineHeight: 1.45 };
 const statementStyle: CSSProperties = { margin: 0, color: colors.text, lineHeight: 1.55, fontSize: "14px" };

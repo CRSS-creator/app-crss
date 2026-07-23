@@ -312,6 +312,7 @@ function buildIndividualBeneficialOwnersFromForm(data: AmlInitialFormData, compl
   const individual = data.individual;
   const checkedAt = completedAt.toISOString();
   const entrepreneur = {
+    typ: "jdg",
     source: "Formularz wstępny AML",
     status: "pobrano_z_formularza",
     label: individual.fullName || individual.businessName || "Przedsiębiorca",
@@ -325,46 +326,11 @@ function buildIndividualBeneficialOwnersFromForm(data: AmlInitialFormData, compl
     adresZamieszkania: individual.residenceAddress || null,
     dokumentTozsamosci: individual.identityDocument || null,
     krajUrodzenia: individual.birthCountry || null,
-    rola: "Przedsiębiorca",
-    reprezentant: true,
-    udzialowiec: false,
-    procentUdzialow: null,
-    wartoscUdzialow: null,
-    liczbaGlosow: null,
-    procentGlosow: null,
-    udzialy: [],
     pep: individualPepStatus(data),
     checkedAt,
   };
 
-  if (individual.isOnlyBeneficialOwner !== "nie") return [entrepreneur];
-
-  const additionalOwners = individual.beneficialOwners.map((owner) => ({
-    source: "Formularz wstępny AML",
-    status: "pobrano_z_formularza",
-    label: owner.fullName || "Beneficjent rzeczywisty",
-    pierwszeImie: null,
-    kolejneImiona: null,
-    nazwisko: null,
-    pesel: owner.peselOrBirthDate || null,
-    dataUrodzenia: null,
-    obywatelstwo: owner.citizenship || null,
-    krajZamieszkania: owner.residenceAddress || null,
-    adresZamieszkania: owner.residenceAddress || null,
-    krajUrodzenia: owner.birthCountry || null,
-    rola: owner.controlType || "Beneficjent rzeczywisty",
-    reprezentant: false,
-    udzialowiec: false,
-    procentUdzialow: null,
-    wartoscUdzialow: null,
-    liczbaGlosow: null,
-    procentGlosow: null,
-    udzialy: [],
-    pep: owner.pep,
-    checkedAt,
-  }));
-
-  return [entrepreneur, ...additionalOwners];
+  return [entrepreneur];
 }
 
 function individualPepStatus(data: AmlInitialFormData) {

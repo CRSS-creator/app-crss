@@ -134,8 +134,11 @@ export async function POST(request: NextRequest) {
   checks.push(sanctionsCheck);
   const now = new Date();
   const pkdCodes = collectPkdCodes(ceidgCheck, krsCheck);
+  const initialFormIndividual = actualIndividualBusiness
+    ? await getLatestIndividualInitialFormData(auth.admin, client.id)
+    : null;
   const beneficialOwners = actualIndividualBusiness
-    ? buildJdgBeneficialOwners(ceidgCheck, client.nazwa, nip, now)
+    ? buildJdgBeneficialOwners(ceidgCheck, client.nazwa, nip, now, initialFormIndividual)
     : extractCrbrBeneficialOwners(crbrCheck, now, krsCheck);
   const result = summarizeResult(checks);
   const visibleSourceChecks = checks.filter((check) => !(actualIndividualBusiness && check.source === "CRBR"));
@@ -903,22 +906,35 @@ function buildRegistryDetails(input: {
   };
 }
 
-function buildJdgBeneficialOwners(check: OfficialCheck | null, clientName: string | null, nip: string, checkedAt: Date) {
+async function getLatestIndividualInitialFormData(admin: SupabaseClient, clientId: string) {
+  const { data } = await admin
+    .from("aml_formularze_wstepne")
+    .select("form_data")
+    .eq("klient_id", clientId)
+    .eq("status", "completed")
+    .order("completed_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const formData = data?.form_data && typeof data.form_data === "object" ? data.form_data as Record<string, unknown> : null;
+  return formData?.individual && typeof formData.individual === "object" ? formData.individual as Record<string, unknown> : null;
+}
+
+function buildJdgBeneficialOwners(check: OfficialCheck | null, clientName: string | null, nip: string, checkedAt: Date, initialFormIndividual: Record<string, unknown> | null) {
   const ceidg = getCeidgRegistryData(check);
   const owner = ceidg.owner || {};
   const label = ceidg.przedsiebiorca || clientName || "Przedsiębiorca";
   return [{
+    typ: "jdg",
     source: "CEIDG",
     status: "pobrano",
     label,
     pierwszeImie: firstDeepText(owner, ["imie", "pierwszeImie", "imiona"]),
     nazwisko: firstDeepText(owner, ["nazwisko"]),
+    pesel: firstText(initialFormIndividual || {}, ["peselOrBirthDate"]),
+    adresZamieszkania: firstText(initialFormIndividual || {}, ["residenceAddress"]),
+    krajZamieszkania: firstText(initialFormIndividual || {}, ["residenceAddress"]),
     nip: firstDeepText(owner, ["nip"]) || nip,
     regon: firstDeepText(owner, ["regon"]),
-    rola: "Przedsiębiorca",
-    reprezentant: true,
-    udzialowiec: true,
-    procentUdzialow: "100",
     spolka: { nazwa: ceidg.nazwa || clientName || null, nip, forma: "Jednoosobowa działalność gospodarcza" },
     checkedAt: checkedAt.toISOString(),
   }];

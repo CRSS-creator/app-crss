@@ -1034,6 +1034,7 @@ function BeneficialOwnerCard({
   saving: boolean;
   onSave: (changes: BeneficialOwnerEditValues) => void;
 }) {
+  const jdgOwner = isJdgBeneficialOwner(owner);
   const ownerRole = beneficiaryRoleLabel(owner) === "-" ? "" : beneficiaryRoleLabel(owner);
   const [representative, setRepresentative] = useState(isRepresentativeOwner(owner, ownerRole));
   const [shareholder, setShareholder] = useState(isShareholderOwner(owner, ownerRole));
@@ -1054,12 +1055,12 @@ function BeneficialOwnerCard({
       <strong style={beneficialOwnerNameStyle}>{asText(owner.label)}</strong>
       <div style={beneficialOwnerMetaStyle}>
         <span>PESEL: {asText(owner.pesel)}</span>
-        <span>Rola: {beneficiaryRoleLabel(owner)}</span>
-        <span>Udziały: {beneficiarySharesLabel(owner)}</span>
+        {!jdgOwner ? <span>Rola: {beneficiaryRoleLabel(owner)}</span> : null}
+        {!jdgOwner ? <span>Udziały: {beneficiarySharesLabel(owner)}</span> : null}
         <span>Obywatelstwo: {asText(owner.obywatelstwo)}</span>
-        <span>Kraj zamieszkania: {asText(owner.krajZamieszkania)}</span>
+        <span>{jdgOwner ? "Adres" : "Kraj zamieszkania"}: {asText(owner.adresZamieszkania || owner.krajZamieszkania)}</span>
       </div>
-      <div style={beneficialOwnerEditStyle}>
+      {!jdgOwner ? <div style={beneficialOwnerEditStyle}>
         <div style={ownerFieldStyle}>
           <span style={ownerFieldLabelStyle}>Rola</span>
           <span style={ownerReadonlyValueStyle}>{selectedRole || "Zaznacz rolę poniżej"}</span>
@@ -1098,7 +1099,7 @@ function BeneficialOwnerCard({
         >
           {saving ? "Zapisywanie..." : "Zapisz dane"}
         </button>
-      </div>
+      </div> : null}
     </div>
   );
 }
@@ -1170,6 +1171,19 @@ function beneficiaryRoleLabel(owner: Record<string, unknown>) {
     .filter((part) => part && normalizeUiText(part) !== "brak")
     .join("; ");
   return asText(role);
+}
+
+function isJdgBeneficialOwner(owner: Record<string, unknown>) {
+  const source = normalizeUiText(String(owner.source || ""));
+  const type = normalizeUiText(String(owner.typ || ""));
+  const role = normalizeUiText(String(owner.rola || ""));
+  const company = owner.spolka && typeof owner.spolka === "object" ? owner.spolka as Record<string, unknown> : {};
+  const legalForm = normalizeUiText(String(company.forma || ""));
+  return type === "jdg"
+    || source.includes("ceidg")
+    || role.includes("przedsiebiorca")
+    || legalForm.includes("jednoosobowa")
+    || legalForm.includes("dzialalnosc gospodarcza");
 }
 
 function beneficiarySharesLabel(owner: Record<string, unknown>) {

@@ -164,5 +164,27 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Nie udało się zapisać statusu zadania." }, { status: 500 });
   }
 
+  if (payload.status === "zrobione") {
+    const relatedDelete = await auth.admin
+      .from("powiadomienia")
+      .delete()
+      .eq("type", "recurring_task_due_today")
+      .eq("related_table", "zadania_cykliczne_realizacje")
+      .eq("related_id", payload.realizationId);
+
+    const metadataDelete = await auth.admin
+      .from("powiadomienia")
+      .delete()
+      .eq("type", "recurring_task_due_today")
+      .contains("metadata", { recurring_task_realization_id: payload.realizationId });
+
+    if (relatedDelete.error || metadataDelete.error) {
+      console.error(
+        "Nie udało się usunąć powiadomień zakończonego zadania cyklicznego:",
+        relatedDelete.error || metadataDelete.error
+      );
+    }
+  }
+
   return NextResponse.json({ ok: true, data: updated });
 }

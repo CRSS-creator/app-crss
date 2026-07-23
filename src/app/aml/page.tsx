@@ -1157,11 +1157,22 @@ function VerificationItem({ verification, profilesById }: { verification: AmlVer
 
 function visibleVerificationSources(verification: AmlVerificationRecord) {
   const sources = verification.zrodla || [];
-  const hasKrs = sources.some((source) => String(source.source || "").toLowerCase().includes("krs"));
-  const withoutPep = sources.filter((source) => String(source.source || "").toLowerCase() !== "pep");
+  const withoutPep = sources.filter((source) => {
+    const sourceName = String(source.source || "").toLowerCase();
+    return sourceName !== "pep" && !isNonApplicableKrsSource(source);
+  });
+  const hasKrs = withoutPep.some((source) => String(source.source || "").toLowerCase().includes("krs"));
   return hasKrs
     ? withoutPep.filter((source) => !String(source.source || "").toLowerCase().includes("ceidg"))
     : withoutPep;
+}
+
+function isNonApplicableKrsSource(source: Record<string, unknown>) {
+  const sourceName = normalizeUiText(String(source.source || ""));
+  const label = normalizeUiText(String(source.label || ""));
+  return sourceName.includes("krs")
+    && String(source.status || "") === "skipped"
+    && (label.includes("nie dotyczy") || label.includes("jdg") || label.includes("jednoosobowej dzialalnosci gospodarczej"));
 }
 
 function beneficiaryRoleLabel(owner: Record<string, unknown>) {

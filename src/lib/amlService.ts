@@ -96,6 +96,26 @@ export type AmlIdentificationStatementRecord = {
   form_data: Record<string, unknown>;
 };
 
+export type AmlRiskAssessmentRecord = {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  klient_id: string;
+  aml_rejestr_id: string | null;
+  public_token: string;
+  status: "active" | "completed" | "revoked";
+  created_by: string | null;
+  created_by_name: string | null;
+  completed_at: string | null;
+  completed_by_name: string | null;
+  completed_pdf_document_id: string | null;
+  assessment_date: string | null;
+  assessment_basis: string | null;
+  risk_level: string | null;
+  next_update_date: string | null;
+  form_data: Record<string, unknown>;
+};
+
 export async function fetchAmlRegisters() {
   return supabase
     .from("aml_rejestr_klientow")
@@ -149,6 +169,13 @@ export async function fetchAmlInitialForms() {
 export async function fetchAmlIdentificationStatements() {
   return supabase
     .from("aml_oswiadczenia_weryfikacji")
+    .select("*")
+    .order("created_at", { ascending: false });
+}
+
+export async function fetchAmlRiskAssessments() {
+  return supabase
+    .from("aml_oceny_ryzyka")
     .select("*")
     .order("created_at", { ascending: false });
 }
@@ -299,6 +326,52 @@ export async function uploadArchivedAmlIdentificationStatement(clientId: string,
   return { data: body?.statement || null, error: null };
 }
 
+export async function createAmlRiskAssessment(clientId: string) {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
+  if (!token) return { data: null, error: new Error("Brak aktywnej sesji użytkownika.") };
+
+  const response = await fetch("/api/aml/risk-assessment-request", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ clientId }),
+  });
+
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    return { data: null, error: new Error(body?.error || "Nie udało się utworzyć oceny ryzyka AML.") };
+  }
+
+  return { data: body as { ok: boolean; assessmentUrl?: string }, error: null };
+}
+
+export async function uploadArchivedAmlRiskAssessment(clientId: string, file: File, completedDate: string) {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
+  if (!token) return { data: null, error: new Error("Brak aktywnej sesji użytkownika.") };
+
+  const formData = new FormData();
+  formData.append("clientId", clientId);
+  formData.append("completedDate", completedDate);
+  formData.append("file", file);
+
+  const response = await fetch("/api/aml/risk-assessment-archive", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    return { data: null, error: new Error(body?.error || "Nie udało się dodać archiwalnej oceny ryzyka AML.") };
+  }
+
+  return { data: body?.assessment || null, error: null };
+}
+
 export async function uploadArchivedAmlReport(clientId: string, file: File) {
   const { data: sessionData } = await supabase.auth.getSession();
   const token = sessionData.session?.access_token;
@@ -428,6 +501,28 @@ export async function getAmlIdentificationStatementPdfUrl(statementId: string) {
   const body = await response.json().catch(() => null);
   if (!response.ok) {
     return { data: null, error: new Error(body?.error || "Nie udało się pobrać linku do oświadczenia AML.") };
+  }
+
+  return { data: body as { url: string; fileName: string }, error: null };
+}
+
+export async function getAmlRiskAssessmentPdfUrl(assessmentId: string) {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
+  if (!token) return { data: null, error: new Error("Brak aktywnej sesji użytkownika.") };
+
+  const response = await fetch("/api/aml/risk-assessment-pdf-url", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ assessmentId }),
+  });
+
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    return { data: null, error: new Error(body?.error || "Nie udało się pobrać linku do oceny ryzyka AML.") };
   }
 
   return { data: body as { url: string; fileName: string }, error: null };

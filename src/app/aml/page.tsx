@@ -7,14 +7,17 @@ import AppLayout from "@/components/AppLayout";
 import { colors, radius, shadow } from "@/app/design";
 import {
   createAmlIdentificationStatement,
+  createAmlRiskAssessment,
   fetchAmlHistory,
   fetchAmlIdentificationStatements,
   fetchAmlInitialForms,
   fetchAmlRegisters,
+  fetchAmlRiskAssessments,
   fetchAmlVerifications,
   getAmlIdentificationStatementPdfUrl,
   getAmlInitialFormPdfUrl,
   getAmlReportUrl,
+  getAmlRiskAssessmentPdfUrl,
   runPepOsintCheck,
   sendAmlInitialForm,
   updateAmlBeneficialOwner,
@@ -22,12 +25,14 @@ import {
   uploadArchivedAmlInitialForm,
   uploadArchivedAmlIdentificationStatement,
   uploadArchivedAmlReport,
+  uploadArchivedAmlRiskAssessment,
   uploadCrbrAmlPdf,
   verifyClientAml,
   type AmlHistoryRecord,
   type AmlIdentificationStatementRecord,
   type AmlInitialFormRecord,
   type AmlRegisterRecord,
+  type AmlRiskAssessmentRecord,
   type AmlVerificationRecord,
 } from "@/lib/amlService";
 import { fetchClients } from "@/lib/clientService";
@@ -65,6 +70,7 @@ type AmlRow = {
   verifications: AmlVerificationRecord[];
   initialForms: AmlInitialFormRecord[];
   identificationStatements: AmlIdentificationStatementRecord[];
+  riskAssessments: AmlRiskAssessmentRecord[];
   history: AmlHistoryRecord[];
 };
 
@@ -107,6 +113,7 @@ function AmlContent() {
   const [verifications, setVerifications] = useState<AmlVerificationRecord[]>([]);
   const [initialForms, setInitialForms] = useState<AmlInitialFormRecord[]>([]);
   const [identificationStatements, setIdentificationStatements] = useState<AmlIdentificationStatementRecord[]>([]);
+  const [riskAssessments, setRiskAssessments] = useState<AmlRiskAssessmentRecord[]>([]);
   const [history, setHistory] = useState<AmlHistoryRecord[]>([]);
   const [profilesById, setProfilesById] = useState<Record<string, Profile>>({});
   const [loading, setLoading] = useState(true);
@@ -117,6 +124,8 @@ function AmlContent() {
   const [uploadingInitialFormArchiveClientId, setUploadingInitialFormArchiveClientId] = useState<string | null>(null);
   const [creatingIdentificationStatementClientId, setCreatingIdentificationStatementClientId] = useState<string | null>(null);
   const [uploadingIdentificationStatementArchiveClientId, setUploadingIdentificationStatementArchiveClientId] = useState<string | null>(null);
+  const [creatingRiskAssessmentClientId, setCreatingRiskAssessmentClientId] = useState<string | null>(null);
+  const [uploadingRiskAssessmentArchiveClientId, setUploadingRiskAssessmentArchiveClientId] = useState<string | null>(null);
   const [savingNextVerificationClientId, setSavingNextVerificationClientId] = useState<string | null>(null);
   const [savingBeneficialOwnerKey, setSavingBeneficialOwnerKey] = useState<string | null>(null);
   const [uploadingArchiveClientId, setUploadingArchiveClientId] = useState<string | null>(null);
@@ -129,13 +138,14 @@ function AmlContent() {
 
   async function loadData() {
     setLoading(true);
-    const [clientsResult, stagesResult, registersResult, verificationsResult, initialFormsResult, identificationStatementsResult, historyResult, profilesResult] = await Promise.all([
+    const [clientsResult, stagesResult, registersResult, verificationsResult, initialFormsResult, identificationStatementsResult, riskAssessmentsResult, historyResult, profilesResult] = await Promise.all([
       fetchClients(),
       fetchOnboardingStages(),
       fetchAmlRegisters(),
       fetchAmlVerifications(),
       fetchAmlInitialForms(),
       fetchAmlIdentificationStatements(),
+      fetchAmlRiskAssessments(),
       fetchAmlHistory(),
       supabase.from("profiles").select("id, full_name, email"),
     ]);
@@ -149,6 +159,7 @@ function AmlContent() {
 
     if (initialFormsResult.error) console.error("Błąd pobierania formularzy wstępnych AML:", initialFormsResult.error);
     if (identificationStatementsResult.error) console.error("Błąd pobierania oświadczeń AML:", identificationStatementsResult.error);
+    if (riskAssessmentsResult.error) console.error("Błąd pobierania ocen ryzyka AML:", riskAssessmentsResult.error);
 
     setClients(clientsResult.error ? [] : ((clientsResult.data || []) as unknown as Client[]));
     setStages(stagesResult.error ? [] : ((stagesResult.data || []) as OnboardingStageRecord[]));
@@ -156,14 +167,15 @@ function AmlContent() {
     setVerifications(verificationsResult.error ? [] : ((verificationsResult.data || []) as AmlVerificationRecord[]));
     setInitialForms(initialFormsResult.error ? [] : ((initialFormsResult.data || []) as AmlInitialFormRecord[]));
     setIdentificationStatements(identificationStatementsResult.error ? [] : ((identificationStatementsResult.data || []) as AmlIdentificationStatementRecord[]));
+    setRiskAssessments(riskAssessmentsResult.error ? [] : ((riskAssessmentsResult.data || []) as AmlRiskAssessmentRecord[]));
     setHistory(historyResult.error ? [] : ((historyResult.data || []) as AmlHistoryRecord[]));
     setProfilesById(indexProfiles((profilesResult.data || []) as Profile[]));
     setLoading(false);
   }
 
   const rows = useMemo(
-    () => buildRows(clients, stages, registers, verifications, initialForms, identificationStatements, history),
-    [clients, stages, registers, verifications, initialForms, identificationStatements, history]
+    () => buildRows(clients, stages, registers, verifications, initialForms, identificationStatements, riskAssessments, history),
+    [clients, stages, registers, verifications, initialForms, identificationStatements, riskAssessments, history]
   );
   const filteredRows = useMemo(() => filterRows(rows, searchTerm), [rows, searchTerm]);
   const selectedRow = rows.find((row) => row.client.id === selectedClientId) || null;
@@ -248,6 +260,37 @@ function AmlContent() {
     setUploadingIdentificationStatementArchiveClientId(row.client.id);
     const result = await uploadArchivedAmlIdentificationStatement(row.client.id, file, completedDate);
     setUploadingIdentificationStatementArchiveClientId(null);
+
+    if (result.error) {
+      alert(result.error.message);
+      return;
+    }
+
+    await loadData();
+    setSelectedClientId(row.client.id);
+  }
+
+  async function handleCreateRiskAssessment(row: AmlRow) {
+    setCreatingRiskAssessmentClientId(row.client.id);
+    const result = await createAmlRiskAssessment(row.client.id);
+    setCreatingRiskAssessmentClientId(null);
+
+    if (result.error) {
+      alert(result.error.message);
+      return;
+    }
+
+    if (result.data?.assessmentUrl) {
+      window.open(result.data.assessmentUrl, "_blank", "noopener,noreferrer");
+    }
+    await loadData();
+    setSelectedClientId(row.client.id);
+  }
+
+  async function handleUploadArchivedRiskAssessment(row: AmlRow, file: File, completedDate: string) {
+    setUploadingRiskAssessmentArchiveClientId(row.client.id);
+    const result = await uploadArchivedAmlRiskAssessment(row.client.id, file, completedDate);
+    setUploadingRiskAssessmentArchiveClientId(null);
 
     if (result.error) {
       alert(result.error.message);
@@ -433,6 +476,8 @@ function AmlContent() {
           uploadingInitialFormArchive={uploadingInitialFormArchiveClientId === selectedRow.client.id}
           creatingIdentificationStatement={creatingIdentificationStatementClientId === selectedRow.client.id}
           uploadingIdentificationStatementArchive={uploadingIdentificationStatementArchiveClientId === selectedRow.client.id}
+          creatingRiskAssessment={creatingRiskAssessmentClientId === selectedRow.client.id}
+          uploadingRiskAssessmentArchive={uploadingRiskAssessmentArchiveClientId === selectedRow.client.id}
           savingNextVerification={savingNextVerificationClientId === selectedRow.client.id}
           uploadingArchive={uploadingArchiveClientId === selectedRow.client.id}
           uploadingCrbrPdf={uploadingCrbrPdfClientId === selectedRow.client.id}
@@ -442,6 +487,8 @@ function AmlContent() {
           onUploadArchivedInitialForm={(file, completedDate) => void handleUploadArchivedInitialForm(selectedRow, file, completedDate)}
           onCreateIdentificationStatement={() => void handleCreateIdentificationStatement(selectedRow)}
           onUploadArchivedIdentificationStatement={(file, completedDate) => void handleUploadArchivedIdentificationStatement(selectedRow, file, completedDate)}
+          onCreateRiskAssessment={() => void handleCreateRiskAssessment(selectedRow)}
+          onUploadArchivedRiskAssessment={(file, completedDate) => void handleUploadArchivedRiskAssessment(selectedRow, file, completedDate)}
           onSaveNextVerificationDate={(nextVerificationDate) => void handleSaveNextVerificationDate(selectedRow, nextVerificationDate)}
           onUploadArchivedReport={(file) => void handleUploadArchivedReport(selectedRow, file)}
           onUploadCrbrPdf={(file) => void handleUploadCrbrPdf(selectedRow, file)}
@@ -463,6 +510,8 @@ function AmlDetailsModal({
   uploadingInitialFormArchive,
   creatingIdentificationStatement,
   uploadingIdentificationStatementArchive,
+  creatingRiskAssessment,
+  uploadingRiskAssessmentArchive,
   savingNextVerification,
   uploadingArchive,
   uploadingCrbrPdf,
@@ -473,6 +522,8 @@ function AmlDetailsModal({
   onUploadArchivedInitialForm,
   onCreateIdentificationStatement,
   onUploadArchivedIdentificationStatement,
+  onCreateRiskAssessment,
+  onUploadArchivedRiskAssessment,
   onSaveNextVerificationDate,
   onUploadArchivedReport,
   onUploadCrbrPdf,
@@ -487,6 +538,8 @@ function AmlDetailsModal({
   uploadingInitialFormArchive: boolean;
   creatingIdentificationStatement: boolean;
   uploadingIdentificationStatementArchive: boolean;
+  creatingRiskAssessment: boolean;
+  uploadingRiskAssessmentArchive: boolean;
   savingNextVerification: boolean;
   uploadingArchive: boolean;
   uploadingCrbrPdf: boolean;
@@ -497,6 +550,8 @@ function AmlDetailsModal({
   onUploadArchivedInitialForm: (file: File, completedDate: string) => void;
   onCreateIdentificationStatement: () => void;
   onUploadArchivedIdentificationStatement: (file: File, completedDate: string) => void;
+  onCreateRiskAssessment: () => void;
+  onUploadArchivedRiskAssessment: (file: File, completedDate: string) => void;
   onSaveNextVerificationDate: (nextVerificationDate: string | null) => void;
   onUploadArchivedReport: (file: File) => void;
   onUploadCrbrPdf: (file: File) => void;
@@ -581,6 +636,8 @@ function AmlDetailsModal({
           uploadingInitialFormArchive={uploadingInitialFormArchive}
           creatingIdentificationStatement={creatingIdentificationStatement}
           uploadingIdentificationStatementArchive={uploadingIdentificationStatementArchive}
+          creatingRiskAssessment={creatingRiskAssessment}
+          uploadingRiskAssessmentArchive={uploadingRiskAssessmentArchive}
           uploadingArchive={uploadingArchive}
           uploadingCrbrPdf={uploadingCrbrPdf}
           savingBeneficialOwnerKey={savingBeneficialOwnerKey}
@@ -588,6 +645,8 @@ function AmlDetailsModal({
           onUploadArchivedInitialForm={onUploadArchivedInitialForm}
           onCreateIdentificationStatement={onCreateIdentificationStatement}
           onUploadArchivedIdentificationStatement={onUploadArchivedIdentificationStatement}
+          onCreateRiskAssessment={onCreateRiskAssessment}
+          onUploadArchivedRiskAssessment={onUploadArchivedRiskAssessment}
           onUploadArchivedReport={onUploadArchivedReport}
           onUploadCrbrPdf={onUploadCrbrPdf}
           onUpdateBeneficialOwner={onUpdateBeneficialOwner}
@@ -607,6 +666,8 @@ function AmlTabContent({
   uploadingInitialFormArchive,
   creatingIdentificationStatement,
   uploadingIdentificationStatementArchive,
+  creatingRiskAssessment,
+  uploadingRiskAssessmentArchive,
   uploadingArchive,
   uploadingCrbrPdf,
   savingBeneficialOwnerKey,
@@ -614,6 +675,8 @@ function AmlTabContent({
   onUploadArchivedInitialForm,
   onCreateIdentificationStatement,
   onUploadArchivedIdentificationStatement,
+  onCreateRiskAssessment,
+  onUploadArchivedRiskAssessment,
   onUploadArchivedReport,
   onUploadCrbrPdf,
   onUpdateBeneficialOwner,
@@ -627,6 +690,8 @@ function AmlTabContent({
   uploadingInitialFormArchive: boolean;
   creatingIdentificationStatement: boolean;
   uploadingIdentificationStatementArchive: boolean;
+  creatingRiskAssessment: boolean;
+  uploadingRiskAssessmentArchive: boolean;
   uploadingArchive: boolean;
   uploadingCrbrPdf: boolean;
   savingBeneficialOwnerKey: string | null;
@@ -634,6 +699,8 @@ function AmlTabContent({
   onUploadArchivedInitialForm: (file: File, completedDate: string) => void;
   onCreateIdentificationStatement: () => void;
   onUploadArchivedIdentificationStatement: (file: File, completedDate: string) => void;
+  onCreateRiskAssessment: () => void;
+  onUploadArchivedRiskAssessment: (file: File, completedDate: string) => void;
   onUploadArchivedReport: (file: File) => void;
   onUploadCrbrPdf: (file: File) => void;
   onUpdateBeneficialOwner: (ownerIndex: number, changes: BeneficialOwnerEditValues) => void;
@@ -755,6 +822,36 @@ function AmlTabContent({
           <div style={listStyle}>
             {row.identificationStatements.map((statement) => (
               <IdentificationStatementItem key={statement.id} statement={statement} profilesById={profilesById} />
+            ))}
+          </div>
+        )}
+      </section>
+    );
+  }
+
+  if (activeTab === "risk_assessment") {
+    return (
+      <section style={tabsSectionStyle}>
+        <div style={detailsSectionHeaderStyle}>
+          <div style={tabPanelStyle}>
+            <span style={tabPanelLabelStyle}>{activeCheck.label}</span>
+            <StatusPill done={activeCheckDone} />
+          </div>
+          <button type="button" onClick={onCreateRiskAssessment} disabled={creatingRiskAssessment} style={primaryButtonStyle}>
+            <Plus size={16} />
+            {creatingRiskAssessment ? "Otwieranie..." : "Przejdź do oceny ryzyka"}
+          </button>
+        </div>
+        <ArchivedRiskAssessmentUpload uploading={uploadingRiskAssessmentArchive} onUpload={onUploadArchivedRiskAssessment} />
+        {row.riskAssessments.length === 0 ? (
+          <div style={tabContentPlaceholderStyle}>
+            <strong style={tabContentTitleStyle}>Oceny ryzyka</strong>
+            <p style={emptySmallStyle}>Brak zapisanych kart oceny ryzyka AML dla tego klienta.</p>
+          </div>
+        ) : (
+          <div style={listStyle}>
+            {row.riskAssessments.map((assessment) => (
+              <RiskAssessmentItem key={assessment.id} assessment={assessment} profilesById={profilesById} />
             ))}
           </div>
         )}
@@ -1007,6 +1104,71 @@ function IdentificationStatementItem({ statement, profilesById }: { statement: A
   );
 }
 
+function RiskAssessmentItem({ assessment, profilesById }: { assessment: AmlRiskAssessmentRecord; profilesById: Record<string, Profile> }) {
+  const active = assessment.status === "active";
+  const archived = Boolean((assessment.form_data as { archiwalny?: unknown })?.archiwalny);
+  const hasPdf = Boolean(assessment.completed_pdf_document_id);
+  const assessmentUrl = typeof window === "undefined" ? `/aml/ocena-ryzyka/${assessment.public_token}` : `${window.location.origin}/aml/ocena-ryzyka/${assessment.public_token}`;
+
+  async function copyLink() {
+    await navigator.clipboard.writeText(assessmentUrl);
+    alert("Skopiowano link do oceny ryzyka AML.");
+  }
+
+  function openAssessment() {
+    window.open(assessmentUrl, "_blank", "noopener,noreferrer");
+  }
+
+  async function openPdf() {
+    const result = await getAmlRiskAssessmentPdfUrl(assessment.id);
+    if (result.error || !result.data?.url) {
+      alert(result.error?.message || "Nie udało się otworzyć PDF oceny ryzyka AML.");
+      return;
+    }
+    window.open(result.data.url, "_blank", "noopener,noreferrer");
+  }
+
+  async function downloadPdf() {
+    const result = await getAmlRiskAssessmentPdfUrl(assessment.id);
+    if (result.error || !result.data?.url) {
+      alert(result.error?.message || "Nie udało się pobrać PDF oceny ryzyka AML.");
+      return;
+    }
+    const link = document.createElement("a");
+    link.href = result.data.url;
+    link.download = result.data.fileName || "Ocena_ryzyka_AML.pdf";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }
+
+  return (
+    <article style={verificationItemStyle}>
+      <div>
+        <strong style={verificationTitleStyle}>{formatDateTime(assessment.created_at)} · {initialFormStatusLabel(assessment.status)}</strong>
+        {archived ? <span style={archivedBadgeStyle}>Archiwalny</span> : null}
+        <p style={verificationMetaStyle}>
+          Utworzył: {assessment.created_by_name || profileLabel(assessment.created_by, profilesById)} · Sporządził: {assessment.completed_by_name || "-"}
+        </p>
+        <div style={sourceGridStyle}>
+          <span style={sourceBadgeStyle(active ? "warning" : assessment.status === "completed" ? "ok" : "archiwalny")}>
+            Link · {active ? "aktywny" : assessment.status === "completed" ? "zamknięty po zapisie" : "unieważniony"}
+          </span>
+          {assessment.assessment_date ? <span style={sourceBadgeStyle("confirmed")}>Data · {formatDate(assessment.assessment_date)}</span> : null}
+          {assessment.risk_level ? <span style={sourceBadgeStyle("confirmed")}>Ryzyko · {riskLevelShortLabel(assessment.risk_level)}</span> : null}
+          {assessment.completed_at ? <span style={sourceBadgeStyle("ok")}>Zapisano · {formatDateTime(assessment.completed_at)}</span> : null}
+        </div>
+      </div>
+      <div style={reportButtonsStyle}>
+        {active ? <button type="button" onClick={openAssessment} style={smallButtonStyle}><Eye size={16} /> Otwórz ocenę</button> : null}
+        {active ? <button type="button" onClick={() => void copyLink()} style={smallButtonStyle}>Kopiuj link</button> : null}
+        {hasPdf ? <button type="button" onClick={() => void openPdf()} style={smallButtonStyle}><Eye size={16} /> Podgląd</button> : null}
+        {hasPdf ? <button type="button" onClick={() => void downloadPdf()} style={smallButtonStyle}><Download size={16} /> Pobierz</button> : null}
+      </div>
+    </article>
+  );
+}
+
 function RegistryDetails({
   register,
   clientId,
@@ -1195,6 +1357,45 @@ function ArchivedStatementUpload({
             if (!file) return;
             if (!completedDate) {
               alert("Najpierw wpisz datę oświadczenia.");
+              return;
+            }
+            onUpload(file, completedDate);
+          }}
+        />
+      </label>
+    </div>
+  );
+}
+
+function ArchivedRiskAssessmentUpload({
+  uploading,
+  onUpload,
+}: {
+  uploading: boolean;
+  onUpload: (file: File, completedDate: string) => void;
+}) {
+  const [completedDate, setCompletedDate] = useState("");
+
+  return (
+    <div style={archiveInitialFormStyle}>
+      <label style={archiveInitialFormDateStyle}>
+        <span style={nextVerificationLabelStyle}>Data oceny ryzyka</span>
+        <AmlDatePicker value={completedDate} onChange={setCompletedDate} />
+      </label>
+      <label style={archiveUploadButtonStyle}>
+        <Upload size={16} />
+        {uploading ? "Dodawanie..." : "Dodaj archiwalną ocenę ryzyka"}
+        <input
+          type="file"
+          accept="application/pdf,.pdf"
+          disabled={uploading}
+          style={hiddenFileInputStyle}
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            event.target.value = "";
+            if (!file) return;
+            if (!completedDate) {
+              alert("Najpierw wpisz datę oceny ryzyka.");
               return;
             }
             onUpload(file, completedDate);
@@ -1462,7 +1663,9 @@ function amlCheckStatus(row: AmlRow, check: AmlCheckKey) {
   if (check === "identification_statement") {
     return row.identificationStatements.some((statement) => Boolean(statement.completed_at || statement.completed_pdf_document_id));
   }
-  if (check === "risk_assessment") return Boolean(row.register?.poziom_ryzyka);
+  if (check === "risk_assessment") {
+    return row.riskAssessments.some((assessment) => Boolean(assessment.completed_at || assessment.completed_pdf_document_id));
+  }
   return row.register?.status === "zatwierdzone";
 }
 
@@ -1481,6 +1684,7 @@ function buildRows(
   verifications: AmlVerificationRecord[],
   initialForms: AmlInitialFormRecord[],
   identificationStatements: AmlIdentificationStatementRecord[],
+  riskAssessments: AmlRiskAssessmentRecord[],
   history: AmlHistoryRecord[]
 ): AmlRow[] {
   const amlStagesByClient = new Map(stages.filter((stage) => stage.etap === "aml").map((stage) => [stage.klient_id, stage]));
@@ -1494,6 +1698,7 @@ function buildRows(
       verifications: verifications.filter((verification) => verification.klient_id === client.id),
       initialForms: initialForms.filter((form) => form.klient_id === client.id),
       identificationStatements: identificationStatements.filter((statement) => statement.klient_id === client.id),
+      riskAssessments: riskAssessments.filter((assessment) => assessment.klient_id === client.id),
       history: history.filter((entry) => entry.klient_id === client.id),
     }))
     .sort((first, second) => {
@@ -1568,6 +1773,14 @@ function initialFormStatusLabel(status: string) {
   return status || "-";
 }
 
+function riskLevelShortLabel(value: string) {
+  if (value === "niskie") return "niskie";
+  if (value === "standardowe") return "standardowe";
+  if (value === "podwyzszone") return "podwyższone";
+  if (value === "wysokie") return "wysokie";
+  return value || "-";
+}
+
 function sourceStatusLabel(status: string) {
   if (status === "ok") return "OK";
   if (status === "confirmed") return "Potwierdzono";
@@ -1590,6 +1803,9 @@ function historyActionLabel(action: string) {
   if (action === "utworzono_link_oswiadczenia_weryfikacji") return "Utworzono link do oświadczenia";
   if (action === "uzupelnienie_oswiadczenia_weryfikacji") return "Uzupełniono oświadczenie";
   if (action === "dodano_archiwalne_oswiadczenie_weryfikacji") return "Dodano archiwalne oświadczenie";
+  if (action === "utworzono_link_oceny_ryzyka") return "Utworzono link do oceny ryzyka";
+  if (action === "uzupelnienie_oceny_ryzyka") return "Uzupełniono ocenę ryzyka";
+  if (action === "dodano_archiwalna_ocene_ryzyka") return "Dodano archiwalną ocenę ryzyka";
   return action.replace(/_/g, " ");
 }
 

@@ -450,7 +450,7 @@ function AmlContent() {
                       <strong style={nipValueStyle}>{row.client.nip || "-"}</strong>
                       <span style={clientMetaStyle}>Opiekun: {caregiverLabel(row.client)}</span>
                     </Td>
-                    <Td>{riskKindLabel(row)}</Td>
+                    <Td><RiskBadge value={riskKindValue(row)} /></Td>
                     <StatusTd><StatusPill done={amlCheckStatus(row, "verification")} /></StatusTd>
                     <StatusTd><StatusPill done={amlCheckStatus(row, "initial_form")} /></StatusTd>
                     <StatusTd><StatusPill done={amlCheckStatus(row, "identification_statement")} /></StatusTd>
@@ -848,7 +848,7 @@ function AmlTabContent({
         </div>
         <div style={riskSummaryStyle}>
           <span style={nextVerificationLabelStyle}>Przypisane ryzyko</span>
-          <strong style={riskSummaryValueStyle}>{riskKindLabel(row)}</strong>
+          <RiskBadge value={riskKindValue(row)} />
         </div>
         <ArchivedRiskAssessmentUpload uploading={uploadingRiskAssessmentArchive} onUpload={onUploadArchivedRiskAssessment} />
         {row.riskAssessments.length === 0 ? (
@@ -1794,9 +1794,15 @@ function riskLevelShortLabel(value: string) {
   return value || "-";
 }
 
-function riskKindLabel(row: AmlRow) {
+function riskKindValue(row: AmlRow) {
   const completedAssessment = row.riskAssessments.find((assessment) => Boolean(assessment.completed_at || assessment.completed_pdf_document_id));
-  return riskLevelShortLabel(completedAssessment?.risk_level || row.register?.poziom_ryzyka || "");
+  return completedAssessment?.risk_level || row.register?.poziom_ryzyka || "";
+}
+
+function RiskBadge({ value }: { value: string }) {
+  const label = riskLevelShortLabel(value);
+  if (label === "-") return <span>-</span>;
+  return <span style={riskBadgeStyle(value)}>{label.toUpperCase()}</span>;
 }
 
 function sourceStatusLabel(status: string) {
@@ -1966,6 +1972,16 @@ function sourceBadgeStyle(status: string): CSSProperties {
   return { ...sourceBadgeBaseStyle, background: "rgba(100, 116, 139, 0.12)", color: colors.muted };
 }
 
+function riskBadgeStyle(value: string): CSSProperties {
+  if (value === "podwyzszone") {
+    return { ...sourceBadgeBaseStyle, background: "rgba(245, 158, 11, 0.16)", color: "#9a5b00", textTransform: "uppercase" };
+  }
+  if (value === "niskie" || value === "standardowe") {
+    return { ...sourceBadgeBaseStyle, background: "rgba(22, 163, 74, 0.12)", color: colors.success, textTransform: "uppercase" };
+  }
+  return { ...sourceBadgeBaseStyle, background: "rgba(100, 116, 139, 0.12)", color: colors.muted, textTransform: "uppercase" };
+}
+
 function StatCard({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: number; tone: "warning" | "info" | "success" }) {
   const toneColor = tone === "success" ? colors.success : tone === "info" ? colors.info : colors.warning;
   return (
@@ -2123,7 +2139,6 @@ const activeTabButtonStyle: CSSProperties = { ...tabButtonStyle, background: col
 const tabPanelStyle: CSSProperties = { minHeight: "54px", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.inputBackground, display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", padding: "12px 14px" };
 const tabPanelLabelStyle: CSSProperties = { color: colors.navy, fontSize: "14px", fontWeight: 850 };
 const riskSummaryStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px", flexWrap: "wrap" };
-const riskSummaryValueStyle: CSSProperties = { color: colors.navy, fontSize: "18px", fontWeight: 900, textTransform: "capitalize" };
 const tabContentPlaceholderStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.inputBackground, padding: "18px", display: "grid", gap: "8px" };
 const tabContentTitleStyle: CSSProperties = { color: colors.navy, fontSize: "16px" };
 const archiveInitialFormStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.inputBackground, padding: "12px", display: "flex", alignItems: "flex-end", gap: "12px", flexWrap: "wrap" };

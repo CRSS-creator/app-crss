@@ -455,7 +455,7 @@ function AmlContent() {
                     <StatusTd><StatusPill done={amlCheckStatus(row, "initial_form")} /></StatusTd>
                     <StatusTd><StatusPill done={amlCheckStatus(row, "identification_statement")} /></StatusTd>
                     <StatusTd><StatusPill done={amlCheckStatus(row, "risk_assessment")} /></StatusTd>
-                    <Td>{formatDate(row.register?.nastepna_weryfikacja_at)}</Td>
+                    <Td>{formatDate(nextVerificationDateForRow(row))}</Td>
                     <Td>
                       <button type="button" onClick={() => setSelectedClientId(row.client.id)} style={detailsButtonStyle}>
                         Szczegóły
@@ -562,13 +562,14 @@ function AmlDetailsModal({
   onClose: () => void;
 }) {
   const [activeTab, setActiveTab] = useState<AmlCheckKey>("verification");
-  const [nextVerificationDate, setNextVerificationDate] = useState(row.register?.nastepna_weryfikacja_at || "");
+  const syncedNextVerificationDate = nextVerificationDateForRow(row);
+  const [nextVerificationDate, setNextVerificationDate] = useState(syncedNextVerificationDate);
   const activeCheck = AML_CHECKS.find((check) => check.key === activeTab) || AML_CHECKS[0];
   const activeCheckDone = amlCheckStatus(row, activeCheck.key);
 
   useEffect(() => {
-    setNextVerificationDate(row.register?.nastepna_weryfikacja_at || "");
-  }, [row.register?.nastepna_weryfikacja_at]);
+    setNextVerificationDate(syncedNextVerificationDate);
+  }, [syncedNextVerificationDate]);
 
   return (
     <div style={modalBackdropStyle}>
@@ -624,7 +625,7 @@ function AmlDetailsModal({
         <div style={modalGridStyle}>
           <InfoBox label="Ostatnia weryfikacja" value={formatDateTime(row.register?.ostatnia_weryfikacja_at)} />
           <InfoBox label="Wykonał" value={profileLabel(row.register?.ostatnia_weryfikacja_by, profilesById)} />
-          <InfoBox label="Następna weryfikacja" value={formatDate(row.register?.nastepna_weryfikacja_at)} />
+          <InfoBox label="Następna weryfikacja" value={formatDate(syncedNextVerificationDate)} />
         </div>
           </>
         ) : null}
@@ -1662,7 +1663,7 @@ function StatusPill({ done }: { done: boolean }) {
 }
 
 function amlCheckStatus(row: AmlRow, check: AmlCheckKey) {
-  if (!isAmlStatusStillValid(row.register?.nastepna_weryfikacja_at)) return false;
+  if (!isAmlStatusStillValid(nextVerificationDateForRow(row))) return false;
   if (check === "verification") return row.verifications.length > 0 || Boolean(row.register?.ostatnia_weryfikacja_at);
   if (check === "initial_form") {
     return row.initialForms.some((form) => Boolean(form.completed_at || form.completed_pdf_document_id));
@@ -1674,6 +1675,11 @@ function amlCheckStatus(row: AmlRow, check: AmlCheckKey) {
     return row.riskAssessments.some((assessment) => Boolean(assessment.completed_at || assessment.completed_pdf_document_id));
   }
   return row.register?.status === "zatwierdzone";
+}
+
+function nextVerificationDateForRow(row: AmlRow) {
+  const completedAssessment = row.riskAssessments.find((assessment) => Boolean(assessment.completed_at || assessment.completed_pdf_document_id));
+  return completedAssessment?.next_update_date || row.register?.nastepna_weryfikacja_at || "";
 }
 
 function allAmlChecksDone(row: AmlRow) {

@@ -310,6 +310,7 @@ function preparedInvoices(group: ReminderGroup) {
 
 function buildOverdueNotificationHtml(group: ReminderGroup) {
   const clientName = escapeHtml(group.clientName || "Państwa firmy");
+  const paymentRequestText = overduePaymentRequestText(group);
   const rows = group.invoices.map((invoice) => {
     const days = overdueDays(invoice.termin_platnosci);
     return `
@@ -342,7 +343,7 @@ function buildOverdueNotificationHtml(group: ReminderGroup) {
         <tbody>${rows}
         </tbody>
       </table>
-      <p style="margin:0 0 16px 0;">Prosimy o uregulowanie zaległości.</p>
+      <p style="margin:0 0 16px 0;">${escapeHtml(paymentRequestText)}</p>
       <p style="margin:0 0 16px 0;">W razie pytań prosimy o kontakt.</p>
       <p style="margin:24px 0 0 0;">Pozdrawiamy serdecznie,<br><strong>Zespół CRSS</strong></p>
     </div>
@@ -355,8 +356,37 @@ function buildOverdueNotificationSms(group: ReminderGroup) {
   const invoiceText = group.invoices
     .map((invoice) => `${toSmsText(invoice.numer || "FV")} - ${overdueDays(invoice.termin_platnosci)} dni po terminie`)
     .join("; ");
+  const paymentRequestText = toSmsText(overduePaymentRequestText(group));
 
-  return toSmsText(`Dzień dobry, informujemy o przeterminowanych fakturach: ${invoiceText}. Szczegóły wysłaliśmy na adres e-mail. CRSS Sp. z o.o.`);
+  return toSmsText(`Dzień dobry, informujemy o przeterminowanych fakturach: ${invoiceText}. ${paymentRequestText} Szczegóły wysłaliśmy na adres e-mail. CRSS Sp. z o.o.`);
+}
+
+function overduePaymentRequestText(group: ReminderGroup) {
+  if (group.invoices.length < 2) return "Prosimy o uregulowanie zaległości.";
+
+  return `Prosimy o uregulowanie zaległości o łącznej kwocie ${formatTotalOverdueAmount(group.invoices)}.`;
+}
+
+function formatTotalOverdueAmount(invoices: OverdueInvoiceRow[]) {
+  const currency = invoices[0]?.waluta || "PLN";
+  const allSameCurrency = invoices.every((invoice) => (invoice.waluta || "PLN") === currency);
+
+  if (!allSameCurrency) {
+    return invoices
+      .map((invoice) => formatMoney(invoice.kwota_brutto, invoice.waluta || "PLN"))
+      .join(" + ");
+  }
+
+  const total = invoices.reduce((sum, invoice) => sum + moneyValue(invoice.kwota_brutto), 0);
+  return formatMoney(total, currency);
+}
+
+function moneyValue(value: number | string | null) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  if (!value) return 0;
+  const normalized = value.replace(/\s/g, "").replace(",", ".");
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function overdueDays(value: string | null) {

@@ -238,8 +238,7 @@ function AmlContent() {
     }
 
     if (result.data?.statementUrl) {
-      await navigator.clipboard.writeText(result.data.statementUrl);
-      alert("Utworzono i skopiowano link do oświadczenia AML.");
+      window.open(result.data.statementUrl, "_blank", "noopener,noreferrer");
     }
     await loadData();
     setSelectedClientId(row.client.id);
@@ -743,7 +742,7 @@ function AmlTabContent({
           </div>
           <button type="button" onClick={onCreateIdentificationStatement} disabled={creatingIdentificationStatement} style={secondaryButtonStyle}>
             <Send size={16} />
-            {creatingIdentificationStatement ? "Tworzenie..." : "Utwórz link do oświadczenia"}
+            {creatingIdentificationStatement ? "Otwieranie..." : "Przejdź do oświadczenia"}
           </button>
         </div>
         <ArchivedStatementUpload uploading={uploadingIdentificationStatementArchive} onUpload={onUploadArchivedIdentificationStatement} />

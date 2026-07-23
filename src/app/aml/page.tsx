@@ -925,15 +925,15 @@ function RegistryDetails({
           <div style={registryPanelWideStyle}>
             <h4 style={registryTitleStyle}>Kody PKD do formularza wstępnego</h4>
             {pkdCodes.length > 0 ? (
-              <div style={pkdListStyle}>
+              <ul style={pkdListStyle}>
                 {pkdCodes.map((pkd, index) => (
-                  <span key={`${asText(pkd.kod)}-${index}`} style={pkdBadgeStyle}>
+                  <li key={`${asText(pkd.kod)}-${index}`} style={pkdRowStyle}>
                     <strong style={pkdCodeStyle}>{asText(pkd.kod)}{pkd.przewazajace ? " · przeważające" : ""}</strong>
                     <span style={pkdNameStyle}>{asText(pkd.nazwa)}</span>
                     {pkd.zrodlo ? <span style={pkdSourceStyle}>{asText(pkd.zrodlo)}</span> : null}
-                  </span>
+                  </li>
                 ))}
-              </div>
+              </ul>
             ) : (
               <p style={emptySmallStyle}>Brak zapisanych kodów PKD.</p>
             )}
@@ -1676,11 +1676,11 @@ function pepOsintStatusValueStyle(status: string): CSSProperties {
   if (status === "error") return { ...definitionValueStyle, color: colors.danger, fontWeight: 900 };
   return definitionValueStyle;
 }
-const pkdListStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "8px" };
-const pkdBadgeStyle: CSSProperties = { display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "4px", minHeight: "66px", padding: "10px 12px", borderRadius: radius.button, background: "rgba(23, 59, 115, 0.08)", color: colors.navy, fontSize: "12px", fontWeight: 850, lineHeight: 1.35 };
-const pkdCodeStyle: CSSProperties = { fontSize: "13px", color: colors.navy };
+const pkdListStyle: CSSProperties = { listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "6px" };
+const pkdRowStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(88px, max-content) minmax(0, 1fr) max-content", gap: "10px", alignItems: "baseline", padding: "0 0 6px", borderBottom: `1px solid ${colors.border}`, color: colors.navy, fontSize: "12px", fontWeight: 850, lineHeight: 1.35 };
+const pkdCodeStyle: CSSProperties = { fontSize: "13px", color: colors.navy, whiteSpace: "nowrap" };
 const pkdNameStyle: CSSProperties = { color: colors.text, fontWeight: 800, overflowWrap: "anywhere" };
-const pkdSourceStyle: CSSProperties = { color: colors.muted, fontSize: "11px", fontWeight: 850, textTransform: "uppercase" };
+const pkdSourceStyle: CSSProperties = { color: colors.muted, fontSize: "11px", fontWeight: 850, textTransform: "uppercase", whiteSpace: "nowrap" };
 const emptySmallStyle: CSSProperties = { margin: 0, color: colors.muted, fontWeight: 750 };
 const listStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "12px" };
 const verificationItemStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "16px", display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "flex-start" };

@@ -795,12 +795,16 @@ function extractPkdCodes(value: unknown, source: string, inPkdNode = false): Pkd
 
   const nestedCodes = Object.entries(record).flatMap(([key, item]) => {
     const lowerKey = key.toLowerCase();
-    const childInPkd = pkdRecord || lowerKey.includes("pkd") || lowerKey.includes("dzialalnosci");
+    const childInPkd = isPkdContainerKey(lowerKey);
     const childCodes = extractPkdCodes(item, source, childInPkd);
     return lowerKey.includes("przewazajacej") ? childCodes.map((code) => ({ ...code, przewazajace: true })) : childCodes;
   });
 
   return [...directCodes, ...nestedCodes].filter((item) => item.kod !== "");
+}
+
+function isPkdContainerKey(lowerKey: string) {
+  return lowerKey.includes("pkd") || lowerKey.includes("przedmiotdzialalnosci") || lowerKey.includes("przedmiotdziałalności");
 }
 
 function pkdCodesFromText(value: string, source: string): PkdCode[] {

@@ -864,13 +864,15 @@ function RegistryDetails({
   const registry = asRecord(register?.dane_rejestrowe);
   const identifiers = asRecord(registry.identyfikatory);
   const vat = asRecord(registry.bialaListaVat);
+  const ceidg = asRecord(registry.ceidg);
   const crbr = asRecord(registry.crbr);
   const crbrCompanies = Array.isArray(crbr.companies) ? crbr.companies as Array<Record<string, unknown>> : [];
   const crbrCompany = crbrCompanies[0] || {};
   const pepOsint = asRecord(registry.pepOsint);
   const owners = Array.isArray(register?.beneficjenci_rzeczywisci) ? register.beneficjenci_rzeczywisci : [];
   const ownersFromInitialForm = owners.some((owner) => String(asRecord(owner).source || "").toLowerCase().includes("formularz"));
-  const ownersHeading = ownersFromInitialForm ? "Beneficjenci rzeczywiści z formularza wstępnego" : "Beneficjenci rzeczywiści z CRBR";
+  const isIndividualBusiness = String(registry.typPodmiotu || "").toLowerCase() === "jdg" || String(identifiers.forma || "").toLowerCase().includes("jednoosobowa");
+  const ownersHeading = isIndividualBusiness ? "Beneficjent rzeczywisty - przedsiębiorca" : ownersFromInitialForm ? "Beneficjenci rzeczywiści z formularza wstępnego" : "Beneficjenci rzeczywiści z CRBR";
   const pkdCodes = Array.isArray(register?.kody_pkd) ? register.kody_pkd : [];
 
   return (
@@ -887,12 +889,12 @@ function RegistryDetails({
             <h4 style={registryTitleStyle}>Identyfikatory</h4>
             <Definition label="NIP" value={asText(identifiers.nip)} />
             <Definition label="REGON" value={asText(identifiers.regon || register.numer_regon)} />
-            <Definition label="KRS" value={asText(identifiers.krs || register.numer_krs)} />
-            <Definition label="Rejestr" value={asText(identifiers.rejestr)} />
+            {!isIndividualBusiness ? <Definition label="KRS" value={asText(identifiers.krs || register.numer_krs)} /> : null}
+            {!isIndividualBusiness ? <Definition label="Rejestr" value={asText(identifiers.rejestr)} /> : null}
             <Definition label="VAT" value={vat.statusVat ? `VAT ${String(vat.statusVat).toLowerCase()}` : "-"} />
-            <Definition label="Nazwa" value={asText(crbrCompany.nazwa || vat.nazwa)} />
-            <Definition label="Adres" value={asText(crbrCompany.adres || vat.adresDzialalnosci || vat.adresSiedziby)} />
-            <Definition label="Forma" value={asText(crbrCompany.formaOrganizacyjna)} />
+            <Definition label="Nazwa" value={asText(identifiers.nazwa || ceidg.nazwa || crbrCompany.nazwa || vat.nazwa)} />
+            <Definition label="Adres" value={asText(identifiers.adres || ceidg.adres || crbrCompany.adres || vat.adresDzialalnosci || vat.adresSiedziby)} />
+            <Definition label="Forma" value={asText(identifiers.forma || ceidg.forma || crbrCompany.formaOrganizacyjna)} />
           </div>
           <div style={beneficialOwnersPanelStyle}>
             <h4 style={registryTitleStyle}>{ownersHeading}</h4>

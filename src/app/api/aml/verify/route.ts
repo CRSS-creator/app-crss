@@ -134,7 +134,9 @@ export async function POST(request: NextRequest) {
   checks.push(sanctionsCheck);
   const now = new Date();
   const pkdCodes = collectPkdCodes(ceidgCheck, krsCheck);
-  const beneficialOwners = actualIndividualBusiness ? [] : extractCrbrBeneficialOwners(crbrCheck, now, krsCheck);
+  const beneficialOwners = actualIndividualBusiness
+    ? buildJdgBeneficialOwners(ceidgCheck, client.nazwa, nip, now)
+    : extractCrbrBeneficialOwners(crbrCheck, now, krsCheck);
   const result = summarizeResult(checks);
   const visibleSourceChecks = checks.filter((check) => !(actualIndividualBusiness && check.source === "CRBR"));
   const registryDetails = buildRegistryDetails({
@@ -145,6 +147,7 @@ export async function POST(request: NextRequest) {
     crbrCheck,
     pkdCodes,
     checks,
+    isIndividualBusiness: actualIndividualBusiness,
     checkedAt: now,
   });
   const reportName = buildReportFileName(client.nazwa, nip, now);
@@ -216,9 +219,7 @@ export async function POST(request: NextRequest) {
     kody_pkd: pkdCodes,
     updated_at: now.toISOString(),
   };
-  if (!actualIndividualBusiness) {
-    registerUpdate.beneficjenci_rzeczywisci = beneficialOwners;
-  }
+  registerUpdate.beneficjenci_rzeczywisci = beneficialOwners;
 
   await auth.admin
     .from("aml_rejestr_klientow")
@@ -419,7 +420,7 @@ async function verifyCeidg(nip: string): Promise<OfficialCheck> {
       return { source: "CEIDG", status: "error", label: "Nie udało się pobrać danych z API CEIDG.", details: { identyfikatorZapytania: queryId, httpStatus: response.status, data, checkedAt: new Date().toISOString(), url } };
     }
 
-    const companies = extractCeidgCompanies(data);
+    const companies = await enrichCeidgCompanies(extractCeidgCompanies(data));
     return {
       source: "CEIDG",
       status: companies.length > 0 ? "ok" : "warning",
@@ -429,6 +430,30 @@ async function verifyCeidg(nip: string): Promise<OfficialCheck> {
   } catch (error) {
     return { source: "CEIDG", status: "error", label: "Błąd połączenia z API CEIDG.", details: { identyfikatorZapytania: queryId, message: errorMessage(error), checkedAt: new Date().toISOString(), url } };
   }
+}
+
+async function enrichCeidgCompanies(companies: Array<Record<string, unknown>>) {
+  const token = CEIDG_API_TOKEN;
+  if (!token) return companies;
+
+  return Promise.all(companies.map(async (company) => {
+    const link = firstText(company, ["link", "url", "href"]);
+    if (!link || !/^https?:\/\//.test(link)) return company;
+
+    try {
+      const response = await fetch(link, {
+        headers: {
+          accept: "application/json",
+          authorization: `Bearer ${token}`,
+        },
+      });
+      const details = await response.json().catch(() => null);
+      if (!response.ok || !details) return company;
+      return { ...company, szczegoly: details };
+    } catch {
+      return company;
+    }
+  }));
 }
 
 async function verifySanctionsLists(name: string, nip: string): Promise<OfficialCheck> {
@@ -595,13 +620,35 @@ function getVatSubject(check: OfficialCheck) {
 
 function getCeidgIdentity(check: OfficialCheck) {
   const details = check.details as { companies?: Array<Record<string, unknown>> };
-  const company = Array.isArray(details.companies) ? details.companies[0] : null;
+  const company = ceidgCompanyFromDetails(details);
   if (!company) return { regon: null as string | null, krs: null as string | null };
 
   return {
     regon: firstDeepText(company, ["regon", "REGON", "numerRegon", "numer_regon"]),
     krs: firstDeepText(company, ["krs", "KRS", "numerKrs", "numer_krs"]),
   };
+}
+
+function getCeidgRegistryData(check: OfficialCheck | null | undefined) {
+  const details = check?.details as { companies?: Array<Record<string, unknown>> } | undefined;
+  const company = ceidgCompanyFromDetails(details);
+  const owner = company ? firstDeepRecord(company, ["wlasciciel", "właściciel", "owner"]) : null;
+  const businessAddress = company ? firstDeepRecord(company, ["adresDzialalnosci", "adresDziałalnosci", "adresDziałalności", "adres"]) : null;
+  const residenceAddress = company ? firstDeepRecord(company, ["adresZamieszkania", "adresDoDoreczen", "adresDoDoręczeń"]) : null;
+  const ownerLabel = owner ? [firstDeepText(owner, ["imie", "pierwszeImie", "imiona"]), firstDeepText(owner, ["nazwisko"])].filter(Boolean).join(" ").trim() : "";
+
+  return {
+    company,
+    owner,
+    nazwa: company ? firstDeepText(company, ["nazwa", "firma", "name"]) : null,
+    adres: formatRegistryAddress(businessAddress) || formatRegistryAddress(residenceAddress),
+    forma: company ? "Jednoosobowa działalność gospodarcza" : null,
+    przedsiebiorca: ownerLabel || null,
+  };
+}
+
+function ceidgCompanyFromDetails(details: { companies?: Array<Record<string, unknown>> } | undefined) {
+  return Array.isArray(details?.companies) ? details.companies[0] : null;
 }
 
 function getCrbrIdentity(check: OfficialCheck) {
@@ -650,6 +697,42 @@ function firstDeepText(value: unknown, keys: string[]): string | null {
   }
   return null;
 }
+
+function firstDeepRecord(value: unknown, keys: string[]): Record<string, unknown> | null {
+  if (!value || typeof value !== "object") return null;
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = firstDeepRecord(item, keys);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  for (const key of keys) {
+    const direct = record[key];
+    if (direct && typeof direct === "object" && !Array.isArray(direct)) return direct as Record<string, unknown>;
+  }
+
+  for (const nested of Object.values(record)) {
+    const found = firstDeepRecord(nested, keys);
+    if (found) return found;
+  }
+  return null;
+}
+
+function formatRegistryAddress(address: Record<string, unknown> | null) {
+  if (!address) return null;
+  const parts = [
+    firstDeepText(address, ["kod", "kodPocztowy", "kod_pocztowy"]),
+    firstDeepText(address, ["miejscowosc", "miejscowość", "miasto"]),
+    firstDeepText(address, ["ulica"]),
+    firstDeepText(address, ["budynek", "nrBudynku", "nrDomu", "numerDomu"]),
+    firstDeepText(address, ["lokal", "nrLokalu", "numerLokalu"]),
+  ].filter(Boolean);
+  return parts.join(" ").trim() || null;
+}
+
 function extractCeidgCompanies(data: unknown) {
   const root = data && typeof data === "object" ? data as Record<string, unknown> : {};
   const candidates = [root.firmy, root.data, root.items, root.results, root.result];
@@ -755,6 +838,7 @@ function buildRegistryDetails(input: {
   crbrCheck: OfficialCheck;
   pkdCodes: PkdCode[];
   checks: OfficialCheck[];
+  isIndividualBusiness: boolean;
   checkedAt: Date;
 }) {
   const krsDetails = input.krsCheck.details as { krs?: string; register?: string; data?: unknown; url?: string };
@@ -762,16 +846,22 @@ function buildRegistryDetails(input: {
   const vatCheck = input.checks.find((check) => normalizeTextForMatch(check.source).includes("biala lista") || check.source === "Status VAT");
   const vatDetails = vatCheck?.details as { identyfikatorZapytania?: unknown; identyfikatorTechniczny?: unknown; requestId?: unknown } | undefined;
   const ceidgIdentity = input.ceidgCheck ? getCeidgIdentity(input.ceidgCheck) : { regon: null, krs: null };
+  const ceidgRegistry = getCeidgRegistryData(input.ceidgCheck);
   const crbrIdentity = getCrbrIdentity(input.crbrCheck);
   const krsIdentity = getKrsIdentity(input.krsCheck);
+  const registryKrs = input.isIndividualBusiness ? null : String(input.vatSubject?.krs || krsDetails.krs || krsIdentity.krs || crbrIdentity.krs || ceidgIdentity.krs || "") || null;
 
   return {
     updatedAt: input.checkedAt.toISOString(),
+    typPodmiotu: input.isIndividualBusiness ? "jdg" : "podmiot_krs",
     identyfikatory: {
       nip: input.nip,
       regon: String(input.vatSubject?.regon || krsIdentity.regon || ceidgIdentity.regon || "") || null,
-      krs: String(input.vatSubject?.krs || krsDetails.krs || krsIdentity.krs || crbrIdentity.krs || ceidgIdentity.krs || "") || null,
-      rejestr: krsDetails.register === "P" ? "Rejestr przedsiębiorców" : krsDetails.register || null,
+      krs: registryKrs,
+      rejestr: input.isIndividualBusiness ? null : krsDetails.register === "P" ? "Rejestr przedsiębiorców" : krsDetails.register || null,
+      nazwa: input.isIndividualBusiness ? ceidgRegistry.nazwa : null,
+      adres: input.isIndividualBusiness ? ceidgRegistry.adres : null,
+      forma: input.isIndividualBusiness ? ceidgRegistry.forma : null,
     },
     statusy: {
       vat: statusForAnySource(input.checks, ["Status VAT", "Biała Lista VAT"]),
@@ -784,6 +874,11 @@ function buildRegistryDetails(input: {
     ceidg: input.ceidgCheck?.status === "ok" ? {
       liczbaWpisow: Array.isArray(ceidgDetails?.companies) ? ceidgDetails.companies.length : 0,
       url: ceidgDetails?.url || null,
+      dane: ceidgRegistry.company || null,
+      nazwa: ceidgRegistry.nazwa,
+      adres: ceidgRegistry.adres,
+      forma: ceidgRegistry.forma,
+      przedsiebiorca: ceidgRegistry.przedsiebiorca,
     } : null,
     krs: input.krsCheck.status === "ok" ? {
       numer: krsDetails.krs || null,
@@ -806,6 +901,27 @@ function buildRegistryDetails(input: {
     } : null,
     crbr: input.crbrCheck.status === "ok" ? input.crbrCheck.details : null,
   };
+}
+
+function buildJdgBeneficialOwners(check: OfficialCheck | null, clientName: string | null, nip: string, checkedAt: Date) {
+  const ceidg = getCeidgRegistryData(check);
+  const owner = ceidg.owner || {};
+  const label = ceidg.przedsiebiorca || clientName || "Przedsiębiorca";
+  return [{
+    source: "CEIDG",
+    status: "pobrano",
+    label,
+    pierwszeImie: firstDeepText(owner, ["imie", "pierwszeImie", "imiona"]),
+    nazwisko: firstDeepText(owner, ["nazwisko"]),
+    nip: firstDeepText(owner, ["nip"]) || nip,
+    regon: firstDeepText(owner, ["regon"]),
+    rola: "Przedsiębiorca",
+    reprezentant: true,
+    udzialowiec: true,
+    procentUdzialow: "100",
+    spolka: { nazwa: ceidg.nazwa || clientName || null, nip, forma: "Jednoosobowa działalność gospodarcza" },
+    checkedAt: checkedAt.toISOString(),
+  }];
 }
 
 function extractCrbrBeneficialOwners(check: OfficialCheck, checkedAt: Date, krsCheck: OfficialCheck) {
@@ -1183,23 +1299,26 @@ async function buildAmlReportPdf(input: {
     : {};
   const crbrCompanies = Array.isArray(crbrDetails.companies) ? crbrDetails.companies as Array<Record<string, unknown>> : [];
   const crbrCompany = crbrCompanies[0] || {};
+  const isIndividualBusiness = input.registryDetails.typPodmiotu === "jdg";
 
   drawInfoBox("Identyfikatory", [
     ["NIP", asPdfText(identifiers.nip || input.nip)],
     ["REGON", asPdfText(identifiers.regon)],
-    ["KRS", asPdfText(identifiers.krs)],
-    ["Rejestr", asPdfText(identifiers.rejestr || "Rejestr przedsiębiorców")],
+    ...(!isIndividualBusiness ? [
+      ["KRS", asPdfText(identifiers.krs)],
+      ["Rejestr", asPdfText(identifiers.rejestr || "Rejestr przedsiębiorców")],
+    ] as [string, string][] : []),
     ...(crbrWasUsed ? [["Id wniosku", asPdfText(crbrMeta.identyfikatorWniosku || crbrDetails.identyfikatorZapytania)] as [string, string]] : []),
-    ["Nazwa", asPdfText(crbrCompany.nazwa)],
-    ["Adres", asPdfText(crbrCompany.adres)],
-    ["Forma", asPdfText(crbrCompany.formaOrganizacyjna)],
+    ["Nazwa", asPdfText(identifiers.nazwa || crbrCompany.nazwa)],
+    ["Adres", asPdfText(identifiers.adres || crbrCompany.adres)],
+    ["Forma", asPdfText(identifiers.forma || crbrCompany.formaOrganizacyjna)],
   ]);
-  drawReportSection("Dane rejestrowe podmiotu", ceidgCheck ? [["CEIDG", ceidgCheck], ["KRS", krsCheck]] : [["KRS", krsCheck]]);
+  drawReportSection("Dane rejestrowe podmiotu", ceidgCheck ? (isIndividualBusiness ? [["CEIDG", ceidgCheck]] : [["CEIDG", ceidgCheck], ["KRS", krsCheck]]) : [["KRS", krsCheck]]);
   drawInfoBox("Informacje o płatniku VAT", vatReportRows(vatData, vatCheck));
   drawReportSection("Rejestr VIES", [["VIES", viesCheck]]);
   drawReportSection("Wyniki weryfikacji na listach sankcyjnych", [["Listy sankcyjne", sanctionsCheck]]);
-  if (crbrWasUsed) {
-    drawReportSection("Beneficjenci rzeczywiści", [["CRBR", crbrCheck]]);
+  if (crbrWasUsed || isIndividualBusiness) {
+    if (crbrWasUsed) drawReportSection("Beneficjenci rzeczywiści", [["CRBR", crbrCheck]]);
     drawInfoBox("Beneficjenci rzeczywiści", input.beneficialOwners.length > 0
       ? input.beneficialOwners.slice(0, 8).map((owner, index) => [
         `${index + 1}.`,

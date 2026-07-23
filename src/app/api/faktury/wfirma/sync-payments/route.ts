@@ -56,6 +56,7 @@ type InvoiceRow = {
   id: string;
   numer: string | null;
   data_wystawienia: string | null;
+  okres: string | null;
   kontrahent_nip: string | null;
   kwota_brutto: number | string | null;
   wfirma_id: string | null;
@@ -104,13 +105,15 @@ async function syncPayments(request: NextRequest) {
   const requestedRange = requestedMonth ? monthRange(requestedMonth) : null;
   let query = admin
     .from("faktury")
-    .select("id,numer,data_wystawienia,kontrahent_nip,kwota_brutto,wfirma_id,wfirma_pdf_path,wfirma_pdf_name,status")
+    .select("id,numer,data_wystawienia,okres,kontrahent_nip,kwota_brutto,wfirma_id,wfirma_pdf_path,wfirma_pdf_name,status")
     .in("status", STATUSES_TO_CHECK)
     .not("wfirma_id", "is", null)
     .order("termin_platnosci", { ascending: true });
 
   if (requestedRange) {
-    query = query.gte("data_wystawienia", requestedRange.dateFrom).lte("data_wystawienia", requestedRange.dateTo);
+    query = query.or(
+      `and(data_wystawienia.gte.${requestedRange.dateFrom},data_wystawienia.lte.${requestedRange.dateTo}),and(okres.gte.${requestedRange.dateFrom},okres.lte.${requestedRange.dateTo})`
+    );
   }
 
   const { data, error } = await query.limit(MAX_INVOICES_PER_RUN);
@@ -183,16 +186,7 @@ async function loadWfirmaInvoicesById(
   invoices: InvoiceRow[],
   requestedMonth: string | null
 ) {
-  const months = requestedMonth
-    ? [requestedMonth]
-    : Array.from(
-        new Set(
-          invoices
-            .map((invoice) => dateOnly(invoice.data_wystawienia))
-            .filter(Boolean)
-            .map((date) => date!.slice(0, 7))
-        )
-      ).slice(0, 1);
+  const months = syncSearchMonths(invoices, requestedMonth);
   const invoicesById = new Map<string, WfirmaInvoice>();
 
   for (const month of months) {
@@ -244,6 +238,28 @@ async function loadWfirmaInvoicesById(
   }
 
   return invoicesById;
+}
+
+function syncSearchMonths(invoices: InvoiceRow[], requestedMonth: string | null) {
+  const months = new Set<string>();
+  if (requestedMonth) {
+    addMonthWithNeighbours(months, requestedMonth);
+  }
+
+  for (const invoice of invoices) {
+    const issueMonth = dateOnly(invoice.data_wystawienia)?.slice(0, 7);
+    const periodMonth = dateOnly(invoice.okres)?.slice(0, 7);
+    if (issueMonth) addMonthWithNeighbours(months, issueMonth);
+    if (periodMonth) addMonthWithNeighbours(months, periodMonth);
+  }
+
+  return [...months].filter(isValidMonth).slice(0, requestedMonth ? 6 : 8);
+}
+
+function addMonthWithNeighbours(months: Set<string>, month: string) {
+  months.add(month);
+  months.add(shiftMonth(month, -1));
+  months.add(shiftMonth(month, 1));
 }
 
 function findMatchingFinalWfirmaInvoice(invoice: InvoiceRow, candidates: WfirmaInvoice[]) {
@@ -504,6 +520,12 @@ function monthRange(month: string) {
   nextMonth.setUTCMonth(nextMonth.getUTCMonth() + 1);
   const dateTo = new Date(nextMonth.getTime() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   return { dateFrom, dateTo };
+}
+
+function shiftMonth(month: string, offset: number) {
+  const date = new Date(`${month}-01T00:00:00.000Z`);
+  date.setUTCMonth(date.getUTCMonth() + offset);
+  return date.toISOString().slice(0, 7);
 }
 
 function buildInvoicePdfName(invoiceNumber: string | null, wfirmaId: string) {

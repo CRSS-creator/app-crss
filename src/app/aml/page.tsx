@@ -6,10 +6,13 @@ import AccessGuard from "@/components/AccessGuard";
 import AppLayout from "@/components/AppLayout";
 import { colors, radius, shadow } from "@/app/design";
 import {
+  createAmlIdentificationStatement,
   fetchAmlHistory,
+  fetchAmlIdentificationStatements,
   fetchAmlInitialForms,
   fetchAmlRegisters,
   fetchAmlVerifications,
+  getAmlIdentificationStatementPdfUrl,
   getAmlInitialFormPdfUrl,
   getAmlReportUrl,
   runPepOsintCheck,
@@ -17,10 +20,12 @@ import {
   updateAmlBeneficialOwner,
   updateNextAmlVerificationDate,
   uploadArchivedAmlInitialForm,
+  uploadArchivedAmlIdentificationStatement,
   uploadArchivedAmlReport,
   uploadCrbrAmlPdf,
   verifyClientAml,
   type AmlHistoryRecord,
+  type AmlIdentificationStatementRecord,
   type AmlInitialFormRecord,
   type AmlRegisterRecord,
   type AmlVerificationRecord,
@@ -59,6 +64,7 @@ type AmlRow = {
   register: AmlRegisterRecord | null;
   verifications: AmlVerificationRecord[];
   initialForms: AmlInitialFormRecord[];
+  identificationStatements: AmlIdentificationStatementRecord[];
   history: AmlHistoryRecord[];
 };
 
@@ -100,6 +106,7 @@ function AmlContent() {
   const [registers, setRegisters] = useState<AmlRegisterRecord[]>([]);
   const [verifications, setVerifications] = useState<AmlVerificationRecord[]>([]);
   const [initialForms, setInitialForms] = useState<AmlInitialFormRecord[]>([]);
+  const [identificationStatements, setIdentificationStatements] = useState<AmlIdentificationStatementRecord[]>([]);
   const [history, setHistory] = useState<AmlHistoryRecord[]>([]);
   const [profilesById, setProfilesById] = useState<Record<string, Profile>>({});
   const [loading, setLoading] = useState(true);
@@ -108,6 +115,8 @@ function AmlContent() {
   const [checkingPepOsintClientId, setCheckingPepOsintClientId] = useState<string | null>(null);
   const [sendingInitialFormClientId, setSendingInitialFormClientId] = useState<string | null>(null);
   const [uploadingInitialFormArchiveClientId, setUploadingInitialFormArchiveClientId] = useState<string | null>(null);
+  const [creatingIdentificationStatementClientId, setCreatingIdentificationStatementClientId] = useState<string | null>(null);
+  const [uploadingIdentificationStatementArchiveClientId, setUploadingIdentificationStatementArchiveClientId] = useState<string | null>(null);
   const [savingNextVerificationClientId, setSavingNextVerificationClientId] = useState<string | null>(null);
   const [savingBeneficialOwnerKey, setSavingBeneficialOwnerKey] = useState<string | null>(null);
   const [uploadingArchiveClientId, setUploadingArchiveClientId] = useState<string | null>(null);
@@ -120,12 +129,13 @@ function AmlContent() {
 
   async function loadData() {
     setLoading(true);
-    const [clientsResult, stagesResult, registersResult, verificationsResult, initialFormsResult, historyResult, profilesResult] = await Promise.all([
+    const [clientsResult, stagesResult, registersResult, verificationsResult, initialFormsResult, identificationStatementsResult, historyResult, profilesResult] = await Promise.all([
       fetchClients(),
       fetchOnboardingStages(),
       fetchAmlRegisters(),
       fetchAmlVerifications(),
       fetchAmlInitialForms(),
+      fetchAmlIdentificationStatements(),
       fetchAmlHistory(),
       supabase.from("profiles").select("id, full_name, email"),
     ]);
@@ -138,20 +148,22 @@ function AmlContent() {
     if (profilesResult.error) console.error("Błąd pobierania użytkowników AML:", profilesResult.error);
 
     if (initialFormsResult.error) console.error("Błąd pobierania formularzy wstępnych AML:", initialFormsResult.error);
+    if (identificationStatementsResult.error) console.error("Błąd pobierania oświadczeń AML:", identificationStatementsResult.error);
 
     setClients(clientsResult.error ? [] : ((clientsResult.data || []) as unknown as Client[]));
     setStages(stagesResult.error ? [] : ((stagesResult.data || []) as OnboardingStageRecord[]));
     setRegisters(registersResult.error ? [] : ((registersResult.data || []) as AmlRegisterRecord[]));
     setVerifications(verificationsResult.error ? [] : ((verificationsResult.data || []) as AmlVerificationRecord[]));
     setInitialForms(initialFormsResult.error ? [] : ((initialFormsResult.data || []) as AmlInitialFormRecord[]));
+    setIdentificationStatements(identificationStatementsResult.error ? [] : ((identificationStatementsResult.data || []) as AmlIdentificationStatementRecord[]));
     setHistory(historyResult.error ? [] : ((historyResult.data || []) as AmlHistoryRecord[]));
     setProfilesById(indexProfiles((profilesResult.data || []) as Profile[]));
     setLoading(false);
   }
 
   const rows = useMemo(
-    () => buildRows(clients, stages, registers, verifications, initialForms, history),
-    [clients, stages, registers, verifications, initialForms, history]
+    () => buildRows(clients, stages, registers, verifications, initialForms, identificationStatements, history),
+    [clients, stages, registers, verifications, initialForms, identificationStatements, history]
   );
   const filteredRows = useMemo(() => filterRows(rows, searchTerm), [rows, searchTerm]);
   const selectedRow = rows.find((row) => row.client.id === selectedClientId) || null;
@@ -205,6 +217,38 @@ function AmlContent() {
     setUploadingInitialFormArchiveClientId(row.client.id);
     const result = await uploadArchivedAmlInitialForm(row.client.id, file, completedDate);
     setUploadingInitialFormArchiveClientId(null);
+
+    if (result.error) {
+      alert(result.error.message);
+      return;
+    }
+
+    await loadData();
+    setSelectedClientId(row.client.id);
+  }
+
+  async function handleCreateIdentificationStatement(row: AmlRow) {
+    setCreatingIdentificationStatementClientId(row.client.id);
+    const result = await createAmlIdentificationStatement(row.client.id);
+    setCreatingIdentificationStatementClientId(null);
+
+    if (result.error) {
+      alert(result.error.message);
+      return;
+    }
+
+    if (result.data?.statementUrl) {
+      await navigator.clipboard.writeText(result.data.statementUrl);
+      alert("Utworzono i skopiowano link do oświadczenia AML.");
+    }
+    await loadData();
+    setSelectedClientId(row.client.id);
+  }
+
+  async function handleUploadArchivedIdentificationStatement(row: AmlRow, file: File, completedDate: string) {
+    setUploadingIdentificationStatementArchiveClientId(row.client.id);
+    const result = await uploadArchivedAmlIdentificationStatement(row.client.id, file, completedDate);
+    setUploadingIdentificationStatementArchiveClientId(null);
 
     if (result.error) {
       alert(result.error.message);
@@ -388,6 +432,8 @@ function AmlContent() {
           checkingPepOsint={checkingPepOsintClientId === selectedRow.client.id}
           sendingInitialForm={sendingInitialFormClientId === selectedRow.client.id}
           uploadingInitialFormArchive={uploadingInitialFormArchiveClientId === selectedRow.client.id}
+          creatingIdentificationStatement={creatingIdentificationStatementClientId === selectedRow.client.id}
+          uploadingIdentificationStatementArchive={uploadingIdentificationStatementArchiveClientId === selectedRow.client.id}
           savingNextVerification={savingNextVerificationClientId === selectedRow.client.id}
           uploadingArchive={uploadingArchiveClientId === selectedRow.client.id}
           uploadingCrbrPdf={uploadingCrbrPdfClientId === selectedRow.client.id}
@@ -395,6 +441,8 @@ function AmlContent() {
           onRunPepOsint={() => void handleRunPepOsint(selectedRow)}
           onSendInitialForm={() => void handleSendInitialForm(selectedRow)}
           onUploadArchivedInitialForm={(file, completedDate) => void handleUploadArchivedInitialForm(selectedRow, file, completedDate)}
+          onCreateIdentificationStatement={() => void handleCreateIdentificationStatement(selectedRow)}
+          onUploadArchivedIdentificationStatement={(file, completedDate) => void handleUploadArchivedIdentificationStatement(selectedRow, file, completedDate)}
           onSaveNextVerificationDate={(nextVerificationDate) => void handleSaveNextVerificationDate(selectedRow, nextVerificationDate)}
           onUploadArchivedReport={(file) => void handleUploadArchivedReport(selectedRow, file)}
           onUploadCrbrPdf={(file) => void handleUploadCrbrPdf(selectedRow, file)}
@@ -414,6 +462,8 @@ function AmlDetailsModal({
   checkingPepOsint,
   sendingInitialForm,
   uploadingInitialFormArchive,
+  creatingIdentificationStatement,
+  uploadingIdentificationStatementArchive,
   savingNextVerification,
   uploadingArchive,
   uploadingCrbrPdf,
@@ -422,6 +472,8 @@ function AmlDetailsModal({
   onRunPepOsint,
   onSendInitialForm,
   onUploadArchivedInitialForm,
+  onCreateIdentificationStatement,
+  onUploadArchivedIdentificationStatement,
   onSaveNextVerificationDate,
   onUploadArchivedReport,
   onUploadCrbrPdf,
@@ -434,6 +486,8 @@ function AmlDetailsModal({
   checkingPepOsint: boolean;
   sendingInitialForm: boolean;
   uploadingInitialFormArchive: boolean;
+  creatingIdentificationStatement: boolean;
+  uploadingIdentificationStatementArchive: boolean;
   savingNextVerification: boolean;
   uploadingArchive: boolean;
   uploadingCrbrPdf: boolean;
@@ -442,6 +496,8 @@ function AmlDetailsModal({
   onRunPepOsint: () => void;
   onSendInitialForm: () => void;
   onUploadArchivedInitialForm: (file: File, completedDate: string) => void;
+  onCreateIdentificationStatement: () => void;
+  onUploadArchivedIdentificationStatement: (file: File, completedDate: string) => void;
   onSaveNextVerificationDate: (nextVerificationDate: string | null) => void;
   onUploadArchivedReport: (file: File) => void;
   onUploadCrbrPdf: (file: File) => void;
@@ -524,11 +580,15 @@ function AmlDetailsModal({
           profilesById={profilesById}
           sendingInitialForm={sendingInitialForm}
           uploadingInitialFormArchive={uploadingInitialFormArchive}
+          creatingIdentificationStatement={creatingIdentificationStatement}
+          uploadingIdentificationStatementArchive={uploadingIdentificationStatementArchive}
           uploadingArchive={uploadingArchive}
           uploadingCrbrPdf={uploadingCrbrPdf}
           savingBeneficialOwnerKey={savingBeneficialOwnerKey}
           onSendInitialForm={onSendInitialForm}
           onUploadArchivedInitialForm={onUploadArchivedInitialForm}
+          onCreateIdentificationStatement={onCreateIdentificationStatement}
+          onUploadArchivedIdentificationStatement={onUploadArchivedIdentificationStatement}
           onUploadArchivedReport={onUploadArchivedReport}
           onUploadCrbrPdf={onUploadCrbrPdf}
           onUpdateBeneficialOwner={onUpdateBeneficialOwner}
@@ -546,11 +606,15 @@ function AmlTabContent({
   profilesById,
   sendingInitialForm,
   uploadingInitialFormArchive,
+  creatingIdentificationStatement,
+  uploadingIdentificationStatementArchive,
   uploadingArchive,
   uploadingCrbrPdf,
   savingBeneficialOwnerKey,
   onSendInitialForm,
   onUploadArchivedInitialForm,
+  onCreateIdentificationStatement,
+  onUploadArchivedIdentificationStatement,
   onUploadArchivedReport,
   onUploadCrbrPdf,
   onUpdateBeneficialOwner,
@@ -562,11 +626,15 @@ function AmlTabContent({
   profilesById: Record<string, Profile>;
   sendingInitialForm: boolean;
   uploadingInitialFormArchive: boolean;
+  creatingIdentificationStatement: boolean;
+  uploadingIdentificationStatementArchive: boolean;
   uploadingArchive: boolean;
   uploadingCrbrPdf: boolean;
   savingBeneficialOwnerKey: string | null;
   onSendInitialForm: () => void;
   onUploadArchivedInitialForm: (file: File, completedDate: string) => void;
+  onCreateIdentificationStatement: () => void;
+  onUploadArchivedIdentificationStatement: (file: File, completedDate: string) => void;
   onUploadArchivedReport: (file: File) => void;
   onUploadCrbrPdf: (file: File) => void;
   onUpdateBeneficialOwner: (ownerIndex: number, changes: BeneficialOwnerEditValues) => void;
@@ -658,6 +726,36 @@ function AmlTabContent({
           <div style={listStyle}>
             {row.initialForms.map((form) => (
               <InitialFormItem key={form.id} form={form} profilesById={profilesById} />
+            ))}
+          </div>
+        )}
+      </section>
+    );
+  }
+
+  if (activeTab === "identification_statement") {
+    return (
+      <section style={tabsSectionStyle}>
+        <div style={detailsSectionHeaderStyle}>
+          <div style={tabPanelStyle}>
+            <span style={tabPanelLabelStyle}>{activeCheck.label}</span>
+            <StatusPill done={activeCheckDone} />
+          </div>
+          <button type="button" onClick={onCreateIdentificationStatement} disabled={creatingIdentificationStatement} style={secondaryButtonStyle}>
+            <Send size={16} />
+            {creatingIdentificationStatement ? "Tworzenie..." : "Utwórz link do oświadczenia"}
+          </button>
+        </div>
+        <ArchivedStatementUpload uploading={uploadingIdentificationStatementArchive} onUpload={onUploadArchivedIdentificationStatement} />
+        {row.identificationStatements.length === 0 ? (
+          <div style={tabContentPlaceholderStyle}>
+            <strong style={tabContentTitleStyle}>Oświadczenia</strong>
+            <p style={emptySmallStyle}>Brak zapisanych oświadczeń o weryfikacji i identyfikacji klienta.</p>
+          </div>
+        ) : (
+          <div style={listStyle}>
+            {row.identificationStatements.map((statement) => (
+              <IdentificationStatementItem key={statement.id} statement={statement} profilesById={profilesById} />
             ))}
           </div>
         )}
@@ -846,6 +944,65 @@ function InitialFormItem({ form, profilesById }: { form: AmlInitialFormRecord; p
   );
 }
 
+function IdentificationStatementItem({ statement, profilesById }: { statement: AmlIdentificationStatementRecord; profilesById: Record<string, Profile> }) {
+  const active = statement.status === "active";
+  const archived = Boolean((statement.form_data as { archiwalny?: unknown })?.archiwalny);
+  const hasPdf = Boolean(statement.completed_pdf_document_id);
+  const statementUrl = typeof window === "undefined" ? `/aml/oswiadczenie-weryfikacji/${statement.public_token}` : `${window.location.origin}/aml/oswiadczenie-weryfikacji/${statement.public_token}`;
+
+  async function copyLink() {
+    await navigator.clipboard.writeText(statementUrl);
+    alert("Skopiowano link do oświadczenia AML.");
+  }
+
+  async function openPdf() {
+    const result = await getAmlIdentificationStatementPdfUrl(statement.id);
+    if (result.error || !result.data?.url) {
+      alert(result.error?.message || "Nie udało się otworzyć PDF oświadczenia AML.");
+      return;
+    }
+    window.open(result.data.url, "_blank", "noopener,noreferrer");
+  }
+
+  async function downloadPdf() {
+    const result = await getAmlIdentificationStatementPdfUrl(statement.id);
+    if (result.error || !result.data?.url) {
+      alert(result.error?.message || "Nie udało się pobrać PDF oświadczenia AML.");
+      return;
+    }
+    const link = document.createElement("a");
+    link.href = result.data.url;
+    link.download = result.data.fileName || "Oswiadczenie_weryfikacji_AML.pdf";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }
+
+  return (
+    <article style={verificationItemStyle}>
+      <div>
+        <strong style={verificationTitleStyle}>{formatDateTime(statement.created_at)} · {initialFormStatusLabel(statement.status)}</strong>
+        {archived ? <span style={archivedBadgeStyle}>Archiwalny</span> : null}
+        <p style={verificationMetaStyle}>
+          Utworzył: {statement.created_by_name || profileLabel(statement.created_by, profilesById)} · Weryfikował: {statement.completed_by_name || "-"}
+        </p>
+        <div style={sourceGridStyle}>
+          <span style={sourceBadgeStyle(active ? "warning" : statement.status === "completed" ? "ok" : "archiwalny")}>
+            Link · {active ? "aktywny" : statement.status === "completed" ? "zamknięty po zapisie" : "unieważniony"}
+          </span>
+          {statement.verification_date ? <span style={sourceBadgeStyle("confirmed")}>Data · {formatDate(statement.verification_date)}</span> : null}
+          {statement.completed_at ? <span style={sourceBadgeStyle("ok")}>Zapisano · {formatDateTime(statement.completed_at)}</span> : null}
+        </div>
+      </div>
+      <div style={reportButtonsStyle}>
+        {active ? <button type="button" onClick={() => void copyLink()} style={smallButtonStyle}>Kopiuj link</button> : null}
+        {hasPdf ? <button type="button" onClick={() => void openPdf()} style={smallButtonStyle}><Eye size={16} /> Podgląd</button> : null}
+        {hasPdf ? <button type="button" onClick={() => void downloadPdf()} style={smallButtonStyle}><Download size={16} /> Pobierz</button> : null}
+      </div>
+    </article>
+  );
+}
+
 function RegistryDetails({
   register,
   clientId,
@@ -995,6 +1152,45 @@ function ArchivedInitialFormUpload({
             if (!file) return;
             if (!completedDate) {
               alert("Najpierw wpisz datę wypełnienia formularza.");
+              return;
+            }
+            onUpload(file, completedDate);
+          }}
+        />
+      </label>
+    </div>
+  );
+}
+
+function ArchivedStatementUpload({
+  uploading,
+  onUpload,
+}: {
+  uploading: boolean;
+  onUpload: (file: File, completedDate: string) => void;
+}) {
+  const [completedDate, setCompletedDate] = useState("");
+
+  return (
+    <div style={archiveInitialFormStyle}>
+      <label style={archiveInitialFormDateStyle}>
+        <span style={nextVerificationLabelStyle}>Data oświadczenia</span>
+        <AmlDatePicker value={completedDate} onChange={setCompletedDate} />
+      </label>
+      <label style={archiveUploadButtonStyle}>
+        <Upload size={16} />
+        {uploading ? "Dodawanie..." : "Dodaj archiwalne oświadczenie"}
+        <input
+          type="file"
+          accept="application/pdf,.pdf"
+          disabled={uploading}
+          style={hiddenFileInputStyle}
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            event.target.value = "";
+            if (!file) return;
+            if (!completedDate) {
+              alert("Najpierw wpisz datę oświadczenia.");
               return;
             }
             onUpload(file, completedDate);
@@ -1259,6 +1455,9 @@ function amlCheckStatus(row: AmlRow, check: AmlCheckKey) {
   if (check === "initial_form") {
     return row.initialForms.some((form) => Boolean(form.completed_at || form.completed_pdf_document_id));
   }
+  if (check === "identification_statement") {
+    return row.identificationStatements.some((statement) => Boolean(statement.completed_at || statement.completed_pdf_document_id));
+  }
   if (check === "risk_assessment") return Boolean(row.register?.poziom_ryzyka);
   return row.register?.status === "zatwierdzone";
 }
@@ -1269,6 +1468,7 @@ function buildRows(
   registers: AmlRegisterRecord[],
   verifications: AmlVerificationRecord[],
   initialForms: AmlInitialFormRecord[],
+  identificationStatements: AmlIdentificationStatementRecord[],
   history: AmlHistoryRecord[]
 ): AmlRow[] {
   const amlStagesByClient = new Map(stages.filter((stage) => stage.etap === "aml").map((stage) => [stage.klient_id, stage]));
@@ -1281,6 +1481,7 @@ function buildRows(
       register: registersByClient.get(client.id) || null,
       verifications: verifications.filter((verification) => verification.klient_id === client.id),
       initialForms: initialForms.filter((form) => form.klient_id === client.id),
+      identificationStatements: identificationStatements.filter((statement) => statement.klient_id === client.id),
       history: history.filter((entry) => entry.klient_id === client.id),
     }))
     .sort((first, second) => {
@@ -1374,6 +1575,9 @@ function historyActionLabel(action: string) {
   if (action === "wysylka_formularza_wstepnego") return "Wysłano formularz wstępny";
   if (action === "uzupelnienie_formularza_wstepnego") return "Uzupełniono formularz wstępny";
   if (action === "dodano_archiwalny_formularz_wstepny") return "Dodano archiwalny formularz wstępny";
+  if (action === "utworzono_link_oswiadczenia_weryfikacji") return "Utworzono link do oświadczenia";
+  if (action === "uzupelnienie_oswiadczenia_weryfikacji") return "Uzupełniono oświadczenie";
+  if (action === "dodano_archiwalne_oswiadczenie_weryfikacji") return "Dodano archiwalne oświadczenie";
   return action.replace(/_/g, " ");
 }
 

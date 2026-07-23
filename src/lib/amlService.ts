@@ -78,6 +78,24 @@ export type AmlInitialFormRecord = {
   form_data: Record<string, unknown>;
 };
 
+export type AmlIdentificationStatementRecord = {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  klient_id: string;
+  aml_rejestr_id: string | null;
+  public_token: string;
+  status: "active" | "completed" | "revoked";
+  created_by: string | null;
+  created_by_name: string | null;
+  completed_at: string | null;
+  completed_by_name: string | null;
+  completed_pdf_document_id: string | null;
+  verification_date: string | null;
+  action_type: string | null;
+  form_data: Record<string, unknown>;
+};
+
 export async function fetchAmlRegisters() {
   return supabase
     .from("aml_rejestr_klientow")
@@ -124,6 +142,13 @@ export async function verifyClientAml(clientId: string) {
 export async function fetchAmlInitialForms() {
   return supabase
     .from("aml_formularze_wstepne")
+    .select("*")
+    .order("created_at", { ascending: false });
+}
+
+export async function fetchAmlIdentificationStatements() {
+  return supabase
+    .from("aml_oswiadczenia_weryfikacji")
     .select("*")
     .order("created_at", { ascending: false });
 }
@@ -226,6 +251,52 @@ export async function uploadArchivedAmlInitialForm(clientId: string, file: File,
   }
 
   return { data: body?.form || null, error: null };
+}
+
+export async function createAmlIdentificationStatement(clientId: string) {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
+  if (!token) return { data: null, error: new Error("Brak aktywnej sesji użytkownika.") };
+
+  const response = await fetch("/api/aml/identification-statement-request", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ clientId }),
+  });
+
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    return { data: null, error: new Error(body?.error || "Nie udało się utworzyć linku do oświadczenia AML.") };
+  }
+
+  return { data: body as { ok: boolean; statementUrl?: string }, error: null };
+}
+
+export async function uploadArchivedAmlIdentificationStatement(clientId: string, file: File, completedDate: string) {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
+  if (!token) return { data: null, error: new Error("Brak aktywnej sesji użytkownika.") };
+
+  const formData = new FormData();
+  formData.append("clientId", clientId);
+  formData.append("completedDate", completedDate);
+  formData.append("file", file);
+
+  const response = await fetch("/api/aml/identification-statement-archive", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    return { data: null, error: new Error(body?.error || "Nie udało się dodać archiwalnego oświadczenia AML.") };
+  }
+
+  return { data: body?.statement || null, error: null };
 }
 
 export async function uploadArchivedAmlReport(clientId: string, file: File) {
@@ -335,6 +406,28 @@ export async function getAmlInitialFormPdfUrl(formId: string) {
   const body = await response.json().catch(() => null);
   if (!response.ok) {
     return { data: null, error: new Error(body?.error || "Nie udało się pobrać linku do formularza wstępnego AML.") };
+  }
+
+  return { data: body as { url: string; fileName: string }, error: null };
+}
+
+export async function getAmlIdentificationStatementPdfUrl(statementId: string) {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
+  if (!token) return { data: null, error: new Error("Brak aktywnej sesji użytkownika.") };
+
+  const response = await fetch("/api/aml/identification-statement-pdf-url", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ statementId }),
+  });
+
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    return { data: null, error: new Error(body?.error || "Nie udało się pobrać linku do oświadczenia AML.") };
   }
 
   return { data: body as { url: string; fileName: string }, error: null };

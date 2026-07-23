@@ -569,7 +569,7 @@ function EditableInput({ label, value, onChange, type = "text", placeholder }: {
   );
 }
 function EditableSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: { value: string; label: string }[] }) { return <label style={editableRowStyle}><span>{label}</span><AppSelect value={value} onChange={onChange} style={inputStyle} options={options} /></label>; }
-function EditableCheckbox({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) { return <label style={editableRowStyle}><span>{label}</span><input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} /></label>; }
+function EditableCheckbox({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) { return <label style={editableRowStyle}><span>{label}</span><input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} style={editableCheckboxStyle} /></label>; }
 function EditableTextarea({ label, value, onChange, rows = 4 }: { label: string; value: string; onChange: (value: string) => void; rows?: number }) { return <label style={textareaRowStyle}><span>{label}</span><textarea value={value} onChange={(event) => onChange(event.target.value)} style={textareaStyle} rows={rows} /></label>; }
 function Th({ children }: { children: React.ReactNode }) { return <th style={thStyle}>{children}</th>; }
 function Td({ children, strong }: { children: React.ReactNode; strong?: boolean }) { return <td style={{ ...tdStyle, fontWeight: strong ? 800 : 500 }}>{children}</td>; }
@@ -617,6 +617,7 @@ const termsGridStyle: React.CSSProperties = { display: "grid", gridTemplateColum
 const notesColumnStyle: React.CSSProperties = { display: "flex", flexDirection: "column", gap: "18px", minWidth: 0 };
 const datesColumnStyle: React.CSSProperties = { display: "flex", flexDirection: "column", gap: "14px", minWidth: 0, position: "relative", zIndex: 1 };
 const editableRowStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "180px 1fr", gap: "14px", alignItems: "center", padding: "10px 0", borderBottom: `1px solid ${colors.border}`, color: colors.muted, fontWeight: 700 };
+const editableCheckboxStyle: React.CSSProperties = { width: 18, height: 18, margin: 0, justifySelf: "start", cursor: "pointer" };
 const textareaRowStyle: React.CSSProperties = { display: "flex", flexDirection: "column", gap: "8px", color: colors.muted, fontWeight: 700 };
 const inputStyle: React.CSSProperties = { width: "100%", border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "10px 12px", background: colors.inputBackground, color: colors.text, fontWeight: 650, outline: "none" };
 const textareaStyle: React.CSSProperties = { ...inputStyle, resize: "vertical", minHeight: "96px", lineHeight: 1.6 };

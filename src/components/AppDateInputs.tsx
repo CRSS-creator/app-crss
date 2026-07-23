@@ -29,7 +29,7 @@ export function AppMonthInput({ value, onChange, disabled = false, style, ariaLa
   const selected = parseMonth(value);
   const [year, setYear] = useState(selected.year);
 
-  usePickerPosition(open, buttonRef, menuRef, setPosition, setOpen);
+  usePickerPosition(open, buttonRef, menuRef, setPosition, setOpen, 260);
 
   return (
     <>
@@ -101,7 +101,7 @@ export function AppDateInput({ value, onChange, disabled = false, style, ariaLab
   const menuRef = useRef<HTMLDivElement | null>(null);
   const [viewDate, setViewDate] = useState(() => parseDate(value) || new Date());
 
-  usePickerPosition(open, buttonRef, menuRef, setPosition, setOpen);
+  usePickerPosition(open, buttonRef, menuRef, setPosition, setOpen, 292);
 
   const days = useMemo(() => calendarDays(viewDate), [viewDate]);
   const monthValue = `${viewDate.getFullYear()}-${String(viewDate.getMonth() + 1).padStart(2, "0")}`;
@@ -180,7 +180,8 @@ function usePickerPosition(
   buttonRef: RefObject<HTMLButtonElement | null>,
   menuRef: RefObject<HTMLDivElement | null>,
   setPosition: (position: PickerPosition | null) => void,
-  setOpen: (open: boolean) => void
+  setOpen: (open: boolean) => void,
+  minWidth: number
 ) {
   useEffect(() => {
     if (!open) return;
@@ -188,7 +189,7 @@ function usePickerPosition(
     function placeMenu() {
       const rect = buttonRef.current?.getBoundingClientRect();
       if (!rect) return;
-      const width = Math.max(rect.width, 260);
+      const width = Math.max(rect.width, minWidth);
       const left = Math.min(rect.left, window.innerWidth - width - 12);
       setPosition({ top: rect.bottom + 6, left: Math.max(12, left), width: rect.width });
     }
@@ -210,7 +211,7 @@ function usePickerPosition(
       window.removeEventListener("resize", placeMenu);
       window.removeEventListener("scroll", placeMenu, true);
     };
-  }, [buttonRef, menuRef, open, setOpen, setPosition]);
+  }, [buttonRef, menuRef, minWidth, open, setOpen, setPosition]);
 }
 
 function currentMonthValue() {

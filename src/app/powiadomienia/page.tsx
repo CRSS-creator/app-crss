@@ -144,6 +144,7 @@ function NotificationsContent() {
               const publicToken = getPublicToken(notification);
               const isTaskNotification = notification.type === "task_assigned" || notification.type === "task_due_today";
               const isCrmFollowUpNotification = notification.type === "crm_follow_up_due";
+              const isCrmLostRecontactNotification = notification.type === "crm_lost_recontact_due";
               const isRecurringTaskNotification = notification.type === "recurring_task_due_today";
               const isPayrollContractNotification = notification.type === "payroll_contract_expiry";
               const isPayrollA1Notification = notification.type === "payroll_a1_due_today";
@@ -171,7 +172,7 @@ function NotificationsContent() {
                       <a style={secondaryButtonStyle} href={`/oferta/${publicToken}`} target="_blank" rel="noreferrer">Otwórz propozycję</a>
                     )}
                     {isTaskNotification && <a style={secondaryButtonStyle} href="/zadania">Otwórz zadania</a>}
-                    {isCrmFollowUpNotification && <a style={secondaryButtonStyle} href="/crm">Otwórz CRM</a>}
+                    {(isCrmFollowUpNotification || isCrmLostRecontactNotification) && <a style={secondaryButtonStyle} href={crmNotificationHref(notification)}>Pokaż szansę</a>}
                     {isRecurringTaskNotification && <a style={secondaryButtonStyle} href="/rozliczenia">Otwórz rozliczenia</a>}
                     {isPayrollA1Notification && <a style={secondaryButtonStyle} href="/kadry">Otwórz Kadry</a>}
                     {isZusPreferentialRateNotification && <a style={secondaryButtonStyle} href="/kadry">Otwórz Kadry</a>}
@@ -206,6 +207,11 @@ function NotificationsContent() {
 
 function SummaryCard({ label, value }: { label: string; value: string | number }) {
   return <div style={summaryCardStyle}><span>{label}</span><strong>{value}</strong></div>;
+}
+
+function crmNotificationHref(notification: AppNotification) {
+  const crmId = notification.related_id || stringMeta(notification.metadata?.crm_id);
+  return crmId ? `/crm?leadId=${encodeURIComponent(crmId)}` : "/crm";
 }
 
 function PayrollContractNotificationTable({ notification }: { notification: AppNotification }) {

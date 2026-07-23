@@ -95,6 +95,7 @@ export default function AmlIdentificationStatementPage() {
           </div>
           <Field label="Rodzaj czynności" required>
             <select style={inputStyle} value={draft.actionType} onChange={(event) => update("actionType", event.target.value)}>
+              <option value="">Wybierz</option>
               {ACTION_TYPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
           </Field>

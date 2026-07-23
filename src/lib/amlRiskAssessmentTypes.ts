@@ -135,7 +135,7 @@ export function emptyAmlRiskAssessmentData(): AmlRiskAssessmentData {
     clientIdentifier: "",
     assessmentDate: new Date().toISOString().slice(0, 10),
     assessedBy: "",
-    assessmentBasis: "rozpoczecie_wspolpracy",
+    assessmentBasis: "",
     dataSources: emptyValues(DATA_SOURCE_FIELDS, ""),
     otherSources: "",
     clientFactors: emptyValues(CLIENT_FACTOR_FIELDS, ""),

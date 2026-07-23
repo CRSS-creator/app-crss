@@ -95,15 +95,6 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     .limit(1)
     .maybeSingle();
 
-  const { data: initialForm } = await result.admin!
-    .from("aml_formularze_wstepne")
-    .select("form_data, completed_by_name, completed_at")
-    .eq("klient_id", client.id)
-    .eq("status", "completed")
-    .order("completed_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
   return NextResponse.json({
     status: "active",
     client: {
@@ -111,7 +102,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       nazwa: client.nazwa,
       nip: client.nip,
     },
-    defaults: buildDefaults(client, register, verification, initialForm),
+    defaults: buildDefaults(client, register, verification),
   });
 }
 
@@ -236,15 +227,11 @@ async function saveRiskAssessment(request: NextRequest, context: RouteContext) {
 function buildDefaults(
   client: ClientRecord,
   register: Record<string, unknown> | null,
-  verification: Record<string, unknown> | null,
-  initialForm: Record<string, unknown> | null
+  verification: Record<string, unknown> | null
 ): Partial<AmlRiskAssessmentData> {
   const registry = asRecord(register?.dane_rejestrowe);
   const identifiers = asRecord(registry.identyfikatory);
-  const formData = asRecord(initialForm?.form_data);
-  const common = asRecord(formData.common);
   const isJdg = String(registry.typPodmiotu || identifiers.forma || "").toLowerCase().includes("jednoosobowa");
-  const sourceStatuses = sourceStatusMap(Array.isArray(verification?.zrodla) ? verification.zrodla as Array<Record<string, unknown>> : []);
   const krs = String(identifiers.krs || register?.numer_krs || "").trim();
   const identifierParts = [client.nip ? `NIP ${client.nip}` : null, krs && !isJdg ? `KRS ${krs}` : null].filter(Boolean);
   const nextUpdate = String(register?.nastepna_weryfikacja_at || "").slice(0, 10);
@@ -253,108 +240,9 @@ function buildDefaults(
     clientName: String(identifiers.nazwa || client.nazwa || ""),
     clientIdentifier: identifierParts.join(", "),
     assessmentDate: verification?.created_at ? String(verification.created_at).slice(0, 10) : new Date().toISOString().slice(0, 10),
-    assessmentBasis: "rozpoczecie_wspolpracy",
-    dataSources: {
-      initialForm: initialForm ? "tak" : "nie",
-      krs: isJdg ? "nie_dotyczy" : sourceStatuses.krs || (krs ? "tak" : "nie"),
-      ceidg: isJdg ? "tak" : "nie_dotyczy",
-      regon: register?.numer_regon ? "tak" : "nie",
-      vatWhitelist: sourceStatuses.vatWhitelist || (verification?.vat_status ? "tak" : "nie"),
-      vies: sourceStatuses.vies || (verification?.vies_status ? "tak" : "nie_dotyczy"),
-      crbr: isJdg ? "nie_dotyczy" : sourceStatuses.crbr || "nie",
-      identityDocument: "nie_dotyczy",
-      signatureReport: "nie_dotyczy",
-      sanctions: verification?.sankcje_status ? "tak" : "nie",
-      pepStatement: hasAnyPepData(formData) ? "tak" : "nie",
-      publicInfo: "nie",
-    },
-    clientFactors: {
-      naturalPerson: "nie",
-      individualBusiness: isJdg ? "tak" : "nie",
-      legalEntity: isJdg ? "nie" : "tak",
-      simpleOwnership: isJdg ? "nie_dotyczy" : "tak",
-      complexOwnership: "nie",
-      foreignOwnershipEntities: common.hasForeignOwnershipEntities === "tak" ? "tak" : "nie",
-      uboEstablished: "tak",
-      uboDifficulties: "nie",
-      registryConsistent: verification?.wynik === "wymaga_analizy" ? "nie" : "tak",
-      inconsistencies: verification?.wynik === "wymaga_analizy" ? "tak" : "nie",
-    },
-    geographicFactors: {
-      onlyPoland: common.onlyPoland === "nie" ? "nie" : "tak",
-      euEeaActivity: common.activityEuEea === "tak" ? "tak" : "nie",
-      outsideEuEeaActivity: common.activityOutsideEuEea === "tak" ? "tak" : "nie",
-      highRiskCountry: common.geographicRisk === "tak" ? "tak" : "nie",
-      sanctionedCountry: "nie",
-    },
-    industryFactors: {
-      typicalForCrss: "tak",
-      understandableActivity: "tak",
-      highAttentionIndustry: hasHighAttentionActivity(common) ? "tak" : "nie",
-      cashActivity: common.significantCashTransactions === "tak" ? "tak" : "nie",
-      crossBorderActivity: common.activityOutsideEuEea === "tak" || common.activityEuEea === "tak" ? "tak" : "nie",
-      sensitiveGoodsOrServices: hasHighAttentionActivity(common) ? "tak" : "nie",
-    },
-    channelFactors: {
-      personalContact: "nie",
-      remoteContact: "tak",
-      autentiAgreement: "nie",
-      advancedAutentiSignature: "nie",
-      mobywatel: "nie",
-      qualifiedSignature: "nie",
-      trustedSignature: "nie",
-      remoteRiskMitigated: "nie",
-    },
-    pepSanctionsFactors: {
-      pep: verification?.pep_status === "pep" ? "tak" : "nie",
-      pepRelated: "nie",
-      sanctionsPositive: verification?.sankcje_status === "trafienie" ? "tak" : "nie",
-      sanctionsRequiresExplanation: verification?.sankcje_status === "wymaga_analizy" ? "tak" : "nie",
-    },
-    behavioralFactors: {
-      completeConsistentData: initialForm ? "tak" : "nie",
-      refusesData: "nie",
-      avoidsExplanation: "nie",
-      expectsEarlyStart: "nie",
-      unusualBehavior: "nie",
-    },
-    finalRiskLevel: verification?.wynik === "wymaga_analizy" ? "podwyzszone" : "standardowe",
-    riskJustification: "Na podstawie formularza wstepnego, danych rejestrowych i wykonanych weryfikacji nie stwierdzono przeslanek ryzyka wysokiego.",
-    decisions: {
-      standardMeasures: verification?.wynik === "wymaga_analizy" ? "nie" : "tak",
-      enhancedMeasures: verification?.wynik === "wymaga_analizy" ? "tak" : "nie",
-      requiresCompletion: "nie",
-      requiresApproval: "nie",
-      refuseCooperation: "nie",
-      considerNotification: "nie",
-    },
     nextUpdateDate: nextUpdate,
     approvalDate: new Date().toISOString().slice(0, 10),
   };
-}
-
-function sourceStatusMap(sources: Array<Record<string, unknown>>) {
-  const map: Record<string, "tak" | "nie"> = {};
-  sources.forEach((source) => {
-    const name = String(source.source || "").toLowerCase();
-    const status = String(source.status || "");
-    const value = status && status !== "skipped" && status !== "error" ? "tak" : "nie";
-    if (name.includes("krs")) map.krs = value;
-    if (name.includes("vat") || name.includes("bia")) map.vatWhitelist = value;
-    if (name.includes("vies")) map.vies = value;
-    if (name.includes("crbr")) map.crbr = value;
-  });
-  return map;
-}
-
-function hasHighAttentionActivity(common: Record<string, unknown>) {
-  const activities = asRecord(common.highAttentionActivities);
-  return Object.values(activities).some((value) => value === "tak");
-}
-
-function hasAnyPepData(formData: Record<string, unknown>) {
-  const common = asRecord(formData.common);
-  return common.pepPublicFunction === "tak" || common.pepFamily === "tak" || common.pepAssociate === "tak";
 }
 
 function asRecord(value: unknown) {

@@ -232,18 +232,9 @@ function buildDefaults(client: ClientRecord, register: Record<string, unknown> |
     clientName: String(identifiers.nazwa || client.nazwa || ""),
     clientIdentifier: identifierParts.join(", "),
     verificationDate: verification?.created_at ? String(verification.created_at).slice(0, 10) : new Date().toISOString().slice(0, 10),
-    actionType: "pierwsza_weryfikacja",
     clientVerificationSources: sourceNames.join(", "),
-    clientVerificationResult: verification?.wynik === "negatywny" ? "negatywny" : verification?.wynik === "wymaga_analizy" ? "wymaga_wyjasnien" : "pozytywny",
     beneficialOwnerName: String(firstOwner.label || [firstOwner.pierwszeImie, firstOwner.nazwisko].filter(Boolean).join(" ") || ""),
     beneficialOwnerControlType: firstOwner.typ === "jdg" ? "przedsiębiorca" : String(firstOwner.rola || firstOwner.typ || ""),
-    beneficialOwnerSources: [firstOwner.source ? String(firstOwner.source) : "formularz klienta"],
-    ownershipStructureEstablished: owners.length > 0 ? "tak" : "",
-    beneficialOwnerDataConsistent: owners.length > 0 ? "tak" : "",
-    discrepanciesRequireExplanation: "nie",
-    finalPositive: "tak",
-    finalRequiresCompletion: "nie",
-    finalNegative: "nie",
   };
 }
 

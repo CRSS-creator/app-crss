@@ -103,6 +103,7 @@ export default function AmlRiskAssessmentPage() {
           </div>
           <Field label="Podstawa sporządzenia oceny" required>
             <select style={inputStyle} value={draft.assessmentBasis} onChange={(event) => update("assessmentBasis", event.target.value)}>
+              <option value="">Wybierz</option>
               {ASSESSMENT_BASIS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
           </Field>

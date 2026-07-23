@@ -43,7 +43,7 @@ export const ACTION_TYPE_OPTIONS = [
   { value: "weryfikacja_dodatkowa", label: "weryfikacja dodatkowa" },
 ];
 
-export const BENEFICIAL_OWNER_SOURCE_OPTIONS = ["formularz klienta", "CRBR", "KRS", "dokumenty klienta", "inne źródła"];
+export const BENEFICIAL_OWNER_SOURCE_OPTIONS = ["formularz klienta", "CEIDG", "CRBR", "KRS", "inne źródła"];
 
 export function emptyAmlIdentificationStatementData(): AmlIdentificationStatementData {
   return {

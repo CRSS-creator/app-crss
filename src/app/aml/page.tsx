@@ -429,7 +429,7 @@ function AmlContent() {
                   <Th>LP</Th>
                   <Th>Klient</Th>
                   <Th>NIP</Th>
-                  <Th>Opiekun</Th>
+                  <Th>Rodzaj ryzyka</Th>
                   <Th>Weryfikacja AML</Th>
                   <Th>Formularz wstępny</Th>
                   <WrappedTh>Oświadczenie o weryfikacji i identyfikacji klienta</WrappedTh>
@@ -446,8 +446,11 @@ function AmlContent() {
                       <strong style={clientNameStyle}>{row.client.nazwa || "Klient bez nazwy"}</strong>
                       <span style={clientMetaStyle}>{row.client.email || row.client.telefon || "Brak danych kontaktowych"}</span>
                     </Td>
-                    <Td>{row.client.nip || "-"}</Td>
-                    <Td>{caregiverLabel(row.client)}</Td>
+                    <Td>
+                      <strong style={nipValueStyle}>{row.client.nip || "-"}</strong>
+                      <span style={clientMetaStyle}>Opiekun: {caregiverLabel(row.client)}</span>
+                    </Td>
+                    <Td>{riskKindLabel(row)}</Td>
                     <StatusTd><StatusPill done={amlCheckStatus(row, "verification")} /></StatusTd>
                     <StatusTd><StatusPill done={amlCheckStatus(row, "initial_form")} /></StatusTd>
                     <StatusTd><StatusPill done={amlCheckStatus(row, "identification_statement")} /></StatusTd>
@@ -1781,6 +1784,11 @@ function riskLevelShortLabel(value: string) {
   return value || "-";
 }
 
+function riskKindLabel(row: AmlRow) {
+  const completedAssessment = row.riskAssessments.find((assessment) => Boolean(assessment.completed_at || assessment.completed_pdf_document_id));
+  return riskLevelShortLabel(completedAssessment?.risk_level || row.register?.poziom_ryzyka || "");
+}
+
 function sourceStatusLabel(status: string) {
   if (status === "ok") return "OK";
   if (status === "confirmed") return "Potwierdzono";
@@ -2055,6 +2063,7 @@ const tdStyle: CSSProperties = { padding: "16px 10px", borderBottom: `1px solid 
 const statusTdStyle: CSSProperties = { ...tdStyle, textAlign: "center", whiteSpace: "nowrap" };
 const clientNameStyle: CSSProperties = { display: "block", color: colors.navy, fontWeight: 850, lineHeight: 1.35 };
 const clientMetaStyle: CSSProperties = { display: "block", marginTop: "5px", color: colors.muted, fontSize: "13px" };
+const nipValueStyle: CSSProperties = { display: "block", color: colors.text, fontWeight: 750, lineHeight: 1.35 };
 const badgeStyle: CSSProperties = { display: "inline-flex", minHeight: "30px", alignItems: "center", justifyContent: "center", padding: "6px 12px", borderRadius: radius.badge, fontSize: "13px", fontWeight: 850, whiteSpace: "nowrap" };
 function statusPillStyle(done: boolean): CSSProperties {
   return {

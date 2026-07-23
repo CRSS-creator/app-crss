@@ -19,7 +19,7 @@ import {
 } from "@/lib/monthlySettlementsService";
 import { fetchTaxObligations, type TaxObligation } from "@/lib/taxObligationService";
 import {
-  createManualInternalTimeEntry,
+  createManualTimeEntry,
   fetchTasks,
   fetchUserTimeEntriesForDay,
   type Task,
@@ -66,6 +66,8 @@ type DashboardState = {
   crmLeads: CrmLead[];
   todayTimeEntries: TimeEntry[];
 };
+
+type ManualTimeScope = "internal" | "client";
 
 export default function DashboardPage() {
   return (
@@ -178,13 +180,13 @@ function DashboardContent({ role }: { role: UserRole }) {
 
   const view = useMemo(() => buildDashboardView(data, role, now), [data, role, now]);
 
-  async function addManualTimeEntry(opis: string, totalSeconds: number) {
+  async function addManualTimeEntry(opis: string, totalSeconds: number, clientId: string | null) {
     if (!data.userId) {
       alert("Nie udało się ustalić użytkownika.");
       return false;
     }
 
-    const result = await createManualInternalTimeEntry(data.userId, opis, totalSeconds);
+    const result = await createManualTimeEntry(data.userId, opis, totalSeconds, clientId);
 
     if (result.error || !result.data) {
       console.error("Błąd dodawania czasu pracy:", result.error);
@@ -231,6 +233,7 @@ function DashboardContent({ role }: { role: UserRole }) {
 
       {manualTimeOpen && (
         <ManualTimeModal
+          clients={data.clients}
           onClose={() => setManualTimeOpen(false)}
           onSave={addManualTimeEntry}
         />
@@ -514,12 +517,17 @@ type WorkTimeDetail = {
 };
 
 function ManualTimeModal({
+  clients,
   onClose,
   onSave,
 }: {
+  clients: Client[];
   onClose: () => void;
-  onSave: (opis: string, totalSeconds: number) => Promise<boolean>;
+  onSave: (opis: string, totalSeconds: number, clientId: string | null) => Promise<boolean>;
 }) {
+  const sortedClients = useMemo(() => [...clients].sort(compareClients), [clients]);
+  const [scope, setScope] = useState<ManualTimeScope>("internal");
+  const [clientId, setClientId] = useState("");
   const [opis, setOpis] = useState("");
   const [hours, setHours] = useState("");
   const [minutes, setMinutes] = useState("");
@@ -541,8 +549,13 @@ function ManualTimeModal({
       return;
     }
 
+    if (scope === "client" && !clientId) {
+      alert("Wybierz klienta.");
+      return;
+    }
+
     setSaving(true);
-    const saved = await onSave(description, totalSeconds);
+    const saved = await onSave(description, totalSeconds, scope === "client" ? clientId : null);
     setSaving(false);
 
     if (saved) onClose();
@@ -562,6 +575,47 @@ function ManualTimeModal({
         </header>
 
         <div style={manualTimeFormStyle}>
+          <div style={manualTimeFieldStyle}>
+            <span style={manualTimeLabelStyle}>Czego dotyczy czas</span>
+            <div style={manualTimeScopeStyle}>
+              <button
+                type="button"
+                style={scope === "internal" ? manualTimeScopeActiveStyle : manualTimeScopeButtonStyle}
+                onClick={() => {
+                  setScope("internal");
+                  setClientId("");
+                }}
+              >
+                Czynności wewnętrzne
+              </button>
+              <button
+                type="button"
+                style={scope === "client" ? manualTimeScopeActiveStyle : manualTimeScopeButtonStyle}
+                onClick={() => setScope("client")}
+              >
+                Konkretny klient
+              </button>
+            </div>
+          </div>
+
+          {scope === "client" ? (
+            <label style={manualTimeFieldStyle}>
+              <span style={manualTimeLabelStyle}>Klient</span>
+              <select
+                style={manualTimeInputStyle}
+                value={clientId}
+                onChange={(event) => setClientId(event.target.value)}
+              >
+                <option value="">Wybierz klienta</option>
+                {sortedClients.map((client) => (
+                  <option key={client.id} value={client.id}>
+                    {client.nazwa || "Klient bez nazwy"}{client.nip ? ` · NIP ${client.nip}` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+
           <label style={manualTimeFieldStyle}>
             <span style={manualTimeLabelStyle}>Opis pracy</span>
             <input
@@ -1156,6 +1210,30 @@ const manualTimeLabelStyle: CSSProperties = {
   fontSize: "13px",
   fontWeight: 900,
   textTransform: "uppercase",
+};
+
+const manualTimeScopeStyle: CSSProperties = {
+  display: "grid",
+  gap: "8px",
+  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+};
+
+const manualTimeScopeButtonStyle: CSSProperties = {
+  background: colors.white,
+  border: `1px solid ${colors.border}`,
+  borderRadius: radius.button,
+  color: colors.navy,
+  cursor: "pointer",
+  fontWeight: 900,
+  minHeight: "46px",
+  padding: "10px 12px",
+};
+
+const manualTimeScopeActiveStyle: CSSProperties = {
+  ...manualTimeScopeButtonStyle,
+  background: colors.navy,
+  borderColor: colors.navy,
+  color: colors.white,
 };
 
 const manualTimeInputStyle: CSSProperties = {

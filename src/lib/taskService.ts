@@ -195,18 +195,24 @@ export async function fetchUserTimeEntriesForDay(userId: string, dayStartIso: st
     .order("started_at", { ascending: false });
 }
 
-export async function createManualInternalTimeEntry(userId: string, opis: string, totalSeconds: number) {
+export async function createManualTimeEntry(
+  userId: string,
+  opis: string,
+  totalSeconds: number,
+  clientId: string | null
+) {
   const normalizedSeconds = Math.max(0, Math.floor(totalSeconds));
   const endedAt = new Date();
   const startedAt = new Date(endedAt.getTime() - normalizedSeconds * 1000);
+  const isInternal = !clientId;
 
   return supabase
     .from("czas_pracy")
     .insert({
       zadanie_id: null,
       zadanie_cykliczne_id: null,
-      klient_id: null,
-      czy_wewnetrzne: true,
+      klient_id: clientId,
+      czy_wewnetrzne: isInternal,
       osoba_id: userId,
       started_at: startedAt.toISOString(),
       ended_at: endedAt.toISOString(),

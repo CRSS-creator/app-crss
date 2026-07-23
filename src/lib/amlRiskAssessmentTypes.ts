@@ -1,4 +1,3 @@
-export type YesNoValue = "" | "tak" | "nie";
 export type YesNoNaValue = "" | "tak" | "nie" | "nie_dotyczy";
 
 export type AmlRiskAssessmentData = {
@@ -11,22 +10,21 @@ export type AmlRiskAssessmentData = {
   otherSources: string;
   clientFactors: Record<string, YesNoNaValue>;
   clientFactorNotes: string;
-  geographicFactors: Record<string, YesNoValue>;
+  geographicFactors: Record<string, YesNoNaValue>;
   geographicNotes: string;
-  industryFactors: Record<string, YesNoValue>;
+  industryFactors: Record<string, YesNoNaValue>;
   industryNotes: string;
-  channelFactors: Record<string, YesNoValue>;
+  channelFactors: Record<string, YesNoNaValue>;
   remoteRiskMitigationNotes: string;
-  pepSanctionsFactors: Record<string, YesNoValue>;
+  pepSanctionsFactors: Record<string, YesNoNaValue>;
   pepSanctionsNotes: string;
-  behavioralFactors: Record<string, YesNoValue>;
+  behavioralFactors: Record<string, YesNoNaValue>;
   behavioralNotes: string;
   finalRiskLevel: "niskie" | "standardowe" | "podwyzszone" | "wysokie" | "";
   riskJustification: string;
-  decisions: Record<string, YesNoValue>;
+  decisions: Record<string, YesNoNaValue>;
   decisionNotes: string;
   nextUpdateDate: string;
-  nextUpdateReason: string;
   approvedBy: string;
   approvalDate: string;
   confirmation: boolean;
@@ -43,7 +41,7 @@ export type PublicAmlRiskAssessmentResponse = {
 };
 
 export const ASSESSMENT_BASIS_OPTIONS = [
-  { value: "rozpoczecie_wspolpracy", label: "rozpoczecie wspolpracy" },
+  { value: "rozpoczecie_wspolpracy", label: "rozpoczęcie współpracy" },
   { value: "aktualizacja_okresowa", label: "aktualizacja okresowa" },
   { value: "aktualizacja_zdarzeniowa", label: "aktualizacja zdarzeniowa" },
   { value: "zmiana_danych", label: "zmiana danych" },
@@ -52,83 +50,83 @@ export const ASSESSMENT_BASIS_OPTIONS = [
 ];
 
 export const DATA_SOURCE_FIELDS = [
-  { key: "initialForm", label: "Formularz wstepny klienta", allowNa: false },
+  { key: "initialForm", label: "Formularz wstępny klienta" },
   { key: "krs", label: "KRS", allowNa: true },
   { key: "ceidg", label: "CEIDG", allowNa: true },
   { key: "regon", label: "GUS albo REGON", allowNa: true },
-  { key: "vatWhitelist", label: "Biala lista podatnikow VAT", allowNa: true },
+  { key: "vatWhitelist", label: "Biała lista podatników VAT", allowNa: true },
   { key: "vies", label: "VIES", allowNa: true },
-  { key: "crbr", label: "Centralny Rejestr Beneficjentow Rzeczywistych", allowNa: true },
-  { key: "identityDocument", label: "Dokument tozsamosci albo elektroniczna weryfikacja tozsamosci", allowNa: true },
+  { key: "crbr", label: "Centralny Rejestr Beneficjentów Rzeczywistych", allowNa: true },
+  { key: "identityDocument", label: "Dokument tożsamości albo elektroniczna weryfikacja tożsamości", allowNa: true },
   { key: "signatureReport", label: "Raport podpisu elektronicznego", allowNa: true },
-  { key: "sanctions", label: "Weryfikacja sankcyjna", allowNa: false },
-  { key: "pepStatement", label: "Oswiadczenie PEP", allowNa: false },
-  { key: "publicInfo", label: "Strona internetowa klienta albo publiczne informacje o dzialalnosci", allowNa: false },
+  { key: "sanctions", label: "Weryfikacja sankcyjna" },
+  { key: "pepStatement", label: "Oświadczenie PEP" },
+  { key: "publicInfo", label: "Strona internetowa klienta albo publiczne informacje o działalności" },
 ];
 
 export const CLIENT_FACTOR_FIELDS = [
-  { key: "naturalPerson", label: "Klient jest osoba fizyczna nieprowadzaca dzialalnosci gospodarczej", allowNa: false },
-  { key: "individualBusiness", label: "Klient jest osoba fizyczna prowadzaca dzialalnosc gospodarcza", allowNa: false },
-  { key: "legalEntity", label: "Klient jest osoba prawna albo jednostka organizacyjna", allowNa: false },
-  { key: "simpleOwnership", label: "Klient ma prosta i zrozumiala strukture wlasnosci", allowNa: true },
-  { key: "complexOwnership", label: "Klient ma zlozona albo wielopoziomowa strukture wlasnosci", allowNa: false },
-  { key: "foreignOwnershipEntities", label: "W strukturze klienta wystepuja podmioty zagraniczne", allowNa: false },
-  { key: "uboEstablished", label: "Beneficjent rzeczywisty zostal ustalony bez watpliwosci", allowNa: false },
-  { key: "uboDifficulties", label: "Wystapily trudnosci w ustaleniu beneficjenta rzeczywistego", allowNa: false },
-  { key: "registryConsistent", label: "Dane klienta sa spojne z danymi z rejestrow", allowNa: false },
-  { key: "inconsistencies", label: "Wystepuja niespojnosci wymagajace wyjasnienia", allowNa: false },
+  { key: "naturalPerson", label: "Klient jest osobą fizyczną nieprowadzącą działalności gospodarczej" },
+  { key: "individualBusiness", label: "Klient jest osobą fizyczną prowadzącą działalność gospodarczą" },
+  { key: "legalEntity", label: "Klient jest osobą prawną albo jednostką organizacyjną" },
+  { key: "simpleOwnership", label: "Klient ma prostą i zrozumiałą strukturę własności" },
+  { key: "complexOwnership", label: "Klient ma złożoną albo wielopoziomową strukturę własności" },
+  { key: "foreignOwnershipEntities", label: "W strukturze klienta występują podmioty zagraniczne" },
+  { key: "uboEstablished", label: "Beneficjent rzeczywisty został ustalony bez wątpliwości" },
+  { key: "uboDifficulties", label: "Wystąpiły trudności w ustaleniu beneficjenta rzeczywistego" },
+  { key: "registryConsistent", label: "Dane klienta są spójne z danymi z rejestrów" },
+  { key: "inconsistencies", label: "Występują niespójności wymagające wyjaśnienia" },
 ];
 
 export const GEOGRAPHIC_FACTOR_FIELDS = [
-  { key: "onlyPoland", label: "Klient dziala wylacznie w Polsce" },
-  { key: "euEeaActivity", label: "Klient prowadzi dzialalnosc w UE albo EOG" },
-  { key: "outsideEuEeaActivity", label: "Klient prowadzi dzialalnosc poza UE albo EOG" },
-  { key: "highRiskCountry", label: "Powiazanie z panstwem wysokiego ryzyka" },
-  { key: "sanctionedCountry", label: "Powiazanie z panstwem objetym sankcjami" },
+  { key: "onlyPoland", label: "Klient działa wyłącznie w Polsce" },
+  { key: "euEeaActivity", label: "Klient prowadzi działalność w UE albo EOG" },
+  { key: "outsideEuEeaActivity", label: "Klient prowadzi działalność poza UE albo EOG" },
+  { key: "highRiskCountry", label: "Powiązanie z państwem wysokiego ryzyka" },
+  { key: "sanctionedCountry", label: "Powiązanie z państwem objętym sankcjami" },
 ];
 
 export const INDUSTRY_FACTOR_FIELDS = [
-  { key: "typicalForCrss", label: "Dzialalnosc jest typowa dla klientow obslugiwanych przez CRSS" },
-  { key: "understandableActivity", label: "Dzialalnosc jest zrozumiala na podstawie formularza, rejestrow i informacji publicznych" },
-  { key: "highAttentionIndustry", label: "Klient dziala w branzy wymagajacej zwiekszonej uwagi" },
-  { key: "cashActivity", label: "Klient prowadzi dzialalnosc gotowkowa albo gotowka moze miec istotne znaczenie" },
-  { key: "crossBorderActivity", label: "Klient prowadzi dzialalnosc transgraniczna" },
-  { key: "sensitiveGoodsOrServices", label: "Klient dziala w obszarach wrazliwych, np. luksus, nieruchomosci, paliwa, metale, platnosci, kryptoaktywa, hazard albo posrednictwo finansowe" },
+  { key: "typicalForCrss", label: "Działalność jest typowa dla klientów obsługiwanych przez CRSS" },
+  { key: "understandableActivity", label: "Działalność jest zrozumiała na podstawie formularza, rejestrów i informacji publicznych" },
+  { key: "highAttentionIndustry", label: "Klient działa w branży wymagającej zwiększonej uwagi" },
+  { key: "cashActivity", label: "Klient prowadzi działalność gotówkową albo gotówka może mieć istotne znaczenie" },
+  { key: "crossBorderActivity", label: "Klient prowadzi działalność transgraniczną" },
+  { key: "sensitiveGoodsOrServices", label: "Klient działa w obszarach wrażliwych, np. luksus, nieruchomości, paliwa, metale, płatności, kryptoaktywa, hazard albo pośrednictwo finansowe" },
 ];
 
 export const CHANNEL_FACTOR_FIELDS = [
-  { key: "personalContact", label: "Wspolpraca zostala nawiazana podczas kontaktu osobistego" },
-  { key: "remoteContact", label: "Wspolpraca zostala nawiazana zdalnie" },
-  { key: "autentiAgreement", label: "Umowa zostala podpisana przez Autenti" },
+  { key: "personalContact", label: "Współpraca została nawiązana podczas kontaktu osobistego" },
+  { key: "remoteContact", label: "Współpraca została nawiązana zdalnie" },
+  { key: "autentiAgreement", label: "Umowa została podpisana przez Autenti" },
   { key: "advancedAutentiSignature", label: "Zastosowano zaawansowany podpis elektroniczny Autenti" },
-  { key: "mobywatel", label: "Zastosowano weryfikacje tozsamosci przez mObywatel" },
+  { key: "mobywatel", label: "Zastosowano weryfikację tożsamości przez mObywatel" },
   { key: "qualifiedSignature", label: "Zastosowano kwalifikowany podpis elektroniczny" },
   { key: "trustedSignature", label: "Zastosowano podpis zaufany" },
-  { key: "remoteRiskMitigated", label: "Brak fizycznej obecnosci ograniczono inna metoda weryfikacji" },
+  { key: "remoteRiskMitigated", label: "Brak fizycznej obecności ograniczono inną metodą weryfikacji" },
 ];
 
 export const PEP_SANCTIONS_FIELDS = [
   { key: "pep", label: "Klient, reprezentant albo beneficjent rzeczywisty posiada status PEP" },
-  { key: "pepRelated", label: "Klient, reprezentant albo beneficjent jest czlonkiem rodziny PEP albo bliskim wspolpracownikiem PEP" },
+  { key: "pepRelated", label: "Klient, reprezentant albo beneficjent jest członkiem rodziny PEP albo bliskim współpracownikiem PEP" },
   { key: "sanctionsPositive", label: "Wynik weryfikacji sankcyjnej jest pozytywny" },
-  { key: "sanctionsRequiresExplanation", label: "Wynik weryfikacji sankcyjnej wymaga dodatkowego wyjasnienia" },
+  { key: "sanctionsRequiresExplanation", label: "Wynik weryfikacji sankcyjnej wymaga dodatkowego wyjaśnienia" },
 ];
 
 export const BEHAVIORAL_FACTOR_FIELDS = [
-  { key: "completeConsistentData", label: "Klient przekazuje dane kompletne i spojne" },
+  { key: "completeConsistentData", label: "Klient przekazuje dane kompletne i spójne" },
   { key: "refusesData", label: "Klient odmawia przekazania danych wymaganych do oceny AML" },
-  { key: "avoidsExplanation", label: "Klient unika wyjasnienia struktury wlasnosci albo charakteru dzialalnosci" },
-  { key: "expectsEarlyStart", label: "Klient oczekuje rozpoczecia wspolpracy przed zakonczeniem weryfikacji AML" },
-  { key: "unusualBehavior", label: "Klient wykazuje nietypowe zachowania wobec charakteru planowanej wspolpracy" },
+  { key: "avoidsExplanation", label: "Klient unika wyjaśnienia struktury własności albo charakteru działalności" },
+  { key: "expectsEarlyStart", label: "Klient oczekuje rozpoczęcia współpracy przed zakończeniem weryfikacji AML" },
+  { key: "unusualBehavior", label: "Klient wykazuje nietypowe zachowania wobec charakteru planowanej współpracy" },
 ];
 
 export const DECISION_FIELDS = [
-  { key: "standardMeasures", label: "Mozna rozpoczac wspolprace przy standardowych srodkach bezpieczenstwa finansowego" },
-  { key: "enhancedMeasures", label: "Mozna rozpoczac wspolprace przy wzmozonych srodkach bezpieczenstwa finansowego" },
-  { key: "requiresCompletion", label: "Wymagane jest uzupelnienie danych albo dokumentow przed rozpoczeciem wspolpracy" },
-  { key: "requiresApproval", label: "Wymagana jest akceptacja osoby odpowiedzialnej za AML albo zarzadu" },
-  { key: "refuseCooperation", label: "CRSS odmawia rozpoczecia wspolpracy" },
-  { key: "considerNotification", label: "Nalezy rozwazyc zawiadomienie wlasciwego organu" },
+  { key: "standardMeasures", label: "Można rozpocząć współpracę przy standardowych środkach bezpieczeństwa finansowego" },
+  { key: "enhancedMeasures", label: "Można rozpocząć współpracę przy wzmożonych środkach bezpieczeństwa finansowego" },
+  { key: "requiresCompletion", label: "Wymagane jest uzupełnienie danych albo dokumentów przed rozpoczęciem współpracy" },
+  { key: "requiresApproval", label: "Wymagana jest akceptacja osoby odpowiedzialnej za AML albo zarządu" },
+  { key: "refuseCooperation", label: "CRSS odmawia rozpoczęcia współpracy" },
+  { key: "considerNotification", label: "Należy rozważyć zawiadomienie właściwego organu" },
 ];
 
 export function emptyAmlRiskAssessmentData(): AmlRiskAssessmentData {
@@ -157,7 +155,6 @@ export function emptyAmlRiskAssessmentData(): AmlRiskAssessmentData {
     decisions: emptyValues(DECISION_FIELDS, ""),
     decisionNotes: "",
     nextUpdateDate: "",
-    nextUpdateReason: "",
     approvedBy: "",
     approvalDate: new Date().toISOString().slice(0, 10),
     confirmation: false,
@@ -166,26 +163,25 @@ export function emptyAmlRiskAssessmentData(): AmlRiskAssessmentData {
 
 export function validateAmlRiskAssessmentData(data: AmlRiskAssessmentData) {
   const missing: string[] = [];
-  requireText(data.clientName, "Nazwa albo imie i nazwisko klienta", missing);
+  requireText(data.clientName, "Nazwa albo imię i nazwisko klienta", missing);
   requireText(data.clientIdentifier, "NIP, PESEL, KRS albo inny identyfikator", missing);
-  requireText(data.assessmentDate, "Data sporzadzenia oceny ryzyka", missing);
-  requireText(data.assessedBy, "Osoba sporzadzajaca ocene ryzyka", missing);
-  requireText(data.assessmentBasis, "Podstawa sporzadzenia oceny", missing);
-  requireFieldSet(data.dataSources, DATA_SOURCE_FIELDS, "Zrodla danych", missing);
-  requireFieldSet(data.clientFactors, CLIENT_FACTOR_FIELDS, "Czynniki dotyczace klienta", missing);
+  requireText(data.assessmentDate, "Data sporządzenia oceny ryzyka", missing);
+  requireText(data.assessedBy, "Osoba sporządzająca ocenę ryzyka", missing);
+  requireText(data.assessmentBasis, "Podstawa sporządzenia oceny", missing);
+  requireFieldSet(data.dataSources, DATA_SOURCE_FIELDS, "Źródła danych", missing);
+  requireFieldSet(data.clientFactors, CLIENT_FACTOR_FIELDS, "Czynniki dotyczące klienta", missing);
   requireFieldSet(data.geographicFactors, GEOGRAPHIC_FACTOR_FIELDS, "Czynniki geograficzne", missing);
-  requireFieldSet(data.industryFactors, INDUSTRY_FACTOR_FIELDS, "Czynniki branzowe", missing);
-  requireFieldSet(data.channelFactors, CHANNEL_FACTOR_FIELDS, "Czynniki kanalu wspolpracy", missing);
+  requireFieldSet(data.industryFactors, INDUSTRY_FACTOR_FIELDS, "Czynniki branżowe", missing);
+  requireFieldSet(data.channelFactors, CHANNEL_FACTOR_FIELDS, "Czynniki kanału współpracy", missing);
   requireFieldSet(data.pepSanctionsFactors, PEP_SANCTIONS_FIELDS, "Status PEP i sankcje", missing);
   requireFieldSet(data.behavioralFactors, BEHAVIORAL_FACTOR_FIELDS, "Czynniki behawioralne", missing);
   requireText(data.finalRiskLevel, "Poziom ryzyka", missing);
   requireText(data.riskJustification, "Uzasadnienie oceny ryzyka", missing);
   requireFieldSet(data.decisions, DECISION_FIELDS, "Decyzja CRSS", missing);
   requireText(data.nextUpdateDate, "Termin kolejnej aktualizacji", missing);
-  requireText(data.nextUpdateReason, "Przyczyna terminu kolejnej aktualizacji", missing);
-  requireText(data.approvedBy, "Osoba zatwierdzajaca ocene", missing);
+  requireText(data.approvedBy, "Osoba zatwierdzająca ocenę", missing);
   requireText(data.approvalDate, "Data zatwierdzenia", missing);
-  if (!data.confirmation) missing.push("Potwierdzenie zakonczenia oceny ryzyka");
+  if (!data.confirmation) missing.push("Potwierdzenie zakończenia oceny ryzyka");
   return missing;
 }
 
@@ -196,7 +192,7 @@ export function assessmentBasisLabel(value: string) {
 export function riskLevelLabel(value: string) {
   if (value === "niskie") return "Ryzyko niskie";
   if (value === "standardowe") return "Ryzyko standardowe";
-  if (value === "podwyzszone") return "Ryzyko podwyzszone";
+  if (value === "podwyzszone") return "Ryzyko podwyższone";
   if (value === "wysokie") return "Ryzyko wysokie";
   return "-";
 }

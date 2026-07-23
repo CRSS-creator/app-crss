@@ -18,7 +18,6 @@ import {
   type AmlRiskAssessmentData,
   type PublicAmlRiskAssessmentResponse,
   type YesNoNaValue,
-  type YesNoValue,
 } from "@/lib/amlRiskAssessmentTypes";
 
 export default function AmlRiskAssessmentPage() {
@@ -87,15 +86,18 @@ export default function AmlRiskAssessmentPage() {
             <p style={eyebrowStyle}>Aplikacja CRSS</p>
             <h1 style={titleStyle}>Karta oceny ryzyka AML</h1>
             <p style={subtitleStyle}>{response.client?.nazwa || "Klient"}{response.client?.nip ? ` · NIP ${response.client.nip}` : ""}</p>
+            <p style={riskInfoStyle}>Przypisane ryzyko: <strong>{riskLevelDisplay(draft.finalRiskLevel)}</strong></p>
           </div>
           <span style={typeBadgeStyle}>Ocena ryzyka</span>
         </div>
 
         <section style={sectionStyle}>
           <h2 style={sectionTitleStyle}>Dane identyfikacyjne karty</h2>
-          <div style={gridStyle}>
+          <div style={twoColumnGridStyle}>
             <Field label="Nazwa albo imię i nazwisko klienta" required><input style={inputStyle} value={draft.clientName} onChange={(event) => update("clientName", event.target.value)} /></Field>
             <Field label="NIP, PESEL, KRS albo inny identyfikator" required><input style={inputStyle} value={draft.clientIdentifier} onChange={(event) => update("clientIdentifier", event.target.value)} /></Field>
+          </div>
+          <div style={twoColumnGridStyle}>
             <Field label="Data sporządzenia oceny ryzyka" required><input type="date" style={inputStyle} value={draft.assessmentDate} onChange={(event) => update("assessmentDate", event.target.value)} /></Field>
             <Field label="Osoba sporządzająca ocenę ryzyka" required><input style={inputStyle} value={draft.assessedBy} onChange={(event) => update("assessedBy", event.target.value)} /></Field>
           </div>
@@ -108,49 +110,49 @@ export default function AmlRiskAssessmentPage() {
 
         <FactorSection title="Źródła danych wykorzystane do oceny">
           {DATA_SOURCE_FIELDS.map((field) => (
-            <ChoiceField key={field.key} label={field.label} allowNa={field.allowNa} value={draft.dataSources[field.key] || ""} onChange={(value) => updateMap("dataSources", field.key, value)} />
+            <ChoiceField key={field.key} label={field.label} value={draft.dataSources[field.key] || ""} onChange={(value) => updateMap("dataSources", field.key, value)} />
           ))}
           <Field label="Inne źródła"><textarea style={textareaStyle} value={draft.otherSources} onChange={(event) => update("otherSources", event.target.value)} /></Field>
         </FactorSection>
 
         <FactorSection title="Czynniki dotyczące klienta">
           {CLIENT_FACTOR_FIELDS.map((field) => (
-            <ChoiceField key={field.key} label={field.label} allowNa={field.allowNa} value={draft.clientFactors[field.key] || ""} onChange={(value) => updateMap("clientFactors", field.key, value)} />
+            <ChoiceField key={field.key} label={field.label} value={draft.clientFactors[field.key] || ""} onChange={(value) => updateMap("clientFactors", field.key, value)} />
           ))}
           <Field label="Opis niespójności albo uwag"><textarea style={textareaStyle} value={draft.clientFactorNotes} onChange={(event) => update("clientFactorNotes", event.target.value)} /></Field>
         </FactorSection>
 
         <FactorSection title="Czynniki geograficzne">
           {GEOGRAPHIC_FACTOR_FIELDS.map((field) => (
-            <ChoiceField key={field.key} label={field.label} value={draft.geographicFactors[field.key] || ""} onChange={(value) => updateMap("geographicFactors", field.key, value as YesNoValue)} />
+            <ChoiceField key={field.key} label={field.label} value={draft.geographicFactors[field.key] || ""} onChange={(value) => updateMap("geographicFactors", field.key, value)} />
           ))}
           <Field label="Opis powiązań geograficznych"><textarea style={textareaStyle} value={draft.geographicNotes} onChange={(event) => update("geographicNotes", event.target.value)} /></Field>
         </FactorSection>
 
         <FactorSection title="Czynniki dotyczące branży i rodzaju działalności">
           {INDUSTRY_FACTOR_FIELDS.map((field) => (
-            <ChoiceField key={field.key} label={field.label} value={draft.industryFactors[field.key] || ""} onChange={(value) => updateMap("industryFactors", field.key, value as YesNoValue)} />
+            <ChoiceField key={field.key} label={field.label} value={draft.industryFactors[field.key] || ""} onChange={(value) => updateMap("industryFactors", field.key, value)} />
           ))}
           <Field label="Opis czynników branżowych"><textarea style={textareaStyle} value={draft.industryNotes} onChange={(event) => update("industryNotes", event.target.value)} /></Field>
         </FactorSection>
 
         <FactorSection title="Czynniki dotyczące kanału nawiązania współpracy">
           {CHANNEL_FACTOR_FIELDS.map((field) => (
-            <ChoiceField key={field.key} label={field.label} value={draft.channelFactors[field.key] || ""} onChange={(value) => updateMap("channelFactors", field.key, value as YesNoValue)} />
+            <ChoiceField key={field.key} label={field.label} value={draft.channelFactors[field.key] || ""} onChange={(value) => updateMap("channelFactors", field.key, value)} />
           ))}
           <Field label="Opis metody ograniczenia ryzyka zdalnego zawarcia umowy"><textarea style={textareaStyle} value={draft.remoteRiskMitigationNotes} onChange={(event) => update("remoteRiskMitigationNotes", event.target.value)} /></Field>
         </FactorSection>
 
         <FactorSection title="Status PEP i sankcje">
           {PEP_SANCTIONS_FIELDS.map((field) => (
-            <ChoiceField key={field.key} label={field.label} value={draft.pepSanctionsFactors[field.key] || ""} onChange={(value) => updateMap("pepSanctionsFactors", field.key, value as YesNoValue)} />
+            <ChoiceField key={field.key} label={field.label} value={draft.pepSanctionsFactors[field.key] || ""} onChange={(value) => updateMap("pepSanctionsFactors", field.key, value)} />
           ))}
           <Field label="Opis wyniku weryfikacji PEP i sankcyjnej"><textarea style={textareaStyle} value={draft.pepSanctionsNotes} onChange={(event) => update("pepSanctionsNotes", event.target.value)} /></Field>
         </FactorSection>
 
         <FactorSection title="Czynniki behawioralne i organizacyjne">
           {BEHAVIORAL_FACTOR_FIELDS.map((field) => (
-            <ChoiceField key={field.key} label={field.label} value={draft.behavioralFactors[field.key] || ""} onChange={(value) => updateMap("behavioralFactors", field.key, value as YesNoValue)} />
+            <ChoiceField key={field.key} label={field.label} value={draft.behavioralFactors[field.key] || ""} onChange={(value) => updateMap("behavioralFactors", field.key, value)} />
           ))}
           <Field label="Opis okoliczności behawioralnych"><textarea style={textareaStyle} value={draft.behavioralNotes} onChange={(event) => update("behavioralNotes", event.target.value)} /></Field>
         </FactorSection>
@@ -171,19 +173,20 @@ export default function AmlRiskAssessmentPage() {
 
         <FactorSection title="Decyzja CRSS">
           {DECISION_FIELDS.map((field) => (
-            <ChoiceField key={field.key} label={field.label} value={draft.decisions[field.key] || ""} onChange={(value) => updateMap("decisions", field.key, value as YesNoValue)} />
+            <ChoiceField key={field.key} label={field.label} value={draft.decisions[field.key] || ""} onChange={(value) => updateMap("decisions", field.key, value)} />
           ))}
           <Field label="Opis decyzji i ewentualnych warunków"><textarea style={textareaStyle} value={draft.decisionNotes} onChange={(event) => update("decisionNotes", event.target.value)} /></Field>
         </FactorSection>
 
         <section style={sectionStyle}>
           <h2 style={sectionTitleStyle}>Termin kolejnej aktualizacji</h2>
-          <div style={gridStyle}>
+          <div style={singleFieldGridStyle}>
             <Field label="Termin kolejnej aktualizacji danych i oceny ryzyka" required><input type="date" style={inputStyle} value={draft.nextUpdateDate} onChange={(event) => update("nextUpdateDate", event.target.value)} /></Field>
+          </div>
+          <div style={twoColumnGridStyle}>
             <Field label="Osoba zatwierdzająca ocenę" required><input style={inputStyle} value={draft.approvedBy} onChange={(event) => update("approvedBy", event.target.value)} /></Field>
             <Field label="Data zatwierdzenia" required><input type="date" style={inputStyle} value={draft.approvalDate} onChange={(event) => update("approvalDate", event.target.value)} /></Field>
           </div>
-          <Field label="Przyczyna przyjęcia takiego terminu" required><textarea style={textareaStyle} value={draft.nextUpdateReason} onChange={(event) => update("nextUpdateReason", event.target.value)} /></Field>
           <label style={confirmationStyle}>
             <input type="checkbox" checked={draft.confirmation} onChange={(event) => update("confirmation", event.target.checked)} />
             <span>Potwierdzam, że dane w karcie odzwierciedlają przeprowadzoną ocenę ryzyka AML.</span>
@@ -223,17 +226,25 @@ function mergeDefaults(current: AmlRiskAssessmentData, defaults: Partial<AmlRisk
   };
 }
 
-function ChoiceField({ label, value, allowNa, onChange }: { label: string; value: YesNoNaValue; allowNa?: boolean; onChange: (value: YesNoNaValue) => void }) {
+function ChoiceField({ label, value, onChange }: { label: string; value: YesNoNaValue; onChange: (value: YesNoNaValue) => void }) {
   return (
     <div style={choiceRowStyle}>
       <span style={choiceLabelStyle}>{label}</span>
       <div style={segmentedStyle}>
         <button type="button" style={value === "tak" ? segmentActiveStyle : segmentStyle} onClick={() => onChange("tak")}>TAK</button>
         <button type="button" style={value === "nie" ? segmentActiveStyle : segmentStyle} onClick={() => onChange("nie")}>NIE</button>
-        {allowNa ? <button type="button" style={value === "nie_dotyczy" ? segmentActiveStyle : segmentStyle} onClick={() => onChange("nie_dotyczy")}>N/D</button> : null}
+        <button type="button" style={value === "nie_dotyczy" ? segmentActiveStyle : segmentStyle} onClick={() => onChange("nie_dotyczy")}>Nie dotyczy</button>
       </div>
     </div>
   );
+}
+
+function riskLevelDisplay(value: string) {
+  if (value === "niskie") return "niskie";
+  if (value === "standardowe") return "standardowe";
+  if (value === "podwyzszone") return "podwyższone";
+  if (value === "wysokie") return "wysokie";
+  return "nie przypisano";
 }
 
 function PublicShell({ children }: { children: ReactNode }) {
@@ -258,20 +269,22 @@ const headerStyle: CSSProperties = { display: "flex", justifyContent: "space-bet
 const eyebrowStyle: CSSProperties = { margin: "0 0 6px", color: colors.red, fontWeight: 900, fontSize: "12px", textTransform: "uppercase" };
 const titleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "30px", lineHeight: 1.12, fontWeight: 700 };
 const subtitleStyle: CSSProperties = { margin: "8px 0 0", color: colors.text, fontSize: "14px", lineHeight: 1.5 };
+const riskInfoStyle: CSSProperties = { margin: "8px 0 0", color: colors.navy, fontSize: "14px", lineHeight: 1.5, fontWeight: 750 };
 const typeBadgeStyle: CSSProperties = { flex: "0 0 auto", padding: "8px 12px", borderRadius: radius.badge, background: "rgba(23,59,115,0.08)", color: colors.navy, fontWeight: 900, fontSize: "12px" };
 const sectionStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "18px", background: "#fff", display: "flex", flexDirection: "column", gap: "14px" };
 const sectionTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "20px", fontWeight: 700 };
-const gridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))", gap: "14px", alignItems: "start" };
+const twoColumnGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "14px", alignItems: "start" };
+const singleFieldGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr)", maxWidth: "520px", gap: "14px", alignItems: "start" };
 const fieldStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "7px", color: colors.navy, fontWeight: 850, fontSize: "13px", minWidth: 0 };
 const fieldLabelStyle: CSSProperties = { minHeight: "20px", color: colors.navy, fontWeight: 850, fontSize: "13px", lineHeight: 1.25, display: "inline-flex", alignItems: "flex-end", gap: "3px", flexWrap: "wrap" };
 const requiredMarkStyle: CSSProperties = { color: colors.navy, fontWeight: 900 };
 const inputStyle: CSSProperties = { width: "100%", minHeight: "44px", border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "10px 12px", color: colors.text, fontWeight: 700, background: "#fff" };
 const textareaStyle: CSSProperties = { ...inputStyle, minHeight: "92px", resize: "vertical", lineHeight: 1.45 };
 const choiceListStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "10px" };
-const choiceRowStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: "12px", alignItems: "center", borderBottom: `1px solid ${colors.border}`, paddingBottom: "10px" };
+const choiceRowStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(260px, auto)", gap: "12px", alignItems: "center", borderBottom: `1px solid ${colors.border}`, paddingBottom: "10px" };
 const choiceLabelStyle: CSSProperties = { color: colors.text, fontWeight: 800, fontSize: "13px", lineHeight: 1.35 };
 const segmentedStyle: CSSProperties = { display: "inline-flex", border: `1px solid ${colors.border}`, borderRadius: radius.button, overflow: "hidden", background: colors.white, flex: "0 0 auto" };
-const segmentStyle: CSSProperties = { minWidth: "54px", minHeight: "38px", border: "none", borderRight: `1px solid ${colors.border}`, background: colors.white, color: colors.navy, fontWeight: 900, cursor: "pointer" };
+const segmentStyle: CSSProperties = { minWidth: "54px", minHeight: "38px", border: "none", borderRight: `1px solid ${colors.border}`, background: colors.white, color: colors.navy, fontWeight: 900, cursor: "pointer", padding: "0 12px", whiteSpace: "nowrap" };
 const segmentActiveStyle: CSSProperties = { ...segmentStyle, background: colors.navy, color: colors.white };
 const confirmationStyle: CSSProperties = { display: "flex", gap: "10px", alignItems: "flex-start", color: colors.text, fontWeight: 800, lineHeight: 1.45 };
 const primaryButtonStyle: CSSProperties = { minHeight: "48px", padding: "0 20px", border: "none", borderRadius: radius.button, background: colors.red, color: colors.white, fontWeight: 900, cursor: "pointer", alignSelf: "flex-start" };

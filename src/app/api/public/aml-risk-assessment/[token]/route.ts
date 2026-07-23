@@ -329,7 +329,6 @@ function buildDefaults(
       considerNotification: "nie",
     },
     nextUpdateDate: nextUpdate,
-    nextUpdateReason: nextUpdate ? "Termin zgodny z cyklem aktualizacji AML klienta." : "",
     approvalDate: new Date().toISOString().slice(0, 10),
   };
 }

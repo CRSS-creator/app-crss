@@ -48,33 +48,33 @@ export async function buildAmlRiskAssessmentPdf(input: PdfInput): Promise<Buffer
   drawPageBackground(context.page);
   drawText(context, "Karta oceny ryzyka AML klienta", MARGIN, 15, colors.navy);
   context.y -= 22;
-  paragraph(context, "Karta sluzy do udokumentowania indywidualnej oceny ryzyka prania pieniedzy oraz finansowania terroryzmu zwiazanego z klientem, stosunkami gospodarczymi albo transakcja okazjonalna.", 9.3);
+  paragraph(context, "Karta służy do udokumentowania indywidualnej oceny ryzyka prania pieniędzy oraz finansowania terroryzmu związanego z klientem, stosunkami gospodarczymi albo transakcją okazjonalną.", 9.3);
 
   section(context, "Dane identyfikacyjne karty");
-  field(context, "Nazwa albo imie i nazwisko klienta", input.data.clientName);
+  field(context, "Nazwa albo imię i nazwisko klienta", input.data.clientName);
   field(context, "NIP, PESEL, KRS albo inny identyfikator", input.data.clientIdentifier);
-  field(context, "Data sporzadzenia oceny ryzyka", input.data.assessmentDate);
-  field(context, "Osoba sporzadzajaca ocene ryzyka", input.data.assessedBy);
-  field(context, "Podstawa sporzadzenia oceny", assessmentBasisLabel(input.data.assessmentBasis));
+  field(context, "Data sporządzenia oceny ryzyka", input.data.assessmentDate);
+  field(context, "Osoba sporządzająca ocenę ryzyka", input.data.assessedBy);
+  field(context, "Podstawa sporządzenia oceny", assessmentBasisLabel(input.data.assessmentBasis));
   field(context, "Token karty", input.formToken);
 
-  section(context, "Zrodla danych wykorzystane do oceny");
+  section(context, "Źródła danych wykorzystane do oceny");
   fieldsFromDefinitions(context, DATA_SOURCE_FIELDS, input.data.dataSources);
-  field(context, "Inne zrodla", input.data.otherSources);
+  field(context, "Inne źródła", input.data.otherSources);
 
-  section(context, "Czynniki dotyczace klienta");
+  section(context, "Czynniki dotyczące klienta");
   fieldsFromDefinitions(context, CLIENT_FACTOR_FIELDS, input.data.clientFactors);
-  field(context, "Opis niespojnosci albo uwag", input.data.clientFactorNotes);
+  field(context, "Opis niespójności albo uwag", input.data.clientFactorNotes);
 
   section(context, "Czynniki geograficzne");
   fieldsFromDefinitions(context, GEOGRAPHIC_FACTOR_FIELDS, input.data.geographicFactors);
-  field(context, "Opis powiazan geograficznych", input.data.geographicNotes);
+  field(context, "Opis powiązań geograficznych", input.data.geographicNotes);
 
-  section(context, "Czynniki dotyczace branzy i rodzaju dzialalnosci");
+  section(context, "Czynniki dotyczące branży i rodzaju działalności");
   fieldsFromDefinitions(context, INDUSTRY_FACTOR_FIELDS, input.data.industryFactors);
-  field(context, "Opis czynnikow branzowych", input.data.industryNotes);
+  field(context, "Opis czynników branżowych", input.data.industryNotes);
 
-  section(context, "Kanal nawiazania wspolpracy");
+  section(context, "Kanał nawiązania współpracy");
   fieldsFromDefinitions(context, CHANNEL_FACTOR_FIELDS, input.data.channelFactors);
   field(context, "Opis metody ograniczenia ryzyka zdalnego zawarcia umowy", input.data.remoteRiskMitigationNotes);
 
@@ -84,20 +84,19 @@ export async function buildAmlRiskAssessmentPdf(input: PdfInput): Promise<Buffer
 
   section(context, "Czynniki behawioralne i organizacyjne");
   fieldsFromDefinitions(context, BEHAVIORAL_FACTOR_FIELDS, input.data.behavioralFactors);
-  field(context, "Opis okolicznosci behawioralnych", input.data.behavioralNotes);
+  field(context, "Opis okoliczności behawioralnych", input.data.behavioralNotes);
 
-  section(context, "Ocena koncowa");
+  section(context, "Ocena końcowa");
   field(context, "Przypisany poziom ryzyka", riskLevelLabel(input.data.finalRiskLevel));
   field(context, "Uzasadnienie oceny ryzyka", input.data.riskJustification);
 
   section(context, "Decyzja CRSS");
   fieldsFromDefinitions(context, DECISION_FIELDS, input.data.decisions);
-  field(context, "Opis decyzji i ewentualnych warunkow", input.data.decisionNotes);
+  field(context, "Opis decyzji i ewentualnych warunków", input.data.decisionNotes);
 
   section(context, "Termin kolejnej aktualizacji");
   field(context, "Termin kolejnej aktualizacji danych i oceny ryzyka", input.data.nextUpdateDate);
-  field(context, "Przyczyna przyjecia takiego terminu", input.data.nextUpdateReason);
-  field(context, "Osoba zatwierdzajaca ocene", input.data.approvedBy);
+  field(context, "Osoba zatwierdzająca ocenę", input.data.approvedBy);
   field(context, "Data zatwierdzenia", input.data.approvalDate);
   field(context, "Data zapisu PDF", input.completedAt.toLocaleString("pl-PL", { dateStyle: "short", timeStyle: "short" }));
 

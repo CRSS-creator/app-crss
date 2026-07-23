@@ -845,6 +845,10 @@ function AmlTabContent({
             {creatingRiskAssessment ? "Otwieranie..." : "Przejdź do oceny ryzyka"}
           </button>
         </div>
+        <div style={riskSummaryStyle}>
+          <span style={nextVerificationLabelStyle}>Przypisane ryzyko</span>
+          <strong style={riskSummaryValueStyle}>{riskKindLabel(row)}</strong>
+        </div>
         <ArchivedRiskAssessmentUpload uploading={uploadingRiskAssessmentArchive} onUpload={onUploadArchivedRiskAssessment} />
         {row.riskAssessments.length === 0 ? (
           <div style={tabContentPlaceholderStyle}>
@@ -2112,6 +2116,8 @@ const tabButtonStyle: CSSProperties = { minHeight: "42px", border: `1px solid ${
 const activeTabButtonStyle: CSSProperties = { ...tabButtonStyle, background: colors.navy, borderColor: colors.navy, color: colors.white };
 const tabPanelStyle: CSSProperties = { minHeight: "54px", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.inputBackground, display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", padding: "12px 14px" };
 const tabPanelLabelStyle: CSSProperties = { color: colors.navy, fontSize: "14px", fontWeight: 850 };
+const riskSummaryStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px", flexWrap: "wrap" };
+const riskSummaryValueStyle: CSSProperties = { color: colors.navy, fontSize: "18px", fontWeight: 900, textTransform: "capitalize" };
 const tabContentPlaceholderStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.inputBackground, padding: "18px", display: "grid", gap: "8px" };
 const tabContentTitleStyle: CSSProperties = { color: colors.navy, fontSize: "16px" };
 const archiveInitialFormStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.inputBackground, padding: "12px", display: "flex", alignItems: "flex-end", gap: "12px", flexWrap: "wrap" };

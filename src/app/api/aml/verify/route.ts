@@ -69,7 +69,8 @@ export async function POST(request: NextRequest) {
 
   const register = await ensureAmlRegister(auth.admin, client.id);
   const checks: OfficialCheck[] = [];
-  const isIndividualForm = resolveAmlInitialFormType(client.forma_prawna) === "individual";
+  const isDeclaredIndividualForm = resolveAmlInitialFormType(client.forma_prawna) === "individual";
+  const startsAsIndividualBusiness = isDeclaredIndividualForm && !looksLikeLegalEntity(client.nazwa, client.forma_prawna);
 
   const checksVat = Boolean(client.czynny_vat);
   const checksVies = Boolean(client.vat_ue);
@@ -87,32 +88,55 @@ export async function POST(request: NextRequest) {
   );
 
   let ceidgCheck: OfficialCheck | null = null;
+  let crbrCheck: OfficialCheck;
+  let krsCheck: OfficialCheck;
   let ceidgIdentity = { regon: null as string | null, krs: null as string | null };
   let krsNumber = normalizeKrs(String(vatSubject?.krs || ""));
-  if (!krsNumber) {
+  let actualIndividualBusiness = startsAsIndividualBusiness;
+
+  if (startsAsIndividualBusiness) {
     ceidgCheck = await verifyCeidg(nip);
     checks.push(ceidgCheck);
     ceidgIdentity = getCeidgIdentity(ceidgCheck);
-    krsNumber = normalizeKrs(String(vatSubject?.krs || ceidgIdentity.krs || ""));
-  }
-  const regonNumber = String(vatSubject?.regon || ceidgIdentity.regon || "").trim() || null;
-  const krsCheck = krsNumber
-    ? await verifyKrs(krsNumber)
-    : skippedCheck("KRS", "Brak numeru KRS w danych z Białej Listy VAT i CEIDG. Dla JDG wpis KRS zwykle nie występuje.");
-  checks.push(krsCheck);
+    krsCheck = skippedCheck("KRS", "KRS nie dotyczy jednoosobowej działalności gospodarczej.");
+    crbrCheck = skippedCheck("CRBR", "CRBR nie dotyczy osób fizycznych ani JDG.");
+  } else {
+    const crbrCandidate = await verifyCrbr(nip, krsNumber || null);
+    const crbrIdentity = getCrbrIdentity(crbrCandidate);
+    krsNumber = normalizeKrs(String(vatSubject?.krs || crbrIdentity.krs || ""));
 
-  const crbrCheck = isIndividualForm
-    ? skippedCheck("CRBR", "CRBR nie dotyczy osób fizycznych ani JDG.")
-    : await verifyCrbr(nip, krsNumber);
+    if (!krsNumber) {
+      ceidgCheck = await verifyCeidg(nip);
+      ceidgIdentity = getCeidgIdentity(ceidgCheck);
+      if (ceidgCheck.status === "ok") {
+        actualIndividualBusiness = true;
+        checks.push(ceidgCheck);
+        krsCheck = skippedCheck("KRS", "Podmiot odnaleziony w CEIDG jako JDG; KRS nie dotyczy.");
+        crbrCheck = skippedCheck("CRBR", "Podmiot odnaleziony w CEIDG jako JDG; CRBR nie dotyczy.");
+      } else {
+        checks.push(ceidgCheck);
+        krsCheck = skippedCheck("KRS", "Nie ustalono numeru KRS po NIP w rejestrach spółek.");
+        crbrCheck = crbrCandidate;
+      }
+    } else {
+      krsCheck = await verifyKrs(krsNumber);
+      crbrCheck = crbrCandidate;
+    }
+  }
+
+  const krsIdentity = getKrsIdentity(krsCheck);
+  const regonNumber = String(vatSubject?.regon || krsIdentity.regon || ceidgIdentity.regon || "").trim() || null;
+  krsNumber = normalizeKrs(String(krsNumber || krsIdentity.krs || ""));
+  checks.push(krsCheck);
   checks.push(crbrCheck);
 
   const sanctionsCheck = await verifySanctionsLists(client.nazwa || "", nip);
   checks.push(sanctionsCheck);
   const now = new Date();
   const pkdCodes = collectPkdCodes(ceidgCheck, krsCheck);
-  const beneficialOwners = isIndividualForm ? [] : extractCrbrBeneficialOwners(crbrCheck, now, krsCheck);
+  const beneficialOwners = actualIndividualBusiness ? [] : extractCrbrBeneficialOwners(crbrCheck, now, krsCheck);
   const result = summarizeResult(checks);
-  const visibleSourceChecks = checks.filter((check) => !(isIndividualForm && check.source === "CRBR"));
+  const visibleSourceChecks = checks.filter((check) => !(actualIndividualBusiness && check.source === "CRBR"));
   const registryDetails = buildRegistryDetails({
     nip,
     vatSubject,
@@ -580,6 +604,29 @@ function getCeidgIdentity(check: OfficialCheck) {
   };
 }
 
+function getCrbrIdentity(check: OfficialCheck) {
+  const details = check.details as { companies?: Array<Record<string, unknown>> };
+  const company = Array.isArray(details.companies) ? details.companies[0] : null;
+  if (!company) return { krs: null as string | null };
+
+  return {
+    krs: firstDeepText(company, ["krs", "KRS", "numerKrs", "numer_krs"]),
+  };
+}
+
+function getKrsIdentity(check: OfficialCheck) {
+  const details = check.details as { krs?: string; data?: unknown };
+  return {
+    regon: firstDeepText(details.data, ["regon", "REGON", "numerRegon", "numer_regon"]),
+    krs: details.krs || firstDeepText(details.data, ["numerKRS", "numerKrs", "krs", "KRS"]),
+  };
+}
+
+function looksLikeLegalEntity(...values: Array<string | null | undefined>) {
+  const text = normalizeTextForMatch(values.filter(Boolean).join(" "));
+  return /\b(spolka|spolki|sp z o o|sp zoo|z ograniczona odpowiedzialnoscia|akcyjna|s a|komandyt|jawna|partnerska|fundacja|stowarzyszenie|spoldzielnia)\b/.test(text);
+}
+
 function firstDeepText(value: unknown, keys: string[]): string | null {
   if (!value || typeof value !== "object") return null;
   if (Array.isArray(value)) {
@@ -715,13 +762,15 @@ function buildRegistryDetails(input: {
   const vatCheck = input.checks.find((check) => normalizeTextForMatch(check.source).includes("biala lista") || check.source === "Status VAT");
   const vatDetails = vatCheck?.details as { identyfikatorZapytania?: unknown; identyfikatorTechniczny?: unknown; requestId?: unknown } | undefined;
   const ceidgIdentity = input.ceidgCheck ? getCeidgIdentity(input.ceidgCheck) : { regon: null, krs: null };
+  const crbrIdentity = getCrbrIdentity(input.crbrCheck);
+  const krsIdentity = getKrsIdentity(input.krsCheck);
 
   return {
     updatedAt: input.checkedAt.toISOString(),
     identyfikatory: {
       nip: input.nip,
-      regon: String(input.vatSubject?.regon || ceidgIdentity.regon || "") || null,
-      krs: String(input.vatSubject?.krs || ceidgIdentity.krs || krsDetails.krs || "") || null,
+      regon: String(input.vatSubject?.regon || krsIdentity.regon || ceidgIdentity.regon || "") || null,
+      krs: String(input.vatSubject?.krs || krsDetails.krs || krsIdentity.krs || crbrIdentity.krs || ceidgIdentity.krs || "") || null,
       rejestr: krsDetails.register === "P" ? "Rejestr przedsiębiorców" : krsDetails.register || null,
     },
     statusy: {

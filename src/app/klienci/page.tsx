@@ -114,6 +114,8 @@ type ClientDocumentListItem = ClientDocument & {
   opis: string | null;
 };
 
+type DocumentTabKey = "all" | "aml" | "other";
+
 type ClientContractDocumentRow = {
   id: string;
   created_at: string;
@@ -137,6 +139,12 @@ const CLIENT_STATUS_OPTIONS = CLIENT_STATUSES.map((status) => ({
   value: status,
   label: status,
 }));
+
+const DOCUMENT_TABS: Array<{ key: DocumentTabKey; label: string }> = [
+  { key: "all", label: "Wszystkie" },
+  { key: "aml", label: "AML" },
+  { key: "other", label: "Pozostałe" },
+];
 
 const LEGAL_FORM_OPTIONS = [
   { value: "", label: "Wybierz" },
@@ -542,16 +550,26 @@ function ClientDrawer({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [documents, setDocuments] = useState<ClientDocumentListItem[]>([]);
   const [documentsLoading, setDocumentsLoading] = useState(true);
+  const [documentsTab, setDocumentsTab] = useState<DocumentTabKey>("all");
   const [uploadingDocument, setUploadingDocument] = useState(false);
   const [draft, setDraft] = useState<ClientDraft>(() => createDraft(client));
 
   const canEditAdministrative = canEditClientAdministrative(role);
   const isDraftJdg = isJdgLegalForm(draft.forma_prawna);
   const isClientJdg = isJdgLegalForm(client.forma_prawna || "");
+  const amlDocuments = documents.filter(isAmlDocument);
+  const otherDocuments = documents.filter((document) => !isAmlDocument(document));
+  const visibleDocuments =
+    documentsTab === "aml"
+      ? amlDocuments
+      : documentsTab === "other"
+        ? otherDocuments
+        : documents;
 
   useEffect(() => {
     setDraft(createDraft(client));
     setEditing(false);
+    setDocumentsTab("all");
     loadDocuments();
   }, [client.id]);
 
@@ -1181,13 +1199,43 @@ function ClientDrawer({
               </button>
             </div>
 
+            {documents.length > 0 ? (
+              <div style={documentsTabsStyle}>
+                {DOCUMENT_TABS.map((tab) => {
+                  const count =
+                    tab.key === "aml"
+                      ? amlDocuments.length
+                      : tab.key === "other"
+                        ? otherDocuments.length
+                        : documents.length;
+                  const active = documentsTab === tab.key;
+
+                  return (
+                    <button
+                      key={tab.key}
+                      type="button"
+                      style={active ? documentsTabActiveStyle : documentsTabStyle}
+                      onClick={() => setDocumentsTab(tab.key)}
+                    >
+                      <span>{tab.label}</span>
+                      <span style={active ? documentsTabCountActiveStyle : documentsTabCountStyle}>
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+
             {documentsLoading ? (
               <div style={documentsEmptyStyle}>Ładowanie dokumentów...</div>
             ) : documents.length === 0 ? (
               <div style={documentsEmptyStyle}>Brak dokumentów dla tego klienta.</div>
+            ) : visibleDocuments.length === 0 ? (
+              <div style={documentsEmptyStyle}>Brak dokumentów w tej zakładce.</div>
             ) : (
               <div style={documentsListStyle}>
-                {documents.map((document) => (
+                {visibleDocuments.map((document) => (
                   <div key={document.id} style={documentsItemStyle}>
                     <div>
                       <div style={documentsNameStyle}>{document.nazwa}</div>
@@ -1696,6 +1744,27 @@ function sortDocumentsByDate(
   second: ClientDocumentListItem
 ) {
   return new Date(second.created_at).getTime() - new Date(first.created_at).getTime();
+}
+
+function isAmlDocument(document: ClientDocumentListItem) {
+  const searchableText = normalizeDocumentText(
+    `${document.nazwa} ${document.opis || ""} ${document.sciezka}`
+  );
+
+  return [
+    "aml",
+    "formularz wstepny",
+    "oswiadczenie weryfikacji",
+    "ocena ryzyka",
+    "karta klienta biura rachunkowego",
+  ].some((phrase) => searchableText.includes(phrase));
+}
+
+function normalizeDocumentText(value: string) {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
 }
 
 function createDraft(client: Client): ClientDraft {
@@ -2362,6 +2431,52 @@ const documentsEmptyStyle: React.CSSProperties = {
   color: colors.muted,
   fontWeight: 700,
   textAlign: "center",
+};
+
+const documentsTabsStyle: React.CSSProperties = {
+  marginTop: "14px",
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "8px",
+};
+
+const documentsTabStyle: React.CSSProperties = {
+  border: `1px solid ${colors.border}`,
+  borderRadius: radius.button,
+  background: colors.white,
+  color: colors.text,
+  padding: "9px 12px",
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "8px",
+  fontWeight: 800,
+  cursor: "pointer",
+};
+
+const documentsTabActiveStyle: React.CSSProperties = {
+  ...documentsTabStyle,
+  background: colors.navy,
+  borderColor: colors.navy,
+  color: colors.white,
+};
+
+const documentsTabCountStyle: React.CSSProperties = {
+  minWidth: "24px",
+  height: "24px",
+  borderRadius: "999px",
+  background: colors.inputBackground,
+  color: colors.navy,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: "12px",
+  fontWeight: 900,
+};
+
+const documentsTabCountActiveStyle: React.CSSProperties = {
+  ...documentsTabCountStyle,
+  background: "rgba(255, 255, 255, 0.22)",
+  color: colors.white,
 };
 
 const documentsListStyle: React.CSSProperties = {

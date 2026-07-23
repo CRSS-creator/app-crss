@@ -18,7 +18,13 @@ import {
   type SettlementProgress,
 } from "@/lib/monthlySettlementsService";
 import { fetchTaxObligations, type TaxObligation } from "@/lib/taxObligationService";
-import { fetchTasks, fetchUserTimeEntriesForDay, type Task, type TimeEntry } from "@/lib/taskService";
+import {
+  createManualInternalTimeEntry,
+  fetchTasks,
+  fetchUserTimeEntriesForDay,
+  type Task,
+  type TimeEntry,
+} from "@/lib/taskService";
 import { fetchCrmLeads } from "@/lib/crmService";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -88,6 +94,7 @@ function DashboardContent({ role }: { role: UserRole }) {
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(() => new Date());
   const [timeDetailsOpen, setTimeDetailsOpen] = useState(false);
+  const [manualTimeOpen, setManualTimeOpen] = useState(false);
 
   useEffect(() => {
     let ignore = false;
@@ -171,6 +178,28 @@ function DashboardContent({ role }: { role: UserRole }) {
 
   const view = useMemo(() => buildDashboardView(data, role, now), [data, role, now]);
 
+  async function addManualTimeEntry(opis: string, totalSeconds: number) {
+    if (!data.userId) {
+      alert("Nie udało się ustalić użytkownika.");
+      return false;
+    }
+
+    const result = await createManualInternalTimeEntry(data.userId, opis, totalSeconds);
+
+    if (result.error || !result.data) {
+      console.error("Błąd dodawania czasu pracy:", result.error);
+      alert("Nie udało się dodać czasu pracy.");
+      return false;
+    }
+
+    setData((current) => ({
+      ...current,
+      todayTimeEntries: [result.data as TimeEntry, ...current.todayTimeEntries],
+    }));
+    setNow(new Date());
+    return true;
+  }
+
   return (
     <section style={contentStyle}>
       <header style={headerStyle}>
@@ -190,11 +219,22 @@ function DashboardContent({ role }: { role: UserRole }) {
           <div style={todayWorkMetaStyle}>
             {view.activeTimeEntriesCount > 0 ? `Aktywny licznik: ${view.activeTimeEntriesCount}` : "Brak aktywnego licznika"}
           </div>
+          <button type="button" style={todayWorkAddButtonStyle} onClick={() => setManualTimeOpen(true)}>
+            <span style={todayWorkAddIconStyle}>+</span>
+            Dodaj czas pracy
+          </button>
           <button type="button" style={todayWorkDetailsButtonStyle} onClick={() => setTimeDetailsOpen(true)}>
             Szczegóły
           </button>
         </div>
       </section>
+
+      {manualTimeOpen && (
+        <ManualTimeModal
+          onClose={() => setManualTimeOpen(false)}
+          onSave={addManualTimeEntry}
+        />
+      )}
 
       {timeDetailsOpen && (
         <TimeDetailsModal
@@ -473,6 +513,97 @@ type WorkTimeDetail = {
   note: string | null;
 };
 
+function ManualTimeModal({
+  onClose,
+  onSave,
+}: {
+  onClose: () => void;
+  onSave: (opis: string, totalSeconds: number) => Promise<boolean>;
+}) {
+  const [opis, setOpis] = useState("");
+  const [hours, setHours] = useState("");
+  const [minutes, setMinutes] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    const description = opis.trim();
+    const totalSeconds =
+      Math.max(0, Number(hours) || 0) * 3600 +
+      Math.max(0, Number(minutes) || 0) * 60;
+
+    if (!description) {
+      alert("Wpisz opis pracy.");
+      return;
+    }
+
+    if (totalSeconds <= 0) {
+      alert("Wpisz czas pracy.");
+      return;
+    }
+
+    setSaving(true);
+    const saved = await onSave(description, totalSeconds);
+    setSaving(false);
+
+    if (saved) onClose();
+  }
+
+  return (
+    <div style={modalOverlayStyle} onClick={onClose}>
+      <section style={manualTimeModalStyle} onClick={(event) => event.stopPropagation()}>
+        <header style={timeModalHeaderStyle}>
+          <div>
+            <p style={timeModalEyebrowStyle}>Ręczny czas pracy</p>
+            <h2 style={timeModalTitleStyle}>Dodaj czas pracy</h2>
+          </div>
+          <button type="button" style={closeButtonStyle} onClick={onClose}>
+            Zamknij
+          </button>
+        </header>
+
+        <div style={manualTimeFormStyle}>
+          <label style={manualTimeFieldStyle}>
+            <span style={manualTimeLabelStyle}>Opis pracy</span>
+            <input
+              style={manualTimeInputStyle}
+              value={opis}
+              onChange={(event) => setOpis(event.target.value)}
+              placeholder="np. przeglądanie maili"
+            />
+          </label>
+
+          <div style={manualTimeGridStyle}>
+            <label style={manualTimeFieldStyle}>
+              <span style={manualTimeLabelStyle}>Godziny</span>
+              <input
+                style={manualTimeInputStyle}
+                type="number"
+                min="0"
+                value={hours}
+                onChange={(event) => setHours(event.target.value)}
+              />
+            </label>
+            <label style={manualTimeFieldStyle}>
+              <span style={manualTimeLabelStyle}>Minuty</span>
+              <input
+                style={manualTimeInputStyle}
+                type="number"
+                min="0"
+                value={minutes}
+                onChange={(event) => setMinutes(event.target.value)}
+              />
+            </label>
+          </div>
+
+          <button type="button" style={manualTimeSaveButtonStyle} disabled={saving} onClick={save}>
+            {saving ? "Zapisywanie..." : "Zapisz czas pracy"}
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function TimeDetailsModal({
   activeEntries,
   entries,
@@ -514,7 +645,7 @@ function TimeDetailsModal({
         </section>
 
         <section style={timeModalSectionStyle}>
-          <h3 style={timeModalSectionTitleStyle}>Zadania z dzisiaj</h3>
+          <h3 style={timeModalSectionTitleStyle}>Czas z dzisiaj</h3>
           {entries.length === 0 ? (
             <EmptyState>Brak zapisanego czasu pracy na dzisiaj.</EmptyState>
           ) : (
@@ -752,6 +883,24 @@ const todayWorkDetailsButtonStyle: CSSProperties = {
   padding: "12px 16px",
 };
 
+const todayWorkAddButtonStyle: CSSProperties = {
+  alignItems: "center",
+  background: colors.red,
+  border: `1px solid ${colors.red}`,
+  borderRadius: radius.button,
+  color: colors.white,
+  cursor: "pointer",
+  display: "inline-flex",
+  gap: "8px",
+  fontWeight: 900,
+  padding: "12px 18px",
+};
+
+const todayWorkAddIconStyle: CSSProperties = {
+  fontSize: "20px",
+  lineHeight: 1,
+};
+
 const cardsGridStyle: CSSProperties = {
   display: "grid",
   gap: "18px",
@@ -934,6 +1083,12 @@ const timeModalStyle: CSSProperties = {
   width: "min(980px, 100%)",
 };
 
+const manualTimeModalStyle: CSSProperties = {
+  ...timeModalStyle,
+  maxWidth: "560px",
+  width: "min(560px, 100%)",
+};
+
 const timeModalHeaderStyle: CSSProperties = {
   alignItems: "flex-start",
   display: "flex",
@@ -978,6 +1133,51 @@ const closeButtonStyle: CSSProperties = {
   cursor: "pointer",
   fontWeight: 800,
   padding: "12px 16px",
+};
+
+const manualTimeFormStyle: CSSProperties = {
+  display: "grid",
+  gap: "16px",
+};
+
+const manualTimeGridStyle: CSSProperties = {
+  display: "grid",
+  gap: "12px",
+  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+};
+
+const manualTimeFieldStyle: CSSProperties = {
+  display: "grid",
+  gap: "8px",
+};
+
+const manualTimeLabelStyle: CSSProperties = {
+  color: colors.navy,
+  fontSize: "13px",
+  fontWeight: 900,
+  textTransform: "uppercase",
+};
+
+const manualTimeInputStyle: CSSProperties = {
+  background: colors.white,
+  border: `1px solid ${colors.border}`,
+  borderRadius: radius.input,
+  color: colors.text,
+  font: "inherit",
+  fontWeight: 700,
+  padding: "13px 14px",
+  width: "100%",
+};
+
+const manualTimeSaveButtonStyle: CSSProperties = {
+  background: colors.red,
+  border: `1px solid ${colors.red}`,
+  borderRadius: radius.button,
+  color: colors.white,
+  cursor: "pointer",
+  fontWeight: 900,
+  justifySelf: "start",
+  padding: "13px 18px",
 };
 
 const timeModalSectionStyle: CSSProperties = {

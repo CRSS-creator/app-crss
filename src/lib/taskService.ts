@@ -40,6 +40,7 @@ export type TimeEntry = {
   zadanie_id: string | null;
   zadanie_cykliczne_id: string | null;
   klient_id: string | null;
+  czy_wewnetrzne?: boolean | null;
   osoba_id: string;
   started_at: string;
   ended_at: string | null;
@@ -192,6 +193,27 @@ export async function fetchUserTimeEntriesForDay(userId: string, dayStartIso: st
     .lt("started_at", dayEndIso)
     .or(`ended_at.gte.${dayStartIso},ended_at.is.null`)
     .order("started_at", { ascending: false });
+}
+
+export async function createManualInternalTimeEntry(userId: string, opis: string, totalSeconds: number) {
+  const normalizedSeconds = Math.max(0, Math.floor(totalSeconds));
+  const endedAt = new Date();
+  const startedAt = new Date(endedAt.getTime() - normalizedSeconds * 1000);
+
+  return supabase
+    .from("czas_pracy")
+    .insert({
+      zadanie_id: null,
+      zadanie_cykliczne_id: null,
+      klient_id: null,
+      czy_wewnetrzne: true,
+      osoba_id: userId,
+      started_at: startedAt.toISOString(),
+      ended_at: endedAt.toISOString(),
+      opis: opis.trim(),
+    })
+    .select(TIME_ENTRY_SELECT)
+    .single<TimeEntry>();
 }
 
 export async function setTaskManualTime(taskId: string, userId: string, totalSeconds: number) {

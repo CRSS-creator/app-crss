@@ -200,7 +200,18 @@ export default function AmlRiskAssessmentPage() {
   );
 
   function update<K extends keyof AmlRiskAssessmentData>(key: K, value: AmlRiskAssessmentData[K]) {
-    setDraft((current) => ({ ...current, [key]: value }));
+    setDraft((current) => {
+      const next = { ...current, [key]: value } as AmlRiskAssessmentData;
+      if (key === "finalRiskLevel" || key === "assessmentDate") {
+        const calculatedNextUpdateDate = calculateNextUpdateDate(next.finalRiskLevel, next.assessmentDate);
+        if (calculatedNextUpdateDate) {
+          next.nextUpdateDate = calculatedNextUpdateDate;
+        } else if (key === "finalRiskLevel") {
+          next.nextUpdateDate = "";
+        }
+      }
+      return next;
+    });
   }
 
   function updateMap<K extends keyof Pick<AmlRiskAssessmentData, "dataSources" | "clientFactors" | "geographicFactors" | "industryFactors" | "channelFactors" | "pepSanctionsFactors" | "behavioralFactors" | "decisions">>(
@@ -246,6 +257,21 @@ function riskLevelDisplay(value: string) {
   if (value === "podwyzszone") return "podwyższone";
   if (value === "wysokie") return "wysokie";
   return "nie przypisano";
+}
+
+function calculateNextUpdateDate(riskLevel: AmlRiskAssessmentData["finalRiskLevel"], verificationDate: string) {
+  if (!verificationDate) return "";
+  if (riskLevel === "niskie" || riskLevel === "standardowe") return addYearsToDateInput(verificationDate, 2);
+  if (riskLevel === "podwyzszone") return addYearsToDateInput(verificationDate, 1);
+  return "";
+}
+
+function addYearsToDateInput(value: string, years: number) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return "";
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(year, month - 1, day, 12);
+  date.setFullYear(date.getFullYear() + years);
+  return date.toISOString().slice(0, 10);
 }
 
 function PublicShell({ children }: { children: ReactNode }) {

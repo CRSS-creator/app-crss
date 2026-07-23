@@ -528,10 +528,20 @@ function ManualTimeModal({
   const sortedClients = useMemo(() => [...clients].sort(compareClients), [clients]);
   const [scope, setScope] = useState<ManualTimeScope>("internal");
   const [clientId, setClientId] = useState("");
+  const [clientSearch, setClientSearch] = useState("");
+  const [clientDropdownOpen, setClientDropdownOpen] = useState(false);
   const [opis, setOpis] = useState("");
   const [hours, setHours] = useState("");
   const [minutes, setMinutes] = useState("");
   const [saving, setSaving] = useState(false);
+  const selectedClient = sortedClients.find((client) => client.id === clientId) || null;
+  const clientQuery = normalize(clientSearch);
+  const filteredClients = sortedClients
+    .filter((client) => {
+      if (!clientQuery) return true;
+      return normalize(`${client.nazwa || ""} ${client.nip || ""}`).includes(clientQuery);
+    })
+    .slice(0, 12);
 
   async function save() {
     const description = opis.trim();
@@ -584,6 +594,8 @@ function ManualTimeModal({
                 onClick={() => {
                   setScope("internal");
                   setClientId("");
+                  setClientSearch("");
+                  setClientDropdownOpen(false);
                 }}
               >
                 Czynności wewnętrzne
@@ -591,7 +603,10 @@ function ManualTimeModal({
               <button
                 type="button"
                 style={scope === "client" ? manualTimeScopeActiveStyle : manualTimeScopeButtonStyle}
-                onClick={() => setScope("client")}
+                onClick={() => {
+                  setScope("client");
+                  setClientDropdownOpen(true);
+                }}
               >
                 Konkretny klient
               </button>
@@ -599,21 +614,49 @@ function ManualTimeModal({
           </div>
 
           {scope === "client" ? (
-            <label style={manualTimeFieldStyle}>
+            <div style={manualTimeFieldStyle}>
               <span style={manualTimeLabelStyle}>Klient</span>
-              <select
-                style={manualTimeInputStyle}
-                value={clientId}
-                onChange={(event) => setClientId(event.target.value)}
-              >
-                <option value="">Wybierz klienta</option>
-                {sortedClients.map((client) => (
-                  <option key={client.id} value={client.id}>
-                    {client.nazwa || "Klient bez nazwy"}{client.nip ? ` · NIP ${client.nip}` : ""}
-                  </option>
-                ))}
-              </select>
-            </label>
+              <div style={manualClientPickerStyle}>
+                <input
+                  style={manualTimeInputStyle}
+                  value={clientSearch}
+                  onFocus={() => setClientDropdownOpen(true)}
+                  onBlur={() => window.setTimeout(() => setClientDropdownOpen(false), 120)}
+                  onChange={(event) => {
+                    setClientSearch(event.target.value);
+                    setClientId("");
+                    setClientDropdownOpen(true);
+                  }}
+                  placeholder={selectedClient ? formatClientOption(selectedClient) : "Wyszukaj klienta po nazwie lub NIP"}
+                />
+                {selectedClient ? (
+                  <div style={manualClientSelectedStyle}>{formatClientOption(selectedClient)}</div>
+                ) : null}
+                {clientDropdownOpen ? (
+                  <div style={manualClientDropdownStyle}>
+                    {filteredClients.length === 0 ? (
+                      <div style={manualClientEmptyStyle}>Brak pasujących klientów</div>
+                    ) : (
+                      filteredClients.map((client) => (
+                        <button
+                          key={client.id}
+                          type="button"
+                          style={manualClientOptionStyle}
+                          onClick={() => {
+                            setClientId(client.id);
+                            setClientSearch("");
+                            setClientDropdownOpen(false);
+                          }}
+                        >
+                          <strong>{client.nazwa || "Klient bez nazwy"}</strong>
+                          <span>{client.nip ? `NIP ${client.nip}` : "Brak NIP"}</span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                ) : null}
+              </div>
+            </div>
           ) : null}
 
           <label style={manualTimeFieldStyle}>
@@ -729,6 +772,10 @@ function TimeEntryRow({ entry, highlight = false }: { entry: WorkTimeDetail; hig
       <strong style={timeEntryDurationStyle}>{formatDuration(entry.durationSeconds)}</strong>
     </article>
   );
+}
+
+function formatClientOption(client: Client) {
+  return `${client.nazwa || "Klient bez nazwy"}${client.nip ? ` · NIP ${client.nip}` : ""}`;
 }
 
 function currentSettlementPeriod() {
@@ -1139,7 +1186,9 @@ const timeModalStyle: CSSProperties = {
 
 const manualTimeModalStyle: CSSProperties = {
   ...timeModalStyle,
+  background: colors.white,
   maxWidth: "560px",
+  overflow: "visible",
   width: "min(560px, 100%)",
 };
 
@@ -1234,6 +1283,55 @@ const manualTimeScopeActiveStyle: CSSProperties = {
   background: colors.navy,
   borderColor: colors.navy,
   color: colors.white,
+};
+
+const manualClientPickerStyle: CSSProperties = {
+  position: "relative",
+};
+
+const manualClientSelectedStyle: CSSProperties = {
+  background: "#e9eef7",
+  border: `1px solid ${colors.border}`,
+  borderRadius: radius.input,
+  color: colors.navy,
+  fontSize: "13px",
+  fontWeight: 800,
+  marginTop: "8px",
+  padding: "9px 11px",
+};
+
+const manualClientDropdownStyle: CSSProperties = {
+  background: colors.white,
+  border: `1px solid ${colors.border}`,
+  borderRadius: radius.input,
+  boxShadow: shadow.card,
+  display: "grid",
+  left: 0,
+  maxHeight: "250px",
+  overflowY: "auto",
+  padding: "6px",
+  position: "absolute",
+  right: 0,
+  top: "calc(100% + 6px)",
+  zIndex: 10,
+};
+
+const manualClientOptionStyle: CSSProperties = {
+  background: colors.white,
+  border: "none",
+  borderRadius: "10px",
+  color: colors.text,
+  cursor: "pointer",
+  display: "grid",
+  gap: "3px",
+  padding: "10px 12px",
+  textAlign: "left",
+};
+
+const manualClientEmptyStyle: CSSProperties = {
+  color: colors.muted,
+  fontWeight: 800,
+  padding: "12px",
 };
 
 const manualTimeInputStyle: CSSProperties = {

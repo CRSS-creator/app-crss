@@ -216,7 +216,7 @@ export async function POST(request: NextRequest) {
     kody_pkd: pkdCodes,
     updated_at: now.toISOString(),
   };
-  if (!isIndividualForm) {
+  if (!actualIndividualBusiness) {
     registerUpdate.beneficjenci_rzeczywisci = beneficialOwners;
   }
 

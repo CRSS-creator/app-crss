@@ -109,7 +109,7 @@ const colors = {
   muted: rgb(0.31, 0.38, 0.5),
   border: rgb(0.78, 0.84, 0.91),
   panel: rgb(0.97, 0.98, 1),
-  background: rgb(0.94, 0.96, 1),
+  background: rgb(1, 1, 1),
 };
 
 function drawPageBackground(page: PDFPage) {

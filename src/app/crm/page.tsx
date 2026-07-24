@@ -283,10 +283,10 @@ function CrmContent() {
             </div>
             <div style={statsKpiGridStyle}>
               <StatTile label="Skutecznosc" value={formatPercent(crmStats.successRate)} hint={`${crmStats.wonCount} wygranych / ${crmStats.closedCount} zamknietych`} />
-              <StatTile label="Sr. miesieczny MRR" value={formatMoney(crmStats.averageMonthlyWonMrr)} hint="Z wygranych szans w okresie" />
+              {statsPeriod !== "month" && <StatTile label="Sr. miesieczny MRR" value={formatMoney(crmStats.averageMonthlyWonMrr)} hint="Z wygranych szans w okresie" />}
               <StatTile label="Sr. MRR na szanse" value={formatMoney(crmStats.averageMrrPerLead)} hint={`${crmStats.totalCount} szans w okresie`} />
               <StatTile label="Potencjal aktywny" value={formatMoney(crmStats.activeMrr)} hint={`${crmStats.activeCount} otwartych szans`} />
-              <StatTile label="MRR wygrany" value={formatMoney(crmStats.wonMrr)} hint="Suma wygranych szans" />
+              <StatTile label="Miesieczny MRR wygrany" value={formatMoney(crmStats.wonMrr)} hint="Suma miesiecznych abonamentow z wygranych szans" />
               <StatTile label="MRR utracony" value={formatMoney(crmStats.lostMrr)} hint={`${crmStats.lostCount} przegranych szans`} />
               <StatTile label="Kadry w szansach" value={formatPercent(crmStats.payrollShare)} hint={`${crmStats.payrollCount} z ${crmStats.totalCount} szans`} />
               <StatTile label="Do follow-up" value={crmStats.followUpCount} hint="Otwarte z ustawiona data follow-up" />

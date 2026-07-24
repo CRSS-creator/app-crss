@@ -299,21 +299,23 @@ function CrmContent() {
                 <div key={row.stage} style={funnelRowStyle}>
                   <div style={funnelLabelStyle}>
                     <strong>{row.label}</strong>
-                    <span>{row.reachedCount}</span>
-                    <span>{row.dropCount}</span>
                   </div>
-                  <div style={funnelGraphicStyle}>
-                    <div style={funnelSideStyle}>
-                      <div style={{ ...funnelShapeStyle, ...funnelPassedShapeStyle, width: `${Math.max(row.reachedRate, row.reachedCount ? 8 : 0)}%` }}>
+                  <div style={funnelBarStyle}>
+                    {row.reachedCount > 0 && (
+                      <div style={{ ...funnelSegmentStyle, ...funnelPassedSegmentStyle, flexGrow: row.reachedCount }}>
                         {row.reachedCount || ""}
                       </div>
-                    </div>
-                    <div style={funnelCenterLineStyle} />
-                    <div style={funnelSideStyle}>
-                      <div style={{ ...funnelShapeStyle, ...funnelDroppedShapeStyle, width: `${Math.max(row.dropRate, row.dropCount ? 8 : 0)}%` }}>
+                    )}
+                    {row.dropCount > 0 && (
+                      <div style={{ ...funnelSegmentStyle, ...funnelDroppedSegmentStyle, flexGrow: row.dropCount }}>
                         {row.dropCount || ""}
                       </div>
-                    </div>
+                    )}
+                    {row.previousDropCount > 0 && (
+                      <div style={{ ...funnelSegmentStyle, ...funnelPreviousDropSegmentStyle, flexGrow: row.previousDropCount }}>
+                        {row.previousDropCount || ""}
+                      </div>
+                    )}
                   </div>
                   <span style={funnelPercentStyle}>{formatPercent(row.stepRate)}</span>
                 </div>
@@ -677,6 +679,7 @@ function buildCrmStats(leads: Lead[], period: CrmStatsPeriod) {
       ? []
       : previousReachedLeads.filter((lead) => !reachedLeads.some((reachedLead) => reachedLead.id === lead.id));
     const dropCount = dropLeads.length;
+    const previousDropCount = Math.max(0, totalCount - previousCount);
     const dropMrr = sumMrr(dropLeads);
     return {
       stage,
@@ -686,6 +689,7 @@ function buildCrmStats(leads: Lead[], period: CrmStatsPeriod) {
       reachedRate: totalCount ? Math.round((reachedCount / totalCount) * 100) : 0,
       stepRate: totalCount === 0 ? 0 : index === 0 ? 100 : previousCount ? Math.round((reachedCount / previousCount) * 100) : 0,
       dropCount,
+      previousDropCount,
       dropRate: previousCount ? Math.round((dropCount / previousCount) * 100) : 0,
       dropMrr,
       reachedMrr: sumMrr(reachedLeads),
@@ -807,12 +811,11 @@ const funnelTopRowStyle: React.CSSProperties = { display: "flex", justifyContent
 const funnelTitleStyle: React.CSSProperties = { color: colors.navy, fontSize: "16px" };
 const funnelRowStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "220px minmax(220px, 1fr) 56px", gap: "12px", alignItems: "center" };
 const funnelLabelStyle: React.CSSProperties = { display: "grid", gap: "4px", color: colors.text, fontSize: "13px", fontWeight: 750 };
-const funnelGraphicStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "1fr 2px 1fr", gap: "10px", alignItems: "center" };
-const funnelSideStyle: React.CSSProperties = { height: "34px", borderRadius: radius.badge, background: "#eef2f7", display: "flex", alignItems: "center", overflow: "hidden" };
-const funnelCenterLineStyle: React.CSSProperties = { width: "2px", height: "42px", borderRadius: "999px", background: colors.border };
-const funnelShapeStyle: React.CSSProperties = { height: "100%", color: colors.white, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: 900, transition: "width 180ms ease", minWidth: 0 };
-const funnelPassedShapeStyle: React.CSSProperties = { marginLeft: "auto", background: colors.navy, borderRadius: radius.badge };
-const funnelDroppedShapeStyle: React.CSSProperties = { marginRight: "auto", background: colors.red, borderRadius: radius.badge };
+const funnelBarStyle: React.CSSProperties = { height: "34px", borderRadius: radius.badge, background: "#eef2f7", display: "flex", alignItems: "stretch", overflow: "hidden" };
+const funnelSegmentStyle: React.CSSProperties = { flexBasis: 0, minWidth: 0, overflow: "hidden", color: colors.white, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: 900 };
+const funnelPassedSegmentStyle: React.CSSProperties = { background: colors.navy };
+const funnelDroppedSegmentStyle: React.CSSProperties = { background: colors.red };
+const funnelPreviousDropSegmentStyle: React.CSSProperties = { background: "#d8dee8", color: colors.navy };
 const funnelPercentStyle: React.CSSProperties = { color: colors.navy, fontWeight: 900, textAlign: "right", fontSize: "13px" };
 const tableHeaderStyle: React.CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "18px" };
 const sectionTitleStyle: React.CSSProperties = { margin: 0, color: colors.navy, fontSize: "24px" };

@@ -657,8 +657,11 @@ function buildCrmStats(leads: Lead[], period: CrmStatsPeriod) {
   const activeMrr = sumMrr(activeLeads);
   const payrollCount = periodLeads.filter((lead) => Boolean(lead.czy_kadry)).length;
   const followUpCount = activeLeads.filter((lead) => Boolean(lead.data_follow_up)).length;
+  let previousStageLeads = periodLeads;
   const reachedCounts = PIPELINE_STAGES.map((stage, index) => {
-    const reachedLeads = periodLeads.filter((lead) => didReachStage(lead, index));
+    const candidates = index === 0 ? periodLeads : previousStageLeads;
+    const reachedLeads = candidates.filter((lead) => didReachStage(lead, index));
+    previousStageLeads = reachedLeads;
     return {
       stage,
       reachedLeads,
@@ -680,7 +683,7 @@ function buildCrmStats(leads: Lead[], period: CrmStatsPeriod) {
       reachedCount,
       notReachedCount: Math.max(0, totalCount - reachedCount),
       reachedRate: totalCount ? Math.round((reachedCount / totalCount) * 100) : 0,
-      stepRate: index === 0 ? 100 : previousCount ? Math.round((reachedCount / previousCount) * 100) : 0,
+      stepRate: totalCount === 0 ? 0 : index === 0 ? 100 : previousCount ? Math.round((reachedCount / previousCount) * 100) : 0,
       dropCount,
       dropRate: previousCount ? Math.round((dropCount / previousCount) * 100) : 0,
       dropMrr,
@@ -746,7 +749,7 @@ function didReachStage(lead: Lead, stageIndex: number) {
     return Boolean(lead.data_wyslania_oferty);
   }
   if (stageIndex === 4) {
-    return isClosed;
+    return Boolean(lead.data_wyslania_oferty && isClosed);
   }
 
   return false;
@@ -792,8 +795,8 @@ const funnelGraphicStyle: React.CSSProperties = { display: "grid", gridTemplateC
 const funnelSideStyle: React.CSSProperties = { height: "34px", borderRadius: radius.badge, background: "#eef2f7", display: "flex", alignItems: "center", overflow: "hidden" };
 const funnelCenterLineStyle: React.CSSProperties = { width: "2px", height: "42px", borderRadius: "999px", background: colors.border };
 const funnelShapeStyle: React.CSSProperties = { height: "100%", color: colors.white, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: 900, transition: "width 180ms ease", minWidth: 0 };
-const funnelPassedShapeStyle: React.CSSProperties = { marginLeft: "auto", background: colors.navy, borderRadius: `${radius.badge} 4px 4px ${radius.badge}`, clipPath: "polygon(9% 0, 100% 0, 100% 100%, 9% 100%, 0 50%)" };
-const funnelDroppedShapeStyle: React.CSSProperties = { marginRight: "auto", background: colors.red, borderRadius: `4px ${radius.badge} ${radius.badge} 4px`, clipPath: "polygon(0 0, 91% 0, 100% 50%, 91% 100%, 0 100%)" };
+const funnelPassedShapeStyle: React.CSSProperties = { marginLeft: "auto", background: colors.navy, borderRadius: radius.badge };
+const funnelDroppedShapeStyle: React.CSSProperties = { marginRight: "auto", background: colors.red, borderRadius: radius.badge };
 const funnelPercentStyle: React.CSSProperties = { color: colors.navy, fontWeight: 900, textAlign: "right", fontSize: "13px" };
 const tableHeaderStyle: React.CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "18px" };
 const sectionTitleStyle: React.CSSProperties = { margin: 0, color: colors.navy, fontSize: "24px" };

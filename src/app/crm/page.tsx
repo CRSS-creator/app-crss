@@ -299,8 +299,8 @@ function CrmContent() {
                 <div key={row.stage} style={funnelRowStyle}>
                   <div style={funnelLabelStyle}>
                     <strong>{row.label}</strong>
-                    <span>{row.reachedCount} przeszło</span>
-                    <span>{row.dropCount} odpadło</span>
+                    <span>{row.reachedCount}</span>
+                    <span>{row.dropCount}</span>
                   </div>
                   <div style={funnelGraphicStyle}>
                     <div style={funnelSideStyle}>

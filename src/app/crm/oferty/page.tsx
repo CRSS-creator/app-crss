@@ -54,6 +54,7 @@ function CrmOffersContent() {
   const [leadCtaStatuses, setLeadCtaStatuses] = useState<Record<string, string>>({});
   const [offer, setOffer] = useState<CrmOffer | null>(null);
   const [events, setEvents] = useState<CrmOfferEvent[]>([]);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -267,8 +268,78 @@ function CrmOffersContent() {
     await loadOffer(selectedLead as Lead);
   }
 
+  function openLeadDetails(leadId: string) {
+    const lead = leads.find((item) => item.id === leadId) || null;
+    if (leadId !== selectedLeadId) {
+      setOffer(null);
+      setEvents([]);
+      setDraft(createOfferDraftFromLead(lead));
+    }
+    setSelectedLeadId(leadId);
+    setDetailsOpen(true);
+  }
+
   const offerUrl = offer ? createOfferUrl(offer.public_token) : "";
   const isLinkPublished = Boolean(offer && offer.status !== "draft" && offer.status !== "expired");
+  const detailsContent = !selectedLead ? (
+    <div style={emptyStyle}>Wybierz szansę, aby przygotować propozycję.</div>
+  ) : (
+    <>
+      <div style={toolbarStyle}>
+        <div>
+          <h2 style={sectionTitleStyle}>{selectedLead.nazwa || "Propozycja"}</h2>
+          <p style={metaStyle}>{offer ? statusLabel(offer.status) : "Nowy szkic"}</p>
+        </div>
+        <div style={actionsStyle}>
+          <button style={primaryButtonStyle} onClick={saveOffer} disabled={saving}>{saving ? "Zapisywanie..." : "Zapisz"}</button>
+          <button style={isLinkPublished ? disabledButtonStyle : secondaryButtonStyle} onClick={publishOffer} disabled={isLinkPublished}>{isLinkPublished ? "Opublikowano" : "Opublikuj link"}</button>
+          {offer && <button style={secondaryButtonStyle} onClick={() => navigator.clipboard.writeText(offerUrl)}>Kopiuj link</button>}
+          {offer && offer.status !== "draft" && offer.status !== "expired" && <button style={secondaryButtonStyle} onClick={() => window.open(offerUrl, "_blank", "noopener,noreferrer")}>Podgląd</button>}
+          {offer && offer.status !== "draft" && offer.status !== "expired" && <button style={dangerButtonStyle} onClick={invalidateOfferLink} disabled={expiring}>{expiring ? "Unieważnianie..." : "Unieważnij link"}</button>}
+        </div>
+      </div>
+
+      {offer?.pdf_url && <Analytics offer={offer} events={events} />}
+
+      <section style={uploadPanelStyle}>
+        <div>
+          <p style={panelEyebrowStyle}>PDF propozycji</p>
+          <h3 style={panelTitleStyle}>{offer?.pdf_file_name || "Wgraj dokument propozycji"}</h3>
+          <p style={panelTextStyle}>{offer?.pdf_file_size ? `${formatFileSize(offer.pdf_file_size)} · link gotowy do śledzenia` : "Po wgraniu PDF klient zobaczy propozycję na prywatnej stronie, a CRM zapisze otwarcia, pobrania i czas oglądania."}</p>
+          {offer?.pdf_url && (
+            <div style={pdfActionsStyle}>
+              <a style={linkStyle} href={offer.pdf_url} target="_blank" rel="noreferrer">Otwórz PDF</a>
+              <button style={dangerTextButtonStyle} type="button" onClick={deletePdf} disabled={removingPdf}>{removingPdf ? "Usuwanie..." : "Usuń PDF"}</button>
+            </div>
+          )}
+        </div>
+        <div style={uploadActionsStyle}>
+          <input ref={fileInputRef} type="file" accept="application/pdf" style={{ display: "none" }} onChange={handleFileChange} />
+          <button style={primaryButtonStyle} onClick={() => fileInputRef.current?.click()} disabled={uploading}>{uploading ? "Wgrywanie..." : "Wgraj PDF"}</button>
+        </div>
+      </section>
+
+      <section style={formStyle}>
+        <Field label="Tytuł"><input style={inputStyle} value={draft.tytul} onChange={(event) => updateDraft("tytul", event.target.value)} /></Field>
+        <Field label="Dla firmy"><input style={inputStyle} value={draft.przygotowana_dla} onChange={(event) => updateDraft("przygotowana_dla", event.target.value)} /></Field>
+        <Field label="Osoba kontaktowa"><input style={inputStyle} value={draft.osoba_kontaktowa} onChange={(event) => updateDraft("osoba_kontaktowa", event.target.value)} /></Field>
+        <Field label="Ważna do"><AppDateInput style={inputStyle} value={draft.wazna_do} onChange={(value) => updateDraft("wazna_do", value)} /></Field>
+      </section>
+
+      <section style={n8nPanelStyle}>
+        <div style={n8nHeaderStyle}>
+          <p style={panelEyebrowStyle}>Automatyczna wysyłka</p>
+          <button style={primaryButtonStyle} onClick={sendViaN8n} disabled={sending || offer?.status === "expired"}>{sending ? "Wysyłanie..." : "Wyślij maila"}</button>
+        </div>
+        <div style={formStyle}>
+          <Field label="Odbiorca"><input style={inputStyle} type="email" value={draft.email_recipient} onChange={(event) => updateDraft("email_recipient", event.target.value)} placeholder="mail klienta" /></Field>
+          <Field label="Temat maila"><input style={inputStyle} value={draft.email_subject} onChange={(event) => updateDraft("email_subject", event.target.value)} /></Field>
+        </div>
+        {offer?.status === "expired" && <p style={sentStyle}>Link jest unieważniony. Opublikuj link ponownie, żeby wrócić do wysyłki.</p>}
+        {offer?.email_sent_at && <p style={sentStyle}>Ostatnio wysłano maila: {formatDateTime(offer.email_sent_at)}</p>}
+      </section>
+    </>
+  );
 
   return (
     <>
@@ -280,80 +351,36 @@ function CrmOffersContent() {
         <button style={secondaryButtonStyle} onClick={() => { window.location.href = "/crm"; }}>Wróć do CRM</button>
       </section>
 
-      <section style={gridStyle}>
-        <aside style={sideStyle}>
+      <section style={offersListShellStyle}>
+        <div style={listHeaderStyle}>
           <h2 style={sectionTitleStyle}>Szanse</h2>
+        </div>
           {loading ? <div style={emptyStyle}>Ładowanie...</div> : leads.map((lead) => (
-            <button key={lead.id} style={lead.id === selectedLeadId ? activeLeadStyle : leadButtonStyle} onClick={() => setSelectedLeadId(lead.id)}>
-              <strong>{lead.nazwa || "Bez nazwy"}</strong>
-              <span>{lead.osoba_kontaktowa || lead.email || "Brak kontaktu"}</span>
-              <em style={ctaStatusStyle}>{leadCtaStatuses[lead.id] || "Sprawdzam status"}</em>
-            </button>
-          ))}
-        </aside>
-
-        <main style={mainStyle}>
-          {!selectedLead ? (
-            <div style={emptyStyle}>Wybierz szansę, aby przygotować propozycję.</div>
-          ) : (
-            <>
-              <div style={toolbarStyle}>
-                <div>
-                  <h2 style={sectionTitleStyle}>{selectedLead.nazwa || "Propozycja"}</h2>
-                  <p style={metaStyle}>{offer ? statusLabel(offer.status) : "Nowy szkic"}</p>
-                </div>
-                <div style={actionsStyle}>
-                  <button style={primaryButtonStyle} onClick={saveOffer} disabled={saving}>{saving ? "Zapisywanie..." : "Zapisz"}</button>
-                  <button style={isLinkPublished ? disabledButtonStyle : secondaryButtonStyle} onClick={publishOffer} disabled={isLinkPublished}>{isLinkPublished ? "Opublikowano" : "Opublikuj link"}</button>
-                  {offer && <button style={secondaryButtonStyle} onClick={() => navigator.clipboard.writeText(offerUrl)}>Kopiuj link</button>}
-                  {offer && offer.status !== "draft" && offer.status !== "expired" && <button style={secondaryButtonStyle} onClick={() => window.open(offerUrl, "_blank", "noopener,noreferrer")}>Podgląd</button>}
-                  {offer && offer.status !== "draft" && offer.status !== "expired" && <button style={dangerButtonStyle} onClick={invalidateOfferLink} disabled={expiring}>{expiring ? "Unieważnianie..." : "Unieważnij link"}</button>}
-                </div>
+            <article key={lead.id} style={lead.id === selectedLeadId ? activeOfferRowStyle : offerRowStyle}>
+              <div style={offerRowMainStyle}>
+                <strong>{lead.nazwa || "Bez nazwy"}</strong>
+                <span>{lead.osoba_kontaktowa || lead.email || "Brak kontaktu"}</span>
               </div>
-
-              {offer?.pdf_url && <Analytics offer={offer} events={events} />}
-
-              <section style={uploadPanelStyle}>
-                <div>
-                  <p style={panelEyebrowStyle}>PDF propozycji</p>
-                  <h3 style={panelTitleStyle}>{offer?.pdf_file_name || "Wgraj dokument propozycji"}</h3>
-                  <p style={panelTextStyle}>{offer?.pdf_file_size ? `${formatFileSize(offer.pdf_file_size)} · link gotowy do śledzenia` : "Po wgraniu PDF klient zobaczy propozycję na prywatnej stronie, a CRM zapisze otwarcia, pobrania i czas oglądania."}</p>
-                  {offer?.pdf_url && (
-                    <div style={pdfActionsStyle}>
-                      <a style={linkStyle} href={offer.pdf_url} target="_blank" rel="noreferrer">Otwórz PDF</a>
-                      <button style={dangerTextButtonStyle} type="button" onClick={deletePdf} disabled={removingPdf}>{removingPdf ? "Usuwanie..." : "Usuń PDF"}</button>
-                    </div>
-                  )}
-                </div>
-                <div style={uploadActionsStyle}>
-                  <input ref={fileInputRef} type="file" accept="application/pdf" style={{ display: "none" }} onChange={handleFileChange} />
-                  <button style={primaryButtonStyle} onClick={() => fileInputRef.current?.click()} disabled={uploading}>{uploading ? "Wgrywanie..." : "Wgraj PDF"}</button>
-                </div>
-              </section>
-
-              <section style={formStyle}>
-                <Field label="Tytuł"><input style={inputStyle} value={draft.tytul} onChange={(event) => updateDraft("tytul", event.target.value)} /></Field>
-                <Field label="Dla firmy"><input style={inputStyle} value={draft.przygotowana_dla} onChange={(event) => updateDraft("przygotowana_dla", event.target.value)} /></Field>
-                <Field label="Osoba kontaktowa"><input style={inputStyle} value={draft.osoba_kontaktowa} onChange={(event) => updateDraft("osoba_kontaktowa", event.target.value)} /></Field>
-                <Field label="Ważna do"><AppDateInput style={inputStyle} value={draft.wazna_do} onChange={(value) => updateDraft("wazna_do", value)} /></Field>
-              </section>
-
-              <section style={n8nPanelStyle}>
-                <div style={n8nHeaderStyle}>
-                  <p style={panelEyebrowStyle}>Automatyczna wysyłka</p>
-                  <button style={primaryButtonStyle} onClick={sendViaN8n} disabled={sending || offer?.status === "expired"}>{sending ? "Wysyłanie..." : "Wyślij maila"}</button>
-                </div>
-                <div style={formStyle}>
-                  <Field label="Odbiorca"><input style={inputStyle} type="email" value={draft.email_recipient} onChange={(event) => updateDraft("email_recipient", event.target.value)} placeholder="mail klienta" /></Field>
-                  <Field label="Temat maila"><input style={inputStyle} value={draft.email_subject} onChange={(event) => updateDraft("email_subject", event.target.value)} /></Field>
-                </div>
-                {offer?.status === "expired" && <p style={sentStyle}>Link jest unieważniony. Opublikuj link ponownie, żeby wrócić do wysyłki.</p>}
-                {offer?.email_sent_at && <p style={sentStyle}>Ostatnio wysłano maila: {formatDateTime(offer.email_sent_at)}</p>}
-              </section>
-            </>
-          )}
-        </main>
+              <em style={ctaStatusStyle}>{leadCtaStatuses[lead.id] || "Sprawdzam status"}</em>
+              <button style={secondaryButtonStyle} onClick={() => openLeadDetails(lead.id)}>Szczegóły</button>
+            </article>
+          ))}
       </section>
+
+      {detailsOpen && (
+        <div style={modalOverlayStyle} role="dialog" aria-modal="true" aria-labelledby="offer-details-title">
+          <div style={modalStyle}>
+            <div style={modalHeaderStyle}>
+              <div>
+                <p style={eyebrowStyle}>Szczegóły propozycji</p>
+                <h2 id="offer-details-title" style={modalTitleStyle}>{selectedLead?.nazwa || "Propozycja"}</h2>
+              </div>
+              <button style={secondaryButtonStyle} onClick={() => setDetailsOpen(false)}>Zamknij</button>
+            </div>
+            {detailsContent}
+          </div>
+        </div>
+      )}
     </>
   );
 }
@@ -495,12 +522,12 @@ function formatDateTime(value: string) {
 const headerStyle: React.CSSProperties = { marginBottom: "28px", display: "flex", justifyContent: "space-between", gap: "18px", alignItems: "flex-start" };
 const eyebrowStyle: React.CSSProperties = { margin: "0 0 8px", color: colors.red, fontWeight: 800 };
 const titleStyle: React.CSSProperties = { margin: 0, color: colors.navy, fontSize: "42px", lineHeight: 1.05 };
-const gridStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "300px minmax(0, 1fr)", gap: "22px", alignItems: "start" };
-const sideStyle: React.CSSProperties = { background: colors.card, border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: "18px", boxShadow: shadow.soft, display: "flex", flexDirection: "column", gap: "10px" };
-const mainStyle: React.CSSProperties = { background: colors.card, border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: "24px", boxShadow: shadow.soft };
+const offersListShellStyle: React.CSSProperties = { background: colors.card, border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: "18px", boxShadow: shadow.soft, display: "flex", flexDirection: "column", gap: "10px" };
+const listHeaderStyle: React.CSSProperties = { display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "center", marginBottom: "4px" };
 const sectionTitleStyle: React.CSSProperties = { margin: 0, color: colors.navy, fontSize: "22px" };
-const leadButtonStyle: React.CSSProperties = { display: "flex", flexDirection: "column", gap: "4px", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, padding: "12px", textAlign: "left", cursor: "pointer" };
-const activeLeadStyle: React.CSSProperties = { ...leadButtonStyle, borderColor: colors.navy, background: "#e8eef8" };
+const offerRowStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto auto", gap: "14px", alignItems: "center", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, padding: "12px 14px" };
+const activeOfferRowStyle: React.CSSProperties = { ...offerRowStyle, borderColor: colors.navy, background: "#f8fbff" };
+const offerRowMainStyle: React.CSSProperties = { minWidth: 0, display: "flex", flexDirection: "column", gap: "4px" };
 const ctaStatusStyle: React.CSSProperties = { display: "inline-flex", alignSelf: "flex-start", marginTop: "4px", borderRadius: radius.badge, padding: "5px 8px", background: "rgba(23, 59, 115, 0.10)", color: colors.navy, fontStyle: "normal", fontWeight: 800, fontSize: "12px" };
 const emptyStyle: React.CSSProperties = { border: `1px dashed ${colors.border}`, borderRadius: radius.input, padding: "18px", color: colors.muted, textAlign: "center", fontWeight: 700 };
 const toolbarStyle: React.CSSProperties = { display: "flex", justifyContent: "space-between", gap: "18px", alignItems: "flex-start", marginBottom: "18px" };
@@ -534,3 +561,7 @@ const inputStyle: React.CSSProperties = { width: "100%", border: `1px solid ${co
 const n8nPanelStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: "20px", marginTop: "18px", background: colors.white };
 const n8nHeaderStyle: React.CSSProperties = { display: "flex", justifyContent: "space-between", gap: "18px", alignItems: "center", marginBottom: "16px" };
 const sentStyle: React.CSSProperties = { margin: "14px 0 0", color: colors.muted, fontWeight: 800 };
+const modalOverlayStyle: React.CSSProperties = { position: "fixed", inset: 0, zIndex: 1000, background: "rgba(15, 23, 42, 0.42)", padding: "34px", display: "flex", alignItems: "center", justifyContent: "center" };
+const modalStyle: React.CSSProperties = { width: "min(1180px, 100%)", maxHeight: "calc(100vh - 68px)", overflow: "auto", background: colors.card, border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: "24px", boxShadow: shadow.card };
+const modalHeaderStyle: React.CSSProperties = { display: "flex", justifyContent: "space-between", gap: "18px", alignItems: "flex-start", marginBottom: "20px" };
+const modalTitleStyle: React.CSSProperties = { margin: 0, color: colors.navy, fontSize: "30px", lineHeight: 1.15 };

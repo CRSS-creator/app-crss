@@ -289,7 +289,6 @@ function CrmContent() {
               <StatTile label="Potencjał aktywny" value={formatMoney(crmStats.activeMrr)} hint={`${crmStats.activeCount} otwartych szans`} />
               <StatTile label="MRR utracony" value={formatMoney(crmStats.lostMrr)} hint={`${crmStats.lostCount} przegranych szans`} />
               <StatTile label="Kadry w szansach" value={formatPercent(crmStats.payrollShare)} hint={`${crmStats.payrollCount} z ${crmStats.totalCount} szans`} />
-              <StatTile label="Do follow-up" value={crmStats.followUpCount} hint="Otwarte z ustawioną datą follow-up" />
             </div>
             <div style={funnelStyle}>
               <div style={funnelTopRowStyle}>

@@ -300,7 +300,8 @@ function CrmContent() {
                 <div key={row.stage} style={funnelRowStyle}>
                   <div style={funnelLabelStyle}>
                     <strong>{row.label}</strong>
-                    <span>{row.reachedCount} szans - MRR {formatMoney(row.reachedMrr)}</span>
+                    <span>{row.reachedCount} przeszlo - mies. przychod {formatMoney(row.reachedMrr)}</span>
+                    <span>{row.notReachedCount} nie przeszlo - mies. przychod {formatMoney(row.notReachedMrr)}</span>
                   </div>
                   <div style={funnelBarTrackStyle}>
                     <div style={{ ...funnelBarReachedStyle, width: `${Math.max(row.reachedRate, row.reachedCount ? 4 : 0)}%` }}>{row.reachedCount || ""}</div>
@@ -657,6 +658,7 @@ function buildCrmStats(leads: Lead[], period: CrmStatsPeriod) {
       notReachedCount: Math.max(0, totalCount - reachedCount),
       reachedRate: totalCount ? Math.round((reachedCount / totalCount) * 100) : 0,
       reachedMrr: sumMrr(reachedLeads),
+      notReachedMrr: Math.max(0, totalMrr - sumMrr(reachedLeads)),
     };
   });
 

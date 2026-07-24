@@ -137,9 +137,10 @@ export async function POST(request: NextRequest) {
   const initialFormIndividual = actualIndividualBusiness
     ? await getLatestIndividualInitialFormData(auth.admin, client.id)
     : null;
-  const beneficialOwners = actualIndividualBusiness
+  const downloadedBeneficialOwners = actualIndividualBusiness
     ? buildJdgBeneficialOwners(ceidgCheck, client.nazwa, nip, now, initialFormIndividual)
     : extractCrbrBeneficialOwners(crbrCheck, now, krsCheck);
+  const beneficialOwners = mergeManualBeneficialOwnerEdits(register.beneficjenci_rzeczywisci, downloadedBeneficialOwners);
   const result = summarizeResult(checks);
   const visibleSourceChecks = checks.filter((check) => !(actualIndividualBusiness && check.source === "CRBR"));
   const registryDetails = buildRegistryDetails({
@@ -527,6 +528,73 @@ function normalizeTextForMatch(value: string) {
     .replace(/[^a-zA-Z0-9]+/g, " ")
     .trim()
     .toLowerCase();
+}
+
+function mergeManualBeneficialOwnerEdits(existingOwnersValue: unknown, downloadedOwners: Array<Record<string, unknown>>) {
+  const existingOwners = Array.isArray(existingOwnersValue)
+    ? existingOwnersValue as Array<Record<string, unknown>>
+    : [];
+  const manualOwnersByKey = new Map<string, Record<string, unknown>>();
+
+  existingOwners
+    .filter((owner) => Boolean(owner.manualnaAktualizacja))
+    .forEach((owner) => {
+      beneficialOwnerIdentityKeys(owner).forEach((key) => {
+        if (!manualOwnersByKey.has(key)) manualOwnersByKey.set(key, owner);
+      });
+    });
+
+  if (manualOwnersByKey.size === 0) return downloadedOwners;
+
+  return downloadedOwners.map((owner) => {
+    const manualOwner = beneficialOwnerIdentityKeys(owner)
+      .map((key) => manualOwnersByKey.get(key))
+      .find(Boolean);
+
+    if (!manualOwner) return owner;
+
+    return {
+      ...owner,
+      rola: manualOwner.rola ?? owner.rola,
+      reprezentant: manualOwner.reprezentant ?? owner.reprezentant,
+      udzialowiec: manualOwner.udzialowiec ?? owner.udzialowiec,
+      procentUdzialow: manualOwner.procentUdzialow ?? owner.procentUdzialow,
+      wartoscUdzialow: manualOwner.wartoscUdzialow ?? owner.wartoscUdzialow,
+      manualnaAktualizacja: manualOwner.manualnaAktualizacja,
+    };
+  });
+}
+
+function beneficialOwnerIdentityKeys(owner: Record<string, unknown>) {
+  const keys: string[] = [];
+  const pesel = String(owner.pesel || "").replace(/\D/g, "");
+  if (pesel) keys.push(`pesel:${pesel}`);
+
+  const name = normalizePersonName([
+    owner.pierwszeImie,
+    owner.kolejneImiona,
+    owner.nazwisko,
+  ].filter(Boolean).join(" ") || String(owner.label || ""));
+  const company = beneficialOwnerCompanyKey(owner);
+
+  if (name && company) keys.push(`name-company:${name}:${company}`);
+  if (name) keys.push(`name:${name}`);
+
+  return keys;
+}
+
+function beneficialOwnerCompanyKey(owner: Record<string, unknown>) {
+  const company = owner.spolka;
+  if (!company || typeof company !== "object") return "";
+
+  const record = company as Record<string, unknown>;
+  const krs = normalizeKrs(String(record.krs || ""));
+  if (krs) return `krs:${krs}`;
+
+  const nip = normalizeNip(record.nip);
+  if (nip) return `nip:${nip}`;
+
+  return normalizeTextForMatch(String(record.nazwa || ""));
 }
 async function verifyCrbr(nip: string, krs: string | null): Promise<OfficialCheck> {
   const queryId = createSourceQueryId("CRBR");

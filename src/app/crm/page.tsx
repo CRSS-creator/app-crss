@@ -307,7 +307,7 @@ function CrmContent() {
                     <div style={{ ...funnelBarReachedStyle, width: `${Math.max(row.reachedRate, row.reachedCount ? 4 : 0)}%` }}>{row.reachedCount || ""}</div>
                     <div style={{ ...funnelBarLostStyle, width: `${Math.max(0, 100 - row.reachedRate)}%` }}>{row.notReachedCount || ""}</div>
                   </div>
-                  <span style={funnelPercentStyle}>{formatPercent(row.reachedRate)}</span>
+                  <span style={funnelPercentStyle}>{formatPercent(row.stepRate)}</span>
                 </div>
               ))}
             </div>
@@ -648,15 +648,24 @@ function buildCrmStats(leads: Lead[], period: CrmStatsPeriod) {
   const activeMrr = sumMrr(activeLeads);
   const payrollCount = periodLeads.filter((lead) => Boolean(lead.czy_kadry)).length;
   const followUpCount = activeLeads.filter((lead) => Boolean(lead.data_follow_up)).length;
-  const stageRows = PIPELINE_STAGES.map((stage, index) => {
+  const reachedCounts = PIPELINE_STAGES.map((stage, index) => {
     const reachedLeads = periodLeads.filter((lead) => didReachStage(lead, index));
-    const reachedCount = reachedLeads.length;
+    return {
+      stage,
+      reachedLeads,
+      reachedCount: reachedLeads.length,
+    };
+  });
+  const stageRows = reachedCounts.map((stageResult, index) => {
+    const { stage, reachedLeads, reachedCount } = stageResult;
+    const previousCount = index === 0 ? totalCount : reachedCounts[index - 1]?.reachedCount || 0;
     return {
       stage,
       label: PIPELINE_LABELS[stage],
       reachedCount,
       notReachedCount: Math.max(0, totalCount - reachedCount),
       reachedRate: totalCount ? Math.round((reachedCount / totalCount) * 100) : 0,
+      stepRate: index === 0 ? 100 : previousCount ? Math.round((reachedCount / previousCount) * 100) : 0,
       reachedMrr: sumMrr(reachedLeads),
       notReachedMrr: Math.max(0, totalMrr - sumMrr(reachedLeads)),
     };

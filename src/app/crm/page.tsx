@@ -317,7 +317,7 @@ function CrmContent() {
                       </div>
                     )}
                   </div>
-                  <span style={funnelPercentStyle}>{formatPercent(row.stepRate)}</span>
+                  <span style={funnelPercentStyle}>{formatPercent(row.reachedRate)}</span>
                 </div>
               ))}
             </div>

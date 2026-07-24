@@ -283,7 +283,7 @@ function CrmContent() {
             </div>
             <div style={statsKpiGridStyle}>
               <StatTile label="Skuteczność" value={formatPercent(crmStats.successRate)} hint={`${crmStats.wonCount} wygranych / ${crmStats.closedCount} zamkniętych`} />
-              <StatTile label="Miesięczny MRR wygrany" value={formatMoney(crmStats.wonMrr)} hint="Suma miesięcznych abonamentów z wygranych szans" />
+              <StatTile label="MRR wygrany" value={formatMoney(crmStats.wonMrr)} hint="Suma miesięcznych abonamentów z wygranych szans" />
               <StatTile label="Skuteczność kwotowa" value={formatPercent(crmStats.valueSuccessRate)} hint={`${formatMoney(crmStats.wonMrr)} z ${formatMoney(crmStats.closedMrr)} zamkniętego MRR`} />
               {statsPeriod !== "month" && <StatTile label="Śr. miesięczny MRR" value={formatMoney(crmStats.averageMonthlyWonMrr)} hint={`Wygrany MRR / ${crmStats.averageMonthsCount} mies.`} />}
               <StatTile label="Śr. MRR na szansę" value={formatMoney(crmStats.averageMrrPerLead)} hint={`${crmStats.totalCount} szans w okresie`} />

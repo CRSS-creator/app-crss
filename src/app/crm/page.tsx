@@ -270,7 +270,7 @@ function CrmContent() {
             <h2 style={sectionTitleStyle}>Statystyki sprzedazy</h2>
             <p style={statsHintStyle}>Lejek, MRR i skutecznosc liczone dla wybranego zakresu szans.</p>
           </div>
-          <button type="button" style={secondaryButtonStyle} onClick={() => setStatsOpen((current) => !current)}>
+          <button type="button" style={primaryButtonStyle} onClick={() => setStatsOpen((current) => !current)}>
             {statsOpen ? "Ukryj statystyki" : "Statystyki"}
           </button>
         </div>

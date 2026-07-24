@@ -701,9 +701,26 @@ function isDateInRange(value: string | null, start: Date, end: Date) {
 }
 
 function didReachStage(lead: Lead, stageIndex: number) {
-  if (lead.status === "wygrana") return true;
+  if (stageIndex === 0) return true;
+
   const leadStageIndex = PIPELINE_STAGES.indexOf(lead.etap || "");
-  return leadStageIndex >= stageIndex;
+  const isClosed = lead.status === "wygrana" || lead.status === "przegrana" || lead.etap === "zamknieta";
+  if (leadStageIndex >= stageIndex) return true;
+
+  if (stageIndex === 1) {
+    return Boolean(lead.data_telefonu || lead.data_spotkania_online || lead.data_wyslania_oferty || lead.data_follow_up || isClosed);
+  }
+  if (stageIndex === 2) {
+    return Boolean(lead.data_spotkania_online || lead.data_wyslania_oferty || lead.data_follow_up || isClosed);
+  }
+  if (stageIndex === 3) {
+    return Boolean(lead.data_wyslania_oferty);
+  }
+  if (stageIndex === 4) {
+    return isClosed;
+  }
+
+  return false;
 }
 
 function sumMrr(leads: Lead[]) {

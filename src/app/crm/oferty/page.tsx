@@ -55,6 +55,7 @@ function CrmOffersContent() {
   const [offer, setOffer] = useState<CrmOffer | null>(null);
   const [events, setEvents] = useState<CrmOfferEvent[]>([]);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -63,6 +64,21 @@ function CrmOffersContent() {
   const [removingPdf, setRemovingPdf] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const selectedLead = useMemo(() => leads.find((lead) => lead.id === selectedLeadId) || null, [leads, selectedLeadId]);
+  const filteredLeads = useMemo(() => {
+    const query = normalizeSearch(searchQuery);
+    if (!query) return leads;
+
+    return leads.filter((lead) => {
+      const searchable = normalizeSearch([
+        lead.nazwa,
+        lead.osoba_kontaktowa,
+        lead.email,
+        leadCtaStatuses[lead.id],
+      ].filter(Boolean).join(" "));
+
+      return searchable.includes(query);
+    });
+  }, [leads, leadCtaStatuses, searchQuery]);
   const [draft, setDraft] = useState<OfferDraft>(() => createOfferDraftFromLead(null));
 
   useEffect(() => {
@@ -354,8 +370,16 @@ function CrmOffersContent() {
       <section style={offersListShellStyle}>
         <div style={listHeaderStyle}>
           <h2 style={sectionTitleStyle}>Szanse</h2>
+          <input
+            style={searchInputStyle}
+            type="search"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Szukaj propozycji..."
+            aria-label="Szukaj propozycji"
+          />
         </div>
-          {loading ? <div style={emptyStyle}>Ładowanie...</div> : leads.map((lead) => (
+          {loading ? <div style={emptyStyle}>Ładowanie...</div> : filteredLeads.length === 0 ? <div style={emptyStyle}>Brak propozycji dla wpisanej frazy.</div> : filteredLeads.map((lead) => (
             <article key={lead.id} style={lead.id === selectedLeadId ? activeOfferRowStyle : offerRowStyle}>
               <div style={offerRowMainStyle}>
                 <strong>{lead.nazwa || "Bez nazwy"}</strong>
@@ -519,12 +543,20 @@ function formatDateTime(value: string) {
   return new Intl.DateTimeFormat("pl-PL", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
 }
 
+function normalizeSearch(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
 const headerStyle: React.CSSProperties = { marginBottom: "28px", display: "flex", justifyContent: "space-between", gap: "18px", alignItems: "flex-start" };
 const eyebrowStyle: React.CSSProperties = { margin: "0 0 8px", color: colors.red, fontWeight: 800 };
 const titleStyle: React.CSSProperties = { margin: 0, color: colors.navy, fontSize: "42px", lineHeight: 1.05 };
 const offersListShellStyle: React.CSSProperties = { background: colors.card, border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: "18px", boxShadow: shadow.soft, display: "flex", flexDirection: "column", gap: "10px" };
-const listHeaderStyle: React.CSSProperties = { display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "center", marginBottom: "4px" };
+const listHeaderStyle: React.CSSProperties = { display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "center", marginBottom: "4px", flexWrap: "wrap" };
 const sectionTitleStyle: React.CSSProperties = { margin: 0, color: colors.navy, fontSize: "22px" };
+const searchInputStyle: React.CSSProperties = { width: "min(420px, 100%)", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, color: colors.text, padding: "12px 14px", fontWeight: 700 };
 const offerRowStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto auto", gap: "14px", alignItems: "center", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, padding: "12px 14px" };
 const activeOfferRowStyle: React.CSSProperties = { ...offerRowStyle, borderColor: colors.navy, background: "#f8fbff" };
 const offerRowMainStyle: React.CSSProperties = { minWidth: 0, display: "flex", flexDirection: "column", gap: "4px" };

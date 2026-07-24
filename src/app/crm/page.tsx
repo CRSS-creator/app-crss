@@ -92,7 +92,7 @@ type CrmTask = {
   termin: string | null;
 };
 
-type CrmStatsPeriod = "month" | "year";
+type CrmStatsPeriod = "all" | "month" | "year";
 
 const EMPTY_FILTER = "Wszystkie";
 const PIPELINE_STAGES = ["nowy_lead", "kontakt_proba_kontaktu", "rozmowa_online", "propozycja_wspolpracy_wyslana", "decyzja"];
@@ -142,7 +142,7 @@ function CrmContent() {
   const [searchQuery, setSearchQuery] = useState("");
   const [openedLeadFromUrl, setOpenedLeadFromUrl] = useState(false);
   const [statsOpen, setStatsOpen] = useState(false);
-  const [statsPeriod, setStatsPeriod] = useState<CrmStatsPeriod>("month");
+  const [statsPeriod, setStatsPeriod] = useState<CrmStatsPeriod>("all");
 
   useEffect(() => {
     loadInitialData();
@@ -268,7 +268,7 @@ function CrmContent() {
         <div style={statsHeaderStyle}>
           <div>
             <h2 style={sectionTitleStyle}>Statystyki sprzedazy</h2>
-            <p style={statsHintStyle}>Lejek, MRR i skutecznosc liczone dla szans utworzonych w wybranym okresie.</p>
+            <p style={statsHintStyle}>Lejek, MRR i skutecznosc liczone dla wybranego zakresu szans.</p>
           </div>
           <button type="button" style={secondaryButtonStyle} onClick={() => setStatsOpen((current) => !current)}>
             {statsOpen ? "Ukryj statystyki" : "Statystyki"}
@@ -277,6 +277,7 @@ function CrmContent() {
         {statsOpen && (
           <div style={statsPanelStyle}>
             <div style={statsTabsStyle}>
+              <button type="button" style={statsTabStyle(statsPeriod === "all")} onClick={() => setStatsPeriod("all")}>Wszystkie</button>
               <button type="button" style={statsTabStyle(statsPeriod === "month")} onClick={() => setStatsPeriod("month")}>Ten miesiac</button>
               <button type="button" style={statsTabStyle(statsPeriod === "year")} onClick={() => setStatsPeriod("year")}>Ten rok</button>
             </div>
@@ -634,7 +635,7 @@ function StatTile({ label, value, hint }: { label: string; value: string | numbe
 
 function buildCrmStats(leads: Lead[], period: CrmStatsPeriod) {
   const { start, end, label, months } = currentStatsRange(period);
-  const periodLeads = leads.filter((lead) => isDateInRange(lead.created_at, start, end));
+  const periodLeads = start && end ? leads.filter((lead) => isDateInRange(lead.created_at, start, end)) : leads;
   const totalCount = periodLeads.length;
   const activeLeads = periodLeads.filter((lead) => lead.status === "otwarta");
   const wonLeads = periodLeads.filter((lead) => lead.status === "wygrana");
@@ -681,6 +682,9 @@ function buildCrmStats(leads: Lead[], period: CrmStatsPeriod) {
 
 function currentStatsRange(period: CrmStatsPeriod) {
   const now = new Date();
+  if (period === "all") {
+    return { start: null, end: null, months: 1, label: "Wszystkie szanse" };
+  }
   const start = period === "month" ? new Date(now.getFullYear(), now.getMonth(), 1) : new Date(now.getFullYear(), 0, 1);
   const end = period === "month" ? new Date(now.getFullYear(), now.getMonth() + 1, 1) : new Date(now.getFullYear() + 1, 0, 1);
   const months = period === "month" ? 1 : now.getMonth() + 1;

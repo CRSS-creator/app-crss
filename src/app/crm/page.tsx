@@ -240,8 +240,7 @@ function CrmContent() {
     const matchesSearch = !normalizedSearch || searchableText.includes(normalizedSearch);
     return matchesSearch && matchesStage && matchesStatus && matchesKadry;
   });
-  const activeLeads = leads.filter((lead) => lead.status === "otwarta");
-  const totalMrr = activeLeads.reduce((sum, lead) => sum + Number(lead.szacowany_mrr || 0), 0);
+  const currentMonthStats = buildCrmStats(leads, "month");
   const crmStats = buildCrmStats(leads, statsPeriod);
 
   return (
@@ -258,17 +257,17 @@ function CrmContent() {
       </section>
 
       <section style={summaryGridStyle}>
-        <SummaryCard label="Aktywne szanse" value={activeLeads.length} />
-        <SummaryCard label="Szacowany MRR" value={`${totalMrr.toLocaleString("pl-PL")} zł`} />
-        <SummaryCard label="Wygrane" value={leads.filter((lead) => lead.status === "wygrana").length} />
-        <SummaryCard label="Przegrane" value={leads.filter((lead) => lead.status === "przegrana").length} />
+        <SummaryCard label="Aktywne szanse" value={currentMonthStats.activeCount} />
+        <SummaryCard label="Szacowany MRR" value={`${currentMonthStats.activeMrr.toLocaleString("pl-PL")} zł`} />
+        <SummaryCard label="Wygrane" value={currentMonthStats.wonCount} />
+        <SummaryCard label="Przegrane" value={currentMonthStats.lostCount} />
       </section>
 
       <section style={cardStyle}>
         <div style={statsHeaderStyle}>
           <div>
-            <h2 style={sectionTitleStyle}>Statystyki sprzedazy</h2>
-            <p style={statsHintStyle}>Lejek, MRR i skutecznosc liczone dla wybranego zakresu szans.</p>
+            <h2 style={sectionTitleStyle}>Statystyki sprzedaży</h2>
+            <p style={statsHintStyle}>Lejek, MRR i skuteczność liczone dla wybranego zakresu szans.</p>
           </div>
           <button type="button" style={primaryButtonStyle} onClick={() => setStatsOpen((current) => !current)}>
             {statsOpen ? "Ukryj statystyki" : "Statystyki"}

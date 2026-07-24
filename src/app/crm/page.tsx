@@ -278,18 +278,18 @@ function CrmContent() {
           <div style={statsPanelStyle}>
             <div style={statsTabsStyle}>
               <button type="button" style={statsTabStyle(statsPeriod === "all")} onClick={() => setStatsPeriod("all")}>Wszystkie</button>
-              <button type="button" style={statsTabStyle(statsPeriod === "month")} onClick={() => setStatsPeriod("month")}>Ten miesiac</button>
+              <button type="button" style={statsTabStyle(statsPeriod === "month")} onClick={() => setStatsPeriod("month")}>Ten miesiąc</button>
               <button type="button" style={statsTabStyle(statsPeriod === "year")} onClick={() => setStatsPeriod("year")}>Ten rok</button>
             </div>
             <div style={statsKpiGridStyle}>
-              <StatTile label="Skutecznosc" value={formatPercent(crmStats.successRate)} hint={`${crmStats.wonCount} wygranych / ${crmStats.closedCount} zamknietych`} />
-              {statsPeriod !== "month" && <StatTile label="Sr. miesieczny MRR" value={formatMoney(crmStats.averageMonthlyWonMrr)} hint="Z wygranych szans w okresie" />}
-              <StatTile label="Sr. MRR na szanse" value={formatMoney(crmStats.averageMrrPerLead)} hint={`${crmStats.totalCount} szans w okresie`} />
-              <StatTile label="Potencjal aktywny" value={formatMoney(crmStats.activeMrr)} hint={`${crmStats.activeCount} otwartych szans`} />
-              <StatTile label="Miesieczny MRR wygrany" value={formatMoney(crmStats.wonMrr)} hint="Suma miesiecznych abonamentow z wygranych szans" />
+              <StatTile label="Skuteczność" value={formatPercent(crmStats.successRate)} hint={`${crmStats.wonCount} wygranych / ${crmStats.closedCount} zamkniętych`} />
+              {statsPeriod !== "month" && <StatTile label="Śr. miesięczny MRR" value={formatMoney(crmStats.averageMonthlyWonMrr)} hint={`Wygrany MRR / ${crmStats.averageMonthsCount} mies.`} />}
+              <StatTile label="Śr. MRR na szansę" value={formatMoney(crmStats.averageMrrPerLead)} hint={`${crmStats.totalCount} szans w okresie`} />
+              <StatTile label="Potencjał aktywny" value={formatMoney(crmStats.activeMrr)} hint={`${crmStats.activeCount} otwartych szans`} />
+              <StatTile label="Miesięczny MRR wygrany" value={formatMoney(crmStats.wonMrr)} hint="Suma miesięcznych abonamentów z wygranych szans" />
               <StatTile label="MRR utracony" value={formatMoney(crmStats.lostMrr)} hint={`${crmStats.lostCount} przegranych szans`} />
               <StatTile label="Kadry w szansach" value={formatPercent(crmStats.payrollShare)} hint={`${crmStats.payrollCount} z ${crmStats.totalCount} szans`} />
-              <StatTile label="Do follow-up" value={crmStats.followUpCount} hint="Otwarte z ustawiona data follow-up" />
+              <StatTile label="Do follow-up" value={crmStats.followUpCount} hint="Otwarte z ustawioną datą follow-up" />
             </div>
             <div style={funnelStyle}>
               <div style={funnelTopRowStyle}>
@@ -300,8 +300,8 @@ function CrmContent() {
                 <div key={row.stage} style={funnelRowStyle}>
                   <div style={funnelLabelStyle}>
                     <strong>{row.label}</strong>
-                    <span>{row.reachedCount} przeszlo - mies. przychod {formatMoney(row.reachedMrr)}</span>
-                    <span>{row.dropCount} odpadlo - mies. przychod {formatMoney(row.dropMrr)}</span>
+                    <span>{row.reachedCount} przeszło - mies. przychód {formatMoney(row.reachedMrr)}</span>
+                    <span>{row.dropCount} odpadło - mies. przychód {formatMoney(row.dropMrr)}</span>
                   </div>
                   <div style={funnelGraphicStyle}>
                     <div style={funnelSideStyle}>
@@ -644,7 +644,7 @@ function StatTile({ label, value, hint }: { label: string; value: string | numbe
 }
 
 function buildCrmStats(leads: Lead[], period: CrmStatsPeriod) {
-  const { start, end, label, months } = currentStatsRange(period);
+  const { start, end, label } = currentStatsRange(period);
   const periodLeads = start && end ? leads.filter((lead) => isDateInRange(lead.created_at, start, end)) : leads;
   const totalCount = periodLeads.length;
   const activeLeads = periodLeads.filter((lead) => lead.status === "otwarta");
@@ -657,6 +657,7 @@ function buildCrmStats(leads: Lead[], period: CrmStatsPeriod) {
   const activeMrr = sumMrr(activeLeads);
   const payrollCount = periodLeads.filter((lead) => Boolean(lead.czy_kadry)).length;
   const followUpCount = activeLeads.filter((lead) => Boolean(lead.data_follow_up)).length;
+  const averageMonthsCount = countMonthsFromFirstLead(periodLeads);
   let previousStageLeads = periodLeads;
   const reachedCounts = PIPELINE_STAGES.map((stage, index) => {
     const candidates = index === 0 ? periodLeads : previousStageLeads;
@@ -699,7 +700,8 @@ function buildCrmStats(leads: Lead[], period: CrmStatsPeriod) {
     lostCount: lostLeads.length,
     closedCount: closedLeads.length,
     successRate: closedLeads.length ? Math.round((wonLeads.length / closedLeads.length) * 100) : 0,
-    averageMonthlyWonMrr: months ? wonMrr / months : 0,
+    averageMonthlyWonMrr: averageMonthsCount ? wonMrr / averageMonthsCount : 0,
+    averageMonthsCount,
     averageMrrPerLead: totalCount ? totalMrr / totalCount : 0,
     activeMrr,
     wonMrr,
@@ -715,15 +717,27 @@ function buildCrmStats(leads: Lead[], period: CrmStatsPeriod) {
 function currentStatsRange(period: CrmStatsPeriod) {
   const now = new Date();
   if (period === "all") {
-    return { start: null, end: null, months: 1, label: "Wszystkie szanse" };
+    return { start: null, end: null, label: "Wszystkie szanse" };
   }
   const start = period === "month" ? new Date(now.getFullYear(), now.getMonth(), 1) : new Date(now.getFullYear(), 0, 1);
   const end = period === "month" ? new Date(now.getFullYear(), now.getMonth() + 1, 1) : new Date(now.getFullYear() + 1, 0, 1);
-  const months = period === "month" ? 1 : now.getMonth() + 1;
   const label = period === "month"
-    ? `Ten miesiac: ${start.toLocaleDateString("pl-PL", { month: "long", year: "numeric" })}`
+    ? `Ten miesiąc: ${start.toLocaleDateString("pl-PL", { month: "long", year: "numeric" })}`
     : `Ten rok: ${start.getFullYear()}`;
-  return { start, end, months, label };
+  return { start, end, label };
+}
+
+function countMonthsFromFirstLead(leads: Lead[]) {
+  const validDates = leads
+    .map((lead) => lead.created_at ? new Date(lead.created_at) : null)
+    .filter((date): date is Date => date instanceof Date && !Number.isNaN(date.getTime()));
+  if (validDates.length === 0) return 0;
+
+  const firstDate = validDates.reduce((earliest, date) => date < earliest ? date : earliest, validDates[0]);
+  const now = new Date();
+  const startMonth = new Date(firstDate.getFullYear(), firstDate.getMonth(), 1);
+  const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  return Math.max(1, (currentMonth.getFullYear() - startMonth.getFullYear()) * 12 + currentMonth.getMonth() - startMonth.getMonth() + 1);
 }
 
 function isDateInRange(value: string | null, start: Date, end: Date) {
@@ -760,7 +774,7 @@ function sumMrr(leads: Lead[]) {
 }
 
 function formatMoney(value: number) {
-  return `${Math.round(value).toLocaleString("pl-PL")} zl`;
+  return `${Math.round(value).toLocaleString("pl-PL")} zł`;
 }
 
 function formatPercent(value: number) {

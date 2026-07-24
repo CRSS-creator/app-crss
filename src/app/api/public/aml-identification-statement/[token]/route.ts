@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { buildAmlIdentificationStatementPdf } from "@/lib/amlIdentificationStatementPdf";
 import { validateAmlIdentificationStatementData, type AmlIdentificationStatementData } from "@/lib/amlIdentificationStatementTypes";
+import { completeOnboardingAmlIfReady } from "@/lib/server/onboardingAmlStatus";
 
 export const runtime = "nodejs";
 
@@ -212,6 +213,8 @@ async function saveStatement(request: NextRequest, context: RouteContext) {
     },
     created_by: null,
   });
+
+  await completeOnboardingAmlIfReady(admin, client.id);
 
   return NextResponse.json({ ok: true });
 }

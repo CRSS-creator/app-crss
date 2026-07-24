@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { resolveAmlInitialFormType } from "@/lib/amlInitialFormTypes";
+import { markOnboardingAmlInProgress } from "@/lib/server/onboardingAmlStatus";
 
 export const runtime = "nodejs";
 
@@ -186,6 +187,7 @@ export async function POST(request: NextRequest) {
   if (!register) {
     return NextResponse.json({ error: "Nie udało się przygotować rejestru AML klienta." }, { status: 500 });
   }
+  await markOnboardingAmlInProgress(auth.admin, clientRecord.id, auth.requesterId);
 
   const { data: existingForm } = await auth.admin
     .from("aml_formularze_wstepne")

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { completeOnboardingAmlIfReady, markOnboardingAmlInProgress } from "@/lib/server/onboardingAmlStatus";
 
 export const runtime = "nodejs";
 
@@ -48,6 +49,7 @@ export async function POST(request: NextRequest) {
     return null;
   });
   if (!register) return NextResponse.json({ error: "Nie udało się przygotować rejestru AML klienta." }, { status: 500 });
+  await markOnboardingAmlInProgress(admin, client.id, requesterId);
 
   const originalFileName = file.name || "oswiadczenie-weryfikacji-aml.pdf";
   const storagePath = `${client.id}/aml-oswiadczenie-weryfikacji-archiwalne-${Date.now()}-${sanitizeFileName(originalFileName)}`;
@@ -121,6 +123,8 @@ export async function POST(request: NextRequest) {
     },
     created_by: requesterId,
   });
+
+  await completeOnboardingAmlIfReady(admin, client.id, requesterId);
 
   return NextResponse.json({ statement: statementRecord });
 }

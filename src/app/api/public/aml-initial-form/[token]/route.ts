@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { buildAmlInitialFormPdf } from "@/lib/amlInitialFormPdf";
 import { resolveAmlInitialFormType, validateAmlInitialFormData, type AmlInitialFormData } from "@/lib/amlInitialFormTypes";
+import { completeOnboardingAmlIfReady } from "@/lib/server/onboardingAmlStatus";
 
 export const runtime = "nodejs";
 
@@ -244,6 +245,8 @@ async function saveInitialForm(request: NextRequest, context: RouteContext) {
     },
     created_by: null,
   });
+
+  await completeOnboardingAmlIfReady(admin, client.id);
 
   if (!client || !documentRecord) {
     return NextResponse.json({ error: "Nie udało się przygotować danych powiadomienia AML." }, { status: 500 });

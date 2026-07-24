@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { buildAmlRiskAssessmentPdf } from "@/lib/amlRiskAssessmentPdf";
 import { validateAmlRiskAssessmentData, type AmlRiskAssessmentData } from "@/lib/amlRiskAssessmentTypes";
+import { completeOnboardingAmlIfReady } from "@/lib/server/onboardingAmlStatus";
 
 export const runtime = "nodejs";
 
@@ -220,6 +221,8 @@ async function saveRiskAssessment(request: NextRequest, context: RouteContext) {
     },
     created_by: null,
   });
+
+  await completeOnboardingAmlIfReady(admin, client.id);
 
   return NextResponse.json({ ok: true });
 }

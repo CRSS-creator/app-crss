@@ -5,6 +5,7 @@ import path from "node:path";
 import { PDFDocument, PDFFont, PDFPage, rgb } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import { resolveAmlInitialFormType } from "@/lib/amlInitialFormTypes";
+import { completeOnboardingAmlIfReady, markOnboardingAmlInProgress } from "@/lib/server/onboardingAmlStatus";
 
 export const runtime = "nodejs";
 
@@ -68,6 +69,7 @@ export async function POST(request: NextRequest) {
   }
 
   const register = await ensureAmlRegister(auth.admin, client.id);
+  await markOnboardingAmlInProgress(auth.admin, client.id, auth.requesterId);
   const checks: OfficialCheck[] = [];
   const isDeclaredIndividualForm = resolveAmlInitialFormType(client.forma_prawna) === "individual";
   const startsAsIndividualBusiness = isDeclaredIndividualForm && !looksLikeLegalEntity(client.nazwa, client.forma_prawna);
@@ -247,6 +249,8 @@ export async function POST(request: NextRequest) {
     },
     created_by: auth.requesterId,
   });
+
+  await completeOnboardingAmlIfReady(auth.admin, client.id, auth.requesterId);
 
   return NextResponse.json({ ok: true, verification });
 }

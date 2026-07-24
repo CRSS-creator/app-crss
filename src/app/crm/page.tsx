@@ -92,6 +92,8 @@ type CrmTask = {
   termin: string | null;
 };
 
+type CrmStatsPeriod = "month" | "year";
+
 const EMPTY_FILTER = "Wszystkie";
 const PIPELINE_STAGES = ["nowy_lead", "kontakt_proba_kontaktu", "rozmowa_online", "propozycja_wspolpracy_wyslana", "decyzja"];
 const PIPELINE_LABELS: Record<string, string> = {
@@ -139,6 +141,8 @@ function CrmContent() {
   const [kadryFilter, setKadryFilter] = useState(EMPTY_FILTER);
   const [searchQuery, setSearchQuery] = useState("");
   const [openedLeadFromUrl, setOpenedLeadFromUrl] = useState(false);
+  const [statsOpen, setStatsOpen] = useState(false);
+  const [statsPeriod, setStatsPeriod] = useState<CrmStatsPeriod>("month");
 
   useEffect(() => {
     loadInitialData();
@@ -238,6 +242,7 @@ function CrmContent() {
   });
   const activeLeads = leads.filter((lead) => lead.status === "otwarta");
   const totalMrr = activeLeads.reduce((sum, lead) => sum + Number(lead.szacowany_mrr || 0), 0);
+  const crmStats = buildCrmStats(leads, statsPeriod);
 
   return (
     <>
@@ -257,6 +262,55 @@ function CrmContent() {
         <SummaryCard label="Szacowany MRR" value={`${totalMrr.toLocaleString("pl-PL")} zł`} />
         <SummaryCard label="Wygrane" value={leads.filter((lead) => lead.status === "wygrana").length} />
         <SummaryCard label="Przegrane" value={leads.filter((lead) => lead.status === "przegrana").length} />
+      </section>
+
+      <section style={cardStyle}>
+        <div style={statsHeaderStyle}>
+          <div>
+            <h2 style={sectionTitleStyle}>Statystyki sprzedazy</h2>
+            <p style={statsHintStyle}>Lejek, MRR i skutecznosc liczone dla szans utworzonych w wybranym okresie.</p>
+          </div>
+          <button type="button" style={secondaryButtonStyle} onClick={() => setStatsOpen((current) => !current)}>
+            {statsOpen ? "Ukryj statystyki" : "Statystyki"}
+          </button>
+        </div>
+        {statsOpen && (
+          <div style={statsPanelStyle}>
+            <div style={statsTabsStyle}>
+              <button type="button" style={statsTabStyle(statsPeriod === "month")} onClick={() => setStatsPeriod("month")}>Ten miesiac</button>
+              <button type="button" style={statsTabStyle(statsPeriod === "year")} onClick={() => setStatsPeriod("year")}>Ten rok</button>
+            </div>
+            <div style={statsKpiGridStyle}>
+              <StatTile label="Skutecznosc" value={formatPercent(crmStats.successRate)} hint={`${crmStats.wonCount} wygranych / ${crmStats.closedCount} zamknietych`} />
+              <StatTile label="Sr. miesieczny MRR" value={formatMoney(crmStats.averageMonthlyWonMrr)} hint="Z wygranych szans w okresie" />
+              <StatTile label="Sr. MRR na szanse" value={formatMoney(crmStats.averageMrrPerLead)} hint={`${crmStats.totalCount} szans w okresie`} />
+              <StatTile label="Potencjal aktywny" value={formatMoney(crmStats.activeMrr)} hint={`${crmStats.activeCount} otwartych szans`} />
+              <StatTile label="MRR wygrany" value={formatMoney(crmStats.wonMrr)} hint="Suma wygranych szans" />
+              <StatTile label="MRR utracony" value={formatMoney(crmStats.lostMrr)} hint={`${crmStats.lostCount} przegranych szans`} />
+              <StatTile label="Kadry w szansach" value={formatPercent(crmStats.payrollShare)} hint={`${crmStats.payrollCount} z ${crmStats.totalCount} szans`} />
+              <StatTile label="Do follow-up" value={crmStats.followUpCount} hint="Otwarte z ustawiona data follow-up" />
+            </div>
+            <div style={funnelStyle}>
+              <div style={funnelTopRowStyle}>
+                <strong style={funnelTitleStyle}>Przechodzenie przez etapy</strong>
+                <span style={statsHintStyle}>{crmStats.periodLabel}</span>
+              </div>
+              {crmStats.stageRows.map((row) => (
+                <div key={row.stage} style={funnelRowStyle}>
+                  <div style={funnelLabelStyle}>
+                    <strong>{row.label}</strong>
+                    <span>{row.reachedCount} szans - MRR {formatMoney(row.reachedMrr)}</span>
+                  </div>
+                  <div style={funnelBarTrackStyle}>
+                    <div style={{ ...funnelBarReachedStyle, width: `${Math.max(row.reachedRate, row.reachedCount ? 4 : 0)}%` }}>{row.reachedCount || ""}</div>
+                    <div style={{ ...funnelBarLostStyle, width: `${Math.max(0, 100 - row.reachedRate)}%` }}>{row.notReachedCount || ""}</div>
+                  </div>
+                  <span style={funnelPercentStyle}>{formatPercent(row.reachedRate)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </section>
 
       <section style={cardStyle}>
@@ -574,6 +628,91 @@ function EditableTextarea({ label, value, onChange, rows = 4 }: { label: string;
 function Th({ children }: { children: React.ReactNode }) { return <th style={thStyle}>{children}</th>; }
 function Td({ children, strong }: { children: React.ReactNode; strong?: boolean }) { return <td style={{ ...tdStyle, fontWeight: strong ? 800 : 500 }}>{children}</td>; }
 function Badge({ children }: { children: React.ReactNode }) { return <span style={badgeStyle}>{children}</span>; }
+function StatTile({ label, value, hint }: { label: string; value: string | number; hint: string }) {
+  return <div style={statTileStyle}><span>{label}</span><strong style={statTileValueStyle}>{value}</strong><small style={statTileHintStyle}>{hint}</small></div>;
+}
+
+function buildCrmStats(leads: Lead[], period: CrmStatsPeriod) {
+  const { start, end, label, months } = currentStatsRange(period);
+  const periodLeads = leads.filter((lead) => isDateInRange(lead.created_at, start, end));
+  const totalCount = periodLeads.length;
+  const activeLeads = periodLeads.filter((lead) => lead.status === "otwarta");
+  const wonLeads = periodLeads.filter((lead) => lead.status === "wygrana");
+  const lostLeads = periodLeads.filter((lead) => lead.status === "przegrana");
+  const closedLeads = [...wonLeads, ...lostLeads];
+  const totalMrr = sumMrr(periodLeads);
+  const wonMrr = sumMrr(wonLeads);
+  const lostMrr = sumMrr(lostLeads);
+  const activeMrr = sumMrr(activeLeads);
+  const payrollCount = periodLeads.filter((lead) => Boolean(lead.czy_kadry)).length;
+  const followUpCount = activeLeads.filter((lead) => Boolean(lead.data_follow_up)).length;
+  const stageRows = PIPELINE_STAGES.map((stage, index) => {
+    const reachedLeads = periodLeads.filter((lead) => didReachStage(lead, index));
+    const reachedCount = reachedLeads.length;
+    return {
+      stage,
+      label: PIPELINE_LABELS[stage],
+      reachedCount,
+      notReachedCount: Math.max(0, totalCount - reachedCount),
+      reachedRate: totalCount ? Math.round((reachedCount / totalCount) * 100) : 0,
+      reachedMrr: sumMrr(reachedLeads),
+    };
+  });
+
+  return {
+    totalCount,
+    activeCount: activeLeads.length,
+    wonCount: wonLeads.length,
+    lostCount: lostLeads.length,
+    closedCount: closedLeads.length,
+    successRate: closedLeads.length ? Math.round((wonLeads.length / closedLeads.length) * 100) : 0,
+    averageMonthlyWonMrr: months ? wonMrr / months : 0,
+    averageMrrPerLead: totalCount ? totalMrr / totalCount : 0,
+    activeMrr,
+    wonMrr,
+    lostMrr,
+    payrollCount,
+    payrollShare: totalCount ? Math.round((payrollCount / totalCount) * 100) : 0,
+    followUpCount,
+    periodLabel: label,
+    stageRows,
+  };
+}
+
+function currentStatsRange(period: CrmStatsPeriod) {
+  const now = new Date();
+  const start = period === "month" ? new Date(now.getFullYear(), now.getMonth(), 1) : new Date(now.getFullYear(), 0, 1);
+  const end = period === "month" ? new Date(now.getFullYear(), now.getMonth() + 1, 1) : new Date(now.getFullYear() + 1, 0, 1);
+  const months = period === "month" ? 1 : now.getMonth() + 1;
+  const label = period === "month"
+    ? `Ten miesiac: ${start.toLocaleDateString("pl-PL", { month: "long", year: "numeric" })}`
+    : `Ten rok: ${start.getFullYear()}`;
+  return { start, end, months, label };
+}
+
+function isDateInRange(value: string | null, start: Date, end: Date) {
+  if (!value) return false;
+  const date = new Date(value);
+  return !Number.isNaN(date.getTime()) && date >= start && date < end;
+}
+
+function didReachStage(lead: Lead, stageIndex: number) {
+  if (lead.status === "wygrana") return true;
+  const leadStageIndex = PIPELINE_STAGES.indexOf(lead.etap || "");
+  return leadStageIndex >= stageIndex;
+}
+
+function sumMrr(leads: Lead[]) {
+  return leads.reduce((sum, lead) => sum + Number(lead.szacowany_mrr || 0), 0);
+}
+
+function formatMoney(value: number) {
+  return `${Math.round(value).toLocaleString("pl-PL")} zl`;
+}
+
+function formatPercent(value: number) {
+  return `${Math.round(value)}%`;
+}
 
 const headerStyle: React.CSSProperties = { display: "flex", justifyContent: "space-between", gap: "24px", alignItems: "flex-start", marginBottom: "28px" };
 const headerActionsStyle: React.CSSProperties = { display: "flex", gap: "12px", flexWrap: "wrap", justifyContent: "flex-end" };
@@ -585,6 +724,24 @@ const secondaryButtonStyle: React.CSSProperties = { border: `1px solid ${colors.
 const summaryGridStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "18px", marginBottom: "24px" };
 const summaryCardStyle: React.CSSProperties = { background: colors.card, border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: "22px", boxShadow: shadow.soft, display: "flex", flexDirection: "column", gap: "10px", color: colors.muted, fontWeight: 800 };
 const cardStyle: React.CSSProperties = { background: colors.card, border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: "28px", boxShadow: shadow.soft, marginBottom: "24px" };
+const statsHeaderStyle: React.CSSProperties = { display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "flex-start" };
+const statsHintStyle: React.CSSProperties = { margin: "7px 0 0", color: colors.muted, fontSize: "13px", lineHeight: 1.45, fontWeight: 650 };
+const statsPanelStyle: React.CSSProperties = { marginTop: "20px", display: "grid", gap: "18px" };
+const statsTabsStyle: React.CSSProperties = { display: "inline-flex", width: "fit-content", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.inputBackground, padding: "4px", gap: "4px" };
+const statsTabStyle = (active: boolean): React.CSSProperties => ({ border: "none", borderRadius: radius.button, background: active ? colors.navy : "transparent", color: active ? colors.white : colors.navy, padding: "9px 13px", fontWeight: 850, cursor: "pointer" });
+const statsKpiGridStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "12px" };
+const statTileStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "14px", display: "grid", gap: "6px", color: colors.muted, fontWeight: 750, minHeight: "112px" };
+const statTileValueStyle: React.CSSProperties = { color: colors.navy, fontSize: "22px", lineHeight: 1.1 };
+const statTileHintStyle: React.CSSProperties = { color: colors.muted, lineHeight: 1.35, fontSize: "12px", fontWeight: 650 };
+const funnelStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, padding: "18px", display: "grid", gap: "14px" };
+const funnelTopRowStyle: React.CSSProperties = { display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center" };
+const funnelTitleStyle: React.CSSProperties = { color: colors.navy, fontSize: "16px" };
+const funnelRowStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "220px minmax(220px, 1fr) 56px", gap: "12px", alignItems: "center" };
+const funnelLabelStyle: React.CSSProperties = { display: "grid", gap: "4px", color: colors.text, fontSize: "13px", fontWeight: 750 };
+const funnelBarTrackStyle: React.CSSProperties = { height: "28px", borderRadius: radius.badge, background: "#eef2f7", display: "flex", overflow: "hidden" };
+const funnelBarReachedStyle: React.CSSProperties = { minWidth: 0, background: colors.navy, color: colors.white, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: 900, transition: "width 180ms ease" };
+const funnelBarLostStyle: React.CSSProperties = { minWidth: 0, background: colors.red, color: colors.white, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: 900, transition: "width 180ms ease" };
+const funnelPercentStyle: React.CSSProperties = { color: colors.navy, fontWeight: 900, textAlign: "right", fontSize: "13px" };
 const tableHeaderStyle: React.CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "18px" };
 const sectionTitleStyle: React.CSSProperties = { margin: 0, color: colors.navy, fontSize: "24px" };
 const counterStyle: React.CSSProperties = { color: colors.muted, fontWeight: 700 };

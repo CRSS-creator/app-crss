@@ -3,6 +3,7 @@
 import { useEffect, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import { useParams } from "next/navigation";
 import { colors, radius, shadow } from "@/app/design";
+import AppSelect from "@/components/AppSelect";
 import {
   ASSESSMENT_BASIS_OPTIONS,
   BEHAVIORAL_FACTOR_FIELDS,
@@ -19,6 +20,19 @@ import {
   type PublicAmlRiskAssessmentResponse,
   type YesNoNaValue,
 } from "@/lib/amlRiskAssessmentTypes";
+
+const ASSESSMENT_BASIS_SELECT_OPTIONS = [
+  { value: "", label: "Wybierz" },
+  ...ASSESSMENT_BASIS_OPTIONS,
+];
+
+const RISK_LEVEL_OPTIONS = [
+  { value: "", label: "Wybierz" },
+  { value: "niskie", label: "Ryzyko niskie" },
+  { value: "standardowe", label: "Ryzyko standardowe" },
+  { value: "podwyzszone", label: "Ryzyko podwyższone" },
+  { value: "wysokie", label: "Ryzyko wysokie" },
+];
 
 export default function AmlRiskAssessmentPage() {
   const params = useParams<{ token: string }>();
@@ -102,10 +116,11 @@ export default function AmlRiskAssessmentPage() {
             <Field label="Osoba sporządzająca ocenę ryzyka" required><input style={inputStyle} value={draft.assessedBy} onChange={(event) => update("assessedBy", event.target.value)} /></Field>
           </div>
           <Field label="Podstawa sporządzenia oceny" required>
-            <select style={inputStyle} value={draft.assessmentBasis} onChange={(event) => update("assessmentBasis", event.target.value)}>
-              <option value="">Wybierz</option>
-              {ASSESSMENT_BASIS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select>
+            <AppSelect
+              value={draft.assessmentBasis}
+              onChange={(value) => update("assessmentBasis", value)}
+              options={ASSESSMENT_BASIS_SELECT_OPTIONS}
+            />
           </Field>
         </section>
 
@@ -161,13 +176,11 @@ export default function AmlRiskAssessmentPage() {
         <section style={sectionStyle}>
           <h2 style={sectionTitleStyle}>Ocena końcowa</h2>
           <Field label="Poziom ryzyka" required>
-            <select style={inputStyle} value={draft.finalRiskLevel} onChange={(event) => update("finalRiskLevel", event.target.value as AmlRiskAssessmentData["finalRiskLevel"])}>
-              <option value="">Wybierz</option>
-              <option value="niskie">Ryzyko niskie</option>
-              <option value="standardowe">Ryzyko standardowe</option>
-              <option value="podwyzszone">Ryzyko podwyższone</option>
-              <option value="wysokie">Ryzyko wysokie</option>
-            </select>
+            <AppSelect
+              value={draft.finalRiskLevel}
+              onChange={(value) => update("finalRiskLevel", value as AmlRiskAssessmentData["finalRiskLevel"])}
+              options={RISK_LEVEL_OPTIONS}
+            />
           </Field>
           <Field label="Uzasadnienie oceny ryzyka" required><textarea style={textareaStyle} value={draft.riskJustification} onChange={(event) => update("riskJustification", event.target.value)} /></Field>
         </section>

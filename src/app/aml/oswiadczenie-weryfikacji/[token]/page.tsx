@@ -3,6 +3,7 @@
 import { useEffect, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import { useParams } from "next/navigation";
 import { colors, radius, shadow } from "@/app/design";
+import AppSelect from "@/components/AppSelect";
 import {
   ACTION_TYPE_OPTIONS,
   BENEFICIAL_OWNER_SOURCE_OPTIONS,
@@ -12,6 +13,18 @@ import {
   type PublicAmlIdentificationStatementResponse,
   type YesNoValue,
 } from "@/lib/amlIdentificationStatementTypes";
+
+const ACTION_TYPE_SELECT_OPTIONS = [
+  { value: "", label: "Wybierz" },
+  ...ACTION_TYPE_OPTIONS,
+];
+
+const CLIENT_VERIFICATION_RESULT_OPTIONS = [
+  { value: "", label: "Wybierz" },
+  { value: "pozytywny", label: "pozytywny" },
+  { value: "wymaga_wyjasnien", label: "wymaga wyjaśnień" },
+  { value: "negatywny", label: "negatywny" },
+];
 
 export default function AmlIdentificationStatementPage() {
   const params = useParams<{ token: string }>();
@@ -94,10 +107,11 @@ export default function AmlIdentificationStatementPage() {
             <Field label="Osoba dokonująca weryfikacji" required><input style={inputStyle} value={draft.verifiedBy} onChange={(event) => update("verifiedBy", event.target.value)} /></Field>
           </div>
           <Field label="Rodzaj czynności" required>
-            <select style={inputStyle} value={draft.actionType} onChange={(event) => update("actionType", event.target.value)}>
-              <option value="">Wybierz</option>
-              {ACTION_TYPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select>
+            <AppSelect
+              value={draft.actionType}
+              onChange={(value) => update("actionType", value)}
+              options={ACTION_TYPE_SELECT_OPTIONS}
+            />
           </Field>
         </section>
 
@@ -106,12 +120,11 @@ export default function AmlIdentificationStatementPage() {
           <Statement>Potwierdzam, że przeprowadzono identyfikację i weryfikację klienta w zakresie wymaganym dla jego formy prawnej.</Statement>
           <Field label="Źródła weryfikacji" required><textarea style={textareaStyle} value={draft.clientVerificationSources} onChange={(event) => update("clientVerificationSources", event.target.value)} /></Field>
           <Field label="Wynik weryfikacji klienta" required>
-            <select style={inputStyle} value={draft.clientVerificationResult} onChange={(event) => update("clientVerificationResult", event.target.value as AmlIdentificationStatementData["clientVerificationResult"])}>
-              <option value="">Wybierz</option>
-              <option value="pozytywny">pozytywny</option>
-              <option value="wymaga_wyjasnien">wymaga wyjaśnień</option>
-              <option value="negatywny">negatywny</option>
-            </select>
+            <AppSelect
+              value={draft.clientVerificationResult}
+              onChange={(value) => update("clientVerificationResult", value as AmlIdentificationStatementData["clientVerificationResult"])}
+              options={CLIENT_VERIFICATION_RESULT_OPTIONS}
+            />
           </Field>
           <Field label="Uwagi"><textarea style={textareaStyle} value={draft.clientNotes} onChange={(event) => update("clientNotes", event.target.value)} /></Field>
         </section>

@@ -283,10 +283,11 @@ function CrmContent() {
             </div>
             <div style={statsKpiGridStyle}>
               <StatTile label="Skuteczność" value={formatPercent(crmStats.successRate)} hint={`${crmStats.wonCount} wygranych / ${crmStats.closedCount} zamkniętych`} />
+              <StatTile label="Miesięczny MRR wygrany" value={formatMoney(crmStats.wonMrr)} hint="Suma miesięcznych abonamentów z wygranych szans" />
+              <StatTile label="Skuteczność kwotowa" value={formatPercent(crmStats.valueSuccessRate)} hint={`${formatMoney(crmStats.wonMrr)} z ${formatMoney(crmStats.closedMrr)} zamkniętego MRR`} />
               {statsPeriod !== "month" && <StatTile label="Śr. miesięczny MRR" value={formatMoney(crmStats.averageMonthlyWonMrr)} hint={`Wygrany MRR / ${crmStats.averageMonthsCount} mies.`} />}
               <StatTile label="Śr. MRR na szansę" value={formatMoney(crmStats.averageMrrPerLead)} hint={`${crmStats.totalCount} szans w okresie`} />
               <StatTile label="Potencjał aktywny" value={formatMoney(crmStats.activeMrr)} hint={`${crmStats.activeCount} otwartych szans`} />
-              <StatTile label="Miesięczny MRR wygrany" value={formatMoney(crmStats.wonMrr)} hint="Suma miesięcznych abonamentów z wygranych szans" />
               <StatTile label="MRR utracony" value={formatMoney(crmStats.lostMrr)} hint={`${crmStats.lostCount} przegranych szans`} />
               <StatTile label="Kadry w szansach" value={formatPercent(crmStats.payrollShare)} hint={`${crmStats.payrollCount} z ${crmStats.totalCount} szans`} />
               <StatTile label="Do follow-up" value={crmStats.followUpCount} hint="Otwarte z ustawioną datą follow-up" />
@@ -654,6 +655,7 @@ function buildCrmStats(leads: Lead[], period: CrmStatsPeriod) {
   const totalMrr = sumMrr(periodLeads);
   const wonMrr = sumMrr(wonLeads);
   const lostMrr = sumMrr(lostLeads);
+  const closedMrr = wonMrr + lostMrr;
   const activeMrr = sumMrr(activeLeads);
   const payrollCount = periodLeads.filter((lead) => Boolean(lead.czy_kadry)).length;
   const followUpCount = activeLeads.filter((lead) => Boolean(lead.data_follow_up)).length;
@@ -700,12 +702,14 @@ function buildCrmStats(leads: Lead[], period: CrmStatsPeriod) {
     lostCount: lostLeads.length,
     closedCount: closedLeads.length,
     successRate: closedLeads.length ? Math.round((wonLeads.length / closedLeads.length) * 100) : 0,
+    valueSuccessRate: closedMrr ? Math.round((wonMrr / closedMrr) * 100) : 0,
     averageMonthlyWonMrr: averageMonthsCount ? wonMrr / averageMonthsCount : 0,
     averageMonthsCount,
     averageMrrPerLead: totalCount ? totalMrr / totalCount : 0,
     activeMrr,
     wonMrr,
     lostMrr,
+    closedMrr,
     payrollCount,
     payrollShare: totalCount ? Math.round((payrollCount / totalCount) * 100) : 0,
     followUpCount,

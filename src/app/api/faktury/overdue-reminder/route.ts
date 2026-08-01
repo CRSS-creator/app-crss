@@ -52,10 +52,10 @@ export async function POST(request: NextRequest) {
   const auth = await getAuthorizedServerUser(request, ALLOWED_ROLES, "Brak uprawnień do wysyłki przypomnień.");
   if (auth.error) return auth.error;
 
-  const webhookUrl = process.env.N8N_INVOICE_MAIL_WEBHOOK_URL?.trim();
+  const webhookUrl = process.env.N8N_OVERDUE_INVOICE_WEBHOOK_URL?.trim();
   if (!webhookUrl) {
     return NextResponse.json(
-      { error: "Brak konfiguracji wysyłki maili. Uzupełnij N8N_INVOICE_MAIL_WEBHOOK_URL." },
+      { error: "Brak konfiguracji wysyłki maili. Uzupełnij N8N_OVERDUE_INVOICE_WEBHOOK_URL." },
       { status: 500 }
     );
   }

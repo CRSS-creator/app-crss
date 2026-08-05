@@ -44,6 +44,7 @@ const SYNC_OPTIONS = [
 const CATEGORY_OPTIONS = [
   { value: "standardowa", label: "Standardowa" },
   { value: "dodatkowa", label: "Dodatkowa" },
+  { value: "korekta", label: "Korekta" },
 ] as const;
 
 export default function InvoicesPage() {
@@ -338,7 +339,10 @@ function InvoicesContent() {
     if (invoice.kategoria === category) return;
 
     setSavingCategoryId(invoice.id);
-    const result = await updateInvoice(invoice.id, { kategoria: category });
+    const result = await updateInvoice(invoice.id, {
+      kategoria: category,
+      ...(category === "korekta" ? { kwota_netto: 0, kwota_vat: 0, kwota_brutto: 0 } : {}),
+    });
     setSavingCategoryId(null);
 
     if (result.error) {
@@ -347,7 +351,11 @@ function InvoicesContent() {
       return;
     }
 
-    const updatedInvoice = (result.data || { ...invoice, kategoria: category }) as Invoice;
+    const updatedInvoice = (result.data || {
+      ...invoice,
+      kategoria: category,
+      ...(category === "korekta" ? { kwota_netto: 0, kwota_vat: 0, kwota_brutto: 0 } : {}),
+    }) as Invoice;
     setInvoices((current) => current.map((item) => (item.id === invoice.id ? updatedInvoice : item)));
     setDetailsInvoice((current) => (current?.id === invoice.id ? updatedInvoice : current));
   }
@@ -682,7 +690,7 @@ function InvoicesContent() {
                     </Td>
                     <Td>
                       <AppSelect
-                        style={categorySelectStyle}
+                        style={{ ...categorySelectStyle, ...categorySelectToneStyle(invoice.kategoria) }}
                         value={invoice.kategoria || "standardowa"}
                         options={CATEGORY_OPTIONS}
                         onChange={(value) => changeInvoiceCategory(invoice, value as InvoiceCategory)}
@@ -1128,6 +1136,15 @@ function Badge({ children, tone }: { children: React.ReactNode; tone: "success" 
 
 function categoryLabel(category: InvoiceCategory | null | undefined) {
   return CATEGORY_OPTIONS.find((item) => item.value === (category || "standardowa"))?.label || "Standardowa";
+}
+
+function categorySelectToneStyle(category: InvoiceCategory | null | undefined): CSSProperties {
+  if (category !== "korekta") return {};
+  return {
+    borderColor: "#fecaca",
+    background: "#fff1f2",
+    color: colors.danger,
+  };
 }
 
 function currentMonthInput() {

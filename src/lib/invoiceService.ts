@@ -4,7 +4,7 @@ export type InvoiceStatus = "szkic" | "wystawiona" | "wyslana" | "oplacona" | "p
 export type InvoiceSource = "aplikacja" | "wfirma" | "import";
 export type InvoiceSyncStatus = "nie_wyslano" | "w_kolejce" | "wyslano" | "blad" | "zaimportowano";
 export type InvoiceType = "sprzedaz" | "korekta" | "proforma";
-export type InvoiceCategory = "standardowa" | "dodatkowa";
+export type InvoiceCategory = "standardowa" | "dodatkowa" | "korekta";
 
 export type Invoice = {
   id: string;

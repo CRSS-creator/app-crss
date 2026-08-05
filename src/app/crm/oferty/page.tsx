@@ -472,7 +472,7 @@ function createOfferPayload(lead: Lead, draft: OfferDraft): CrmOfferPayload {
     przygotowana_dla: draft.przygotowana_dla.trim() || lead.nazwa || null,
     osoba_kontaktowa: draft.osoba_kontaktowa.trim() || lead.osoba_kontaktowa || null,
     rekomendowany_pakiet: "PDF",
-    cta_label: "Proszę o kontakt w sprawie propozycji",
+    cta_label: "Mam dodatkowe pytania",
     cta_url: null,
     email_recipient: draft.email_recipient.trim() || lead.email || null,
     email_subject: draft.email_subject.trim() || `Propozycja współpracy CRSS dla ${draft.przygotowana_dla || lead.nazwa || "Państwa firmy"}`,

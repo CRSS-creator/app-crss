@@ -21,7 +21,7 @@ declare global {
 const PDFJS_SCRIPT = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
 const PDFJS_WORKER = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 const DEFAULT_NEXT_STEP_TEXT =
-  "Wybierz preferowany dalszy krok. Po otrzymaniu decyzji opiekun CRSS wróci z potwierdzeniem i kolejnymi ustaleniami.";
+  "Daj znać, co będzie dla Ciebie najlepsze. Możesz od razu potwierdzić współpracę, poprosić o kontakt albo przekazać nam, że tym razem rezygnujesz.";
 const REJECTION_REASONS = [
   "Zakres propozycji nie odpowiada aktualnym potrzebom",
   "Budżet jest za wysoki",
@@ -202,7 +202,7 @@ export default function PublicOfferPage() {
             Przygotowana dla: <strong>{offer.przygotowana_dla || "Twojej firmy"}</strong>
             {offer.osoba_kontaktowa ? ` · ${offer.osoba_kontaktowa}` : ""}
           </p>
-          {offer.wazna_do && <p style={validInlineStyle}>Ważna do: {formatDate(offer.wazna_do)}</p>}
+          {offer.wazna_do && <p style={validInlineStyle}>Na odpowiedź czekamy do: {formatDate(offer.wazna_do)}</p>}
           {decisionLabel && <p style={decisionStatusStyle}>{decisionLabel}</p>}
         </div>
         <div style={topActionsStackStyle}>
@@ -214,14 +214,14 @@ export default function PublicOfferPage() {
       {showRejectionReason && (
         <section style={rejectionPanelStyle}>
           <div>
-            <h2 style={rejectionTitleStyle}>Powód rezygnacji</h2>
-            <p style={rejectionTextStyle}>Wybór powodu pomoże nam lepiej odnieść się do Państwa decyzji.</p>
+            <h2 style={rejectionTitleStyle}>Co zdecydowało?</h2>
+            <p style={rejectionTextStyle}>Krótka informacja pomoże nam lepiej zrozumieć Twoją decyzję.</p>
           </div>
           <AppSelect style={selectStyle} value={rejectionReason} options={REJECTION_REASON_OPTIONS} onChange={setRejectionReason} />
           <div style={rejectionActionsStyle}>
             <button style={secondaryButtonStyle} onClick={() => setShowRejectionReason(false)} disabled={Boolean(decisionSaving)}>Anuluj</button>
             <button style={rejectButtonStyle} onClick={() => handleDecision("rejected", rejectionReason)} disabled={Boolean(decisionSaving)}>
-              {decisionSaving === "rejected" ? "Zapisywanie..." : "Przekaż rezygnację"}
+              {decisionSaving === "rejected" ? "Zapisywanie..." : "Wyślij odpowiedź"}
             </button>
           </div>
         </section>
@@ -248,9 +248,9 @@ export default function PublicOfferPage() {
 
       <section style={footerCtaStyle}>
         <div style={footerIntroStyle}>
-          <h2 style={footerTitleStyle}>Co dalej?</h2>
+          <h2 style={footerTitleStyle}>Co chcesz zrobić dalej?</h2>
           <p style={footerTextStyle}>{offer.warunki || DEFAULT_NEXT_STEP_TEXT}</p>
-          {offer.wazna_do && <p style={validStyle}>Propozycja ważna do: {formatDate(offer.wazna_do)}</p>}
+          {offer.wazna_do && <p style={validStyle}>Na odpowiedź czekamy do: {formatDate(offer.wazna_do)}</p>}
         </div>
         <div style={footerActionStackStyle}>
           {offer.pdf_url && <button style={downloadButtonStyle} onClick={handlePdfDownload}>Pobierz PDF</button>}
@@ -266,13 +266,13 @@ function DecisionButtons({ onDecision, saving, status, compact }: { onDecision: 
   return (
     <div style={compact ? footerActionsStyle : actionsStyle}>
       <button style={primaryButtonStyle} onClick={() => onDecision("accepted")} disabled={disabled || status === "accepted"}>
-        {saving === "accepted" ? "Zapisywanie..." : status === "accepted" ? "Współpraca potwierdzona" : "Rozpocznij współpracę"}
+        {saving === "accepted" ? "Zapisywanie..." : status === "accepted" ? "Współpraca potwierdzona" : "Chcę rozpocząć współpracę"}
       </button>
       <button style={secondaryButtonStyle} onClick={() => onDecision("discussion_requested")} disabled={disabled || status === "discussion_requested"}>
-        {saving === "discussion_requested" ? "Zapisywanie..." : status === "discussion_requested" ? "Prośba o kontakt wysłana" : "Umów rozmowę"}
+        {saving === "discussion_requested" ? "Zapisywanie..." : status === "discussion_requested" ? "Poproszono o kontakt" : "Mam dodatkowe pytania"}
       </button>
       <button style={rejectButtonStyle} onClick={() => onDecision("rejected")} disabled={disabled || status === "rejected"}>
-        {saving === "rejected" ? "Zapisywanie..." : status === "rejected" ? "Rezygnacja przekazana" : "Rezygnuję"}
+        {saving === "rejected" ? "Zapisywanie..." : status === "rejected" ? "Odpowiedź przekazana" : "Tym razem rezygnuję"}
       </button>
     </div>
   );
@@ -364,9 +364,9 @@ function formatDate(value: string) {
 }
 
 function statusDecisionLabel(status: CrmOffer["status"]) {
-  if (status === "accepted") return "Dziękujemy za potwierdzenie. Opiekun CRSS skontaktuje się z Państwem, aby ustalić dalsze kroki.";
-  if (status === "discussion_requested") return "Dziękujemy. Opiekun CRSS skontaktuje się z Państwem, aby omówić propozycję.";
-  if (status === "rejected") return "Dziękujemy za informację. Opiekun CRSS odnotuje Państwa decyzję.";
+  if (status === "accepted") return "Dziękujemy za potwierdzenie. Odezwie się do Ciebie opiekun CRSS i ustalicie kolejne kroki.";
+  if (status === "discussion_requested") return "Dziękujemy, poproszono opiekuna CRSS o kontakt. Wrócimy do Ciebie, żeby spokojnie omówić pytania.";
+  if (status === "rejected") return "Dziękujemy za informację. Zapisaliśmy Twoją odpowiedź.";
   return null;
 }
 

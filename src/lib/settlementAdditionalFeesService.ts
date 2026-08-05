@@ -51,7 +51,7 @@ export type LateDocumentsFeeSettlement = {
 };
 
 const LATE_DOCUMENTS_FEE_NAME = "Opłata za nieterminowe dostarczenie dokumentów";
-const LATE_DOCUMENTS_FEE_NOTE = "Automatyczna opłata: dokumenty dostarczone po 7. dniu miesiąca następującego po miesiącu rozliczeniowym.";
+const LATE_DOCUMENTS_FEE_NOTE_PREFIX = "Automatyczna opłata";
 
 export async function fetchAdditionalFeeDefinitions(includeInactive = false) {
   let query = supabase
@@ -139,7 +139,7 @@ export async function syncLateDocumentsAdditionalFee(settlement: LateDocumentsFe
   if (existingResult.error) return existingResult;
 
   const existingFees = ((existingResult.data || []) as SettlementAdditionalFee[])
-    .filter((fee) => (fee.uwagi || "").startsWith("Automatyczna opłata"));
+    .filter((fee) => (fee.uwagi || "").startsWith(LATE_DOCUMENTS_FEE_NOTE_PREFIX));
   const mainFee = existingFees[0] || null;
   const duplicateFees = existingFees.slice(1);
 
@@ -160,7 +160,7 @@ export async function syncLateDocumentsAdditionalFee(settlement: LateDocumentsFe
     nazwa: LATE_DOCUMENTS_FEE_NAME,
     kwota_netto: amount,
     ilosc: 1,
-    uwagi: LATE_DOCUMENTS_FEE_NOTE,
+    uwagi: buildLateDocumentsFeeNote(settlement),
   };
 
   if (mainFee) {
@@ -184,6 +184,18 @@ function calculateLateDocumentsFeeAmount(subscription: number | string | null | 
   return Math.max(150, Math.round(subscriptionValue * 0.1 * 100) / 100);
 }
 
+function buildLateDocumentsFeeNote(settlement: LateDocumentsFeeSettlement) {
+  const deliveredAt = toDate(settlement.data_dostarczenia_dokumentow);
+  const dueAt = documentsDueDate(settlement.okres);
+  const periodLabel = formatSettlementPeriod(settlement.okres);
+
+  if (!deliveredAt || !dueAt) {
+    return `${LATE_DOCUMENTS_FEE_NOTE_PREFIX}: dokumenty dostarczone po terminie wynikającym z umowy.`;
+  }
+
+  return `${LATE_DOCUMENTS_FEE_NOTE_PREFIX}: dokumenty za okres ${periodLabel} dostarczono ${formatDate(deliveredAt)}; zgodnie z umową powinny być dostarczone do ${formatDate(dueAt)}.`;
+}
+
 function getLateDocumentsFeeClient(client: LateDocumentsFeeSettlement["klienci"]) {
   if (Array.isArray(client)) return client[0] || null;
   return client || null;
@@ -193,6 +205,16 @@ function documentsDueDate(period: string) {
   const [year, month] = period.split("-").map(Number);
   if (!year || !month) return null;
   return new Date(year, month, 7, 12, 0, 0, 0);
+}
+
+function formatSettlementPeriod(period: string) {
+  const [year, month] = period.split("-").map(Number);
+  if (!year || !month) return period;
+  return new Intl.DateTimeFormat("pl-PL", { month: "long", year: "numeric" }).format(new Date(year, month - 1, 1, 12, 0, 0, 0));
+}
+
+function formatDate(date: Date) {
+  return new Intl.DateTimeFormat("pl-PL", { day: "2-digit", month: "2-digit", year: "numeric" }).format(date);
 }
 
 function isLateDocumentsFeeExcludedClient(clientName: string | null | undefined) {

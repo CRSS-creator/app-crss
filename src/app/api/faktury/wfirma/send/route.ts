@@ -24,6 +24,8 @@ type InvoiceRow = {
   data_wystawienia: string | null;
   data_sprzedazy: string | null;
   termin_platnosci: string | null;
+  okres: string | null;
+  kategoria: string | null;
   kontrahent_nazwa: string;
   kontrahent_nip: string | null;
   kontrahent_email: string | null;
@@ -81,6 +83,7 @@ export async function POST(request: NextRequest) {
       continue;
     }
     try {
+      await assertNoDuplicateStandardInvoice(auth.admin, invoice);
       const validationErrors = validateWfirmaInvoice(invoice);
       if (validationErrors.length > 0) throw new Error(`Brakuje danych do wFirmy: ${validationErrors.join(", ")}.`);
 
@@ -196,6 +199,8 @@ async function claimInvoiceForWfirma(admin: SupabaseClient, invoiceId: string) {
       data_wystawienia,
       data_sprzedazy,
       termin_platnosci,
+      okres,
+      kategoria,
       kontrahent_nazwa,
       kontrahent_nip,
       kontrahent_email,
@@ -240,6 +245,27 @@ async function saveWfirmaInvoicePdf(params: {
     return { path, name, error: null as string | null };
   } catch (error) {
     return { path: null, name: null, error: error instanceof Error ? error.message : "Nieznany błąd pobierania PDF." };
+  }
+}
+
+async function assertNoDuplicateStandardInvoice(admin: SupabaseClient, invoice: InvoiceRow) {
+  if (!invoice.klient_id || !invoice.okres || (invoice.kategoria && invoice.kategoria !== "standardowa")) return;
+
+  const { data, error } = await admin
+    .from("faktury")
+    .select("id,numer,wfirma_id")
+    .eq("klient_id", invoice.klient_id)
+    .eq("okres", invoice.okres)
+    .eq("kategoria", "standardowa")
+    .neq("id", invoice.id)
+    .or("wfirma_id.not.is.null,zrodlo.eq.wfirma")
+    .limit(1);
+
+  if (error) throw new Error("Nie udało się sprawdzić duplikatów faktury standardowej.");
+  const duplicate = data?.[0];
+  if (duplicate) {
+    const label = duplicate.numer ? ` (${duplicate.numer})` : "";
+    throw new Error(`Faktura standardowa za ten okres jest już wystawiona w wFirmie${label}. Szkic nie został wysłany.`);
   }
 }
 

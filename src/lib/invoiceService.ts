@@ -104,6 +104,14 @@ export type InvoicePayload = {
   wfirma_sync_error?: string | null;
 };
 
+export type DraftInvoiceLinePayload = {
+  nazwa: string;
+  ilosc: string | number;
+  jednostka: string;
+  cena_netto: string | number;
+  stawka_vat: string;
+};
+
 export type WfirmaPaymentSyncResult = {
   checked: number;
   markedPaid: number;
@@ -176,6 +184,20 @@ export async function updateInvoice(invoiceId: string, payload: Partial<InvoiceP
     .eq("id", invoiceId)
     .select(INVOICE_SELECT)
     .single<Invoice>();
+}
+
+export async function updateDraftInvoiceLine(invoiceId: string, lineId: string, payload: DraftInvoiceLinePayload) {
+  return callInvoiceEndpoint<{ invoice: Invoice }>(
+    "/api/faktury/drafts",
+    { action: "updateLine", invoiceId, lineId, line: payload }
+  );
+}
+
+export async function deleteDraftInvoice(invoiceId: string) {
+  return callInvoiceEndpoint<{ deleted: true }>(
+    "/api/faktury/drafts",
+    { action: "deleteInvoice", invoiceId }
+  );
 }
 
 export async function ensureSubscriptionInvoices(invoiceMonth?: string) {
@@ -313,6 +335,14 @@ async function getWfirmaPaymentSyncMonths(): Promise<{ data: string[]; error: Er
 }
 
 async function callWfirmaEndpoint<T>(url: string, payload: unknown): Promise<{ data: T | null; error: Error | null }> {
+  return callInvoiceEndpoint<T>(url, payload, "Operacja wFirmy nie powiodła się.");
+}
+
+async function callInvoiceEndpoint<T>(
+  url: string,
+  payload: unknown,
+  fallbackMessage = "Operacja na fakturze nie powiodła się."
+): Promise<{ data: T | null; error: Error | null }> {
   const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
   const token = sessionData.session?.access_token;
   if (sessionError || !token) {
@@ -336,7 +366,7 @@ async function callWfirmaEndpoint<T>(url: string, payload: unknown): Promise<{ d
     }
     return { data: data as T, error: null };
   } catch (error) {
-    return { data: null, error: error instanceof Error ? error : new Error("Operacja wFirmy nie powiodła się.") };
+    return { data: null, error: error instanceof Error ? error : new Error(fallbackMessage) };
   }
 }
 

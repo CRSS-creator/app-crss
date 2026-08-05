@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { CalendarClock, DownloadCloud, FileText, Mail, RotateCw, Send, TriangleAlert } from "lucide-react";
+import { CalendarClock, DownloadCloud, FileText, Mail, Pencil, RotateCw, Save, Send, Trash2, TriangleAlert, X } from "lucide-react";
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
 import AppSelect from "@/components/AppSelect";
@@ -9,6 +9,7 @@ import { AppMonthInput } from "@/components/AppDateInputs";
 import { colors, radius, shadow } from "@/app/design";
 import {
   ensureSubscriptionInvoices,
+  deleteDraftInvoice,
   fetchInvoices,
   getInvoicePdfUrl,
   importWfirmaInvoices,
@@ -17,7 +18,9 @@ import {
   sendOverdueInvoiceReminders,
   sendInvoicesToWfirma,
   syncWfirmaPayments,
+  updateDraftInvoiceLine,
   updateInvoice,
+  type DraftInvoiceLinePayload,
   type Invoice,
   type InvoiceCategory,
   type InvoiceEmailHistory,
@@ -75,6 +78,10 @@ function InvoicesContent() {
   const [savingPeriodId, setSavingPeriodId] = useState<string | null>(null);
   const [openingPdfId, setOpeningPdfId] = useState<string | null>(null);
   const [sendingMailId, setSendingMailId] = useState<string | null>(null);
+  const [deletingInvoiceId, setDeletingInvoiceId] = useState<string | null>(null);
+  const [editingLineId, setEditingLineId] = useState<string | null>(null);
+  const [savingLineId, setSavingLineId] = useState<string | null>(null);
+  const [lineDrafts, setLineDrafts] = useState<Record<string, DraftInvoiceLinePayload>>({});
 
   useEffect(() => {
     void loadData({ generateCurrentMonth: true });
@@ -404,7 +411,88 @@ function InvoicesContent() {
     await loadData();
   }
 
+  function startLineEdit(line: InvoiceLine) {
+    setEditingLineId(line.id);
+    setLineDrafts((current) => ({
+      ...current,
+      [line.id]: {
+        nazwa: line.nazwa,
+        ilosc: String(line.ilosc ?? ""),
+        jednostka: line.jednostka,
+        cena_netto: String(line.cena_netto ?? ""),
+        stawka_vat: line.stawka_vat,
+      },
+    }));
+  }
+
+  function updateLineDraft(lineId: string, field: keyof DraftInvoiceLinePayload, value: string) {
+    const defaults: DraftInvoiceLinePayload = {
+      nazwa: "",
+      ilosc: "",
+      jednostka: "szt.",
+      cena_netto: "",
+      stawka_vat: "23%",
+    };
+    setLineDrafts((current) => ({
+      ...current,
+      [lineId]: {
+        ...defaults,
+        ...current[lineId],
+        [field]: value,
+      },
+    }));
+  }
+
+  function cancelLineEdit(lineId: string) {
+    setEditingLineId((current) => (current === lineId ? null : current));
+    setLineDrafts((current) => {
+      const next = { ...current };
+      delete next[lineId];
+      return next;
+    });
+  }
+
+  async function saveLineEdit(invoice: Invoice, line: InvoiceLine) {
+    const draft = lineDrafts[line.id];
+    if (!draft) return;
+
+    setSavingLineId(line.id);
+    const result = await updateDraftInvoiceLine(invoice.id, line.id, draft);
+    setSavingLineId(null);
+
+    if (result.error || !result.data?.invoice) {
+      console.error("Blad zapisu pozycji faktury:", result.error);
+      alert(`Nie udało się zapisać pozycji faktury.\n\n${result.error?.message || ""}`);
+      return;
+    }
+
+    const updatedInvoice = result.data.invoice;
+    setInvoices((current) => current.map((item) => (item.id === updatedInvoice.id ? updatedInvoice : item)));
+    setDetailsInvoice(updatedInvoice);
+    cancelLineEdit(line.id);
+  }
+
+  async function removeDraft(invoice: Invoice) {
+    if (!canEditDraftInvoice(invoice)) return;
+    if (!window.confirm(`Usunąć szkic faktury dla ${invoice.kontrahent_nazwa}?`)) return;
+
+    setDeletingInvoiceId(invoice.id);
+    const result = await deleteDraftInvoice(invoice.id);
+    setDeletingInvoiceId(null);
+
+    if (result.error) {
+      console.error("Blad usuwania szkicu faktury:", result.error);
+      alert(`Nie udało się usunąć szkicu faktury.\n\n${result.error.message}`);
+      return;
+    }
+
+    setInvoices((current) => current.filter((item) => item.id !== invoice.id));
+    setSelectedInvoiceIds((current) => current.filter((invoiceId) => invoiceId !== invoice.id));
+    setDetailsInvoice(null);
+  }
+
   const detailsReadinessIssues = detailsInvoice ? wfirmaReadinessIssues(detailsInvoice) : [];
+  const detailsDraftEditable = detailsInvoice ? canEditDraftInvoice(detailsInvoice) : false;
 
   return (
     <>
@@ -750,9 +838,23 @@ function InvoicesContent() {
                 <p style={eyebrowStyle}>Szczegóły FV</p>
                 <h2 style={detailsTitleStyle}>{invoiceNumberLabel(detailsInvoice)}</h2>
               </div>
-              <button type="button" style={secondaryButtonStyle} onClick={() => setDetailsInvoice(null)}>
-                Zamknij
-              </button>
+              <div style={detailsButtonGroupStyle}>
+                {detailsDraftEditable ? (
+                  <button
+                    type="button"
+                    style={dangerButtonStyle}
+                    disabled={deletingInvoiceId === detailsInvoice.id}
+                    onClick={() => removeDraft(detailsInvoice)}
+                    title="Usuń szkic"
+                  >
+                    <Trash2 size={18} />
+                    {deletingInvoiceId === detailsInvoice.id ? "Usuwanie..." : "Usuń"}
+                  </button>
+                ) : null}
+                <button type="button" style={secondaryButtonStyle} onClick={() => setDetailsInvoice(null)}>
+                  Zamknij
+                </button>
+              </div>
             </div>
 
             <div style={detailsSummaryGridStyle}>
@@ -829,25 +931,111 @@ function InvoicesContent() {
                     <Th>VAT</Th>
                     <Th>Netto</Th>
                     <Th>Brutto</Th>
+                    <Th>Akcje</Th>
                   </tr>
                 </thead>
                 <tbody>
                   {invoiceLines(detailsInvoice).length === 0 ? (
                     <tr>
-                      <Td colSpan={7}>Brak pozycji faktury.</Td>
+                      <Td colSpan={8}>Brak pozycji faktury.</Td>
                     </tr>
                   ) : (
-                    invoiceLines(detailsInvoice).map((line) => (
-                      <tr key={line.id}>
-                        <Td strong>{line.nazwa}</Td>
-                        <Td>{formatQuantity(line.ilosc)}</Td>
-                        <Td>{line.jednostka}</Td>
-                        <Td>{formatMoney(line.cena_netto)}</Td>
-                        <Td>{line.stawka_vat}</Td>
-                        <Td>{formatMoney(line.kwota_netto)}</Td>
-                        <Td strong>{formatMoney(lineGross(line))}</Td>
-                      </tr>
-                    ))
+                    invoiceLines(detailsInvoice).map((line) => {
+                      const editing = detailsDraftEditable && editingLineId === line.id;
+                      const draft = lineDrafts[line.id];
+                      return (
+                        <tr key={line.id}>
+                          <Td strong>
+                            {editing ? (
+                              <input
+                                style={lineNameInputStyle}
+                                value={draft?.nazwa || ""}
+                                onChange={(event) => updateLineDraft(line.id, "nazwa", event.target.value)}
+                              />
+                            ) : line.nazwa}
+                          </Td>
+                          <Td>
+                            {editing ? (
+                              <input
+                                style={lineNumberInputStyle}
+                                value={String(draft?.ilosc || "")}
+                                onChange={(event) => updateLineDraft(line.id, "ilosc", event.target.value)}
+                                inputMode="decimal"
+                              />
+                            ) : formatQuantity(line.ilosc)}
+                          </Td>
+                          <Td>
+                            {editing ? (
+                              <input
+                                style={lineUnitInputStyle}
+                                value={draft?.jednostka || ""}
+                                onChange={(event) => updateLineDraft(line.id, "jednostka", event.target.value)}
+                              />
+                            ) : line.jednostka}
+                          </Td>
+                          <Td>
+                            {editing ? (
+                              <input
+                                style={lineMoneyInputStyle}
+                                value={String(draft?.cena_netto || "")}
+                                onChange={(event) => updateLineDraft(line.id, "cena_netto", event.target.value)}
+                                inputMode="decimal"
+                              />
+                            ) : formatMoney(line.cena_netto)}
+                          </Td>
+                          <Td>
+                            {editing ? (
+                              <input
+                                style={lineVatInputStyle}
+                                value={draft?.stawka_vat || ""}
+                                onChange={(event) => updateLineDraft(line.id, "stawka_vat", event.target.value)}
+                                inputMode="decimal"
+                              />
+                            ) : line.stawka_vat}
+                          </Td>
+                          <Td>{formatMoney(line.kwota_netto)}</Td>
+                          <Td strong>{formatMoney(lineGross(line))}</Td>
+                          <Td>
+                            {detailsDraftEditable ? (
+                              editing ? (
+                                <span style={lineActionGroupStyle}>
+                                  <button
+                                    type="button"
+                                    style={iconButtonStyle}
+                                    disabled={savingLineId === line.id}
+                                    onClick={() => saveLineEdit(detailsInvoice, line)}
+                                    title="Zapisz pozycję"
+                                    aria-label="Zapisz pozycję"
+                                  >
+                                    <Save size={16} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    style={iconButtonStyle}
+                                    disabled={savingLineId === line.id}
+                                    onClick={() => cancelLineEdit(line.id)}
+                                    title="Anuluj edycję"
+                                    aria-label="Anuluj edycję"
+                                  >
+                                    <X size={16} />
+                                  </button>
+                                </span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  style={iconButtonStyle}
+                                  onClick={() => startLineEdit(line)}
+                                  title="Edytuj pozycję"
+                                  aria-label="Edytuj pozycję"
+                                >
+                                  <Pencil size={16} />
+                                </button>
+                              )
+                            ) : null}
+                          </Td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
@@ -1043,6 +1231,13 @@ function canQueueForWfirma(invoice: Invoice) {
   return invoice.status !== "anulowana" && ["nie_wyslano", "blad"].includes(invoice.wfirma_sync_status);
 }
 
+function canEditDraftInvoice(invoice: Invoice) {
+  return invoice.status === "szkic"
+    && invoice.zrodlo === "aplikacja"
+    && invoice.wfirma_id === null
+    && ["nie_wyslano", "blad"].includes(invoice.wfirma_sync_status);
+}
+
 function canSendInvoiceMail(invoice: Invoice) {
   return Boolean(invoice.wfirma_pdf_path && hasInvoiceEmail(invoice) && invoice.status !== "anulowana");
 }
@@ -1186,6 +1381,7 @@ const fieldStyle: CSSProperties = { display: "grid", gap: "7px", color: colors.m
 const inputStyle: CSSProperties = { width: "100%", minHeight: "42px", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, padding: "10px 12px", fontWeight: 750, boxSizing: "border-box" };
 const primaryButtonStyle: CSSProperties = { border: `1px solid ${colors.red}`, borderRadius: radius.input, background: colors.red, color: colors.white, minHeight: "42px", padding: "9px 14px", fontSize: "15px", lineHeight: 1, fontWeight: 850, cursor: "pointer", display: "inline-flex", justifyContent: "center", alignItems: "center", gap: "8px", whiteSpace: "nowrap" };
 const secondaryButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.navy, minHeight: "42px", padding: "9px 13px", fontSize: "15px", lineHeight: 1, fontWeight: 800, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "8px", whiteSpace: "nowrap" };
+const dangerButtonStyle: CSSProperties = { ...secondaryButtonStyle, borderColor: "#fecaca", background: "#fff1f2", color: colors.danger };
 const smallButtonStyle: CSSProperties = { ...secondaryButtonStyle, minHeight: "34px", padding: "7px 10px" };
 const filtersStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(220px, 1fr) 170px", gap: "10px", marginBottom: "14px" };
 const searchStyle: CSSProperties = { ...inputStyle };
@@ -1231,6 +1427,7 @@ const overdueTableStyle: CSSProperties = { width: "100%", minWidth: "1080px", bo
 const emptyOverdueStyle: CSSProperties = { padding: "28px", border: `1px dashed ${colors.border}`, borderRadius: radius.input, background: colors.card, color: colors.muted, textAlign: "center", fontWeight: 800 };
 const detailsPanelStyle: CSSProperties = { width: "min(920px, 92vw)", height: "100%", background: colors.white, boxShadow: shadow.card, padding: "24px", overflowY: "auto", boxSizing: "border-box" };
 const detailsHeaderStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "flex-start", marginBottom: "18px" };
+const detailsButtonGroupStyle: CSSProperties = { display: "flex", gap: "10px", alignItems: "center", justifyContent: "flex-end", flexWrap: "wrap" };
 const detailsTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "28px" };
 const detailsSummaryGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(145px, 1fr))", gap: "10px", marginBottom: "16px" };
 const detailStatStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "10px 12px", display: "grid", gap: "5px", minHeight: "64px", alignContent: "center", color: colors.text, fontWeight: 500 };
@@ -1248,7 +1445,14 @@ const readinessValueStyle: CSSProperties = { color: colors.text, fontSize: "14px
 const readinessDotOkStyle: CSSProperties = { width: "9px", height: "9px", borderRadius: "999px", background: colors.success };
 const readinessDotErrorStyle: CSSProperties = { ...readinessDotOkStyle, background: colors.danger };
 const lineTableWrapperStyle: CSSProperties = { overflowX: "auto", border: `1px solid ${colors.border}`, borderRadius: radius.input };
-const lineTableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse", minWidth: "760px" };
+const lineTableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse", minWidth: "860px" };
+const lineNameInputStyle: CSSProperties = { ...inputStyle, minHeight: "34px", padding: "7px 9px", fontSize: "14px", minWidth: "220px" };
+const lineNumberInputStyle: CSSProperties = { ...inputStyle, minHeight: "34px", padding: "7px 9px", fontSize: "14px", width: "82px", minWidth: "82px", fontVariantNumeric: "tabular-nums" };
+const lineUnitInputStyle: CSSProperties = { ...lineNumberInputStyle, width: "74px", minWidth: "74px" };
+const lineMoneyInputStyle: CSSProperties = { ...lineNumberInputStyle, width: "112px", minWidth: "112px" };
+const lineVatInputStyle: CSSProperties = { ...lineNumberInputStyle, width: "78px", minWidth: "78px" };
+const lineActionGroupStyle: CSSProperties = { display: "inline-flex", gap: "6px", alignItems: "center" };
+const iconButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.navy, width: "34px", height: "34px", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer" };
 const invoiceDescriptionStyle: CSSProperties = { marginTop: "18px", border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "14px", background: colors.card };
 const descriptionTitleStyle: CSSProperties = { margin: "0 0 8px", color: colors.navy, fontSize: "16px" };
 const descriptionTextStyle: CSSProperties = { margin: 0, color: colors.text, fontWeight: 500, lineHeight: 1.55, whiteSpace: "pre-line" };

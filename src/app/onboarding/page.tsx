@@ -204,8 +204,7 @@ function OnboardingContent() {
   );
   const selectedRow = rows.find((row) => row.client.id === selectedClientId) || null;
   const filteredRows = rows.filter((row) => statusFilter === "Wszystkie" || row.status === statusFilter);
-  const blockedCount = rows.filter((row) => row.status === "Czeka na formalności").length;
-  const doneCount = rows.filter((row) => row.status === "Zakończony").length;
+  const ongoingCount = rows.filter((row) => row.status === "W trakcie").length;
   const currentRole = (currentUserRole || "").toLowerCase();
   const canAssignCaregiver = currentRole === "manager" || currentRole === "owner";
 
@@ -483,9 +482,7 @@ function OnboardingContent() {
       </section>
 
       <section style={summaryGridStyle}>
-        <Summary label="W onboardingu" value={rows.length} />
-        <Summary label="Zakończone" value={doneCount} />
-        <Summary label="Wymaga reakcji" value={blockedCount} />
+        <Summary label="W onboardingu" value={ongoingCount} />
       </section>
 
       <section style={cardStyle}>
@@ -1385,7 +1382,7 @@ const headerStyle: CSSProperties = { display: "flex", justifyContent: "space-bet
 const eyebrowStyle: CSSProperties = { margin: "0 0 8px", color: colors.red, fontWeight: 850 };
 const titleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "42px", lineHeight: 1.05 };
 const subtitleStyle: CSSProperties = { margin: "12px 0 0", color: colors.muted, fontSize: "17px", lineHeight: 1.65, maxWidth: "900px" };
-const summaryGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "16px", marginBottom: "22px" };
+const summaryGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "16px", marginBottom: "22px" };
 const summaryStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.card, padding: "18px", boxShadow: shadow.soft, display: "flex", flexDirection: "column", gap: "8px", color: colors.muted, fontWeight: 800 };
 const summaryValueStyle: CSSProperties = { color: colors.text, overflowWrap: "anywhere", lineHeight: 1.35 };
 const cardStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.card, padding: "26px", boxShadow: shadow.soft };

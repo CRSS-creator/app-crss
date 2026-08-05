@@ -1194,6 +1194,7 @@ function paymentDueDate(invoice: Invoice) {
 }
 
 function paymentStatusLabel(invoice: Invoice) {
+  if (invoice.kategoria === "korekta") return "Korekta";
   if (invoice.status === "oplacona") return "Zapłacona";
   if (invoice.status === "anulowana") return "Anulowana";
   if (invoice.status === "przeterminowana" || isInvoiceOverdue(invoice)) return "Przeterminowana";
@@ -1201,6 +1202,7 @@ function paymentStatusLabel(invoice: Invoice) {
 }
 
 function paymentStatusTone(invoice: Invoice): "success" | "danger" | "neutral" {
+  if (invoice.kategoria === "korekta") return "danger";
   if (invoice.status === "oplacona") return "success";
   if (invoice.status === "anulowana" || invoice.status === "przeterminowana" || isInvoiceOverdue(invoice)) return "danger";
   return "neutral";

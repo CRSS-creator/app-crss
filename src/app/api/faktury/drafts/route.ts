@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAuthorizedServerUser } from "@/lib/serverAuth";
 
 const ALLOWED_ROLES = new Set(["owner", "admin"]);
+const INVOICE_PDF_BUCKET = "faktury-pdf";
 
 type DraftActionPayload = {
   action?: "deleteInvoice" | "updateLine";
@@ -19,10 +20,12 @@ type DraftActionPayload = {
 
 type DraftInvoiceRow = {
   id: string;
+  numer: string | null;
   status: string;
   zrodlo: string;
   wfirma_id: string | null;
   wfirma_sync_status: string;
+  wfirma_pdf_path: string | null;
 };
 
 const INVOICE_SELECT = `
@@ -76,16 +79,22 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Brak identyfikatora faktury." }, { status: 400 });
   }
 
-  const invoice = await loadEditableDraft(auth.admin, payload.invoiceId);
+  const invoice = await loadDraft(auth.admin, payload.invoiceId);
   if (invoice.error) return invoice.error;
 
   if (payload.action === "deleteInvoice") {
-    const deleted = await deleteDraft(auth.admin, invoice.data.id);
+    if (!isDeletableDraft(invoice.data)) {
+      return NextResponse.json({ error: "Nie mozna usunac faktury z ostatecznym numerem." }, { status: 400 });
+    }
+    const deleted = await deleteDraft(auth.admin, invoice.data);
     if (deleted) return deleted;
     return NextResponse.json({ deleted: true });
   }
 
   if (payload.action === "updateLine") {
+    if (!isEditableDraft(invoice.data)) {
+      return NextResponse.json({ error: "Mozna edytowac tylko szkic przed wyslaniem do wFirmy." }, { status: 400 });
+    }
     if (!payload.lineId || !payload.line) {
       return NextResponse.json({ error: "Brak danych pozycji faktury." }, { status: 400 });
     }
@@ -98,26 +107,31 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({ error: "Nieznana operacja na szkicu faktury." }, { status: 400 });
 }
 
-async function loadEditableDraft(admin: SupabaseClient, invoiceId: string) {
+async function loadDraft(admin: SupabaseClient, invoiceId: string) {
   const { data, error } = await admin
     .from("faktury")
-    .select("id,status,zrodlo,wfirma_id,wfirma_sync_status")
+    .select("id,numer,status,zrodlo,wfirma_id,wfirma_sync_status,wfirma_pdf_path")
     .eq("id", invoiceId)
     .maybeSingle<DraftInvoiceRow>();
 
   if (error) {
     return { data: null, error: NextResponse.json({ error: "Nie udało się pobrać szkicu faktury." }, { status: 500 }) };
   }
-  if (!data || !isEditableDraft(data)) {
-    return { data: null, error: NextResponse.json({ error: "Można edytować albo usunąć tylko szkic przed wysłaniem do wFirmy." }, { status: 400 }) };
+  if (!data) {
+    return { data: null, error: NextResponse.json({ error: "Nie znaleziono faktury." }, { status: 404 }) };
   }
   return { data, error: null };
 }
 
-async function deleteDraft(admin: SupabaseClient, invoiceId: string) {
+async function deleteDraft(admin: SupabaseClient, invoice: DraftInvoiceRow) {
+  const invoiceId = invoice.id;
   const lineDelete = await admin.from("faktury_pozycje").delete().eq("faktura_id", invoiceId);
   if (lineDelete.error) {
     return NextResponse.json({ error: `Nie udało się usunąć pozycji szkicu: ${lineDelete.error.message}` }, { status: 500 });
+  }
+
+  if (invoice.wfirma_pdf_path) {
+    await admin.storage.from(INVOICE_PDF_BUCKET).remove([invoice.wfirma_pdf_path]);
   }
 
   const invoiceDelete = await admin.from("faktury").delete().eq("id", invoiceId);
@@ -206,6 +220,17 @@ function isEditableDraft(invoice: DraftInvoiceRow) {
     && invoice.zrodlo === "aplikacja"
     && invoice.wfirma_id === null
     && ["nie_wyslano", "blad"].includes(invoice.wfirma_sync_status);
+}
+
+function isDeletableDraft(invoice: DraftInvoiceRow) {
+  return !hasFinalInvoiceNumber(invoice.numer);
+}
+
+function hasFinalInvoiceNumber(value: string | null) {
+  const normalized = asText(value).toUpperCase();
+  if (!normalized) return false;
+  if (normalized.startsWith("WRF")) return false;
+  return true;
 }
 
 function asText(value: unknown) {

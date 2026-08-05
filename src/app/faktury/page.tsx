@@ -481,7 +481,7 @@ function InvoicesContent() {
   }
 
   async function removeDraft(invoice: Invoice) {
-    if (!canEditDraftInvoice(invoice)) return;
+    if (!canDeleteDraftInvoice(invoice)) return;
     if (!window.confirm(`Usunąć szkic faktury dla ${invoice.kontrahent_nazwa}?`)) return;
 
     setDeletingInvoiceId(invoice.id);
@@ -501,6 +501,7 @@ function InvoicesContent() {
 
   const detailsReadinessIssues = detailsInvoice ? wfirmaReadinessIssues(detailsInvoice) : [];
   const detailsDraftEditable = detailsInvoice ? canEditDraftInvoice(detailsInvoice) : false;
+  const detailsDraftDeletable = detailsInvoice ? canDeleteDraftInvoice(detailsInvoice) : false;
 
   return (
     <>
@@ -847,7 +848,7 @@ function InvoicesContent() {
                 <h2 style={detailsTitleStyle}>{invoiceNumberLabel(detailsInvoice)}</h2>
               </div>
               <div style={detailsButtonGroupStyle}>
-                {detailsDraftEditable ? (
+                {detailsDraftDeletable ? (
                   <button
                     type="button"
                     style={dangerButtonStyle}
@@ -1258,6 +1259,17 @@ function canEditDraftInvoice(invoice: Invoice) {
     && invoice.zrodlo === "aplikacja"
     && invoice.wfirma_id === null
     && ["nie_wyslano", "blad"].includes(invoice.wfirma_sync_status);
+}
+
+function canDeleteDraftInvoice(invoice: Invoice) {
+  return !hasFinalInvoiceNumber(invoice.numer);
+}
+
+function hasFinalInvoiceNumber(value: string | null) {
+  const normalized = String(value || "").trim().toUpperCase();
+  if (!normalized) return false;
+  if (normalized.startsWith("WRF")) return false;
+  return true;
 }
 
 function canSendInvoiceMail(invoice: Invoice) {

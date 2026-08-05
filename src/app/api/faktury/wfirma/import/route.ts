@@ -304,7 +304,8 @@ async function replaceInvoiceLines(
   invoiceId: string,
   lines: WfirmaInvoiceLine[]
 ) {
-  await admin.from("faktury_pozycje").delete().eq("faktura_id", invoiceId);
+  const deleteResult = await admin.from("faktury_pozycje").delete().eq("faktura_id", invoiceId);
+  if (deleteResult.error) throw new Error("Nie udalo sie usunac wczesniejszych pozycji faktury przed importem z wFirmy.");
   if (lines.length === 0) return;
 
   const records = lines.map((line, index) => {

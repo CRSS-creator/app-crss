@@ -68,50 +68,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Wybierz co najmniej jedną fakturę." }, { status: 400 });
   }
 
-  const { data: invoices, error } = await auth.admin
-    .from("faktury")
-    .select(`
-      id,
-      klient_id,
-      numer,
-      data_wystawienia,
-      data_sprzedazy,
-      termin_platnosci,
-      kontrahent_nazwa,
-      kontrahent_nip,
-      kontrahent_email,
-      waluta,
-      opis,
-      wfirma_sync_status,
-      klienci (
-        email
-      ),
-      faktury_pozycje (
-        nazwa,
-        ilosc,
-        jednostka,
-        cena_netto,
-        stawka_vat,
-        sort_order
-      )
-    `)
-    .in("id", invoiceIds)
-    .in("wfirma_sync_status", ["nie_wyslano", "w_kolejce", "blad"]);
-
-  if (error) {
-    return NextResponse.json({ error: "Nie udało się pobrać faktur do wysyłki." }, { status: 500 });
-  }
-
   const sent: string[] = [];
   const failed: { invoiceId: string; error: string }[] = [];
-  const fetchedInvoiceIds = new Set(((invoices || []) as InvoiceRow[]).map((invoice) => invoice.id));
-  invoiceIds
-    .filter((invoiceId) => !fetchedInvoiceIds.has(invoiceId))
-    .forEach((invoiceId) => {
-      failed.push({ invoiceId, error: "Ta faktura zostaĹ‚a juĹĽ wysĹ‚ana do wFirmy albo nie moĹĽe zostaÄ‡ wysĹ‚ana ponownie." });
-    });
 
-  for (const invoice of (invoices || []) as InvoiceRow[]) {
+  for (const invoiceId of invoiceIds) {
+    const { data: invoice, error } = await claimInvoiceForWfirma(auth.admin, invoiceId);
+    if (error || !invoice) {
+      failed.push({
+        invoiceId,
+        error: error || "Faktura jest juz wyslana albo trwa jej wysylka. Odswiez liste faktur.",
+      });
+      continue;
+    }
     try {
       const validationErrors = validateWfirmaInvoice(invoice);
       if (validationErrors.length > 0) throw new Error(`Brakuje danych do wFirmy: ${validationErrors.join(", ")}.`);
@@ -208,6 +176,48 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json({ sent: sent.length, failed });
+}
+
+async function claimInvoiceForWfirma(admin: SupabaseClient, invoiceId: string) {
+  const { data, error } = await admin
+    .from("faktury")
+    .update({
+      wfirma_sync_status: "w_kolejce",
+      wfirma_sync_error: null,
+    })
+    .eq("id", invoiceId)
+    .is("wfirma_id", null)
+    .neq("status", "anulowana")
+    .in("wfirma_sync_status", ["nie_wyslano", "blad"])
+    .select(`
+      id,
+      klient_id,
+      numer,
+      data_wystawienia,
+      data_sprzedazy,
+      termin_platnosci,
+      kontrahent_nazwa,
+      kontrahent_nip,
+      kontrahent_email,
+      waluta,
+      opis,
+      wfirma_sync_status,
+      klienci (
+        email
+      ),
+      faktury_pozycje (
+        nazwa,
+        ilosc,
+        jednostka,
+        cena_netto,
+        stawka_vat,
+        sort_order
+      )
+    `)
+    .maybeSingle();
+
+  if (error) return { data: null, error: "Nie udalo sie zablokowac faktury do wysylki." };
+  return { data: data as InvoiceRow | null, error: null };
 }
 
 async function saveWfirmaInvoicePdf(params: {
@@ -331,7 +341,6 @@ function invoiceClientEmail(invoice: InvoiceRow) {
 function buildWfirmaInvoiceContent(line: InvoiceLineRow) {
   return {
     count: decimal(line.ilosc || 1, 4),
-    unit_count: decimal(line.ilosc || 1, 4),
     price: decimal(line.cena_netto || 0, 2),
     vat: normalizeVat(line.stawka_vat),
     name: line.nazwa,

@@ -51,7 +51,7 @@ export type LateDocumentsFeeSettlement = {
 };
 
 const LATE_DOCUMENTS_FEE_NAME = "Opłata za nieterminowe dostarczenie dokumentów";
-const LATE_DOCUMENTS_FEE_NOTE_PREFIX = "Automatyczna opłata";
+const LATE_DOCUMENTS_FEE_NOTE_PATTERN = "dokumenty za okres";
 
 export async function fetchAdditionalFeeDefinitions(includeInactive = false) {
   let query = supabase
@@ -139,7 +139,7 @@ export async function syncLateDocumentsAdditionalFee(settlement: LateDocumentsFe
   if (existingResult.error) return existingResult;
 
   const existingFees = ((existingResult.data || []) as SettlementAdditionalFee[])
-    .filter((fee) => (fee.uwagi || "").startsWith(LATE_DOCUMENTS_FEE_NOTE_PREFIX));
+    .filter((fee) => (fee.uwagi || "").toLowerCase().includes(LATE_DOCUMENTS_FEE_NOTE_PATTERN));
   const mainFee = existingFees[0] || null;
   const duplicateFees = existingFees.slice(1);
 
@@ -190,10 +190,10 @@ function buildLateDocumentsFeeNote(settlement: LateDocumentsFeeSettlement) {
   const periodLabel = formatSettlementPeriod(settlement.okres);
 
   if (!deliveredAt || !dueAt) {
-    return `${LATE_DOCUMENTS_FEE_NOTE_PREFIX}: dokumenty dostarczone po terminie wynikającym z umowy.`;
+    return "Dokumenty dostarczone po terminie wynikającym z umowy.";
   }
 
-  return `${LATE_DOCUMENTS_FEE_NOTE_PREFIX}: dokumenty za okres ${periodLabel} dostarczono ${formatDate(deliveredAt)}; zgodnie z umową powinny być dostarczone do ${formatDate(dueAt)}.`;
+  return `Dokumenty za okres ${periodLabel} dostarczono ${formatDate(deliveredAt)}; zgodnie z umową powinny być dostarczone do ${formatDate(dueAt)}.`;
 }
 
 function getLateDocumentsFeeClient(client: LateDocumentsFeeSettlement["klienci"]) {

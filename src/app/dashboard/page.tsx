@@ -18,6 +18,7 @@ import {
   type SettlementProgress,
 } from "@/lib/monthlySettlementsService";
 import { fetchTaxObligations, type TaxObligation } from "@/lib/taxObligationService";
+import { fetchRecurringTaskRealizations, type RecurringTaskRealization } from "@/lib/recurringTasksService";
 import {
   createManualTimeEntry,
   fetchTasks,
@@ -62,6 +63,7 @@ type DashboardState = {
   settlements: MonthlySettlement[];
   progressRows: SettlementProgress[];
   taxObligations: TaxObligation[];
+  recurringRealizations: RecurringTaskRealization[];
   onboardingStages: OnboardingStageRecord[];
   crmLeads: CrmLead[];
   todayTimeEntries: TimeEntry[];
@@ -89,6 +91,7 @@ function DashboardContent({ role }: { role: UserRole }) {
     settlements: [],
     progressRows: [],
     taxObligations: [],
+    recurringRealizations: [],
     onboardingStages: [],
     crmLeads: [],
     todayTimeEntries: [],
@@ -122,6 +125,7 @@ function DashboardContent({ role }: { role: UserRole }) {
         settlementsResult,
         progressResult,
         taxResult,
+        recurringResult,
         onboardingResult,
         crmResult,
         timeResult,
@@ -132,6 +136,7 @@ function DashboardContent({ role }: { role: UserRole }) {
         fetchMonthlySettlements(period),
         fetchSettlementTaskProgress(period),
         fetchTaxObligations(period),
+        fetchRecurringTaskRealizations(period),
         fetchOnboardingStages(),
         crmPromise,
         userId ? fetchUserTimeEntriesForDay(userId, start.toISOString(), end.toISOString()) : Promise.resolve({ data: [] as TimeEntry[], error: null }),
@@ -158,6 +163,7 @@ function DashboardContent({ role }: { role: UserRole }) {
           settlements: (settlementsResult.data || []) as MonthlySettlement[],
           progressRows: (progressResult.data || []) as SettlementProgress[],
           taxObligations: (taxResult.data || []) as TaxObligation[],
+          recurringRealizations: (recurringResult.data || []) as RecurringTaskRealization[],
           onboardingStages: (onboardingResult.data || []) as OnboardingStageRecord[],
           crmLeads: (crmResult.data || []) as CrmLead[],
           todayTimeEntries: (timeResult.data || []) as TimeEntry[],
@@ -357,7 +363,7 @@ function buildDashboardView(data: DashboardState, role: UserRole, now: Date) {
     return normalize(client.status_klienta) === "onboarding" || onboardingClientIds.has(client.id);
   });
   const todayWorkSeconds = calculateTodayWorkSeconds(data.todayTimeEntries, now);
-  const todayTimeDetails = buildTodayTimeDetails(data.todayTimeEntries, data.tasks, data.clients, now);
+  const todayTimeDetails = buildTodayTimeDetails(data.todayTimeEntries, data.tasks, data.clients, data.recurringRealizations, now);
   const activeTimeDetails = todayTimeDetails.filter((entry) => entry.active);
   const activeTimeEntriesCount = activeTimeDetails.length;
 
@@ -800,10 +806,13 @@ function calculateTodayWorkSeconds(entries: TimeEntry[], now: Date) {
   }, 0);
 }
 
-function buildTodayTimeDetails(entries: TimeEntry[], tasks: Task[], clients: Client[], now: Date): WorkTimeDetail[] {
+function buildTodayTimeDetails(entries: TimeEntry[], tasks: Task[], clients: Client[], recurringRealizations: RecurringTaskRealization[], now: Date): WorkTimeDetail[] {
   const { start, end } = getTodayBounds(now);
   const tasksById = new Map(tasks.map((task) => [task.id, task]));
   const clientsById = new Map(clients.map((client) => [client.id, client]));
+  const recurringRealizationsByKey = new Map(
+    recurringRealizations.map((realization) => [recurringTimeKey(realization.zadanie_cykliczne_id, realization.klient_id, realization.okres), realization])
+  );
 
   return entries
     .map((entry) => {
@@ -811,19 +820,27 @@ function buildTodayTimeDetails(entries: TimeEntry[], tasks: Task[], clients: Cli
       if (durationSeconds <= 0) return null;
       const task = entry.zadanie_id ? tasksById.get(entry.zadanie_id) : null;
       const client = entry.klient_id ? clientsById.get(entry.klient_id) : null;
+      const recurringRealization = entry.zadanie_cykliczne_id
+        ? recurringRealizationsByKey.get(recurringTimeKey(entry.zadanie_cykliczne_id, entry.klient_id, entry.miesiac_rozliczeniowy))
+        : null;
+      const title = task?.tytul || recurringRealization?.tytul || entry.opis || (entry.zadanie_cykliczne_id ? "Zadanie cykliczne" : "Zadanie");
       return {
         id: entry.id,
-        title: task?.tytul || entry.opis || (entry.zadanie_cykliczne_id ? "Zadanie cykliczne" : "Zadanie"),
+        title,
         clientName: client?.nazwa || null,
         startLabel: formatTimeOnly(entry.started_at),
         endLabel: entry.ended_at ? formatTimeOnly(entry.ended_at) : "teraz",
         durationSeconds,
         active: !entry.ended_at,
-        note: task?.tytul ? entry.opis : null,
+        note: title !== entry.opis ? entry.opis : null,
       };
     })
     .filter((entry): entry is WorkTimeDetail => Boolean(entry))
     .sort((first, second) => Number(second.active) - Number(first.active) || second.durationSeconds - first.durationSeconds);
+}
+
+function recurringTimeKey(taskId: string | null, clientId: string | null, settlementMonth: string | null) {
+  return [taskId || "", clientId || "", settlementMonth || ""].join("|");
 }
 
 function calculateEntryOverlapSeconds(entry: TimeEntry, dayStart: Date, dayEnd: Date, now: Date) {

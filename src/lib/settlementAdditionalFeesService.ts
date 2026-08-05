@@ -52,7 +52,7 @@ export type LateDocumentsFeeSettlement = {
 
 const LATE_DOCUMENTS_FEE_NAME = "Opłata za nieterminowe dostarczenie dokumentów";
 const LATE_DOCUMENTS_FEE_NOTE_PATTERN = "dokumenty za okres";
-const LATE_DOCUMENTS_GRACE_DAYS = 10;
+const LATE_DOCUMENTS_GRACE_DAYS = 3;
 
 export async function fetchAdditionalFeeDefinitions(includeInactive = false) {
   let query = supabase

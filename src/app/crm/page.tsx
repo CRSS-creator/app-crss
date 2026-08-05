@@ -639,7 +639,9 @@ function EditableCheckbox({ label, checked, onChange }: { label: string; checked
 function EditableTextarea({ label, value, onChange, rows = 4 }: { label: string; value: string; onChange: (value: string) => void; rows?: number }) { return <label style={textareaRowStyle}><span>{label}</span><textarea value={value} onChange={(event) => onChange(event.target.value)} style={textareaStyle} rows={rows} /></label>; }
 function Th({ children }: { children: React.ReactNode }) { return <th style={thStyle}>{children}</th>; }
 function Td({ children, strong }: { children: React.ReactNode; strong?: boolean }) { return <td style={{ ...tdStyle, fontWeight: strong ? 800 : 500 }}>{children}</td>; }
-function Badge({ children }: { children: React.ReactNode }) { return <span style={badgeStyle}>{children}</span>; }
+function Badge({ children }: { children: React.ReactNode }) {
+  return <span style={badgeStyle(String(children))}>{children}</span>;
+}
 function StatTile({ label, value, hint }: { label: string; value: string | number; hint: string }) {
   return <div style={statTileStyle}><span>{label}</span><strong style={statTileValueStyle}>{value}</strong><small style={statTileHintStyle}>{hint}</small></div>;
 }
@@ -834,7 +836,17 @@ const tableStyle: React.CSSProperties = { width: "100%", borderCollapse: "collap
 const thStyle: React.CSSProperties = { textAlign: "left", padding: "14px 16px", color: colors.muted, fontSize: "13px", textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: `1px solid ${colors.border}` };
 const rowStyle: React.CSSProperties = { borderBottom: `1px solid ${colors.border}` };
 const tdStyle: React.CSSProperties = { padding: "16px", color: colors.text, verticalAlign: "middle" };
-const badgeStyle: React.CSSProperties = { display: "inline-flex", borderRadius: radius.badge, padding: "7px 12px", background: "rgba(23, 59, 115, 0.10)", color: colors.navy, fontWeight: 800, fontSize: "13px" };
+const badgeStyle = (label: string): React.CSSProperties => {
+  const normalized = label.trim().toLowerCase();
+  if (normalized === "wygrana") {
+    return { ...badgeBaseStyle, background: "#dcfce7", color: colors.success };
+  }
+  if (normalized === "przegrana") {
+    return { ...badgeBaseStyle, background: "#fee2e2", color: colors.danger };
+  }
+  return { ...badgeBaseStyle, background: "rgba(23, 59, 115, 0.10)", color: colors.navy };
+};
+const badgeBaseStyle: React.CSSProperties = { display: "inline-flex", borderRadius: radius.badge, padding: "7px 12px", fontWeight: 800, fontSize: "13px" };
 const emptyStyle: React.CSSProperties = { border: `1px dashed ${colors.border}`, borderRadius: radius.input, padding: "18px", color: colors.muted, fontWeight: 700, textAlign: "center" };
 const drawerOverlayStyle: React.CSSProperties = { position: "fixed", inset: 0, zIndex: 50, background: "rgba(15, 23, 42, 0.32)", backdropFilter: "blur(3px)", display: "flex", justifyContent: "flex-end" };
 const drawerStyle: React.CSSProperties = { width: "560px", maxWidth: "100%", height: "100vh", background: colors.card, borderLeft: `1px solid ${colors.border}`, boxShadow: "-12px 0 30px rgba(15, 23, 42, 0.12)", padding: "28px", overflowY: "auto" };

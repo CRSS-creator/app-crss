@@ -49,6 +49,10 @@ const BILLING_MODEL_OPTIONS = [
   { value: "z_gory", label: "Z góry" },
 ];
 
+function activeFlagFromClientStatus(status: string | null | undefined) {
+  return status?.trim().toLowerCase() === "aktywny";
+}
+
 export default function ContractClientOnboardingPanel({ contract, onCreated }: Props) {
   const [caregivers, setCaregivers] = useState<Caregiver[]>([]);
   const [saving, setSaving] = useState(false);
@@ -121,6 +125,7 @@ export default function ContractClientOnboardingPanel({ contract, onCreated }: P
       forma_prawna: emptyToNull(draft.forma_prawna),
       forma_opodatkowania: emptyToNull(draft.forma_opodatkowania),
       status_klienta: draft.status_klienta || "Onboarding",
+      aktywny: activeFlagFromClientStatus(draft.status_klienta || "Onboarding"),
       opiekun_id: emptyToNull(draft.opiekun_id),
       obsluga_kadrowa: Boolean(contract.obsluga_kadrowa),
       czynny_vat: draft.czynny_vat,

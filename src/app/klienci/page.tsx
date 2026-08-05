@@ -140,6 +140,10 @@ const CLIENT_STATUS_OPTIONS = CLIENT_STATUSES.map((status) => ({
   label: status,
 }));
 
+function activeFlagFromClientStatus(status: string | null | undefined) {
+  return status?.trim().toLowerCase() === "aktywny";
+}
+
 const DOCUMENT_TABS: Array<{ key: DocumentTabKey; label: string }> = [
   { key: "all", label: "Wszystkie" },
   { key: "aml", label: "AML" },
@@ -729,6 +733,7 @@ function ClientDrawer({
           glowna_stawka_ryczaltu: draft.forma_opodatkowania === "Ryczałt" ? draft.glowna_stawka_ryczaltu.trim() || null : null,
           obsluga_kadrowa: draft.obsluga_kadrowa,
           status_klienta: draft.status_klienta.trim() || null,
+          aktywny: activeFlagFromClientStatus(draft.status_klienta),
           abonament: draft.abonament ? Number(draft.abonament) : null,
           model_fakturowania: draft.model_fakturowania || "z_dolu",
           pierwszy_okres_rozliczeniowy: normalizeMonthInput(
@@ -1351,6 +1356,7 @@ function CreateClientDrawer({
       glowna_stawka_ryczaltu: draft.forma_opodatkowania === "Ryczałt" ? draft.glowna_stawka_ryczaltu.trim() || null : null,
       obsluga_kadrowa: draft.obsluga_kadrowa,
       status_klienta: draft.status_klienta.trim() || "Aktywny",
+      aktywny: activeFlagFromClientStatus(draft.status_klienta || "Aktywny"),
       abonament: draft.abonament ? Number(draft.abonament) : null,
       model_fakturowania: draft.model_fakturowania || "z_dolu",
       pierwszy_okres_rozliczeniowy: normalizeMonthInput(

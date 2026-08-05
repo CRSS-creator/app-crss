@@ -17,6 +17,7 @@ import {
   finishClientOnboardingRpc,
   stageLabel,
   statusLabel,
+  syncCompletedOnboardingClientStatusesRpc,
   updateOnboardingStageNotes,
   updateOnboardingStageStatus,
   type OnboardingHistoryRecord,
@@ -164,7 +165,7 @@ function OnboardingContent() {
       supabase.auth.getSession(),
     ]);
 
-    const nextClients = clientsResult.error ? [] : ((clientsResult.data || []) as unknown as Client[]);
+    let nextClients = clientsResult.error ? [] : ((clientsResult.data || []) as unknown as Client[]);
     const nextContracts = contractsResult.error ? [] : ((contractsResult.data || []) as CrmContract[]);
     const nextRodoContracts = rodoResult.error ? [] : ((rodoResult.data || []) as RodoProcessingContract[]);
 
@@ -186,6 +187,19 @@ function OnboardingContent() {
     if (stagesResult.error) console.error("Błąd pobierania etapów onboardingu:", stagesResult.error);
     if (historyResult.error) console.error("Błąd pobierania historii onboardingu:", historyResult.error);
 
+    const nextStages = stagesResult.error ? [] : ((stagesResult.data || []) as OnboardingStageRecord[]);
+    if (hasCompletedInactiveOnboarding(nextClients, nextStages)) {
+      const syncResult = await syncCompletedOnboardingClientStatusesRpc();
+      if (syncResult.error) {
+        console.error("Błąd synchronizacji zakończonych onboardingów:", syncResult.error);
+      } else if ((syncResult.data || 0) > 0) {
+        const refreshedClients = await fetchClients();
+        if (!refreshedClients.error) {
+          nextClients = (refreshedClients.data || []) as unknown as Client[];
+        }
+      }
+    }
+
     setClients(nextClients);
     setContracts(nextContracts);
     setRodoContracts(nextRodoContracts);
@@ -193,7 +207,7 @@ function OnboardingContent() {
     setProfilesById(nextProfilesById);
     setCurrentUserRole(nextProfilesById[userResult.data.user?.id || ""]?.role || null);
     setCaregivers(await fetchAssignableCaregivers(sessionResult.data.session?.access_token));
-    setOnboardingStages(stagesResult.error ? [] : ((stagesResult.data || []) as OnboardingStageRecord[]));
+    setOnboardingStages(nextStages);
     setOnboardingHistory(historyResult.error ? [] : ((historyResult.data || []) as OnboardingHistoryRecord[]));
     setLoading(false);
   }
@@ -709,6 +723,29 @@ function findOnboardingClientIds(clients: Client[], contracts: CrmContract[]) {
       return status === "onboarding" || hasStartedContractOnboarding;
     })
     .map((client) => client.id);
+}
+
+function hasCompletedInactiveOnboarding(clients: Client[], stages: OnboardingStageRecord[]) {
+  const requiredStages: OnboardingStageKey[] = [
+    "contract",
+    "rodo",
+    "aml",
+    "client_card",
+    "powers",
+    "wfirma_account",
+    "wfirma",
+    "documents_takeover",
+  ];
+  const doneStatuses: OnboardingStageStatus[] = ["gotowe", "papierowo", "nowy_podmiot"];
+
+  return clients.some((client) => {
+    if (normalize(client.status_klienta) === "aktywny") return false;
+
+    return requiredStages.every((stageKey) => {
+      const stage = stages.find((item) => item.klient_id === client.id && item.etap === stageKey);
+      return Boolean(stage && doneStatuses.includes(stage.status));
+    });
+  });
 }
 
 function buildRows(

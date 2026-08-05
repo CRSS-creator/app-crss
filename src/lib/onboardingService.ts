@@ -143,6 +143,10 @@ export async function finishClientOnboardingRpc(klientId: string) {
   return supabase.rpc("finish_client_onboarding", { public_client_id: klientId });
 }
 
+export async function syncCompletedOnboardingClientStatusesRpc() {
+  return supabase.rpc("sync_completed_onboarding_client_statuses");
+}
+
 export function stageLabel(stage: OnboardingStageKey) {
   if (stage === "contract") return "Umowa księgowa";
   if (stage === "rodo") return "Umowa powierzenia";

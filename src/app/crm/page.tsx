@@ -142,7 +142,7 @@ function CrmContent() {
   const [searchQuery, setSearchQuery] = useState("");
   const [openedLeadFromUrl, setOpenedLeadFromUrl] = useState(false);
   const [statsOpen, setStatsOpen] = useState(false);
-  const [statsPeriod, setStatsPeriod] = useState<CrmStatsPeriod>("all");
+  const [statsPeriod, setStatsPeriod] = useState<CrmStatsPeriod>("month");
 
   useEffect(() => {
     loadInitialData();

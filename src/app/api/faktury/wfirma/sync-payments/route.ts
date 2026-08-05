@@ -17,7 +17,7 @@ import {
 const ALLOWED_ROLES = new Set(["owner", "admin"]);
 const INVOICE_PDF_BUCKET = "faktury-pdf";
 const STATUSES_TO_CHECK = ["wystawiona", "wyslana", "przeterminowana"];
-const MAX_INVOICES_PER_RUN = 80;
+const MAX_INVOICES_PER_RUN = 5000;
 const PAID_VALUES = new Set([
   "1",
   "true",
@@ -111,6 +111,7 @@ async function syncPayments(request: NextRequest) {
     .from("faktury")
     .select("id,numer,data_wystawienia,okres,kontrahent_nip,kwota_netto,kwota_vat,kwota_brutto,wfirma_id,wfirma_pdf_path,wfirma_pdf_name,status")
     .in("status", STATUSES_TO_CHECK)
+    .neq("kategoria", "korekta")
     .not("wfirma_id", "is", null)
     .order("termin_platnosci", { ascending: true });
 
@@ -263,7 +264,7 @@ function syncSearchMonths(invoices: InvoiceRow[], requestedMonth: string | null)
     if (periodMonth) addMonthWithNeighbours(months, periodMonth);
   }
 
-  return [...months].filter(isValidMonth).slice(0, requestedMonth ? 6 : 8);
+  return [...months].filter(isValidMonth);
 }
 
 function addMonthWithNeighbours(months: Set<string>, month: string) {

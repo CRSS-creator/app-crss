@@ -52,6 +52,7 @@ export type LateDocumentsFeeSettlement = {
 
 const LATE_DOCUMENTS_FEE_NAME = "Opłata za nieterminowe dostarczenie dokumentów";
 const LATE_DOCUMENTS_FEE_NOTE_PATTERN = "dokumenty za okres";
+const LATE_DOCUMENTS_GRACE_DAYS = 10;
 
 export async function fetchAdditionalFeeDefinitions(includeInactive = false) {
   let query = supabase
@@ -176,7 +177,7 @@ function shouldApplyLateDocumentsFee(settlement: LateDocumentsFeeSettlement, cli
   const deliveredAt = toDate(settlement.data_dostarczenia_dokumentow);
   const dueAt = documentsDueDate(settlement.okres);
   if (!deliveredAt || !dueAt) return false;
-  return deliveredAt.getTime() > dueAt.getTime();
+  return deliveredAt.getTime() >= addDays(dueAt, LATE_DOCUMENTS_GRACE_DAYS).getTime();
 }
 
 function calculateLateDocumentsFeeAmount(subscription: number | string | null | undefined) {
@@ -205,6 +206,12 @@ function documentsDueDate(period: string) {
   const [year, month] = period.split("-").map(Number);
   if (!year || !month) return null;
   return new Date(year, month, 7, 12, 0, 0, 0);
+}
+
+function addDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
 }
 
 function formatSettlementPeriod(period: string) {

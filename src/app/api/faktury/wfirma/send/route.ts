@@ -19,8 +19,11 @@ type SendPayload = {
 
 type InvoiceRow = {
   id: string;
+  created_at: string;
   klient_id: string | null;
   numer: string | null;
+  status: string;
+  zrodlo: string;
   data_wystawienia: string | null;
   data_sprzedazy: string | null;
   termin_platnosci: string | null;
@@ -82,6 +85,9 @@ export async function POST(request: NextRequest) {
       });
       continue;
     }
+    let createdWfirmaId = "";
+    let createdWfirmaNumber = invoice.numer;
+    let createdWfirmaIssueDate = invoice.data_wystawienia || new Date().toISOString().slice(0, 10);
     try {
       await assertNoDuplicateStandardInvoice(auth.admin, invoice);
       const validationErrors = validateWfirmaInvoice(invoice);
@@ -103,6 +109,9 @@ export async function POST(request: NextRequest) {
       const paymentDate = addDays(wfirmaIssueDate, 7);
       const wfirmaId = stringify(wfirmaInvoice?.id);
       const wfirmaNumber = stringify(wfirmaInvoice?.fullnumber || wfirmaInvoice?.number) || invoice.numer;
+      createdWfirmaId = wfirmaId;
+      createdWfirmaNumber = wfirmaNumber;
+      createdWfirmaIssueDate = wfirmaIssueDate;
       const pdfResult = wfirmaId
         ? await saveWfirmaInvoicePdf({
             admin: auth.admin,
@@ -160,13 +169,24 @@ export async function POST(request: NextRequest) {
       sent.push(invoice.id);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Nieznany błąd wysyłki.";
-      await auth.admin
-        .from("faktury")
-        .update({
-          wfirma_sync_status: "blad",
-          wfirma_sync_error: message,
-        })
-        .eq("id", invoice.id);
+      const failedUpdatePayload = createdWfirmaId
+        ? {
+            numer: createdWfirmaNumber,
+            status: "wystawiona",
+            zrodlo: "wfirma",
+            data_wystawienia: createdWfirmaIssueDate,
+            data_sprzedazy: createdWfirmaIssueDate,
+            termin_platnosci: addDays(createdWfirmaIssueDate, 7),
+            wfirma_id: createdWfirmaId,
+            wfirma_synced_at: new Date().toISOString(),
+            wfirma_sync_status: "wyslano",
+            wfirma_sync_error: `Faktura powstala w wFirmie, ale aplikacja nie zapisala pelnych danych: ${message}`,
+          }
+        : {
+            wfirma_sync_status: "blad",
+            wfirma_sync_error: message,
+          };
+      await auth.admin.from("faktury").update(failedUpdatePayload).eq("id", invoice.id);
       failed.push({ invoiceId: invoice.id, error: message });
     }
   }
@@ -190,12 +210,16 @@ async function claimInvoiceForWfirma(admin: SupabaseClient, invoiceId: string) {
     })
     .eq("id", invoiceId)
     .is("wfirma_id", null)
-    .neq("status", "anulowana")
+    .eq("status", "szkic")
+    .eq("zrodlo", "aplikacja")
     .in("wfirma_sync_status", ["nie_wyslano", "blad"])
     .select(`
       id,
+      created_at,
       klient_id,
       numer,
+      status,
+      zrodlo,
       data_wystawienia,
       data_sprzedazy,
       termin_platnosci,
@@ -253,20 +277,33 @@ async function assertNoDuplicateStandardInvoice(admin: SupabaseClient, invoice: 
 
   const { data, error } = await admin
     .from("faktury")
-    .select("id,numer,wfirma_id")
+    .select("id,created_at,numer,status,zrodlo,wfirma_id,wfirma_sync_status")
     .eq("klient_id", invoice.klient_id)
     .eq("okres", invoice.okres)
     .eq("kategoria", "standardowa")
     .neq("id", invoice.id)
-    .or("wfirma_id.not.is.null,zrodlo.eq.wfirma")
-    .limit(1);
+    .neq("status", "anulowana");
 
   if (error) throw new Error("Nie udało się sprawdzić duplikatów faktury standardowej.");
-  const duplicate = data?.[0];
-  if (duplicate) {
+  const duplicate = (data || []).find((item) => {
+    if (item.wfirma_id || item.zrodlo === "wfirma") return true;
+    if (item.zrodlo !== "aplikacja" || item.status !== "szkic" || item.wfirma_sync_status === "wyslano") return false;
+    return compareInvoiceClaimOrder(item.created_at, item.id, invoice.created_at, invoice.id) < 0;
+  });
+  if (duplicate?.wfirma_id || duplicate?.zrodlo === "wfirma") {
     const label = duplicate.numer ? ` (${duplicate.numer})` : "";
     throw new Error(`Faktura standardowa za ten okres jest już wystawiona w wFirmie${label}. Szkic nie został wysłany.`);
   }
+  if (duplicate) {
+    const label = duplicate.numer ? ` (${duplicate.numer})` : "";
+    throw new Error(`Istnieje wczesniejszy szkic standardowej faktury za ten okres${label}. Wysylka tego duplikatu zostala zablokowana.`);
+  }
+}
+
+function compareInvoiceClaimOrder(firstCreatedAt: string | null, firstId: string, secondCreatedAt: string | null, secondId: string) {
+  const createdCompare = stringify(firstCreatedAt).localeCompare(stringify(secondCreatedAt));
+  if (createdCompare !== 0) return createdCompare;
+  return firstId.localeCompare(secondId);
 }
 
 function validateWfirmaInvoice(invoice: InvoiceRow) {

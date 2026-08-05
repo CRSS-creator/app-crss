@@ -115,6 +115,7 @@ export type DraftInvoiceLinePayload = {
 export type WfirmaPaymentSyncResult = {
   checked: number;
   markedPaid: number;
+  refreshed?: { invoiceId: string; number: string | null; pdf: boolean }[];
   paid: { invoiceId: string; number: string | null; wfirmaId: string }[];
   failed: { invoiceId: string; number: string | null; wfirmaId: string; error: string }[];
 };
@@ -241,10 +242,13 @@ export async function sendInvoicesToWfirma(invoiceIds: string[]) {
   );
 }
 
-export async function syncWfirmaPayments(month?: string): Promise<{ data: WfirmaPaymentSyncResult | null; error: Error | null }> {
+export async function syncWfirmaPayments(month?: string, invoiceIds?: string[]): Promise<{ data: WfirmaPaymentSyncResult | null; error: Error | null }> {
   return callWfirmaEndpoint<WfirmaPaymentSyncResult>(
     "/api/faktury/wfirma/sync-payments",
-    month ? { month } : {}
+    {
+      ...(month ? { month } : {}),
+      ...(invoiceIds?.length ? { invoiceIds } : {}),
+    }
   );
 }
 
@@ -311,7 +315,9 @@ async function callInvoiceEndpoint<T>(
     const text = await response.text();
     const data = parseJson(text);
     if (!response.ok) {
-      const details = data?.error || text.slice(0, 500) || `HTTP ${response.status}`;
+      const details = response.status === 504
+        ? "Serwer przerwał odświeżanie po czasie. Część danych mogła już zostać zaktualizowana, odśwież widok i ponów operację dla pozostałych faktur."
+        : data?.error || (looksLikeHtml(text) ? `HTTP ${response.status}` : text.slice(0, 500)) || `HTTP ${response.status}`;
       return { data: null, error: new Error(details) };
     }
     return { data: data as T, error: null };
@@ -326,6 +332,10 @@ function parseJson(value: string) {
   } catch {
     return null;
   }
+}
+
+function looksLikeHtml(value: string) {
+  return /^\s*</.test(value);
 }
 
 function normalizeInvoicePayload<T extends Partial<InvoicePayload>>(payload: T) {

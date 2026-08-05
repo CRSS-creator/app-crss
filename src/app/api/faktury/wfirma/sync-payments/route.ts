@@ -81,6 +81,7 @@ type FailedInvoice = PaidInvoice & {
 
 type SyncPayload = {
   month?: string;
+  invoiceIds?: string[];
 };
 
 export async function GET(request: NextRequest) {
@@ -105,7 +106,9 @@ async function syncPayments(request: NextRequest) {
     return NextResponse.json({ error: wfirma.error }, { status: 500 });
   }
 
-  const requestedMonth = await syncMonth(request);
+  const payload = await syncPayload(request);
+  const requestedMonth = syncMonth(request, payload);
+  const requestedInvoiceIds = syncInvoiceIds(payload);
   const requestedRange = requestedMonth ? monthRange(requestedMonth) : null;
   let query = admin
     .from("faktury")
@@ -114,6 +117,10 @@ async function syncPayments(request: NextRequest) {
     .neq("kategoria", "korekta")
     .not("wfirma_id", "is", null)
     .order("termin_platnosci", { ascending: true });
+
+  if (requestedInvoiceIds.length > 0) {
+    query = query.in("id", requestedInvoiceIds);
+  }
 
   if (requestedRange) {
     query = query.or(
@@ -519,17 +526,26 @@ async function replaceInvoiceLines(
   if (error) throw new Error("Nie udało się zapisać pozycji faktury z wFirmy.");
 }
 
-async function syncMonth(request: NextRequest) {
+async function syncPayload(request: NextRequest) {
+  try {
+    return (await request.json()) as SyncPayload;
+  } catch {
+    return {};
+  }
+}
+
+function syncMonth(request: NextRequest, payload: SyncPayload) {
   const queryMonth = request.nextUrl.searchParams.get("month")?.trim();
   if (isValidMonth(queryMonth)) return queryMonth || null;
 
-  try {
-    const payload = (await request.json()) as SyncPayload;
-    const bodyMonth = stringify(payload.month);
-    return isValidMonth(bodyMonth) ? bodyMonth : null;
-  } catch {
-    return null;
-  }
+  const bodyMonth = stringify(payload.month);
+  return isValidMonth(bodyMonth) ? bodyMonth : null;
+}
+
+function syncInvoiceIds(payload: SyncPayload) {
+  return Array.isArray(payload.invoiceIds)
+    ? payload.invoiceIds.filter((id) => /^[0-9a-f-]{36}$/i.test(stringify(id)))
+    : [];
 }
 
 function isValidMonth(value: string | null | undefined) {

@@ -46,6 +46,7 @@ const CATEGORY_OPTIONS = [
   { value: "dodatkowa", label: "Dodatkowa" },
   { value: "korekta", label: "Korekta" },
 ] as const;
+const MONTH_REFRESH_BATCH_SIZE = 4;
 
 export default function InvoicesPage() {
   return (
@@ -207,12 +208,24 @@ function InvoicesContent() {
 
   async function refreshSelectedMonthInvoices() {
     setSyncingSelectedMonth(true);
-    const syncResult = await syncWfirmaPayments(invoiceMonth);
+    const invoiceIds = invoices
+      .filter((invoice) => canRefreshSelectedMonthInvoice(invoice, invoiceMonth))
+      .map((invoice) => invoice.id);
+    let firstError: Error | null = null;
+
+    for (let index = 0; index < invoiceIds.length; index += MONTH_REFRESH_BATCH_SIZE) {
+      const batch = invoiceIds.slice(index, index + MONTH_REFRESH_BATCH_SIZE);
+      const syncResult = await syncWfirmaPayments(invoiceMonth, batch);
+      if (syncResult.error) {
+        firstError = syncResult.error;
+        break;
+      }
+    }
     setSyncingSelectedMonth(false);
 
-    if (syncResult.error) {
-      console.error("Błąd sprawdzania płatności w wFirmie dla miesiąca:", syncResult.error);
-      alert(`Nie udało się odświeżyć płatności za wybrany miesiąc.\n\n${syncResult.error.message}`);
+    if (firstError) {
+      console.error("Błąd sprawdzania płatności w wFirmie dla miesiąca:", firstError);
+      alert(`Nie udało się odświeżyć płatności za wybrany miesiąc.\n\n${firstError.message}`);
     }
 
     await loadData();
@@ -565,7 +578,7 @@ function InvoicesContent() {
             style={secondaryButtonStyle}
             disabled={loading || syncingSelectedMonth || generating || importingWfirma}
             onClick={refreshSelectedMonthInvoices}
-            title="Odświeża płatności tylko dla wybranego miesiąca"
+            title="Odświeża numer, daty, PDF, pozycje i płatności dla wybranego miesiąca"
           >
             <RotateCw size={18} />
             {syncingSelectedMonth ? "Odświeżanie..." : "Odśwież"}
@@ -1274,6 +1287,15 @@ function hasFinalInvoiceNumber(value: string | null) {
 
 function canSendInvoiceMail(invoice: Invoice) {
   return Boolean(invoice.wfirma_pdf_path && hasInvoiceEmail(invoice) && invoice.status !== "anulowana");
+}
+
+function canRefreshSelectedMonthInvoice(invoice: Invoice, month: string) {
+  return Boolean(
+    invoiceListMonth(invoice) === month &&
+      invoice.wfirma_id &&
+      invoice.kategoria !== "korekta" &&
+      ["wystawiona", "wyslana", "przeterminowana"].includes(invoice.status)
+  );
 }
 
 function canSendOverdueReminder(invoice: Invoice) {

@@ -204,8 +204,10 @@ async function loadWfirmaInvoicesByMonth(
 ) {
   const months = syncSearchMonths(invoices, requestedMonth);
   const invoicesById = new Map<string, WfirmaInvoice>();
+  const requestedWfirmaIds = new Set(invoices.map((invoice) => stringify(invoice.wfirma_id)).filter(Boolean));
 
   for (const month of months) {
+    if (hasAllRequestedInvoices(invoicesById, requestedWfirmaIds)) break;
     const range = monthRange(month);
     let page = 1;
     const limit = 100;
@@ -225,6 +227,7 @@ async function loadWfirmaInvoicesByMonth(
           const id = stringify(invoice.id);
           if (id) invoicesById.set(id, invoice);
         }
+        if (hasAllRequestedInvoices(invoicesById, requestedWfirmaIds)) break;
         if (wfirmaInvoices.length < limit) break;
       } catch (error) {
         console.error("Nie udało się pobrać faktur z wFirmy dla miesiąca.", {
@@ -280,11 +283,21 @@ function syncSearchMonths(invoices: InvoiceRow[], requestedMonth: string | null)
   for (const invoice of invoices) {
     const issueMonth = dateOnly(invoice.data_wystawienia)?.slice(0, 7);
     const periodMonth = dateOnly(invoice.okres)?.slice(0, 7);
-    if (issueMonth) addMonthWithNeighbours(months, issueMonth);
-    if (periodMonth) addMonthWithNeighbours(months, periodMonth);
+    if (requestedMonth) {
+      if (issueMonth) addMonthWithNeighbours(months, issueMonth);
+      if (periodMonth) addMonthWithNeighbours(months, periodMonth);
+    } else {
+      if (issueMonth) months.add(issueMonth);
+      else if (periodMonth) months.add(periodMonth);
+    }
   }
 
   return [...months].filter(isValidMonth);
+}
+
+function hasAllRequestedInvoices(invoicesById: Map<string, WfirmaInvoice>, requestedWfirmaIds: Set<string>) {
+  if (requestedWfirmaIds.size === 0) return true;
+  return [...requestedWfirmaIds].every((wfirmaId) => invoicesById.has(wfirmaId));
 }
 
 function addMonthWithNeighbours(months: Set<string>, month: string) {

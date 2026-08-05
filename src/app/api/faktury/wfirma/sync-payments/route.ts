@@ -128,7 +128,9 @@ async function syncPayments(request: NextRequest) {
   }
 
   const invoices = ((data || []) as InvoiceRow[]).filter((invoice) => stringify(invoice.wfirma_id));
-  const wfirmaInvoicesById = await loadWfirmaInvoicesById(wfirma.config, invoices, requestedMonth);
+  const wfirmaInvoicesById = requestedMonth
+    ? await loadWfirmaInvoicesByMonth(wfirma.config, invoices, requestedMonth)
+    : await loadWfirmaInvoicesByDirectId(wfirma.config, invoices);
   const paid: PaidInvoice[] = [];
   const failed: FailedInvoice[] = [];
   const refreshed: { invoiceId: string; number: string | null; pdf: boolean }[] = [];
@@ -141,9 +143,11 @@ async function syncPayments(request: NextRequest) {
       const wfirmaInvoice = wfirmaInvoicesById.get(wfirmaId);
       if (!wfirmaInvoice) throw new Error("wFirma nie zwróciła danych tej faktury.");
 
-      const syncResult = await syncWfirmaInvoiceSnapshot(admin, wfirma.config, invoice, wfirmaInvoice);
-      if (syncResult.updatedNumber || syncResult.savedPdf) {
-        refreshed.push({ invoiceId: invoice.id, number: syncResult.invoiceNumber, pdf: syncResult.savedPdf });
+      if (requestedMonth) {
+        const syncResult = await syncWfirmaInvoiceSnapshot(admin, wfirma.config, invoice, wfirmaInvoice);
+        if (syncResult.updatedNumber || syncResult.savedPdf) {
+          refreshed.push({ invoiceId: invoice.id, number: syncResult.invoiceNumber, pdf: syncResult.savedPdf });
+        }
       }
 
       if (!isPaidInvoice(wfirmaInvoice)) continue;
@@ -186,10 +190,10 @@ async function syncPayments(request: NextRequest) {
   });
 }
 
-async function loadWfirmaInvoicesById(
+async function loadWfirmaInvoicesByMonth(
   config: Parameters<typeof findWfirmaInvoices>[0]["config"],
   invoices: InvoiceRow[],
-  requestedMonth: string | null
+  requestedMonth: string
 ) {
   const months = syncSearchMonths(invoices, requestedMonth);
   const invoicesById = new Map<string, WfirmaInvoice>();
@@ -200,20 +204,29 @@ async function loadWfirmaInvoicesById(
     const limit = 100;
 
     while (page <= 20) {
-      const response = await findWfirmaInvoices({
-        config,
-        dateFrom: range.dateFrom,
-        dateTo: range.dateTo,
-        page,
-        limit,
-      });
-      const wfirmaInvoices = extractWfirmaInvoices(response);
-      for (const invoice of wfirmaInvoices) {
-        if (isCorrectionInvoice(invoice)) continue;
-        const id = stringify(invoice.id);
-        if (id) invoicesById.set(id, invoice);
+      try {
+        const response = await findWfirmaInvoices({
+          config,
+          dateFrom: range.dateFrom,
+          dateTo: range.dateTo,
+          page,
+          limit,
+        });
+        const wfirmaInvoices = extractWfirmaInvoices(response);
+        for (const invoice of wfirmaInvoices) {
+          if (isCorrectionInvoice(invoice)) continue;
+          const id = stringify(invoice.id);
+          if (id) invoicesById.set(id, invoice);
+        }
+        if (wfirmaInvoices.length < limit) break;
+      } catch (error) {
+        console.error("Nie udało się pobrać faktur z wFirmy dla miesiąca.", {
+          month,
+          page,
+          error: error instanceof Error ? error.message : error,
+        });
+        break;
       }
-      if (wfirmaInvoices.length < limit) break;
       page += 1;
     }
   }
@@ -245,6 +258,34 @@ async function loadWfirmaInvoicesById(
       if (invoice && id) invoicesById.set(id, invoice);
     } catch {
       // The caller reports missing invoices in the regular failed list.
+    }
+  }
+
+  return invoicesById;
+}
+
+async function loadWfirmaInvoicesByDirectId(
+  config: Parameters<typeof findWfirmaInvoices>[0]["config"],
+  invoices: InvoiceRow[]
+) {
+  const invoicesById = new Map<string, WfirmaInvoice>();
+
+  for (const invoice of invoices) {
+    const wfirmaId = stringify(invoice.wfirma_id);
+    if (!wfirmaId || invoicesById.has(wfirmaId)) continue;
+
+    try {
+      const response = await getWfirmaInvoice(config, wfirmaId);
+      const wfirmaInvoice = firstWfirmaInvoice(response);
+      const id = stringify(wfirmaInvoice?.id || wfirmaId);
+      if (wfirmaInvoice && id && !isCorrectionInvoice(wfirmaInvoice)) {
+        invoicesById.set(id, wfirmaInvoice);
+      }
+    } catch (error) {
+      console.error("Nie udało się pobrać faktury z wFirmy po ID.", {
+        wfirmaId,
+        error: error instanceof Error ? error.message : error,
+      });
     }
   }
 

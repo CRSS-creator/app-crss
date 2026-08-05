@@ -310,6 +310,9 @@ export function validateAmlInitialFormData(data: AmlInitialFormData) {
   } else {
     if (!data.individual.fullName?.trim()) missing.push("Imię i nazwisko klienta");
     if (!data.individual.peselOrBirthDate?.trim()) missing.push("PESEL lub data urodzenia klienta");
+    requireText(data.individual.birthCountry, "Państwo urodzenia klienta", missing);
+    requireText(data.individual.identityDocument, "Dokument tożsamości klienta", missing);
+    requireText(data.individual.residenceAddress, "Adres zamieszkania klienta", missing);
     if (!data.individual.businessSubject?.trim()) missing.push("Przedmiot prowadzonej działalności");
     requireYesNo(data.individual.hasAuthorizedPersons, "Informacja, czy ustanowiono osobę upoważnioną", missing);
     if (data.individual.hasAuthorizedPersons === "tak") requireCompleteIndividualAuthorizedPersons(data.individual.authorizedPersons, missing);

@@ -244,9 +244,9 @@ function IndividualForm({ draft, setDraft, response }: FormProps) {
           <Field label="Imię i nazwisko" required><input style={inputStyle} value={individual.fullName} onChange={(event) => update("fullName", event.target.value)} /></Field>
           <Field label="Obywatelstwo"><input style={inputStyle} value={individual.citizenship} onChange={(event) => update("citizenship", event.target.value)} /></Field>
           <Field label="PESEL lub data urodzenia" required><input style={inputStyle} value={individual.peselOrBirthDate} onChange={(event) => update("peselOrBirthDate", event.target.value)} /></Field>
-          <Field label="Państwo urodzenia"><input style={inputStyle} value={individual.birthCountry} onChange={(event) => update("birthCountry", event.target.value)} /></Field>
-          <Field label="Seria i numer dokumentu tożsamości"><input style={inputStyle} value={individual.identityDocument} onChange={(event) => update("identityDocument", event.target.value)} /></Field>
-          <Field label="Adres zamieszkania"><input style={inputStyle} value={individual.residenceAddress} onChange={(event) => update("residenceAddress", event.target.value)} /></Field>
+          <Field label="Państwo urodzenia" required><input style={inputStyle} value={individual.birthCountry} onChange={(event) => update("birthCountry", event.target.value)} /></Field>
+          <Field label="Seria i numer dokumentu tożsamości" required><input style={inputStyle} value={individual.identityDocument} onChange={(event) => update("identityDocument", event.target.value)} /></Field>
+          <Field label="Adres zamieszkania" required><input style={inputStyle} value={individual.residenceAddress} onChange={(event) => update("residenceAddress", event.target.value)} /></Field>
           <ReadOnlyField label="Adres e-mail" value={client?.email} />
           <ReadOnlyField label="Telefon" value={client?.telefon} />
           <ReadOnlyField label="NIP" value={client?.nip} />

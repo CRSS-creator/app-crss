@@ -327,13 +327,6 @@ function renderDashboard(view: CfoView) {
             {view.ownerPositiveResult > 0 ? <><span>Pokryte wynikiem po kosztach</span><strong>-{formatMoney(view.ownerPositiveResult)}</strong></> : null}
           </div>
         </div>
-        <div style={quickGridStyle}>
-          <MiniStat label="Potrzebne po kosztach" value={formatMoney(view.ownerGoalTarget)} helper="brakująca wypłata netto + bufor" />
-          <MiniStat label="Wypłata netto w kosztach" value={formatMoney(view.ownerPayoutRecorded)} helper={`do wypłaty netto brakuje: ${formatMoney(view.ownerPayoutRemaining)}`} />
-          <MiniStat label="Wynik po kosztach" value={formatMoney(view.operatingResult)} helper="przychody minus koszty operacyjne i zarządcze" />
-          <MiniStat label="Zostaje po wypłacie" value={formatMoney(view.retainedProfitAfterOwner)} helper={`${formatPercent(view.retainedProfitMargin)} przychodów po dopłacie właściciela`} />
-          <MiniStat label={view.ownerGoalGap > 0 ? "Brakuje do celu" : "Nadwyżka ponad cel"} value={formatMoney(view.ownerGoalGap > 0 ? view.ownerGoalGap : view.ownerGoalSurplus)} helper={`minimum w spółce: ${formatMoney(view.companyBufferTarget)}`} tone={view.ownerGoalGap > 0 ? "bad" : "good"} />
-        </div>
       </article>
       <article style={panelStyle}>
         <div style={panelHeaderWithTotalStyle}>
@@ -989,11 +982,6 @@ function MoneyTextInput({
       }}
     />
   );
-}
-
-function MiniStat({ label, value, helper, tone }: { label: string; value: string; helper: string; tone?: "good" | "bad" }) {
-  const valueStyle = tone === "good" ? successInlineStyle : tone === "bad" ? dangerInlineStyle : undefined;
-  return <div style={miniStatStyle}><span>{label}</span><strong style={valueStyle}>{value}</strong><small>{helper}</small></div>;
 }
 
 function Breakdown({ rows }: { rows: { label: string; value: number }[] }) {
@@ -1720,8 +1708,6 @@ const recommendationStyle: CSSProperties = { display: "grid", gap: "6px", backgr
 const ownerGoalBreakdownStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: "7px 14px", marginTop: "8px", maxWidth: "560px" };
 const dangerInlineStyle: CSSProperties = { color: colors.danger, fontWeight: 900 };
 const successInlineStyle: CSSProperties = { color: colors.success, fontWeight: 900 };
-const quickGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "12px", marginTop: "14px" };
-const miniStatStyle: CSSProperties = { display: "grid", gap: "6px", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "12px", color: colors.muted, fontWeight: 750 };
 const tableWrapperStyle: CSSProperties = { overflowX: "auto" };
 const tableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse" };
 const wideCostTableStyle: CSSProperties = { ...tableStyle, minWidth: "1220px", tableLayout: "fixed" };

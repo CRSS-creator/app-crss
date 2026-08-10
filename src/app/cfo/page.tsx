@@ -500,7 +500,7 @@ function renderTeamSectionTable(
   const drafts = teamMembers.map((member) => employeeDrafts[member.id] || defaultEmployeeDraft(member, period));
 
   return (
-    <section style={sectionGridStyle}>
+    <section style={sectionStackStyle}>
       <article style={panelStyle}>
         <div style={panelHeaderStyle}>
           <Users size={21} style={panelIconStyle} />
@@ -554,14 +554,14 @@ function renderTeamSectionTable(
           </table>
         </div>
         <div style={formFooterStyle}>
-          <span style={smallStyle}>Norma dzienna: 8 h. Capacity liczone z dni roboczych, wymiaru etatu, nieobecności i nadgodzin.</span>
+          <span style={smallStyle}>Norma dzienna: 8 h. Dostępne godziny liczone są z dni roboczych, wymiaru etatu, nieobecności i nadgodzin.</span>
           <button type="button" style={primaryButtonStyle} onClick={saveTeamCosts} disabled={saving || teamMembers.length === 0}><Save size={17} />Zapisz zespół</button>
         </div>
       </article>
       <article style={panelStyle}>
         <div style={panelHeaderStyle}>
           <CalendarDays size={21} style={panelIconStyle} />
-          <h2 style={panelTitleStyle}>Miesięczny capacity</h2>
+          <h2 style={panelTitleStyle}>Dostępne godziny w miesiącu</h2>
         </div>
         <div style={miniListStyle}>
           {drafts.length === 0 ? <span style={smallStyle}>Brak aktywnych użytkowników zespołu.</span> : drafts.map((employee) => {
@@ -1109,7 +1109,6 @@ const tabsStyle: CSSProperties = { display: "flex", gap: "8px", flexWrap: "wrap"
 const tabStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.navy, minHeight: "40px", padding: "8px 12px", fontWeight: 850, display: "inline-flex", alignItems: "center", gap: "8px", cursor: "pointer" };
 const activeTabStyle: CSSProperties = { ...tabStyle, background: colors.navy, color: colors.white, borderColor: colors.navy };
 const dashboardGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 0.95fr) minmax(0, 1.05fr)", gap: "18px", alignItems: "start" };
-const sectionGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1.2fr) minmax(320px, 0.8fr)", gap: "18px", alignItems: "start" };
 const sectionStackStyle: CSSProperties = { display: "grid", gap: "18px" };
 const panelStyle: CSSProperties = { background: colors.card, border: `1px solid ${colors.border}`, borderRadius: radius.card, boxShadow: shadow.soft, padding: "20px", minWidth: 0 };
 const widePanelStyle: CSSProperties = { ...panelStyle, gridColumn: "1 / -1" };

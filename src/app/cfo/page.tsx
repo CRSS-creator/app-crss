@@ -317,14 +317,15 @@ function renderDashboard(view: CfoView) {
           <strong>{view.ownerGoalGap <= 0 ? "Nadwyżka ponad cel właścicielski" : "Brakuje do celu właścicielskiego"}</strong>
           <span>
             {view.ownerGoalGap <= 0
-              ? <><strong style={successInlineStyle}>Nadwyżka {formatMoney(view.ownerGoalSurplus)}</strong>. Cel obejmuje wypłatę {formatMoney(OWNER_MONTHLY_PAYOUT)} oraz minimum {formatMoney(view.companyBufferTarget)} pozostające w spółce.</>
-              : <><strong style={dangerInlineStyle}>Brakuje {formatMoney(view.ownerGoalGap)}</strong>. Cel obejmuje wypłatę {formatMoney(OWNER_MONTHLY_PAYOUT)} oraz minimum {formatMoney(view.companyBufferTarget)} pozostające w spółce.</>}
+              ? <><strong style={successInlineStyle}>Nadwyżka {formatMoney(view.ownerGoalSurplus)}</strong>. Cel obejmuje wypłatę {formatMoney(OWNER_MONTHLY_PAYOUT)}, w tym {formatMoney(view.ownerPayoutRecorded)} już ujęte w kosztach, oraz minimum {formatMoney(view.companyBufferTarget)} pozostające w spółce.</>
+              : <><strong style={dangerInlineStyle}>Brakuje {formatMoney(view.ownerGoalGap)}</strong>. Cel obejmuje wypłatę {formatMoney(OWNER_MONTHLY_PAYOUT)}, w tym {formatMoney(view.ownerPayoutRecorded)} już ujęte w kosztach, oraz minimum {formatMoney(view.companyBufferTarget)} pozostające w spółce.</>}
           </span>
         </div>
         <div style={quickGridStyle}>
-          <MiniStat label="Wymagany wynik" value={formatMoney(view.ownerGoalTarget)} helper="wypłata właściciela + 10% przychodów" />
+          <MiniStat label="Wymagany wynik" value={formatMoney(view.ownerGoalTarget)} helper="brakująca wypłata + 10% przychodów" />
+          <MiniStat label="Wypłata w kosztach" value={formatMoney(view.ownerPayoutRecorded)} helper={`do wypłaty brakuje: ${formatMoney(view.ownerPayoutRemaining)}`} />
           <MiniStat label="Wynik po kosztach" value={formatMoney(view.operatingResult)} helper="przychody minus koszty operacyjne i zarządcze" />
-          <MiniStat label="Zostaje po wypłacie" value={formatMoney(view.retainedProfitAfterOwner)} helper={`${formatPercent(view.retainedProfitMargin)} przychodów po wypłacie właściciela`} />
+          <MiniStat label="Zostaje po wypłacie" value={formatMoney(view.retainedProfitAfterOwner)} helper={`${formatPercent(view.retainedProfitMargin)} przychodów po dopłacie właściciela`} />
           <MiniStat label={view.ownerGoalGap > 0 ? "Brakuje do celu" : "Nadwyżka ponad cel"} value={formatMoney(view.ownerGoalGap > 0 ? view.ownerGoalGap : view.ownerGoalSurplus)} helper={`minimum w spółce: ${formatMoney(view.companyBufferTarget)}`} tone={view.ownerGoalGap > 0 ? "bad" : "good"} />
         </div>
       </article>
@@ -1084,12 +1085,14 @@ function buildCfoView(period: string, revenueLines: CfoInvoiceLine[], costs: Cfo
   const employeeBase = sum(employees.map((employee) => Number(employee.podstawa || 0) + Number(employee.zus_pracodawcy || 0) + Number(employee.benefity || 0) + Number(employee.premie || 0) + Number(employee.szkolenia || 0)));
   const activeCosts = costs.filter((cost) => !cost.ignoruj);
   const managementCosts = sum(activeCosts.filter((cost) => cost.kategoria === "zarzad_wlasciciel").map(monthlyCostShare));
+  const ownerPayoutRecorded = Math.min(OWNER_MONTHLY_PAYOUT, sum(activeCosts.filter(isOwnerPayoutCost).map(monthlyCostShare)));
+  const ownerPayoutRemaining = Math.max(0, OWNER_MONTHLY_PAYOUT - ownerPayoutRecorded);
   const operatingCosts = sum(activeCosts.filter((cost) => cost.kategoria !== "zarzad_wlasciciel").map(monthlyCostShare)) + employeeBase;
   const operatingResult = revenue - operatingCosts - managementCosts;
   const cashFlow = sum(bank.filter((transaction) => !transaction.ignoruj && transaction.typ !== "transfer_wewnetrzny").map((transaction) => Number(transaction.kwota || 0)));
   const companyBufferTarget = revenue * COMPANY_BUFFER_RATE;
-  const ownerGoalTarget = OWNER_MONTHLY_PAYOUT + companyBufferTarget;
-  const retainedProfitAfterOwner = operatingResult - OWNER_MONTHLY_PAYOUT;
+  const ownerGoalTarget = ownerPayoutRemaining + companyBufferTarget;
+  const retainedProfitAfterOwner = operatingResult - ownerPayoutRemaining;
   const retainedProfitMargin = revenue > 0 ? retainedProfitAfterOwner / revenue : null;
   const ownerGoalGap = Math.max(0, ownerGoalTarget - operatingResult);
   const ownerGoalSurplus = Math.max(0, operatingResult - ownerGoalTarget);
@@ -1128,6 +1131,8 @@ function buildCfoView(period: string, revenueLines: CfoInvoiceLine[], costs: Cfo
     cashFlow,
     companyBufferTarget,
     ownerGoalTarget,
+    ownerPayoutRecorded,
+    ownerPayoutRemaining,
     retainedProfitAfterOwner,
     retainedProfitMargin,
     ownerGoalGap,
@@ -1295,6 +1300,10 @@ function classifyBankTransaction(title: string, contractor: string): CfoBankTran
 function monthlyCostShare(cost: CfoCostItem) {
   if (cost.ujecie_zarzadcze !== "rozliczenie_w_czasie") return Number(cost.kwota_netto_cfo || 0);
   return Number(cost.kwota_netto_cfo || 0) / Math.max(1, monthsBetween(cost.okres_start, cost.okres_end));
+}
+
+function isOwnerPayoutCost(cost: CfoCostItem) {
+  return cost.kategoria === "zarzad_wlasciciel" && ["Wynagrodzenie podstawowe Prezesa", "Premia Prezesa"].includes(cost.podkategoria || "");
 }
 
 function monthsBetween(start: string, end: string) {

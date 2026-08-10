@@ -595,12 +595,12 @@ function renderClientsSection(clients: CfoClientProfitabilityRow[]) {
             {clients.length === 0 ? <EmptyRow colSpan={8} text="Brak klientów z przychodami w tym okresie." /> : clients.map((client) => (
               <tr key={client.key}>
                 <Td>{client.name}</Td>
-                <Td align="right">{formatMoney(client.revenue)}</Td>
+                <Td align="right"><strong>{formatMoney(client.revenue)}</strong></Td>
                 <Td align="right">{formatMoney(client.mrr)}</Td>
                 <Td align="right">{formatHours(client.hours)}</Td>
                 <Td align="right">{formatMoney(client.laborCost)}</Td>
-                <Td align="right">{formatMoney(client.result)}</Td>
-                <Td align="right">{formatPercent(client.margin)}</Td>
+                <Td align="right"><strong>{formatMoney(client.result)}</strong></Td>
+                <Td align="right"><strong>{formatPercent(client.margin)}</strong></Td>
                 <Td><span style={clientStatusStyle(client.statusTone)}>{client.status}</span></Td>
               </tr>
             ))}

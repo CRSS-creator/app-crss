@@ -308,18 +308,18 @@ function renderDashboard(view: CfoView) {
           <h2 style={panelTitleStyle}>Dashboard właścicielski</h2>
         </div>
         <div style={recommendationStyle}>
-          <strong>{view.ownerGoalGap <= 0 ? "Cel właścicielski jest pokryty" : "Brakujący wynik do celu właścicielskiego"}</strong>
+          <strong>{view.ownerGoalGap <= 0 ? "Nadwyżka ponad cel właścicielski" : "Brakuje do celu właścicielskiego"}</strong>
           <span>
             {view.ownerGoalGap <= 0
-              ? `Po kosztach zostaje ${formatMoney(view.operatingResult)}. Po wypłacie właściciela ${formatMoney(OWNER_MONTHLY_PAYOUT)} w spółce zostaje ${formatMoney(view.retainedProfitAfterOwner)}, czyli ${formatPercent(view.retainedProfitMargin)} przychodów. Minimum to ${formatMoney(view.companyBufferTarget)}.`
-              : `Po kosztach zostaje ${formatMoney(view.operatingResult)}. Żeby wypłacić właścicielowi ${formatMoney(OWNER_MONTHLY_PAYOUT)} i zostawić w spółce 10% przychodów, czyli ${formatMoney(view.companyBufferTarget)}, brakuje ${formatMoney(view.ownerGoalGap)}.`}
+              ? <><strong style={successInlineStyle}>Nadwyżka {formatMoney(view.ownerGoalSurplus)}</strong>. Cel obejmuje wypłatę {formatMoney(OWNER_MONTHLY_PAYOUT)} oraz minimum {formatMoney(view.companyBufferTarget)} pozostające w spółce.</>
+              : <><strong style={dangerInlineStyle}>Brakuje {formatMoney(view.ownerGoalGap)}</strong>. Cel obejmuje wypłatę {formatMoney(OWNER_MONTHLY_PAYOUT)} oraz minimum {formatMoney(view.companyBufferTarget)} pozostające w spółce.</>}
           </span>
         </div>
         <div style={quickGridStyle}>
           <MiniStat label="Wymagany wynik" value={formatMoney(view.ownerGoalTarget)} helper="wypłata właściciela + 10% przychodów" />
           <MiniStat label="Wynik po kosztach" value={formatMoney(view.operatingResult)} helper="przychody minus koszty operacyjne i zarządcze" />
           <MiniStat label="Zostaje po wypłacie" value={formatMoney(view.retainedProfitAfterOwner)} helper={`${formatPercent(view.retainedProfitMargin)} przychodów po wypłacie właściciela`} />
-          <MiniStat label={view.ownerGoalGap > 0 ? "Brakuje do celu" : "Nadwyżka ponad cel"} value={formatMoney(view.ownerGoalGap > 0 ? view.ownerGoalGap : view.ownerGoalSurplus)} helper={`minimum w spółce: ${formatMoney(view.companyBufferTarget)}`} />
+          <MiniStat label={view.ownerGoalGap > 0 ? "Brakuje do celu" : "Nadwyżka ponad cel"} value={formatMoney(view.ownerGoalGap > 0 ? view.ownerGoalGap : view.ownerGoalSurplus)} helper={`minimum w spółce: ${formatMoney(view.companyBufferTarget)}`} tone={view.ownerGoalGap > 0 ? "bad" : "good"} />
         </div>
       </article>
       <article style={panelStyle}>
@@ -629,8 +629,9 @@ function TeamInput({ value, onChange }: { value: number; onChange: (value: numbe
   );
 }
 
-function MiniStat({ label, value, helper }: { label: string; value: string; helper: string }) {
-  return <div style={miniStatStyle}><span>{label}</span><strong>{value}</strong><small>{helper}</small></div>;
+function MiniStat({ label, value, helper, tone }: { label: string; value: string; helper: string; tone?: "good" | "bad" }) {
+  const valueStyle = tone === "good" ? successInlineStyle : tone === "bad" ? dangerInlineStyle : undefined;
+  return <div style={miniStatStyle}><span>{label}</span><strong style={valueStyle}>{value}</strong><small>{helper}</small></div>;
 }
 
 function Breakdown({ rows }: { rows: { label: string; value: number }[] }) {
@@ -1169,6 +1170,8 @@ const panelHeaderStyle: CSSProperties = { display: "flex", alignItems: "center",
 const panelIconStyle: CSSProperties = { color: colors.red, display: "inline-flex" };
 const panelTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "21px" };
 const recommendationStyle: CSSProperties = { display: "grid", gap: "6px", background: "#e9eef7", border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "16px", color: colors.navy };
+const dangerInlineStyle: CSSProperties = { color: colors.danger, fontWeight: 900 };
+const successInlineStyle: CSSProperties = { color: colors.success, fontWeight: 900 };
 const quickGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "12px", marginTop: "14px" };
 const miniStatStyle: CSSProperties = { display: "grid", gap: "6px", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "12px", color: colors.muted, fontWeight: 750 };
 const tableWrapperStyle: CSSProperties = { overflowX: "auto" };

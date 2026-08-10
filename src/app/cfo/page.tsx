@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { Banknote, BriefcaseBusiness, CalendarDays, FileSpreadsheet, LayoutDashboard, Plus, ReceiptText, RefreshCw, TrendingUp, Upload, Users } from "lucide-react";
+import { Banknote, BriefcaseBusiness, CalendarDays, FileSpreadsheet, LayoutDashboard, Plus, ReceiptText, RefreshCw, Save, TrendingUp, Upload, Users } from "lucide-react";
 
 import { colors, radius, shadow } from "@/app/design";
 import AccessGuard from "@/components/AccessGuard";
@@ -34,6 +34,7 @@ import {
 } from "@/lib/cfoService";
 
 type CfoTab = "dashboard" | "przychody" | "koszty" | "cashflow" | "zespol" | "klienci";
+type EmployeeCostDraft = Omit<CfoEmployeeCost, "id"> & { id?: string };
 
 const TABS: { id: CfoTab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -123,9 +124,8 @@ function CfoContent() {
   const [bankTransactions, setBankTransactions] = useState<CfoBankTransaction[]>([]);
   const [clientTimeEntries, setClientTimeEntries] = useState<CfoClientTimeEntry[]>([]);
   const [teamMembers, setTeamMembers] = useState<CfoTeamMember[]>([]);
-  const [selectedTeamMemberId, setSelectedTeamMemberId] = useState("");
   const [manualCost, setManualCost] = useState(() => emptyManualCost(period));
-  const [employeeDraft, setEmployeeDraft] = useState<Omit<CfoEmployeeCost, "id">>({ ...EMPTY_EMPLOYEE, okres: monthToDate(period) });
+  const [employeeDrafts, setEmployeeDrafts] = useState<Record<string, EmployeeCostDraft>>({});
 
   useEffect(() => {
     void loadData();
@@ -168,8 +168,7 @@ function CfoContent() {
     setClientTimeEntries((timeResult.data || []) as CfoClientTimeEntry[]);
     setTeamMembers((teamResult.data || []) as CfoTeamMember[]);
     setManualCost(emptyManualCost(period));
-    setEmployeeDraft({ ...EMPTY_EMPLOYEE, okres: monthToDate(period) });
-    setSelectedTeamMemberId("");
+    setEmployeeDrafts(buildEmployeeDrafts((teamResult.data || []) as CfoTeamMember[], (employeeResult.data || []) as CfoEmployeeCost[], period));
     setLoading(false);
   }
 
@@ -222,23 +221,18 @@ function CfoContent() {
     await loadData();
   }
 
-  async function saveEmployeeCost() {
-    if (!employeeDraft.osoba_nazwa.trim()) return alert("Wybierz osobę z zespołu.");
+  async function saveTeamCosts() {
     setSaving(true);
-    const result = await upsertCfoEmployeeCost(employeeDraft);
+    for (const row of Object.values(employeeDrafts)) {
+      const result = await upsertCfoEmployeeCost(row);
+      if (result.error) {
+        setSaving(false);
+        alert(`Nie udało się zapisać kosztu dla osoby: ${row.osoba_nazwa}.`);
+        return;
+      }
+    }
     setSaving(false);
-    if (result.error) return alert("Nie udało się zapisać kosztu pracownika.");
     await loadData();
-  }
-
-  function selectTeamMember(memberId: string) {
-    const member = teamMembers.find((item) => item.id === memberId);
-    setSelectedTeamMemberId(memberId);
-    setEmployeeDraft((current) => ({
-      ...current,
-      osoba_id: member?.id || null,
-      osoba_nazwa: member ? teamMemberName(member) : "",
-    }));
   }
 
   return (
@@ -286,7 +280,7 @@ function CfoContent() {
       {!loading && activeTab === "przychody" ? renderRevenueSection(revenueLines, changeRevenueCategory) : null}
       {!loading && activeTab === "koszty" ? renderCostSection(costs, manualCost, setManualCost, addManualCost, importCostsFile, saving) : null}
       {!loading && activeTab === "cashflow" ? renderCashflowSection(bankTransactions, importBankFile, saving, setBankTransactions) : null}
-      {!loading && activeTab === "zespol" ? renderTeamSection(teamMembers, employeeCosts, selectedTeamMemberId, selectTeamMember, employeeDraft, setEmployeeDraft, saveEmployeeCost, saving, period) : null}
+      {!loading && activeTab === "zespol" ? renderTeamSectionTable(teamMembers, employeeDrafts, setEmployeeDrafts, saveTeamCosts, saving, period) : null}
       {!loading && activeTab === "klienci" ? renderClientsSection(clientProfitability) : null}
     </main>
   );
@@ -485,18 +479,23 @@ function renderCashflowSection(
   );
 }
 
-function renderTeamSection(
+function renderTeamSectionTable(
   teamMembers: CfoTeamMember[],
-  employeeCosts: CfoEmployeeCost[],
-  selectedTeamMemberId: string,
-  selectTeamMember: (memberId: string) => void,
-  employeeDraft: Omit<CfoEmployeeCost, "id">,
-  setEmployeeDraft: (next: Omit<CfoEmployeeCost, "id"> | ((current: Omit<CfoEmployeeCost, "id">) => Omit<CfoEmployeeCost, "id">)) => void,
-  saveEmployeeCost: () => void,
+  employeeDrafts: Record<string, EmployeeCostDraft>,
+  setEmployeeDrafts: (next: Record<string, EmployeeCostDraft> | ((current: Record<string, EmployeeCostDraft>) => Record<string, EmployeeCostDraft>)) => void,
+  saveTeamCosts: () => void,
   saving: boolean,
   period: string,
 ) {
-  const memberOptions = teamMembers.map((member) => ({ value: member.id, label: `${teamMemberName(member)} · ${roleLabel(member.role)}` }));
+  function updateDraft(member: CfoTeamMember, field: keyof EmployeeCostDraft, value: string | number | boolean | null) {
+    setEmployeeDrafts((current) => {
+      const draft = current[member.id] || defaultEmployeeDraft(member, period);
+      return { ...current, [member.id]: { ...draft, [field]: value } };
+    });
+  }
+
+  const drafts = teamMembers.map((member) => employeeDrafts[member.id] || defaultEmployeeDraft(member, period));
+
   return (
     <section style={sectionGridStyle}>
       <article style={panelStyle}>
@@ -504,21 +503,56 @@ function renderTeamSection(
           <Users size={21} style={panelIconStyle} />
           <h2 style={panelTitleStyle}>Koszty zespołu</h2>
         </div>
-        <div style={employeeFormStyle}>
-          <AppSelect value={selectedTeamMemberId} options={[{ value: "", label: "Wybierz osobę" }, ...memberOptions]} onChange={selectTeamMember} />
-          <AppSelect value={employeeDraft.zespol} options={[{ value: "ksiegowy", label: "Zespół księgowy" }, { value: "marketingowy", label: "Zespół marketingowy" }, { value: "sprzedazowy", label: "Zespół sprzedażowy" }]} onChange={(value) => setEmployeeDraft((current) => ({ ...current, zespol: value as CfoEmployeeCost["zespol"] }))} />
-          <NumberInput label="Wymiar etatu" value={employeeDraft.wymiar_etatu} onChange={(value) => setEmployeeDraft((current) => ({ ...current, wymiar_etatu: value }))} />
-          <NumberInput label="Podstawa" value={employeeDraft.podstawa} onChange={(value) => setEmployeeDraft((current) => ({ ...current, podstawa: value }))} />
-          <NumberInput label="ZUS pracodawcy" value={employeeDraft.zus_pracodawcy} onChange={(value) => setEmployeeDraft((current) => ({ ...current, zus_pracodawcy: value }))} />
-          <NumberInput label="Benefity" value={employeeDraft.benefity} onChange={(value) => setEmployeeDraft((current) => ({ ...current, benefity: value }))} />
-          <NumberInput label="Premie" value={employeeDraft.premie} onChange={(value) => setEmployeeDraft((current) => ({ ...current, premie: value }))} />
-          <NumberInput label="Szkolenia" value={employeeDraft.szkolenia} onChange={(value) => setEmployeeDraft((current) => ({ ...current, szkolenia: value }))} />
-          <NumberInput label="Nieobecności godzinowo" value={employeeDraft.nieobecnosci_godziny} onChange={(value) => setEmployeeDraft((current) => ({ ...current, nieobecnosci_godziny: value }))} />
-          <NumberInput label="Nadgodziny" value={employeeDraft.nadgodziny} onChange={(value) => setEmployeeDraft((current) => ({ ...current, nadgodziny: value }))} />
+        <div style={tableWrapperStyle}>
+          <table style={tableStyle}>
+            <thead>
+              <tr>
+                <Th>Osoba</Th>
+                <Th>Zespół</Th>
+                <Th align="right">Wymiar etatu</Th>
+                <Th align="right">Podstawa</Th>
+                <Th align="right">ZUS pracodawcy</Th>
+                <Th align="right">Benefity</Th>
+                <Th align="right">Premie</Th>
+                <Th align="right">Szkolenia</Th>
+                <Th align="right">Nieobecności</Th>
+                <Th align="right">Nadgodziny</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {teamMembers.length === 0 ? <EmptyRow colSpan={10} text="Brak aktywnych użytkowników zespołu." /> : teamMembers.map((member) => {
+                const draft = employeeDrafts[member.id] || defaultEmployeeDraft(member, period);
+                return (
+                  <tr key={member.id}>
+                    <Td>
+                      <strong>{teamMemberName(member)}</strong>
+                      <small style={smallStyle}>{roleLabel(member.role)}</small>
+                    </Td>
+                    <Td>
+                      <AppSelect
+                        value={draft.zespol}
+                        options={[{ value: "ksiegowy", label: "Księgowy" }, { value: "marketingowy", label: "Marketing" }, { value: "sprzedazowy", label: "Sprzedaż" }]}
+                        onChange={(value) => updateDraft(member, "zespol", value as CfoEmployeeCost["zespol"])}
+                        style={compactSelectStyle}
+                      />
+                    </Td>
+                    <TeamInput value={draft.wymiar_etatu} onChange={(value) => updateDraft(member, "wymiar_etatu", value)} />
+                    <TeamInput value={draft.podstawa} onChange={(value) => updateDraft(member, "podstawa", value)} />
+                    <TeamInput value={draft.zus_pracodawcy} onChange={(value) => updateDraft(member, "zus_pracodawcy", value)} />
+                    <TeamInput value={draft.benefity} onChange={(value) => updateDraft(member, "benefity", value)} />
+                    <TeamInput value={draft.premie} onChange={(value) => updateDraft(member, "premie", value)} />
+                    <TeamInput value={draft.szkolenia} onChange={(value) => updateDraft(member, "szkolenia", value)} />
+                    <TeamInput value={draft.nieobecnosci_godziny} onChange={(value) => updateDraft(member, "nieobecnosci_godziny", value)} />
+                    <TeamInput value={draft.nadgodziny} onChange={(value) => updateDraft(member, "nadgodziny", value)} />
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
         <div style={formFooterStyle}>
           <span style={smallStyle}>Norma dzienna: 8 h. Capacity liczone z dni roboczych, wymiaru etatu, nieobecności i nadgodzin.</span>
-          <button type="button" style={primaryButtonStyle} onClick={saveEmployeeCost} disabled={saving}><Plus size={17} />Dodaj koszt</button>
+          <button type="button" style={primaryButtonStyle} onClick={saveTeamCosts} disabled={saving || teamMembers.length === 0}><Save size={17} />Zapisz zespół</button>
         </div>
       </article>
       <article style={panelStyle}>
@@ -527,11 +561,11 @@ function renderTeamSection(
           <h2 style={panelTitleStyle}>Miesięczny capacity</h2>
         </div>
         <div style={miniListStyle}>
-          {employeeCosts.length === 0 ? <span style={smallStyle}>Brak kosztów zespołu dla okresu.</span> : employeeCosts.map((employee) => {
-            const hours = availableHours(employee, period);
+          {drafts.length === 0 ? <span style={smallStyle}>Brak aktywnych użytkowników zespołu.</span> : drafts.map((employee) => {
+            const hours = availableHours(employee as CfoEmployeeCost, period);
             const hourly = hours > 0 ? (Number(employee.podstawa || 0) + Number(employee.zus_pracodawcy || 0) + Number(employee.benefity || 0)) / hours : 0;
             return (
-              <div key={employee.id} style={miniItemStyle}>
+              <div key={employee.osoba_id || employee.osoba_nazwa} style={miniItemStyle}>
                 <div><strong>{employee.osoba_nazwa}</strong><small style={smallStyle}>{employee.zespol === "ksiegowy" ? "Zespół księgowy" : employee.zespol === "marketingowy" ? "Marketing" : "Sprzedaż"}</small></div>
                 <span>{hours.toLocaleString("pl-PL")} h</span>
                 <span>{formatMoney(hourly)} / h</span>
@@ -574,12 +608,11 @@ function renderClientsSection(clients: CfoClientProfitabilityRow[]) {
   );
 }
 
-function NumberInput({ label, value, onChange }: { label: string; value: number; onChange: (value: number) => void }) {
+function TeamInput({ value, onChange }: { value: number; onChange: (value: number) => void }) {
   return (
-    <label style={fieldStyle}>
-      <span>{label}</span>
-      <input style={inputStyle} type="number" value={value} onChange={(event) => onChange(Number(event.target.value || 0))} />
-    </label>
+    <Td align="right">
+      <input style={teamInputStyle} type="number" value={value} onChange={(event) => onChange(Number(event.target.value || 0))} />
+    </Td>
   );
 }
 
@@ -619,6 +652,25 @@ type CfoClientProfitabilityRow = CfoClientRow & {
   statusTone: "good" | "watch" | "warn" | "bad" | "missing";
 };
 type CfoView = ReturnType<typeof buildCfoView>;
+
+function buildEmployeeDrafts(teamMembers: CfoTeamMember[], employeeCosts: CfoEmployeeCost[], period: string): Record<string, EmployeeCostDraft> {
+  const existingByPerson = new Map(employeeCosts.filter((employee) => employee.osoba_id).map((employee) => [employee.osoba_id as string, employee]));
+  return teamMembers.reduce<Record<string, EmployeeCostDraft>>((drafts, member) => {
+    const existing = existingByPerson.get(member.id);
+    drafts[member.id] = existing ? { ...existing } : defaultEmployeeDraft(member, period);
+    return drafts;
+  }, {});
+}
+
+function defaultEmployeeDraft(member: CfoTeamMember, period: string): EmployeeCostDraft {
+  return {
+    ...EMPTY_EMPLOYEE,
+    okres: monthToDate(period),
+    osoba_id: member.id,
+    osoba_nazwa: teamMemberName(member),
+    zespol: member.role === "manager" ? "ksiegowy" : "ksiegowy",
+  };
+}
 
 function buildClientProfitability(period: string, clients: CfoClientRow[], employees: CfoEmployeeCost[], timeEntries: CfoClientTimeEntry[]): CfoClientProfitabilityRow[] {
   const hourlyCostByPerson = new Map<string, number>();
@@ -1028,12 +1080,11 @@ const compactSelectStyle: CSSProperties = { minHeight: "36px", padding: "7px 10p
 const uploadBoxStyle: CSSProperties = { border: `1px dashed ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, cursor: "pointer", padding: "18px", color: colors.text, display: "grid", gap: "8px", justifyItems: "start" };
 const manualGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: "10px", marginTop: "14px", alignItems: "start" };
 const inputStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, minHeight: "42px", padding: "9px 12px", fontWeight: 750, width: "100%", boxSizing: "border-box" };
+const teamInputStyle: CSSProperties = { ...inputStyle, minHeight: "34px", padding: "6px 8px", width: "96px", textAlign: "right" };
 const primaryButtonStyle: CSSProperties = { border: `1px solid ${colors.red}`, borderRadius: radius.input, background: colors.red, color: colors.white, minHeight: "42px", padding: "9px 14px", fontWeight: 850, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "8px", cursor: "pointer", whiteSpace: "nowrap" };
 const secondaryButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.navy, minHeight: "42px", padding: "9px 14px", fontWeight: 850, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "8px", cursor: "pointer" };
 const moneyInputStyle: CSSProperties = { ...inputStyle, minHeight: "36px", padding: "7px 9px", width: "120px" };
 const mutedRowStyle: CSSProperties = { opacity: 0.58, background: "#f1f5f9" };
-const employeeFormStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "10px" };
-const fieldStyle: CSSProperties = { display: "grid", gap: "6px", color: colors.muted, fontWeight: 800, fontSize: "13px" };
 const formFooterStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", marginTop: "14px", flexWrap: "wrap" };
 const miniListStyle: CSSProperties = { display: "grid", gap: "8px" };
 const miniItemStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto auto", gap: "10px", border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "10px 12px", color: colors.text, alignItems: "center" };

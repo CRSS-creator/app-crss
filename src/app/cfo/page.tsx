@@ -787,7 +787,7 @@ async function parseCostWorkbook(file: File, period: string): Promise<CfoCostImp
       kategoria: category.category,
       podkategoria: category.subcategory,
       okres_start: monthToDate(period),
-      okres_end: monthToDate(period),
+      okres_end: monthEndDate(period),
       zrodlo: "import" as const,
     };
   }).filter((row) => row.kontrahent || row.kwota_netto_cfo);
@@ -971,7 +971,7 @@ function emptyManualCost(period: string): CfoCostImportRow {
     kategoria: "administracja_ogolne",
     podkategoria: null,
     okres_start: monthToDate(period),
-    okres_end: monthToDate(period),
+    okres_end: monthEndDate(period),
     zrodlo: "recznie",
   };
 }
@@ -986,6 +986,11 @@ function currentMonthDate() {
 
 function monthToDate(value: string) {
   return `${value}-01`;
+}
+
+function monthEndDate(value: string) {
+  const [year, month] = value.split("-").map(Number);
+  return new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
 }
 
 function formatMoney(value: number | string | null | undefined) {

@@ -401,7 +401,7 @@ function renderCostSection(
         </div>
         <label style={uploadBoxStyle}>
           <FileSpreadsheet size={22} />
-          <strong>Wczytaj CSV kosztów</strong>
+          <strong>Wczytaj Excel kosztów</strong>
           <span>Numer dokumentu, kontrahent, netto, VAT, brutto i opis. Kwotę netto CFO możesz później poprawić.</span>
           <input type="file" accept=".xlsx,.xls,.csv,.txt" hidden onChange={(event) => event.target.files?.[0] && importCostsFile(event.target.files[0])} />
         </label>

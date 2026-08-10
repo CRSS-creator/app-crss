@@ -402,12 +402,12 @@ function renderCostSection(
           <input type="file" accept=".xlsx,.xls,.csv,.txt" hidden onChange={(event) => event.target.files?.[0] && importCostsFile(event.target.files[0])} />
         </label>
         <div style={manualFormStyle}>
-          <div style={manualTopRowStyle}>
+          <div style={manualRowStyle}>
             <input style={inputStyle} placeholder="Kontrahent" value={manualCost.kontrahent} onChange={(event) => setManualCost((current) => ({ ...current, kontrahent: event.target.value }))} />
             <input style={inputStyle} placeholder="Numer dokumentu" value={manualCost.numer_dokumentu || ""} onChange={(event) => setManualCost((current) => ({ ...current, numer_dokumentu: emptyToNull(event.target.value) }))} />
             <input style={inputStyle} placeholder="Kwota netto CFO" type="number" value={manualCost.kwota_netto_cfo} onChange={(event) => setManualCost((current) => ({ ...current, kwota_netto_cfo: Number(event.target.value || 0), kwota_netto_import: Number(event.target.value || 0) }))} />
           </div>
-          <div style={manualBottomRowStyle}>
+          <div style={manualRowStyle}>
             <AppSelect value={manualCost.kategoria} options={COST_OPTIONS} onChange={(value) => setManualCost((current) => ({ ...current, kategoria: value as CfoCostCategory, podkategoria: null }))} />
             <AppSelect value={manualCost.podkategoria || ""} options={[{ value: "", label: "Bez podkategorii" }, ...subcategoryOptions]} onChange={(value) => setManualCost((current) => ({ ...current, podkategoria: emptyToNull(value) }))} />
             <div style={dateRangeStyle}>
@@ -1207,9 +1207,8 @@ const invoiceLineIndentStyle: CSSProperties = { display: "inline-flex", paddingL
 const smallStyle: CSSProperties = { display: "block", color: colors.muted, marginTop: "4px", fontSize: "12px", fontWeight: 650 };
 const compactSelectStyle: CSSProperties = { minHeight: "36px", padding: "7px 10px", background: colors.white };
 const uploadBoxStyle: CSSProperties = { border: `1px dashed ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, cursor: "pointer", padding: "18px", color: colors.text, display: "grid", gap: "8px", justifyItems: "start" };
-const manualFormStyle: CSSProperties = { display: "grid", gap: "10px", marginTop: "14px" };
-const manualTopRowStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(220px, 1.4fr) minmax(180px, 1fr) minmax(160px, 0.8fr)", gap: "10px", alignItems: "start" };
-const manualBottomRowStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(200px, 1fr) minmax(190px, 1fr) minmax(260px, 1.25fr) auto", gap: "10px", alignItems: "start" };
+const manualFormStyle: CSSProperties = { display: "grid", gap: "10px", marginTop: "14px", maxWidth: "980px" };
+const manualRowStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "10px", alignItems: "start" };
 const dateRangeStyle: CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" };
 const inputStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, minHeight: "42px", padding: "9px 12px", fontWeight: 750, width: "100%", boxSizing: "border-box" };
 const teamInputStyle: CSSProperties = { ...inputStyle, minHeight: "34px", padding: "6px 8px", width: "96px", textAlign: "right" };

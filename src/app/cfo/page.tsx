@@ -132,6 +132,8 @@ function CfoContent() {
   const [clientTimeEntries, setClientTimeEntries] = useState<CfoClientTimeEntry[]>([]);
   const [teamMembers, setTeamMembers] = useState<CfoTeamMember[]>([]);
   const [manualCost, setManualCost] = useState<ManualCostDraft>(() => emptyManualCost(period));
+  const [manualInterperiod, setManualInterperiod] = useState(false);
+  const [expandedCostPeriods, setExpandedCostPeriods] = useState<Record<string, boolean>>({});
   const [employeeDrafts, setEmployeeDrafts] = useState<Record<string, EmployeeCostDraft>>({});
 
   useEffect(() => {
@@ -175,6 +177,8 @@ function CfoContent() {
     setClientTimeEntries((timeResult.data || []) as CfoClientTimeEntry[]);
     setTeamMembers((teamResult.data || []) as CfoTeamMember[]);
     setManualCost(emptyManualCost(period));
+    setManualInterperiod(false);
+    setExpandedCostPeriods({});
     setEmployeeDrafts(buildEmployeeDrafts((teamResult.data || []) as CfoTeamMember[], (employeeResult.data || []) as CfoEmployeeCost[], period));
     setLoading(false);
   }
@@ -283,7 +287,7 @@ function CfoContent() {
       {loading ? <section style={panelStyle}>Ładowanie danych CFO...</section> : null}
       {!loading && activeTab === "dashboard" ? renderDashboard(view) : null}
       {!loading && activeTab === "przychody" ? renderRevenueSection(revenueLines, changeRevenueCategory) : null}
-      {!loading && activeTab === "koszty" ? renderCostSection(costs, manualCost, setManualCost, addManualCost, importCostsFile, saving) : null}
+      {!loading && activeTab === "koszty" ? renderCostSection(period, costs, setCosts, manualCost, setManualCost, manualInterperiod, setManualInterperiod, expandedCostPeriods, setExpandedCostPeriods, addManualCost, importCostsFile, saving) : null}
       {!loading && activeTab === "cashflow" ? renderCashflowSection(bankTransactions, importBankFile, saving, setBankTransactions) : null}
       {!loading && activeTab === "zespol" ? renderTeamSectionTable(teamMembers, employeeDrafts, setEmployeeDrafts, saveTeamCosts, saving, period) : null}
       {!loading && activeTab === "klienci" ? renderClientsSection(clientProfitability) : null}
@@ -590,15 +594,39 @@ function MonthField({ value, onChange }: { value: string; onChange: (value: stri
 }
 
 function renderCostSection(
+  period: string,
   costs: CfoCostItem[],
+  setCosts: (next: CfoCostItem[] | ((current: CfoCostItem[]) => CfoCostItem[])) => void,
   manualCost: ManualCostDraft,
   setManualCost: (next: ManualCostDraft | ((current: ManualCostDraft) => ManualCostDraft)) => void,
+  manualInterperiod: boolean,
+  setManualInterperiod: (next: boolean) => void,
+  expandedCostPeriods: Record<string, boolean>,
+  setExpandedCostPeriods: (next: Record<string, boolean> | ((current: Record<string, boolean>) => Record<string, boolean>)) => void,
   addManualCost: () => void,
   importCostsFile: (file: File) => void,
   saving: boolean,
 ) {
   const subcategoryOptions = manualCost.kategoria ? SUBCATEGORIES[manualCost.kategoria].map((item) => ({ value: item, label: item })) : [];
   const hasSubcategories = subcategoryOptions.length > 0;
+
+  async function changeCost(cost: CfoCostItem, payload: Partial<CfoCostItem>) {
+    setCosts((current) => current.map((item) => item.id === cost.id ? { ...item, ...payload } : item));
+    await updateCost(cost.id, payload);
+  }
+
+  function toggleManualInterperiod(enabled: boolean) {
+    setManualInterperiod(enabled);
+    if (!enabled) {
+      setManualCost((current) => ({ ...current, okres_start: monthToDate(period), okres_end: monthEndDate(period) }));
+    }
+  }
+
+  function toggleCostInterperiod(cost: CfoCostItem, enabled: boolean) {
+    setExpandedCostPeriods((current) => ({ ...current, [cost.id]: enabled }));
+    if (!enabled) void changeCost(cost, { okres_start: monthToDate(period), okres_end: monthEndDate(period) });
+  }
+
   return (
     <section style={sectionStackStyle}>
       <article style={panelStyle}>
@@ -621,9 +649,17 @@ function renderCostSection(
           <div style={manualBottomRowStyle}>
             <AppSelect value={manualCost.kategoria} options={MANUAL_COST_OPTIONS} onChange={(value) => setManualCost((current) => ({ ...current, kategoria: value as CfoCostCategory | "", podkategoria: null }))} />
             {hasSubcategories ? <AppSelect value={manualCost.podkategoria || ""} options={[{ value: "", label: "Wybierz podkategorię" }, ...subcategoryOptions]} onChange={(value) => setManualCost((current) => ({ ...current, podkategoria: emptyToNull(value) }))} /> : null}
-            <div style={dateRangeStyle}>
-              <DateField value={manualCost.okres_start} onChange={(value) => setManualCost((current) => ({ ...current, okres_start: value }))} />
-              <DateField value={manualCost.okres_end} onChange={(value) => setManualCost((current) => ({ ...current, okres_end: value }))} />
+            <div style={manualPeriodStyle}>
+              <label style={checkboxLabelStyle}>
+                <input type="checkbox" checked={manualInterperiod} onChange={(event) => toggleManualInterperiod(event.target.checked)} />
+                Międzyokresowe
+              </label>
+              {manualInterperiod ? (
+                <div style={dateRangeStyle}>
+                  <DateField value={manualCost.okres_start} onChange={(value) => setManualCost((current) => ({ ...current, okres_start: value }))} />
+                  <DateField value={manualCost.okres_end} onChange={(value) => setManualCost((current) => ({ ...current, okres_end: value }))} />
+                </div>
+              ) : <span style={periodMonthBadgeStyle}>{formatMonthField(period)}</span>}
             </div>
             <button type="button" style={primaryButtonStyle} onClick={addManualCost} disabled={saving}><Plus size={17} />Dodaj</button>
           </div>
@@ -636,19 +672,54 @@ function renderCostSection(
         </div>
         <div style={tableWrapperStyle}>
           <table style={wideCostTableStyle}>
+            <colgroup>
+              <col style={{ width: "14%" }} />
+              <col style={{ width: "22%" }} />
+              <col style={{ width: "16%" }} />
+              <col style={{ width: "16%" }} />
+              <col style={{ width: "18%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "6%" }} />
+            </colgroup>
             <thead><tr><Th>Dokument</Th><Th>Kontrahent</Th><Th>Kategoria</Th><Th>Podkategoria</Th><Th>Okres</Th><Th align="right">Netto CFO</Th><Th align="right">Brutto cash flow</Th></tr></thead>
             <tbody>
-              {costs.length === 0 ? <EmptyRow colSpan={7} text="Brak kosztów w tym okresie." /> : costs.map((cost) => (
-                <tr key={cost.id} style={cost.ignoruj ? mutedRowStyle : undefined}>
-                  <Td>{cost.numer_dokumentu || "Brak numeru"}<small style={smallStyle}>{formatDate(cost.data_dokumentu)}</small></Td>
-                  <Td>{cost.kontrahent}</Td>
-                  <Td><AppSelect value={cost.kategoria} options={COST_OPTIONS} onChange={(value) => void updateCost(cost.id, { kategoria: value as CfoCostCategory })} style={compactSelectStyle} /></Td>
-                  <Td>{cost.podkategoria || "Bez podkategorii"}</Td>
-                  <Td>{formatDate(cost.okres_start)} - {formatDate(cost.okres_end)}</Td>
-                  <Td align="right"><input style={moneyInputStyle} type="number" defaultValue={cost.kwota_netto_cfo} onBlur={(event) => void updateCost(cost.id, { kwota_netto_cfo: Number(event.target.value || 0) })} /></Td>
-                  <Td align="right">{formatMoney(cost.kwota_brutto)}</Td>
-                </tr>
-              ))}
+              {costs.length === 0 ? <EmptyRow colSpan={7} text="Brak kosztów w tym okresie." /> : costs.map((cost) => {
+                const rowSubcategoryOptions = SUBCATEGORIES[cost.kategoria].map((item) => ({ value: item, label: item }));
+                const isInterperiod = expandedCostPeriods[cost.id] || !isFullMonthPeriod(cost.okres_start, cost.okres_end);
+                return (
+                  <tr key={cost.id} style={cost.ignoruj ? mutedRowStyle : undefined}>
+                    <Td>{cost.numer_dokumentu || "Brak numeru"}<small style={smallStyle}>{formatDate(cost.data_dokumentu)}</small></Td>
+                    <Td style={contractorCostCellStyle}>{cost.kontrahent}</Td>
+                    <Td><AppSelect value={cost.kategoria} options={COST_OPTIONS} onChange={(value) => void changeCost(cost, { kategoria: value as CfoCostCategory, podkategoria: null })} style={compactSelectStyle} /></Td>
+                    <Td>
+                      {rowSubcategoryOptions.length > 0 ? (
+                        <AppSelect
+                          value={cost.podkategoria || ""}
+                          options={[{ value: "", label: "Wybierz podkategorię" }, ...rowSubcategoryOptions]}
+                          onChange={(value) => void changeCost(cost, { podkategoria: emptyToNull(value) })}
+                          style={compactSelectStyle}
+                        />
+                      ) : <span style={smallStyle}>Bez podkategorii</span>}
+                    </Td>
+                    <Td>
+                      <div style={costPeriodCellStyle}>
+                        <label style={checkboxLabelStyle}>
+                          <input type="checkbox" checked={isInterperiod} onChange={(event) => toggleCostInterperiod(cost, event.target.checked)} />
+                          Międzyokresowe
+                        </label>
+                        {isInterperiod ? (
+                          <div style={costDateRangeStyle}>
+                            <DateField value={cost.okres_start} onChange={(value) => void changeCost(cost, { okres_start: value })} />
+                            <DateField value={cost.okres_end} onChange={(value) => void changeCost(cost, { okres_end: value })} />
+                          </div>
+                        ) : <span style={periodMonthBadgeStyle}>{formatCostPeriod(cost.okres_start, cost.okres_end)}</span>}
+                      </div>
+                    </Td>
+                    <Td align="right"><input style={moneyInputStyle} type="number" value={cost.kwota_netto_cfo} onChange={(event) => setCosts((current) => current.map((item) => item.id === cost.id ? { ...item, kwota_netto_cfo: Number(event.target.value || 0) } : item))} onBlur={(event) => void updateCost(cost.id, { kwota_netto_cfo: Number(event.target.value || 0) })} /></Td>
+                    <Td align="right">{formatMoney(cost.kwota_brutto)}</Td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -886,8 +957,8 @@ function Th({ children, align = "left" }: { children: React.ReactNode; align?: "
   return <th style={{ ...thStyle, textAlign: align }}>{children}</th>;
 }
 
-function Td({ children, align = "left" }: { children: React.ReactNode; align?: "left" | "right" }) {
-  return <td style={{ ...tdStyle, textAlign: align }}>{children}</td>;
+function Td({ children, align = "left", style }: { children: React.ReactNode; align?: "left" | "right"; style?: CSSProperties }) {
+  return <td style={{ ...tdStyle, textAlign: align, ...style }}>{children}</td>;
 }
 
 function EmptyRow({ colSpan, text }: { colSpan: number; text: string }) {
@@ -1325,6 +1396,17 @@ function formatMonthField(value: string) {
   return `${MONTH_LABELS[month - 1] || ""} ${year}`.trim();
 }
 
+function isFullMonthPeriod(start: string, end: string) {
+  if (!start || !end) return false;
+  const month = start.slice(0, 7);
+  return start === monthToDate(month) && end === monthEndDate(month);
+}
+
+function formatCostPeriod(start: string, end: string) {
+  if (isFullMonthPeriod(start, end)) return formatMonthField(start.slice(0, 7));
+  return `${formatDate(start)} - ${formatDate(end)}`;
+}
+
 function parseMonthFieldText(value: string) {
   const normalized = value.trim().toLowerCase();
   const isoMatch = /^(\d{4})-(\d{1,2})$/.exec(normalized);
@@ -1512,9 +1594,10 @@ const quickGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "r
 const miniStatStyle: CSSProperties = { display: "grid", gap: "6px", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "12px", color: colors.muted, fontWeight: 750 };
 const tableWrapperStyle: CSSProperties = { overflowX: "auto" };
 const tableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse" };
-const wideCostTableStyle: CSSProperties = { ...tableStyle, minWidth: "1120px" };
+const wideCostTableStyle: CSSProperties = { ...tableStyle, minWidth: "1220px", tableLayout: "fixed" };
 const thStyle: CSSProperties = { color: colors.muted, borderBottom: `1px solid ${colors.border}`, padding: "11px 9px", fontSize: "12px", textTransform: "uppercase", letterSpacing: 0 };
 const tdStyle: CSSProperties = { color: colors.text, borderBottom: `1px solid ${colors.border}`, padding: "10px 9px", verticalAlign: "middle" };
+const contractorCostCellStyle: CSSProperties = { width: "230px", maxWidth: "230px", whiteSpace: "normal", overflowWrap: "anywhere" };
 const invoiceGroupCellStyle: CSSProperties = { ...tdStyle, background: "#f1f5f9", color: colors.navy, paddingTop: "14px", paddingBottom: "14px" };
 const invoiceLineIndentStyle: CSSProperties = { display: "inline-flex", paddingLeft: "18px" };
 const smallStyle: CSSProperties = { display: "block", color: colors.muted, marginTop: "4px", fontSize: "12px", fontWeight: 650 };
@@ -1524,6 +1607,11 @@ const manualFormStyle: CSSProperties = { display: "grid", gap: "10px", marginTop
 const manualTopRowStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(230px, 1.4fr) minmax(200px, 1fr) minmax(180px, 0.8fr)", gap: "10px", alignItems: "start" };
 const manualBottomRowStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(220px, 1fr) minmax(210px, 1fr) minmax(330px, 1.2fr) auto", gap: "10px", alignItems: "start" };
 const dateRangeStyle: CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" };
+const manualPeriodStyle: CSSProperties = { display: "grid", gap: "8px", alignItems: "start" };
+const checkboxLabelStyle: CSSProperties = { display: "inline-flex", alignItems: "center", gap: "8px", color: colors.navy, fontSize: "13px", fontWeight: 850, cursor: "pointer", whiteSpace: "nowrap" };
+const periodMonthBadgeStyle: CSSProperties = { display: "inline-flex", alignItems: "center", width: "fit-content", minHeight: "36px", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, color: colors.navy, padding: "7px 11px", fontWeight: 850 };
+const costPeriodCellStyle: CSSProperties = { display: "grid", gap: "8px", minWidth: "220px" };
+const costDateRangeStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(130px, 1fr) minmax(130px, 1fr)", gap: "8px" };
 const inputStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, minHeight: "42px", padding: "9px 12px", fontWeight: 750, width: "100%", boxSizing: "border-box" };
 const dateFieldStyle: CSSProperties = { position: "relative", minWidth: 0 };
 const dateControlStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, minHeight: "42px", display: "grid", gridTemplateColumns: "minmax(0, 1fr) 38px", alignItems: "center", overflow: "hidden" };

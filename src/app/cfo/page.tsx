@@ -10,10 +10,15 @@ import AppLayout from "@/components/AppLayout";
 import AppSelect from "@/components/AppSelect";
 import {
   fetchCfoBankTransactions,
+  fetchCfoBankTransactionsRange,
   fetchCfoClientTimeEntries,
+  fetchCfoClientTimeEntriesRange,
   fetchCfoCosts,
+  fetchCfoCostsRange,
   fetchCfoEmployeeCosts,
+  fetchCfoEmployeeCostsRange,
   fetchCfoRevenueLines,
+  fetchCfoRevenueLinesRange,
   fetchCfoTeamMembers,
   importBankTransactions,
   insertCfoCosts,
@@ -35,6 +40,7 @@ import {
 } from "@/lib/cfoService";
 
 type CfoTab = "dashboard" | "przychody" | "koszty" | "cashflow" | "zespol" | "klienci";
+type CfoViewMode = "month" | "year";
 type EmployeeCostDraft = Omit<CfoEmployeeCost, "id"> & { id?: string };
 type ManualCostDraft = Omit<CfoCostImportRow, "kategoria"> & { kategoria: CfoCostCategory | "" };
 
@@ -123,6 +129,7 @@ export default function CfoPage() {
 function CfoContent() {
   const [activeTab, setActiveTab] = useState<CfoTab>("dashboard");
   const [period, setPeriod] = useState(currentMonthInput());
+  const [viewMode, setViewMode] = useState<CfoViewMode>("month");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [revenueLines, setRevenueLines] = useState<CfoInvoiceLine[]>([]);
@@ -140,11 +147,11 @@ function CfoContent() {
     void loadData();
     // Dane CFO przeładowują się po zmianie okresu.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [period]);
+  }, [period, viewMode]);
 
   const view = useMemo(
-    () => buildCfoView(period, revenueLines, costs, employeeCosts, bankTransactions),
-    [period, revenueLines, costs, employeeCosts, bankTransactions],
+    () => buildCfoView(period, viewMode, revenueLines, costs, employeeCosts, bankTransactions),
+    [period, viewMode, revenueLines, costs, employeeCosts, bankTransactions],
   );
 
   const clientProfitability = useMemo(
@@ -154,13 +161,14 @@ function CfoContent() {
 
   async function loadData() {
     setLoading(true);
+    const range = cfoPeriodRange(period, viewMode);
     const [revenueResult, costsResult, employeeResult, bankResult, teamResult, timeResult] = await Promise.all([
-      fetchCfoRevenueLines(monthToDate(period)),
-      fetchCfoCosts(monthToDate(period)),
-      fetchCfoEmployeeCosts(monthToDate(period)),
-      fetchCfoBankTransactions(monthToDate(period)),
+      viewMode === "year" ? fetchCfoRevenueLinesRange(range.from, range.to) : fetchCfoRevenueLines(range.from),
+      viewMode === "year" ? fetchCfoCostsRange(range.from, range.to) : fetchCfoCosts(range.from),
+      viewMode === "year" ? fetchCfoEmployeeCostsRange(range.from, range.to) : fetchCfoEmployeeCosts(range.from),
+      viewMode === "year" ? fetchCfoBankTransactionsRange(range.from, range.to) : fetchCfoBankTransactions(range.from),
       fetchCfoTeamMembers(),
-      fetchCfoClientTimeEntries(monthToDate(period)),
+      viewMode === "year" ? fetchCfoClientTimeEntriesRange(range.from, range.to) : fetchCfoClientTimeEntries(range.from),
     ]);
 
     if (revenueResult.error) console.error("Błąd pobierania przychodów CFO:", revenueResult.error);
@@ -255,6 +263,12 @@ function CfoContent() {
           <h1 style={titleStyle}>CFO</h1>
         </div>
         <div style={headerActionsStyle}>
+          {activeTab === "dashboard" ? (
+            <div style={viewModeToggleStyle} aria-label="Zakres dashboardu">
+              <button type="button" style={viewMode === "month" ? viewModeActiveButtonStyle : viewModeButtonStyle} onClick={() => setViewMode("month")}>Miesiąc</button>
+              <button type="button" style={viewMode === "year" ? viewModeActiveButtonStyle : viewModeButtonStyle} onClick={() => setViewMode("year")}>Rok</button>
+            </div>
+          ) : null}
           <MonthField value={period} onChange={setPeriod} />
           <button type="button" style={secondaryButtonStyle} onClick={loadData} disabled={loading || saving}>
             <RefreshCw size={17} />
@@ -276,7 +290,10 @@ function CfoContent() {
         {TABS.map((tab) => {
           const Icon = tab.icon;
           return (
-            <button key={tab.id} type="button" style={activeTab === tab.id ? activeTabStyle : tabStyle} onClick={() => setActiveTab(tab.id)}>
+            <button key={tab.id} type="button" style={activeTab === tab.id ? activeTabStyle : tabStyle} onClick={() => {
+              setActiveTab(tab.id);
+              if (tab.id !== "dashboard") setViewMode("month");
+            }}>
               <Icon size={17} />
               {tab.label}
             </button>
@@ -285,7 +302,7 @@ function CfoContent() {
       </nav>
 
       {loading ? <section style={panelStyle}>Ładowanie danych CFO...</section> : null}
-      {!loading && activeTab === "dashboard" ? renderDashboard(view) : null}
+      {!loading && activeTab === "dashboard" ? renderDashboard(view, viewMode, period) : null}
       {!loading && activeTab === "przychody" ? renderRevenueSection(revenueLines, changeRevenueCategory) : null}
       {!loading && activeTab === "koszty" ? renderCostSection(period, costs, setCosts, manualCost, setManualCost, manualInterperiod, setManualInterperiod, expandedCostPeriods, setExpandedCostPeriods, addManualCost, importCostsFile, saving) : null}
       {!loading && activeTab === "cashflow" ? renderCashflowSection(bankTransactions, importBankFile, saving, setBankTransactions) : null}
@@ -305,13 +322,14 @@ function Metric({ label, value, tone }: { label: string; value: string; tone?: "
   );
 }
 
-function renderDashboard(view: CfoView) {
+function renderDashboard(view: CfoView, viewMode: CfoViewMode, period: string) {
   return (
     <section style={dashboardGridStyle}>
       <article style={widePanelStyle}>
         <div style={panelHeaderStyle}>
           <TrendingUp size={21} style={panelIconStyle} />
           <h2 style={panelTitleStyle}>Dashboard właścicielski</h2>
+          <span style={dashboardScopeBadgeStyle}>{viewMode === "year" ? `Rok ${period.slice(0, 4)}` : formatMonthField(period)}</span>
         </div>
         <div style={recommendationStyle}>
           <strong>{view.ownerGoalGap <= 0 ? "Nadwyżka ponad ideał właścicielski" : "Brakuje do ideału właścicielskiego"}</strong>
@@ -1150,15 +1168,19 @@ function clientProfitabilityStatus(margin: number | null, hours: number) {
   return { status: "Konieczna podwyżka / rozważyć zakończenie", statusTone: "bad" as const };
 }
 
-function buildCfoView(period: string, revenueLines: CfoInvoiceLine[], costs: CfoCostItem[], employees: CfoEmployeeCost[], bank: CfoBankTransaction[]) {
+function buildCfoView(period: string, viewMode: CfoViewMode, revenueLines: CfoInvoiceLine[], costs: CfoCostItem[], employees: CfoEmployeeCost[], bank: CfoBankTransaction[]) {
+  const range = cfoPeriodRange(period, viewMode);
+  const periodMonths = monthsBetween(range.from, range.to);
+  const ownerPayoutTarget = OWNER_MONTHLY_PAYOUT * periodMonths;
   const revenue = sum(revenueLines.map((line) => Number(line.kwota_netto || 0)));
   const mrr = sum(revenueLines.filter((line) => line.cfo_przychod_kategoria === "abonamenty").map((line) => Number(line.kwota_netto || 0)));
   const employeeBase = sum(employees.map((employee) => Number(employee.podstawa || 0) + Number(employee.zus_pracodawcy || 0) + Number(employee.benefity || 0) + Number(employee.premie || 0) + Number(employee.szkolenia || 0)));
   const activeCosts = costs.filter((cost) => !cost.ignoruj);
-  const managementCosts = sum(activeCosts.filter((cost) => cost.kategoria === "zarzad_wlasciciel").map(monthlyCostShare));
-  const ownerPayoutRecorded = Math.min(OWNER_MONTHLY_PAYOUT, sum(activeCosts.filter(isOwnerPayoutCost).map(monthlyCostShare)));
-  const ownerPayoutRemaining = Math.max(0, OWNER_MONTHLY_PAYOUT - ownerPayoutRecorded);
-  const operatingCosts = sum(activeCosts.filter((cost) => cost.kategoria !== "zarzad_wlasciciel").map(monthlyCostShare)) + employeeBase;
+  const costValue = (cost: CfoCostItem) => costShareForRange(cost, range.from, range.to);
+  const managementCosts = sum(activeCosts.filter((cost) => cost.kategoria === "zarzad_wlasciciel").map(costValue));
+  const ownerPayoutRecorded = Math.min(ownerPayoutTarget, sum(activeCosts.filter(isOwnerPayoutCost).map(costValue)));
+  const ownerPayoutRemaining = Math.max(0, ownerPayoutTarget - ownerPayoutRecorded);
+  const operatingCosts = sum(activeCosts.filter((cost) => cost.kategoria !== "zarzad_wlasciciel").map(costValue)) + employeeBase;
   const operatingResult = revenue - operatingCosts - managementCosts;
   const cashFlow = sum(bank.filter((transaction) => !transaction.ignoruj && transaction.typ !== "transfer_wewnetrzny").map((transaction) => Number(transaction.kwota || 0)));
   const companyBufferTarget = revenue * COMPANY_BUFFER_RATE;
@@ -1187,7 +1209,7 @@ function buildCfoView(period: string, revenueLines: CfoInvoiceLine[], costs: Cfo
 
   costs.forEach((cost) => {
     const label = costLabel(cost.kategoria);
-    const value = monthlyCostShare(cost);
+    const value = costValue(cost);
     const current = costsByCategory.get(label) || { value: 0, children: new Map<string, number>() };
     const subcategory = cost.podkategoria || "Bez podkategorii";
     current.value += value;
@@ -1203,6 +1225,7 @@ function buildCfoView(period: string, revenueLines: CfoInvoiceLine[], costs: Cfo
     operatingResult,
     cashFlow,
     companyBufferTarget,
+    ownerPayoutTarget,
     ownerGoalTarget,
     ownerPayoutRecorded,
     ownerPayoutRemaining,
@@ -1372,11 +1395,15 @@ function classifyBankTransaction(title: string, contractor: string): CfoBankTran
   return "do_przypisania";
 }
 
-function monthlyCostShare(cost: CfoCostItem) {
+function costShareForRange(cost: CfoCostItem, rangeStart: string, rangeEnd: string) {
   const amount = Number(cost.kwota_netto_cfo || 0);
-  const months = Math.max(1, monthsBetween(cost.okres_start, cost.okres_end));
-  if (months === 1 && cost.ujecie_zarzadcze !== "rozliczenie_w_czasie") return amount;
-  return amount / months;
+  const totalMonths = Math.max(1, monthsBetween(cost.okres_start, cost.okres_end));
+  const overlapStart = cost.okres_start > rangeStart ? cost.okres_start : rangeStart;
+  const overlapEnd = cost.okres_end < rangeEnd ? cost.okres_end : rangeEnd;
+  if (overlapStart > overlapEnd) return 0;
+  const overlapMonths = Math.max(1, monthsBetween(overlapStart, overlapEnd));
+  if (totalMonths === 1 && cost.ujecie_zarzadcze !== "rozliczenie_w_czasie") return amount;
+  return (amount / totalMonths) * overlapMonths;
 }
 
 function isOwnerPayoutCost(cost: CfoCostItem) {
@@ -1466,6 +1493,14 @@ function currentMonthInput() {
 
 function currentMonthDate() {
   return `${currentMonthInput()}-01`;
+}
+
+function cfoPeriodRange(period: string, viewMode: CfoViewMode) {
+  if (viewMode === "year") {
+    const year = period.slice(0, 4);
+    return { from: `${year}-01-01`, to: `${year}-12-31` };
+  }
+  return { from: monthToDate(period), to: monthEndDate(period) };
 }
 
 function monthToDate(value: string) {
@@ -1675,6 +1710,9 @@ function sum(values: number[]) {
 const contentStyle: CSSProperties = { padding: "32px", display: "grid", gap: "20px" };
 const headerStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "18px", alignItems: "flex-start", flexWrap: "wrap" };
 const headerActionsStyle: CSSProperties = { display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" };
+const viewModeToggleStyle: CSSProperties = { display: "inline-flex", border: `1px solid ${colors.border}`, borderRadius: radius.input, overflow: "hidden", background: colors.white, minHeight: "42px" };
+const viewModeButtonStyle: CSSProperties = { border: 0, background: "transparent", color: colors.navy, padding: "9px 13px", fontWeight: 850, cursor: "pointer" };
+const viewModeActiveButtonStyle: CSSProperties = { ...viewModeButtonStyle, background: colors.navy, color: colors.white };
 const eyebrowStyle: CSSProperties = { color: colors.red, fontWeight: 850, margin: "0 0 8px" };
 const titleStyle: CSSProperties = { color: colors.navy, fontSize: "42px", margin: 0, lineHeight: 1.05 };
 const monthFieldWrapperStyle: CSSProperties = { position: "relative", width: "235px" };
@@ -1702,6 +1740,7 @@ const panelHeaderStyle: CSSProperties = { display: "flex", alignItems: "center",
 const panelHeaderWithTotalStyle: CSSProperties = { ...panelHeaderStyle, justifyContent: "space-between", flexWrap: "wrap" };
 const panelTitleGroupStyle: CSSProperties = { display: "inline-flex", alignItems: "center", gap: "10px", minWidth: 0 };
 const panelHeaderTotalStyle: CSSProperties = { color: colors.navy, fontSize: "15px", whiteSpace: "nowrap" };
+const dashboardScopeBadgeStyle: CSSProperties = { display: "inline-flex", borderRadius: radius.badge, background: "rgba(23, 59, 115, 0.10)", color: colors.navy, padding: "7px 10px", fontSize: "12px", fontWeight: 900, marginLeft: "auto" };
 const panelIconStyle: CSSProperties = { color: colors.red, display: "inline-flex" };
 const panelTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "21px" };
 const recommendationStyle: CSSProperties = { display: "grid", gap: "6px", background: "#e9eef7", border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "16px", color: colors.navy };

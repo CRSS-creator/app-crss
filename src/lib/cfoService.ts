@@ -199,6 +199,17 @@ export async function fetchCfoRevenueLines(period: string) {
     .order("nazwa", { ascending: true });
 }
 
+export async function fetchCfoRevenueLinesRange(from: string, to: string) {
+  return supabase
+    .from("faktury_pozycje")
+    .select(INVOICE_LINE_SELECT)
+    .gte("faktury.okres", from)
+    .lte("faktury.okres", to)
+    .eq("faktury.typ", "sprzedaz")
+    .neq("faktury.status", "anulowana")
+    .order("nazwa", { ascending: true });
+}
+
 export async function updateInvoiceLineCfoCategory(lineId: string, category: CfoRevenueCategory) {
   return supabase
     .from("faktury_pozycje")
@@ -214,6 +225,16 @@ export async function fetchCfoCosts(period: string) {
     .select("*")
     .lte("okres_start", period)
     .gte("okres_end", period)
+    .order("data_dokumentu", { ascending: false, nullsFirst: false })
+    .order("created_at", { ascending: false });
+}
+
+export async function fetchCfoCostsRange(from: string, to: string) {
+  return supabase
+    .from("cfo_koszty")
+    .select("*")
+    .lte("okres_start", to)
+    .gte("okres_end", from)
     .order("data_dokumentu", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false });
 }
@@ -242,6 +263,15 @@ export async function fetchCfoEmployeeCosts(period: string) {
     .order("osoba_nazwa", { ascending: true });
 }
 
+export async function fetchCfoEmployeeCostsRange(from: string, to: string) {
+  return supabase
+    .from("cfo_koszty_pracownikow")
+    .select("*")
+    .gte("okres", from)
+    .lte("okres", to)
+    .order("osoba_nazwa", { ascending: true });
+}
+
 export async function fetchCfoTeamMembers() {
   return supabase
     .from("profiles")
@@ -263,6 +293,15 @@ export async function fetchCfoClientTimeEntries(period: string) {
     .lt("started_at", to);
 }
 
+export async function fetchCfoClientTimeEntriesRange(from: string, to: string) {
+  return supabase
+    .from("czas_pracy")
+    .select("id, klient_id, osoba_id, started_at, ended_at, duration_seconds, miesiac_rozliczeniowy")
+    .not("ended_at", "is", null)
+    .gte("started_at", from)
+    .lt("started_at", startOfNextMonth(to));
+}
+
 export async function upsertCfoEmployeeCost(row: Omit<CfoEmployeeCost, "id"> & { id?: string }) {
   const { id, ...payload } = row;
   const query = id
@@ -281,6 +320,16 @@ export async function fetchCfoBankTransactions(period: string) {
     .select(BANK_TRANSACTION_SELECT)
     .gte("data_ksiegowania", from)
     .lte("data_ksiegowania", to)
+    .order("data_ksiegowania", { ascending: false })
+    .order("lp", { ascending: true });
+}
+
+export async function fetchCfoBankTransactionsRange(from: string, to: string) {
+  return supabase
+    .from("cfo_transakcje_bankowe")
+    .select(BANK_TRANSACTION_SELECT)
+    .gte("data_ksiegowania", from)
+    .lte("data_ksiegowania", endOfMonth(to))
     .order("data_ksiegowania", { ascending: false })
     .order("lp", { ascending: true });
 }

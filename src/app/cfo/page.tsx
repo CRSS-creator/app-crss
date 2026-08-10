@@ -86,7 +86,7 @@ const SUBCATEGORIES: Record<CfoCostCategory, string[]> = {
   systemy_technologia: ["wFirma", "Google Workspace", "MS Office", "OpenAI", "T-Mobile", "Inne"],
   marketing_sprzedaz: ["Meta ADS", "Google ADS", "Canva", "Koszt zespołu marketingowego", "Koszt zespołu sprzedażowego"],
   administracja_ogolne: ["Wynagrodzenie pracowników administracji - podstawa", "Wynagrodzenie pracowników administracji - ZUS pracodawcy", "Wynagrodzenie pracowników administracji - benefity", "Wynagrodzenie pracowników administracji - premie", "Wynagrodzenie pracowników administracji - szkolenia", "Artykuły biurowe / spożywcze", "Prawne / podatkowe", "OC", "Bank", "Poczta / kurier", "Reprezentacja", "Inne"],
-  zarzad_wlasciciel: ["Wynagrodzenie podstawowe Prezesa", "Premia Prezesa", "Samochód służbowy"],
+  zarzad_wlasciciel: ["Wynagrodzenie netto Prezesa", "Premia netto Prezesa", "PIT od wynagrodzenia Prezesa", "ZUS od wynagrodzenia Prezesa", "Inne obciążenia wynagrodzenia Prezesa", "Samochód służbowy"],
   jednorazowe_nadzwyczajne: [],
 };
 
@@ -317,13 +317,13 @@ function renderDashboard(view: CfoView) {
           <strong>{view.ownerGoalGap <= 0 ? "Nadwyżka ponad cel właścicielski" : "Brakuje do celu właścicielskiego"}</strong>
           <span>
             {view.ownerGoalGap <= 0
-              ? <><strong style={successInlineStyle}>Nadwyżka {formatMoney(view.ownerGoalSurplus)}</strong>. Cel obejmuje wypłatę {formatMoney(OWNER_MONTHLY_PAYOUT)}, w tym {formatMoney(view.ownerPayoutRecorded)} już ujęte w kosztach, oraz minimum {formatMoney(view.companyBufferTarget)} pozostające w spółce.</>
-              : <><strong style={dangerInlineStyle}>Brakuje {formatMoney(view.ownerGoalGap)}</strong>. Cel obejmuje wypłatę {formatMoney(OWNER_MONTHLY_PAYOUT)}, w tym {formatMoney(view.ownerPayoutRecorded)} już ujęte w kosztach, oraz minimum {formatMoney(view.companyBufferTarget)} pozostające w spółce.</>}
+              ? <><strong style={successInlineStyle}>Nadwyżka {formatMoney(view.ownerGoalSurplus)}</strong>. Cel obejmuje wypłatę netto {formatMoney(OWNER_MONTHLY_PAYOUT)}, w tym {formatMoney(view.ownerPayoutRecorded)} netto już ujęte w kosztach, oraz minimum {formatMoney(view.companyBufferTarget)} pozostające w spółce.</>
+              : <><strong style={dangerInlineStyle}>Brakuje {formatMoney(view.ownerGoalGap)}</strong>. Cel obejmuje wypłatę netto {formatMoney(OWNER_MONTHLY_PAYOUT)}, w tym {formatMoney(view.ownerPayoutRecorded)} netto już ujęte w kosztach, oraz minimum {formatMoney(view.companyBufferTarget)} pozostające w spółce.</>}
           </span>
         </div>
         <div style={quickGridStyle}>
           <MiniStat label="Wymagany wynik" value={formatMoney(view.ownerGoalTarget)} helper="brakująca wypłata + 10% przychodów" />
-          <MiniStat label="Wypłata w kosztach" value={formatMoney(view.ownerPayoutRecorded)} helper={`do wypłaty brakuje: ${formatMoney(view.ownerPayoutRemaining)}`} />
+          <MiniStat label="Wypłata netto w kosztach" value={formatMoney(view.ownerPayoutRecorded)} helper={`do wypłaty netto brakuje: ${formatMoney(view.ownerPayoutRemaining)}`} />
           <MiniStat label="Wynik po kosztach" value={formatMoney(view.operatingResult)} helper="przychody minus koszty operacyjne i zarządcze" />
           <MiniStat label="Zostaje po wypłacie" value={formatMoney(view.retainedProfitAfterOwner)} helper={`${formatPercent(view.retainedProfitMargin)} przychodów po dopłacie właściciela`} />
           <MiniStat label={view.ownerGoalGap > 0 ? "Brakuje do celu" : "Nadwyżka ponad cel"} value={formatMoney(view.ownerGoalGap > 0 ? view.ownerGoalGap : view.ownerGoalSurplus)} helper={`minimum w spółce: ${formatMoney(view.companyBufferTarget)}`} tone={view.ownerGoalGap > 0 ? "bad" : "good"} />
@@ -1303,7 +1303,7 @@ function monthlyCostShare(cost: CfoCostItem) {
 }
 
 function isOwnerPayoutCost(cost: CfoCostItem) {
-  return cost.kategoria === "zarzad_wlasciciel" && ["Wynagrodzenie podstawowe Prezesa", "Premia Prezesa"].includes(cost.podkategoria || "");
+  return cost.kategoria === "zarzad_wlasciciel" && ["Wynagrodzenie netto Prezesa", "Premia netto Prezesa", "Wynagrodzenie podstawowe Prezesa", "Premia Prezesa"].includes(cost.podkategoria || "");
 }
 
 function monthsBetween(start: string, end: string) {

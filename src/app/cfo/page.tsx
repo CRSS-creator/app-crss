@@ -329,7 +329,7 @@ function renderDashboard(view: CfoView, viewMode: CfoViewMode, period: string) {
         <div style={panelHeaderStyle}>
           <TrendingUp size={21} style={panelIconStyle} />
           <h2 style={panelTitleStyle}>Dashboard właścicielski</h2>
-          <span style={dashboardScopeBadgeStyle}>{viewMode === "year" ? `Rok ${period.slice(0, 4)}` : formatMonthField(period)}</span>
+          <span style={dashboardScopeBadgeStyle}>{cfoPeriodLabel(period, viewMode)}</span>
         </div>
         <div style={recommendationStyle}>
           <strong>{view.ownerGoalGap <= 0 ? "Nadwyżka ponad ideał właścicielski" : "Brakuje do ideału właścicielskiego"}</strong>
@@ -1497,10 +1497,20 @@ function currentMonthDate() {
 
 function cfoPeriodRange(period: string, viewMode: CfoViewMode) {
   if (viewMode === "year") {
-    const year = period.slice(0, 4);
-    return { from: `${year}-01-01`, to: `${year}-12-31` };
+    const { year, month } = parseMonthValue(period);
+    const lastClosedMonth = Math.max(1, month - 1);
+    const lastClosedPeriod = `${year}-${String(lastClosedMonth).padStart(2, "0")}`;
+    return { from: `${year}-01-01`, to: monthEndDate(lastClosedPeriod) };
   }
   return { from: monthToDate(period), to: monthEndDate(period) };
+}
+
+function cfoPeriodLabel(period: string, viewMode: CfoViewMode) {
+  if (viewMode === "month") return formatMonthField(period);
+  const range = cfoPeriodRange(period, viewMode);
+  const year = range.from.slice(0, 4);
+  const lastMonth = Number(range.to.slice(5, 7));
+  return `Rok ${year} do ${MONTH_LABELS[lastMonth - 1]}`;
 }
 
 function monthToDate(value: string) {

@@ -1,4 +1,4 @@
-export type UserRole = "owner" | "manager" | "admin" | "accountant" | "handlowiec" | string;
+export type UserRole = "owner" | "manager" | "admin" | "accountant" | string;
 
 export type AppModule =
   | "dashboard"
@@ -28,14 +28,14 @@ const moduleAccess: Record<AppModule, string[]> = {
   rozliczenia: ["owner", "manager", "admin", "accountant"],
   komunikaty: ["owner", "manager", "admin", "accountant"],
   kadry: ["owner", "manager", "admin", "accountant"],
-  limity: ["owner", "manager", "admin", "accountant"],
+  limity: ["owner", "manager", "admin"],
   onboarding: ["owner", "manager", "admin", "accountant"],
   "zamykanie-roku": ["owner", "manager", "admin"],
-  crm: ["owner", "admin", "handlowiec"],
+  crm: ["owner", "admin"],
   umowy: ["owner", "admin"],
   faktury: ["owner", "admin"],
-  cso: ["owner", "admin", "handlowiec"],
-  cfo: ["owner", "admin"],
+  cso: ["owner", "admin"],
+  cfo: ["owner"],
   aml: ["owner", "manager", "admin"],
   rodo: ["owner", "manager", "admin"],
   uzytkownicy: ["owner", "manager", "admin", "accountant"],
@@ -47,10 +47,11 @@ export function canAccessModule(role: UserRole | null, moduleName: AppModule) {
   return moduleAccess[moduleName]?.includes(role) ?? false;
 }
 
-export function canManageClients(_role: UserRole | null) {
+export function canManageClients(role: UserRole | null) {
+  void role;
   return false;
 }
 
 export function canEditClientAdministrative(role: UserRole | null) {
-  return role === "owner" || role === "manager" || role === "admin";
+  return role === "owner" || role === "admin";
 }

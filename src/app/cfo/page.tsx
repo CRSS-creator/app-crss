@@ -316,10 +316,10 @@ function renderDashboard(view: CfoView) {
           </span>
         </div>
         <div style={quickGridStyle}>
-          <MiniStat label="Pozycje faktur" value={String(view.invoiceLineCount)} helper={`${view.uncategorizedRevenue} bez kategorii CFO`} />
-          <MiniStat label="Koszty" value={String(view.costCount)} helper={`${formatMoney(view.operatingCosts + view.managementCosts)} w tym okresie`} />
-          <MiniStat label="Transakcje bankowe" value={String(view.bankTransactionCount)} helper={`${view.unassignedBankCount} do przypisania`} />
-          <MiniStat label="Godziny zespołu" value={`${view.availableHours.toLocaleString("pl-PL")} h`} helper="na podstawie dni roboczych i etatów" />
+          <MiniStat label="Wymagany wynik" value={formatMoney(view.ownerGoalTarget)} helper="wypłata właściciela + 10% przychodów" />
+          <MiniStat label="Wynik po kosztach" value={formatMoney(view.operatingResult)} helper="przychody minus koszty operacyjne i zarządcze" />
+          <MiniStat label="Zostaje po wypłacie" value={formatMoney(view.retainedProfitAfterOwner)} helper={`${formatPercent(view.retainedProfitMargin)} przychodów po wypłacie właściciela`} />
+          <MiniStat label={view.ownerGoalGap > 0 ? "Brakuje do celu" : "Nadwyżka ponad cel"} value={formatMoney(view.ownerGoalGap > 0 ? view.ownerGoalGap : view.ownerGoalSurplus)} helper={`minimum w spółce: ${formatMoney(view.companyBufferTarget)}`} />
         </div>
       </article>
       <article style={panelStyle}>
@@ -790,6 +790,7 @@ function buildCfoView(period: string, revenueLines: CfoInvoiceLine[], costs: Cfo
   const retainedProfitAfterOwner = operatingResult - OWNER_MONTHLY_PAYOUT;
   const retainedProfitMargin = revenue > 0 ? retainedProfitAfterOwner / revenue : null;
   const ownerGoalGap = Math.max(0, ownerGoalTarget - operatingResult);
+  const ownerGoalSurplus = Math.max(0, operatingResult - ownerGoalTarget);
   const clientsByName = new Map<string, CfoClientRow>();
   const revenueByCategory = new Map<string, number>();
   const costsByCategory = new Map<string, { value: number; children: Map<string, number> }>();
@@ -828,13 +829,8 @@ function buildCfoView(period: string, revenueLines: CfoInvoiceLine[], costs: Cfo
     retainedProfitAfterOwner,
     retainedProfitMargin,
     ownerGoalGap,
+    ownerGoalSurplus,
     ownerGoalText: ownerGoalGap <= 0 ? "Pokryty" : `Brakuje ${formatMoney(ownerGoalGap)}`,
-    invoiceLineCount: revenueLines.length,
-    uncategorizedRevenue: revenueLines.filter((line) => !line.cfo_przychod_kategoria).length,
-    costCount: costs.length,
-    bankTransactionCount: bank.length,
-    unassignedBankCount: bank.filter((transaction) => transaction.typ === "do_przypisania" && !transaction.ignoruj).length,
-    availableHours: sum(employees.map((employee) => Math.max(0, availableHours(employee, period)))),
     clients: Array.from(clientsByName.values()).sort((a, b) => b.revenue - a.revenue),
     revenueBreakdown: Array.from(revenueByCategory, ([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value),
     costBreakdown: Array.from(costsByCategory, ([label, entry]) => ({

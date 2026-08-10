@@ -33,6 +33,7 @@ export type CfoInvoiceLine = {
 export type CfoInvoiceParent = {
     id: string;
     okres: string | null;
+    typ: string;
     status: string;
     klient_id: string | null;
     kontrahent_nazwa: string | null;
@@ -164,6 +165,7 @@ const INVOICE_LINE_SELECT = `
   faktury!inner (
     id,
     okres,
+    typ,
     status,
     klient_id,
     kontrahent_nazwa,
@@ -188,6 +190,7 @@ export async function fetchCfoRevenueLines(period: string) {
     .from("faktury_pozycje")
     .select(INVOICE_LINE_SELECT)
     .eq("faktury.okres", period)
+    .eq("faktury.typ", "sprzedaz")
     .neq("faktury.status", "anulowana")
     .order("nazwa", { ascending: true });
 }

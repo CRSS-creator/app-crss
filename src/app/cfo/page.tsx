@@ -823,7 +823,7 @@ function renderTeamSectionTable(
                 <Th align="right">Benefity</Th>
                 <Th align="right">Premie</Th>
                 <Th align="right">Szkolenia</Th>
-                <Th align="right">Nieobecności</Th>
+                <Th align="right">Nieobecności dni</Th>
                 <Th align="right">Nadgodziny</Th>
               </tr>
             </thead>
@@ -859,7 +859,7 @@ function renderTeamSectionTable(
           </table>
         </div>
         <div style={formFooterStyle}>
-          <span style={smallStyle}>Norma dzienna: 8 h. Dostępne godziny liczone są z dni roboczych, wymiaru etatu, nieobecności i nadgodzin.</span>
+          <span style={smallStyle}>Norma dzienna: 8 h. Nieobecności wpisuj w dniach, każdy dzień zmniejsza dostępność o 8 h.</span>
           <button type="button" style={primaryButtonStyle} onClick={saveTeamCosts} disabled={saving || teamMembers.length === 0}><Save size={17} />Zapisz zespół</button>
         </div>
       </article>
@@ -1313,7 +1313,7 @@ function monthsBetween(start: string, end: string) {
 }
 
 function availableHours(employee: CfoEmployeeCost, period: string) {
-  return businessDaysInMonth(period) * 8 * Number(employee.wymiar_etatu || 0) - Number(employee.nieobecnosci_godziny || 0) + Number(employee.nadgodziny || 0);
+  return businessDaysInMonth(period) * 8 * Number(employee.wymiar_etatu || 0) - Number(employee.nieobecnosci_godziny || 0) * 8 + Number(employee.nadgodziny || 0);
 }
 
 function businessDaysInMonth(period: string) {

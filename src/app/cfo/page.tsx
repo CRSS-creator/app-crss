@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Banknote, BriefcaseBusiness, CalendarDays, FileSpreadsheet, LayoutDashboard, Plus, ReceiptText, RefreshCw, Save, TrendingUp, Upload, Users } from "lucide-react";
+import * as XLSX from "xlsx";
 
 import { colors, radius, shadow } from "@/app/design";
 import AccessGuard from "@/components/AccessGuard";
@@ -398,7 +399,7 @@ function renderCostSection(
           <FileSpreadsheet size={22} />
           <strong>Wczytaj CSV kosztów</strong>
           <span>Numer dokumentu, kontrahent, netto, VAT, brutto i opis. Kwotę netto CFO możesz później poprawić.</span>
-          <input type="file" accept=".csv,.txt" hidden onChange={(event) => event.target.files?.[0] && importCostsFile(event.target.files[0])} />
+          <input type="file" accept=".xlsx,.xls,.csv,.txt" hidden onChange={(event) => event.target.files?.[0] && importCostsFile(event.target.files[0])} />
         </label>
         <div style={manualGridStyle}>
           <input style={inputStyle} placeholder="Kontrahent" value={manualCost.kontrahent} onChange={(event) => setManualCost((current) => ({ ...current, kontrahent: event.target.value }))} />
@@ -844,10 +845,19 @@ function buildCfoView(period: string, revenueLines: CfoInvoiceLine[], costs: Cfo
 
 async function parseCostWorkbook(file: File, period: string): Promise<CfoCostImportRow[]> {
   if (/\.(xlsx|xls)$/i.test(file.name)) {
-    alert("Ten import przyjmuje teraz CSV. Otwórz plik w Excelu i zapisz jako CSV, a następnie wczytaj ponownie.");
-    return [];
+    const workbook = XLSX.read(await file.arrayBuffer(), { cellDates: true });
+    const firstSheetName = workbook.SheetNames[0];
+    const sheet = firstSheetName ? workbook.Sheets[firstSheetName] : null;
+    if (!sheet) return [];
+    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: null, raw: true });
+    return buildCostImportRows(rows, file.name, period);
   }
+
   const rows = parseDelimitedTable(await file.text());
+  return buildCostImportRows(rows, file.name, period);
+}
+
+function buildCostImportRows(rows: Record<string, unknown>[], fileName: string, period: string): CfoCostImportRow[] {
   return rows.map((row, index) => {
     const documentNumber = stringValue(row["Nr dokumentu"] ?? row["Numer dokumentu"]);
     const contractor = stringValue(row["Kontrahent"]) || "Brak kontrahenta";
@@ -857,7 +867,7 @@ async function parseCostWorkbook(file: File, period: string): Promise<CfoCostImp
     const gross = numberValue(row["Razem"] ?? row["Kwota brutto"]);
     const category = classifyCost(contractor, description);
     return {
-      import_key: `cost:${file.name}:${documentNumber || index}:${contractor}:${net}`,
+      import_key: `cost:${fileName}:${documentNumber || index}:${contractor}:${net}`,
       data_dokumentu: dateValue(row["Data wystawienia"]),
       numer_dokumentu: documentNumber,
       kontrahent: contractor,
@@ -1111,11 +1121,18 @@ function numberValue(value: unknown) {
 
 function dateValue(value: unknown) {
   if (value instanceof Date) return value.toISOString().slice(0, 10);
+  if (typeof value === "number" && value > 25000) return excelSerialDate(value);
   const text = stringValue(value);
   if (!text) return null;
   if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
   if (/^\d{2}-\d{2}-\d{4}$/.test(text)) return parsePolishDate(text);
+  if (/^\d{2}\.\d{2}\.\d{4}$/.test(text)) return parsePolishDate(text.replace(/\./g, "-"));
   return null;
+}
+
+function excelSerialDate(value: number) {
+  const epoch = Date.UTC(1899, 11, 30);
+  return new Date(epoch + Math.round(value) * 86400000).toISOString().slice(0, 10);
 }
 
 function parsePolishDate(value: unknown) {

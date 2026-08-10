@@ -418,8 +418,8 @@ function renderCostSection(
           <h2 style={panelTitleStyle}>Koszty CFO</h2>
         </div>
         <div style={tableWrapperStyle}>
-          <table style={tableStyle}>
-            <thead><tr><Th>Dokument</Th><Th>Kontrahent</Th><Th>Kategoria</Th><Th>Podkategoria</Th><Th>Okres</Th><Th align="right">Netto CFO</Th><Th align="right">Brutto CF</Th></tr></thead>
+          <table style={wideCostTableStyle}>
+            <thead><tr><Th>Dokument</Th><Th>Kontrahent</Th><Th>Kategoria</Th><Th>Podkategoria</Th><Th>Okres</Th><Th align="right">Netto CFO</Th><Th align="right">Brutto cash flow</Th></tr></thead>
             <tbody>
               {costs.length === 0 ? <EmptyRow colSpan={7} text="Brak kosztów w tym okresie." /> : costs.map((cost) => (
                 <tr key={cost.id} style={cost.ignoruj ? mutedRowStyle : undefined}>
@@ -1193,6 +1193,7 @@ const quickGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "r
 const miniStatStyle: CSSProperties = { display: "grid", gap: "6px", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "12px", color: colors.muted, fontWeight: 750 };
 const tableWrapperStyle: CSSProperties = { overflowX: "auto" };
 const tableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse" };
+const wideCostTableStyle: CSSProperties = { ...tableStyle, minWidth: "1120px" };
 const thStyle: CSSProperties = { color: colors.muted, borderBottom: `1px solid ${colors.border}`, padding: "11px 9px", fontSize: "12px", textTransform: "uppercase", letterSpacing: 0 };
 const tdStyle: CSSProperties = { color: colors.text, borderBottom: `1px solid ${colors.border}`, padding: "10px 9px", verticalAlign: "middle" };
 const invoiceGroupCellStyle: CSSProperties = { ...tdStyle, background: "#f1f5f9", color: colors.navy, paddingTop: "14px", paddingBottom: "14px" };

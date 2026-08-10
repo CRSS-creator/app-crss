@@ -301,7 +301,7 @@ function Metric({ label, value, tone }: { label: string; value: string; tone?: "
 
 function renderDashboard(view: CfoView) {
   return (
-    <section style={sectionGridStyle}>
+    <section style={dashboardGridStyle}>
       <article style={widePanelStyle}>
         <div style={panelHeaderStyle}>
           <TrendingUp size={21} style={panelIconStyle} />
@@ -329,12 +329,12 @@ function renderDashboard(view: CfoView) {
         </div>
         <Breakdown rows={view.revenueBreakdown} />
       </article>
-      <article style={panelStyle}>
+      <article style={widePanelStyle}>
         <div style={panelHeaderStyle}>
           <FileSpreadsheet size={21} style={panelIconStyle} />
           <h2 style={panelTitleStyle}>Struktura kosztów</h2>
         </div>
-        <Breakdown rows={view.costBreakdown} />
+        <CostBreakdown rows={view.costBreakdown} />
       </article>
     </section>
   );
@@ -628,6 +628,31 @@ function Breakdown({ rows }: { rows: { label: string; value: number }[] }) {
   return <div style={miniListStyle}>{rows.map((row) => <div key={row.label} style={miniItemStyle}><span>{row.label}</span><strong>{formatMoney(row.value)}</strong></div>)}</div>;
 }
 
+function CostBreakdown({ rows }: { rows: CfoCostBreakdownRow[] }) {
+  if (rows.length === 0) return <span style={smallStyle}>Brak danych w tym okresie.</span>;
+
+  return (
+    <div style={costBreakdownGridStyle}>
+      {rows.map((row) => (
+        <div key={row.label} style={costBreakdownItemStyle}>
+          <div style={costBreakdownHeaderStyle}>
+            <strong>{row.label}</strong>
+            <strong>{formatMoney(row.value)}</strong>
+          </div>
+          <div style={costSubListStyle}>
+            {row.children.length === 0 ? <small style={smallStyle}>Brak podkategorii</small> : row.children.map((child) => (
+              <div key={child.label} style={costSubItemStyle}>
+                <span>{child.label}</span>
+                <strong>{formatMoney(child.value)}</strong>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function Th({ children, align = "left" }: { children: React.ReactNode; align?: "left" | "right" }) {
   return <th style={{ ...thStyle, textAlign: align }}>{children}</th>;
 }
@@ -646,6 +671,7 @@ async function updateCost(costId: string, payload: Partial<CfoCostItem>) {
 }
 
 type CfoClientRow = { key: string; id: string | null; name: string; revenue: number; mrr: number };
+type CfoCostBreakdownRow = { label: string; value: number; children: { label: string; value: number }[] };
 type CfoClientProfitabilityRow = CfoClientRow & {
   hours: number;
   laborCost: number;
@@ -726,7 +752,7 @@ function buildCfoView(period: string, revenueLines: CfoInvoiceLine[], costs: Cfo
   const ownerGoalGap = Math.max(0, ownerGoalTarget - operatingResult);
   const clientsByName = new Map<string, CfoClientRow>();
   const revenueByCategory = new Map<string, number>();
-  const costsByCategory = new Map<string, number>();
+  const costsByCategory = new Map<string, { value: number; children: Map<string, number> }>();
 
   revenueLines.forEach((line) => {
     const category = revenueLabel(line.cfo_przychod_kategoria || "pozostale");
@@ -742,7 +768,12 @@ function buildCfoView(period: string, revenueLines: CfoInvoiceLine[], costs: Cfo
 
   costs.forEach((cost) => {
     const label = costLabel(cost.kategoria);
-    costsByCategory.set(label, (costsByCategory.get(label) || 0) + monthlyCostShare(cost));
+    const value = monthlyCostShare(cost);
+    const current = costsByCategory.get(label) || { value: 0, children: new Map<string, number>() };
+    const subcategory = cost.podkategoria || "Bez podkategorii";
+    current.value += value;
+    current.children.set(subcategory, (current.children.get(subcategory) || 0) + value);
+    costsByCategory.set(label, current);
   });
 
   return {
@@ -763,7 +794,11 @@ function buildCfoView(period: string, revenueLines: CfoInvoiceLine[], costs: Cfo
     availableHours: sum(employees.map((employee) => Math.max(0, availableHours(employee, period)))),
     clients: Array.from(clientsByName.values()).sort((a, b) => b.revenue - a.revenue),
     revenueBreakdown: Array.from(revenueByCategory, ([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value),
-    costBreakdown: Array.from(costsByCategory, ([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value),
+    costBreakdown: Array.from(costsByCategory, ([label, entry]) => ({
+      label,
+      value: entry.value,
+      children: Array.from(entry.children, ([childLabel, childValue]) => ({ label: childLabel, value: childValue })).sort((a, b) => b.value - a.value),
+    })).sort((a, b) => b.value - a.value),
   };
 }
 
@@ -1073,6 +1108,7 @@ const warnMetricValueStyle: CSSProperties = { ...metricValueStyle, color: colors
 const tabsStyle: CSSProperties = { display: "flex", gap: "8px", flexWrap: "wrap", borderBottom: `1px solid ${colors.border}`, paddingBottom: "10px" };
 const tabStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.navy, minHeight: "40px", padding: "8px 12px", fontWeight: 850, display: "inline-flex", alignItems: "center", gap: "8px", cursor: "pointer" };
 const activeTabStyle: CSSProperties = { ...tabStyle, background: colors.navy, color: colors.white, borderColor: colors.navy };
+const dashboardGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 0.95fr) minmax(0, 1.05fr)", gap: "18px", alignItems: "start" };
 const sectionGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1.2fr) minmax(320px, 0.8fr)", gap: "18px", alignItems: "start" };
 const sectionStackStyle: CSSProperties = { display: "grid", gap: "18px" };
 const panelStyle: CSSProperties = { background: colors.card, border: `1px solid ${colors.border}`, borderRadius: radius.card, boxShadow: shadow.soft, padding: "20px", minWidth: 0 };
@@ -1101,6 +1137,11 @@ const formFooterStyle: CSSProperties = { display: "flex", justifyContent: "space
 const miniListStyle: CSSProperties = { display: "grid", gap: "8px" };
 const miniItemStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto auto", gap: "10px", border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "10px 12px", color: colors.text, alignItems: "center" };
 const badgeStyle: CSSProperties = { display: "inline-flex", borderRadius: radius.badge, background: "rgba(23, 59, 115, 0.10)", color: colors.navy, padding: "7px 10px", fontSize: "12px", fontWeight: 900 };
+const costBreakdownGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "12px" };
+const costBreakdownItemStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "13px", display: "grid", gap: "10px", minWidth: 0 };
+const costBreakdownHeaderStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "12px", color: colors.navy, alignItems: "center" };
+const costSubListStyle: CSSProperties = { display: "grid", gap: "7px" };
+const costSubItemStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "12px", color: colors.text, fontSize: "13px", borderTop: `1px solid ${colors.border}`, paddingTop: "7px" };
 
 function clientStatusStyle(tone: CfoClientProfitabilityRow["statusTone"]): CSSProperties {
   const palette = {

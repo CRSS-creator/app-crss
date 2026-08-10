@@ -85,7 +85,7 @@ const SUBCATEGORIES: Record<CfoCostCategory, string[]> = {
   lokal_infrastruktura: ["Czynsz", "Prąd", "Gaz", "Śmieci", "Woda", "Sprzątanie", "Wyposażenie", "Materiały gospodarcze"],
   systemy_technologia: ["wFirma", "Google Workspace", "MS Office", "OpenAI", "T-Mobile"],
   marketing_sprzedaz: ["Meta ADS", "Google ADS", "Canva", "Koszt zespołu marketingowego", "Koszt zespołu sprzedażowego"],
-  administracja_ogolne: ["Artykuły biurowe / spożywcze", "Prawne / podatkowe", "OC", "Bank", "Poczta / kurier", "Reprezentacja", "Inne"],
+  administracja_ogolne: ["Wynagrodzenie pracowników administracji - podstawa", "Wynagrodzenie pracowników administracji - ZUS pracodawcy", "Wynagrodzenie pracowników administracji - benefity", "Wynagrodzenie pracowników administracji - premie", "Wynagrodzenie pracowników administracji - szkolenia", "Artykuły biurowe / spożywcze", "Prawne / podatkowe", "OC", "Bank", "Poczta / kurier", "Reprezentacja", "Inne"],
   zarzad_wlasciciel: ["Wynagrodzenie podstawowe Prezesa", "Premia Prezesa", "Samochód służbowy"],
   jednorazowe_nadzwyczajne: [],
 };

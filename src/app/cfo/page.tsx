@@ -1212,7 +1212,7 @@ function buildCfoView(period: string, revenueLines: CfoInvoiceLine[], costs: Cfo
     retainedProfitMargin,
     ownerGoalGap,
     ownerGoalSurplus,
-    ownerGoalText: ownerGoalGap <= 0 ? "Pokryty" : `Brakuje ${formatMoney(ownerGoalGap)}`,
+    ownerGoalText: ownerGoalGap <= 0 ? formatMoney(ownerGoalSurplus) : `-${formatMoney(ownerGoalGap)}`,
     clients: Array.from(clientsByName.values()).sort((a, b) => b.revenue - a.revenue),
     revenueBreakdown: Array.from(revenueByCategory, ([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value),
     costBreakdown: Array.from(costsByCategory, ([label, entry]) => ({

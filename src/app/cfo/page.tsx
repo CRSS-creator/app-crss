@@ -289,7 +289,7 @@ function CfoContent() {
       {!loading && activeTab === "przychody" ? renderRevenueSection(revenueLines, changeRevenueCategory) : null}
       {!loading && activeTab === "koszty" ? renderCostSection(period, costs, setCosts, manualCost, setManualCost, manualInterperiod, setManualInterperiod, expandedCostPeriods, setExpandedCostPeriods, addManualCost, importCostsFile, saving) : null}
       {!loading && activeTab === "cashflow" ? renderCashflowSection(bankTransactions, importBankFile, saving, setBankTransactions) : null}
-      {!loading && activeTab === "zespol" ? renderTeamSectionTable(teamMembers, employeeDrafts, setEmployeeDrafts, saveTeamCosts, saving, period) : null}
+      {!loading && activeTab === "zespol" ? renderTeamSectionTable(teamMembers, employeeDrafts, setEmployeeDrafts, saveTeamCosts, saving, period, clientTimeEntries) : null}
       {!loading && activeTab === "klienci" ? renderClientsSection(clientProfitability) : null}
     </main>
   );
@@ -794,6 +794,7 @@ function renderTeamSectionTable(
   saveTeamCosts: () => void,
   saving: boolean,
   period: string,
+  timeEntries: CfoClientTimeEntry[],
 ) {
   function updateDraft(member: CfoTeamMember, field: keyof EmployeeCostDraft, value: string | number | boolean | null) {
     setEmployeeDrafts((current) => {
@@ -803,6 +804,8 @@ function renderTeamSectionTable(
   }
 
   const drafts = teamMembers.map((member) => employeeDrafts[member.id] || defaultEmployeeDraft(member, period));
+  const workTimeByPerson = buildTeamWorkTime(timeEntries);
+  const hasAnyWorkTime = timeEntries.some((entry) => Number(entry.duration_seconds || 0) > 0);
 
   return (
     <section style={sectionStackStyle}>
@@ -869,13 +872,19 @@ function renderTeamSectionTable(
           <h2 style={panelTitleStyle}>Dostępne godziny w miesiącu</h2>
         </div>
         <div style={miniListStyle}>
+          {!hasAnyWorkTime ? <div style={infoNoticeStyle}>W tym miesiącu nie ma zaznaczonego czasu pracy.</div> : null}
           {drafts.length === 0 ? <span style={smallStyle}>Brak aktywnych użytkowników zespołu.</span> : drafts.map((employee) => {
             const hours = availableHours(employee as CfoEmployeeCost, period);
             const hourly = hours > 0 ? (Number(employee.podstawa || 0) + Number(employee.zus_pracodawcy || 0) + Number(employee.benefity || 0)) / hours : 0;
+            const workTime = employee.osoba_id ? workTimeByPerson.get(employee.osoba_id) || EMPTY_WORK_TIME : EMPTY_WORK_TIME;
+            const utilization = hours > 0 ? workTime.total / hours : null;
             return (
-              <div key={employee.osoba_id || employee.osoba_nazwa} style={miniItemStyle}>
+              <div key={employee.osoba_id || employee.osoba_nazwa} style={teamCapacityItemStyle}>
                 <div><strong>{employee.osoba_nazwa}</strong><small style={smallStyle}>{employee.zespol === "ksiegowy" ? "Zespół księgowy" : employee.zespol === "marketingowy" ? "Marketing" : "Sprzedaż"}</small></div>
-                <span>{hours.toLocaleString("pl-PL")} h</span>
+                <span>Dostępne: <strong>{formatHours(hours)}</strong></span>
+                <span>Przepracowane: <strong>{formatHours(workTime.total)}</strong></span>
+                <span>Klientowe: <strong>{formatHours(workTime.client)}</strong></span>
+                <span>Wykorzystanie: <strong>{utilization === null ? "brak capacity" : formatPercent(utilization)}</strong></span>
                 <span>{formatMoney(hourly)} / h</span>
               </div>
             );
@@ -979,6 +988,7 @@ async function updateCost(costId: string, payload: Partial<CfoCostItem>) {
 type CfoClientRow = { key: string; id: string | null; name: string; revenue: number; mrr: number };
 type CfoCostBreakdownRow = { label: string; value: number; children: { label: string; value: number }[] };
 type CfoRevenueInvoiceGroup = { id: string; number: string; date: string | null; clientName: string; total: number; lines: CfoInvoiceLine[] };
+type CfoTeamWorkTime = { total: number; client: number };
 type CfoClientProfitabilityRow = CfoClientRow & {
   hours: number;
   laborCost: number;
@@ -987,6 +997,8 @@ type CfoClientProfitabilityRow = CfoClientRow & {
   status: string;
   statusTone: "good" | "watch" | "warn" | "bad" | "missing";
 };
+
+const EMPTY_WORK_TIME: CfoTeamWorkTime = { total: 0, client: 0 };
 type CfoView = ReturnType<typeof buildCfoView>;
 
 function groupRevenueLinesByInvoice(lines: CfoInvoiceLine[]): CfoRevenueInvoiceGroup[] {
@@ -1068,6 +1080,19 @@ function buildClientProfitability(period: string, clients: CfoClientRow[], emplo
     const status = clientProfitabilityStatus(margin, hours);
     return { ...client, hours, laborCost, result, margin, ...status };
   });
+}
+
+function buildTeamWorkTime(timeEntries: CfoClientTimeEntry[]) {
+  const byPerson = new Map<string, CfoTeamWorkTime>();
+  timeEntries.forEach((entry) => {
+    const hours = Number(entry.duration_seconds || 0) / 3600;
+    if (!entry.osoba_id || hours <= 0) return;
+    const current = byPerson.get(entry.osoba_id) || { ...EMPTY_WORK_TIME };
+    current.total += hours;
+    if (entry.klient_id) current.client += hours;
+    byPerson.set(entry.osoba_id, current);
+  });
+  return byPerson;
 }
 
 function clientProfitabilityStatus(margin: number | null, hours: number) {
@@ -1650,6 +1675,8 @@ const mutedRowStyle: CSSProperties = { opacity: 0.58, background: "#f1f5f9" };
 const formFooterStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", marginTop: "14px", flexWrap: "wrap" };
 const miniListStyle: CSSProperties = { display: "grid", gap: "8px" };
 const miniItemStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto auto", gap: "10px", border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "10px 12px", color: colors.text, alignItems: "center" };
+const teamCapacityItemStyle: CSSProperties = { ...miniItemStyle, gridTemplateColumns: "minmax(220px, 1.4fr) repeat(5, minmax(120px, auto))", alignItems: "center" };
+const infoNoticeStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: "#e9eef7", color: colors.navy, padding: "12px", fontWeight: 800 };
 const badgeStyle: CSSProperties = { display: "inline-flex", borderRadius: radius.badge, background: "rgba(23, 59, 115, 0.10)", color: colors.navy, padding: "7px 10px", fontSize: "12px", fontWeight: 900 };
 const costBreakdownGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "12px" };
 const costBreakdownItemStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "13px", display: "grid", gap: "10px", minWidth: 0 };

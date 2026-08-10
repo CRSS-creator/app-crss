@@ -258,7 +258,6 @@ export async function fetchCfoClientTimeEntries(period: string) {
   return supabase
     .from("czas_pracy")
     .select("id, klient_id, osoba_id, started_at, ended_at, duration_seconds, miesiac_rozliczeniowy")
-    .not("klient_id", "is", null)
     .not("ended_at", "is", null)
     .gte("started_at", from)
     .lt("started_at", to);

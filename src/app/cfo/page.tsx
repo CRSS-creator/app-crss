@@ -36,6 +36,7 @@ import {
 
 type CfoTab = "dashboard" | "przychody" | "koszty" | "cashflow" | "zespol" | "klienci";
 type EmployeeCostDraft = Omit<CfoEmployeeCost, "id"> & { id?: string };
+type ManualCostDraft = Omit<CfoCostImportRow, "kategoria"> & { kategoria: CfoCostCategory | "" };
 
 const TABS: { id: CfoTab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -63,6 +64,7 @@ const COST_OPTIONS: { value: CfoCostCategory; label: string }[] = [
   { value: "zarzad_wlasciciel", label: "Zarząd / właściciel" },
   { value: "jednorazowe_nadzwyczajne", label: "Jednorazowe i nadzwyczajne" },
 ];
+const MANUAL_COST_OPTIONS: { value: string; label: string }[] = [{ value: "", label: "Wybierz kategorię" }, ...COST_OPTIONS];
 
 const BANK_TYPE_OPTIONS: { value: CfoBankTransactionType; label: string }[] = [
   { value: "do_przypisania", label: "Do przypisania" },
@@ -128,7 +130,7 @@ function CfoContent() {
   const [bankTransactions, setBankTransactions] = useState<CfoBankTransaction[]>([]);
   const [clientTimeEntries, setClientTimeEntries] = useState<CfoClientTimeEntry[]>([]);
   const [teamMembers, setTeamMembers] = useState<CfoTeamMember[]>([]);
-  const [manualCost, setManualCost] = useState(() => emptyManualCost(period));
+  const [manualCost, setManualCost] = useState<ManualCostDraft>(() => emptyManualCost(period));
   const [employeeDrafts, setEmployeeDrafts] = useState<Record<string, EmployeeCostDraft>>({});
 
   useEffect(() => {
@@ -218,8 +220,9 @@ function CfoContent() {
 
   async function addManualCost() {
     if (!manualCost.kontrahent.trim()) return alert("Podaj kontrahenta.");
+    if (!manualCost.kategoria) return alert("Wybierz kategorię kosztu.");
     setSaving(true);
-    const result = await insertCfoCosts([{ ...manualCost, import_key: `manual:${crypto.randomUUID()}`, zrodlo: "recznie" }]);
+    const result = await insertCfoCosts([{ ...manualCost, kategoria: manualCost.kategoria, import_key: `manual:${crypto.randomUUID()}`, zrodlo: "recznie" }]);
     setSaving(false);
     if (result.error) return alert("Nie udało się dodać kosztu.");
     await loadData();
@@ -381,13 +384,14 @@ function renderRevenueSection(lines: CfoInvoiceLine[], onChange: (line: CfoInvoi
 
 function renderCostSection(
   costs: CfoCostItem[],
-  manualCost: CfoCostImportRow,
-  setManualCost: (next: CfoCostImportRow | ((current: CfoCostImportRow) => CfoCostImportRow)) => void,
+  manualCost: ManualCostDraft,
+  setManualCost: (next: ManualCostDraft | ((current: ManualCostDraft) => ManualCostDraft)) => void,
   addManualCost: () => void,
   importCostsFile: (file: File) => void,
   saving: boolean,
 ) {
-  const subcategoryOptions = SUBCATEGORIES[manualCost.kategoria].map((item) => ({ value: item, label: item }));
+  const subcategoryOptions = manualCost.kategoria ? SUBCATEGORIES[manualCost.kategoria].map((item) => ({ value: item, label: item })) : [];
+  const hasSubcategories = subcategoryOptions.length > 0;
   return (
     <section style={sectionStackStyle}>
       <article style={panelStyle}>
@@ -408,8 +412,8 @@ function renderCostSection(
             <input style={inputStyle} placeholder="Kwota netto CFO" type="number" value={manualCost.kwota_netto_cfo} onChange={(event) => setManualCost((current) => ({ ...current, kwota_netto_cfo: Number(event.target.value || 0), kwota_netto_import: Number(event.target.value || 0) }))} />
           </div>
           <div style={manualBottomRowStyle}>
-            <AppSelect value={manualCost.kategoria} options={COST_OPTIONS} onChange={(value) => setManualCost((current) => ({ ...current, kategoria: value as CfoCostCategory, podkategoria: null }))} />
-            <AppSelect value={manualCost.podkategoria || ""} options={[{ value: "", label: "Bez podkategorii" }, ...subcategoryOptions]} onChange={(value) => setManualCost((current) => ({ ...current, podkategoria: emptyToNull(value) }))} />
+            <AppSelect value={manualCost.kategoria} options={MANUAL_COST_OPTIONS} onChange={(value) => setManualCost((current) => ({ ...current, kategoria: value as CfoCostCategory | "", podkategoria: null }))} />
+            {hasSubcategories ? <AppSelect value={manualCost.podkategoria || ""} options={[{ value: "", label: "Wybierz podkategorię" }, ...subcategoryOptions]} onChange={(value) => setManualCost((current) => ({ ...current, podkategoria: emptyToNull(value) }))} /> : null}
             <div style={dateRangeStyle}>
               <input style={inputStyle} type="date" value={manualCost.okres_start} onChange={(event) => setManualCost((current) => ({ ...current, okres_start: event.target.value }))} />
               <input style={inputStyle} type="date" value={manualCost.okres_end} onChange={(event) => setManualCost((current) => ({ ...current, okres_end: event.target.value }))} />
@@ -1059,7 +1063,7 @@ function costLabel(category: CfoCostCategory) {
   return COST_OPTIONS.find((option) => option.value === category)?.label || "Inne";
 }
 
-function emptyManualCost(period: string): CfoCostImportRow {
+function emptyManualCost(period: string): ManualCostDraft {
   return {
     import_key: "",
     data_dokumentu: null,
@@ -1070,7 +1074,7 @@ function emptyManualCost(period: string): CfoCostImportRow {
     kwota_netto_cfo: 0,
     kwota_vat: null,
     kwota_brutto: null,
-    kategoria: "administracja_ogolne",
+    kategoria: "",
     podkategoria: null,
     okres_start: monthToDate(period),
     okres_end: monthEndDate(period),

@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { BarChart3, Banknote, FileSpreadsheet, Plus, RefreshCw, Save, Upload } from "lucide-react";
-import * as XLSX from "xlsx";
 
 import { colors, radius, shadow } from "@/app/design";
 import AccessGuard from "@/components/AccessGuard";
@@ -320,9 +319,9 @@ function CfoContent() {
           <div style={importGridStyle}>
             <label style={uploadBoxStyle}>
               <FileSpreadsheet size={24} />
-              <strong>Wczytaj Excel kosztow</strong>
-              <span>Nr dokumentu, kontrahent, netto, VAT, brutto i opis.</span>
-              <input hidden type="file" accept=".xlsx,.xls,.csv" onChange={(event) => event.target.files?.[0] && importCostsFile(event.target.files[0])} />
+              <strong>Wczytaj CSV kosztow</strong>
+              <span>Eksport z Excela: nr dokumentu, kontrahent, netto, VAT, brutto i opis.</span>
+              <input hidden type="file" accept=".csv,.txt" onChange={(event) => event.target.files?.[0] && importCostsFile(event.target.files[0])} />
             </label>
             <label style={uploadBoxStyle}>
               <Banknote size={24} />
@@ -561,10 +560,13 @@ function monthsBetween(start: string, end: string) {
 }
 
 async function parseCostWorkbook(file: File, period: string): Promise<CfoCostImportRow[]> {
-  const buffer = await file.arrayBuffer();
-  const workbook = XLSX.read(buffer);
-  const sheet = workbook.Sheets[workbook.SheetNames[0]];
-  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: null });
+  if (/\.(xlsx|xls)$/i.test(file.name)) {
+    alert("Ten import przyjmuje teraz CSV. Otworz plik w Excelu i zapisz jako CSV, a nastepnie wczytaj ponownie.");
+    return [];
+  }
+
+  const text = await file.text();
+  const rows = parseDelimitedTable(text);
 
   return rows.map((row, index) => {
     const documentNumber = stringValue(row["Nr dokumentu"] ?? row["Numer dokumentu"]);
@@ -646,6 +648,52 @@ function parseCsv(text: string) {
     } else if (char === '"') {
       quoted = !quoted;
     } else if (char === "," && !quoted) {
+      row.push(value);
+      value = "";
+    } else if ((char === "\n" || char === "\r") && !quoted) {
+      if (char === "\r" && next === "\n") index += 1;
+      row.push(value);
+      if (row.some((cell) => cell.trim())) result.push(row);
+      row = [];
+      value = "";
+    } else {
+      value += char;
+    }
+  }
+
+  row.push(value);
+  if (row.some((cell) => cell.trim())) result.push(row);
+  return result;
+}
+
+function parseDelimitedTable(text: string) {
+  const firstLine = text.split(/\r?\n/).find((line) => line.trim()) || "";
+  const delimiter = firstLine.includes(";") ? ";" : ",";
+  const [headers = [], ...rows] = parseDelimited(text, delimiter);
+
+  return rows.map((row) => {
+    return headers.reduce<Record<string, unknown>>((acc, header, index) => {
+      acc[header.trim()] = row[index] ?? null;
+      return acc;
+    }, {});
+  });
+}
+
+function parseDelimited(text: string, delimiter: "," | ";") {
+  const result: string[][] = [];
+  let row: string[] = [];
+  let value = "";
+  let quoted = false;
+
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    const next = text[index + 1];
+    if (char === '"' && quoted && next === '"') {
+      value += '"';
+      index += 1;
+    } else if (char === '"') {
+      quoted = !quoted;
+    } else if (char === delimiter && !quoted) {
       row.push(value);
       value = "";
     } else if ((char === "\n" || char === "\r") && !quoted) {
@@ -769,11 +817,6 @@ function numberValue(value: unknown) {
 
 function dateValue(value: unknown) {
   if (value instanceof Date) return value.toISOString().slice(0, 10);
-  if (typeof value === "number") {
-    const date = XLSX.SSF.parse_date_code(value);
-    if (!date) return null;
-    return `${date.y}-${String(date.m).padStart(2, "0")}-${String(date.d).padStart(2, "0")}`;
-  }
   const text = stringValue(value);
   if (!text) return null;
   if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;

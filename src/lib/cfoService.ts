@@ -84,6 +84,16 @@ export type CfoTeamMember = {
   aktywne: boolean | null;
 };
 
+export type CfoClientTimeEntry = {
+  id: string;
+  klient_id: string | null;
+  osoba_id: string;
+  started_at: string;
+  ended_at: string | null;
+  duration_seconds: number | null;
+  miesiac_rozliczeniowy: string | null;
+};
+
 export type CfoBankAccount = {
   id: string;
   numer_rachunku: string;
@@ -234,6 +244,19 @@ export async function fetchCfoTeamMembers() {
     .order("full_name", { ascending: true });
 }
 
+export async function fetchCfoClientTimeEntries(period: string) {
+  const from = period;
+  const to = startOfNextMonth(period);
+
+  return supabase
+    .from("czas_pracy")
+    .select("id, klient_id, osoba_id, started_at, ended_at, duration_seconds, miesiac_rozliczeniowy")
+    .not("klient_id", "is", null)
+    .not("ended_at", "is", null)
+    .gte("started_at", from)
+    .lt("started_at", to);
+}
+
 export async function upsertCfoEmployeeCost(row: Omit<CfoEmployeeCost, "id"> & { id?: string }) {
   const { id, ...payload } = row;
   const query = id
@@ -298,4 +321,9 @@ export async function updateBankTransaction(transactionId: string, payload: Part
 function endOfMonth(period: string) {
   const [year, month] = period.slice(0, 7).split("-").map(Number);
   return new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
+}
+
+function startOfNextMonth(period: string) {
+  const [year, month] = period.slice(0, 7).split("-").map(Number);
+  return new Date(Date.UTC(year, month, 1)).toISOString().slice(0, 10);
 }

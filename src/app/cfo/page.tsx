@@ -9,6 +9,7 @@ import AppLayout from "@/components/AppLayout";
 import AppSelect from "@/components/AppSelect";
 import {
   fetchCfoBankTransactions,
+  fetchCfoClientTimeEntries,
   fetchCfoCosts,
   fetchCfoEmployeeCosts,
   fetchCfoRevenueLines,
@@ -22,6 +23,7 @@ import {
   type CfoBankImportRow,
   type CfoBankTransaction,
   type CfoBankTransactionType,
+  type CfoClientTimeEntry,
   type CfoCostCategory,
   type CfoCostImportRow,
   type CfoCostItem,
@@ -119,6 +121,7 @@ function CfoContent() {
   const [costs, setCosts] = useState<CfoCostItem[]>([]);
   const [employeeCosts, setEmployeeCosts] = useState<CfoEmployeeCost[]>([]);
   const [bankTransactions, setBankTransactions] = useState<CfoBankTransaction[]>([]);
+  const [clientTimeEntries, setClientTimeEntries] = useState<CfoClientTimeEntry[]>([]);
   const [teamMembers, setTeamMembers] = useState<CfoTeamMember[]>([]);
   const [selectedTeamMemberId, setSelectedTeamMemberId] = useState("");
   const [manualCost, setManualCost] = useState(() => emptyManualCost(period));
@@ -135,14 +138,20 @@ function CfoContent() {
     [period, revenueLines, costs, employeeCosts, bankTransactions],
   );
 
+  const clientProfitability = useMemo(
+    () => buildClientProfitability(period, view.clients, employeeCosts, clientTimeEntries),
+    [period, view.clients, employeeCosts, clientTimeEntries],
+  );
+
   async function loadData() {
     setLoading(true);
-    const [revenueResult, costsResult, employeeResult, bankResult, teamResult] = await Promise.all([
+    const [revenueResult, costsResult, employeeResult, bankResult, teamResult, timeResult] = await Promise.all([
       fetchCfoRevenueLines(monthToDate(period)),
       fetchCfoCosts(monthToDate(period)),
       fetchCfoEmployeeCosts(monthToDate(period)),
       fetchCfoBankTransactions(monthToDate(period)),
       fetchCfoTeamMembers(),
+      fetchCfoClientTimeEntries(monthToDate(period)),
     ]);
 
     if (revenueResult.error) console.error("Błąd pobierania przychodów CFO:", revenueResult.error);
@@ -150,11 +159,13 @@ function CfoContent() {
     if (employeeResult.error) console.error("Błąd pobierania kosztów pracowników CFO:", employeeResult.error);
     if (bankResult.error) console.error("Błąd pobierania transakcji bankowych CFO:", bankResult.error);
     if (teamResult.error) console.error("Błąd pobierania zespołu CFO:", teamResult.error);
+    if (timeResult.error) console.error("Błąd pobierania czasu pracy klientów CFO:", timeResult.error);
 
     setRevenueLines((revenueResult.data || []) as unknown as CfoInvoiceLine[]);
     setCosts((costsResult.data || []) as CfoCostItem[]);
     setEmployeeCosts((employeeResult.data || []) as CfoEmployeeCost[]);
     setBankTransactions((bankResult.data || []) as CfoBankTransaction[]);
+    setClientTimeEntries((timeResult.data || []) as CfoClientTimeEntry[]);
     setTeamMembers((teamResult.data || []) as CfoTeamMember[]);
     setManualCost(emptyManualCost(period));
     setEmployeeDraft({ ...EMPTY_EMPLOYEE, okres: monthToDate(period) });
@@ -276,7 +287,7 @@ function CfoContent() {
       {!loading && activeTab === "koszty" ? renderCostSection(costs, manualCost, setManualCost, addManualCost, importCostsFile, saving) : null}
       {!loading && activeTab === "cashflow" ? renderCashflowSection(bankTransactions, importBankFile, saving, setBankTransactions) : null}
       {!loading && activeTab === "zespol" ? renderTeamSection(teamMembers, employeeCosts, selectedTeamMemberId, selectTeamMember, employeeDraft, setEmployeeDraft, saveEmployeeCost, saving, period) : null}
-      {!loading && activeTab === "klienci" ? renderClientsSection(view.clients) : null}
+      {!loading && activeTab === "klienci" ? renderClientsSection(clientProfitability) : null}
     </main>
   );
 }
@@ -533,7 +544,7 @@ function renderTeamSection(
   );
 }
 
-function renderClientsSection(clients: CfoClientRow[]) {
+function renderClientsSection(clients: CfoClientProfitabilityRow[]) {
   return (
     <section style={panelStyle}>
       <div style={panelHeaderStyle}>
@@ -542,14 +553,18 @@ function renderClientsSection(clients: CfoClientRow[]) {
       </div>
       <div style={tableWrapperStyle}>
         <table style={tableStyle}>
-          <thead><tr><Th>Klient</Th><Th align="right">Przychód</Th><Th align="right">MRR</Th><Th>Status</Th></tr></thead>
+          <thead><tr><Th>Klient</Th><Th align="right">Przychód</Th><Th align="right">MRR</Th><Th align="right">Godziny</Th><Th align="right">Koszt pracy</Th><Th align="right">Wynik</Th><Th align="right">Marża</Th><Th>Status</Th></tr></thead>
           <tbody>
-            {clients.length === 0 ? <EmptyRow colSpan={4} text="Brak klientów z przychodami w tym okresie." /> : clients.map((client) => (
-              <tr key={client.name}>
+            {clients.length === 0 ? <EmptyRow colSpan={8} text="Brak klientów z przychodami w tym okresie." /> : clients.map((client) => (
+              <tr key={client.key}>
                 <Td>{client.name}</Td>
                 <Td align="right">{formatMoney(client.revenue)}</Td>
                 <Td align="right">{formatMoney(client.mrr)}</Td>
-                <Td><span style={badgeStyle}>Wymaga kosztu czasu</span></Td>
+                <Td align="right">{formatHours(client.hours)}</Td>
+                <Td align="right">{formatMoney(client.laborCost)}</Td>
+                <Td align="right">{formatMoney(client.result)}</Td>
+                <Td align="right">{formatPercent(client.margin)}</Td>
+                <Td><span style={clientStatusStyle(client.statusTone)}>{client.status}</span></Td>
               </tr>
             ))}
           </tbody>
@@ -594,8 +609,54 @@ async function updateCost(costId: string, payload: Partial<CfoCostItem>) {
   if (result.error) alert("Nie udało się zapisać kosztu.");
 }
 
-type CfoClientRow = { name: string; revenue: number; mrr: number };
+type CfoClientRow = { key: string; id: string | null; name: string; revenue: number; mrr: number };
+type CfoClientProfitabilityRow = CfoClientRow & {
+  hours: number;
+  laborCost: number;
+  result: number;
+  margin: number | null;
+  status: string;
+  statusTone: "good" | "watch" | "warn" | "bad" | "missing";
+};
 type CfoView = ReturnType<typeof buildCfoView>;
+
+function buildClientProfitability(period: string, clients: CfoClientRow[], employees: CfoEmployeeCost[], timeEntries: CfoClientTimeEntry[]): CfoClientProfitabilityRow[] {
+  const hourlyCostByPerson = new Map<string, number>();
+  employees.forEach((employee) => {
+    if (!employee.osoba_id || !employee.w_capacity) return;
+    const hours = availableHours(employee, period);
+    const directCost = Number(employee.podstawa || 0) + Number(employee.zus_pracodawcy || 0) + Number(employee.benefity || 0);
+    hourlyCostByPerson.set(employee.osoba_id, hours > 0 ? directCost / hours : 0);
+  });
+
+  const clientHours = new Map<string, number>();
+  const clientLaborCost = new Map<string, number>();
+  timeEntries.forEach((entry) => {
+    if (!entry.klient_id) return;
+    const hours = Number(entry.duration_seconds || 0) / 3600;
+    const hourlyCost = hourlyCostByPerson.get(entry.osoba_id) || 0;
+    clientHours.set(entry.klient_id, (clientHours.get(entry.klient_id) || 0) + hours);
+    clientLaborCost.set(entry.klient_id, (clientLaborCost.get(entry.klient_id) || 0) + hours * hourlyCost);
+  });
+
+  return clients.map((client) => {
+    const hours = client.id ? clientHours.get(client.id) || 0 : 0;
+    const laborCost = client.id ? clientLaborCost.get(client.id) || 0 : 0;
+    const result = client.revenue - laborCost;
+    const margin = client.revenue > 0 ? result / client.revenue : null;
+    const status = clientProfitabilityStatus(margin, hours);
+    return { ...client, hours, laborCost, result, margin, ...status };
+  });
+}
+
+function clientProfitabilityStatus(margin: number | null, hours: number) {
+  if (hours <= 0) return { status: "Brakuje czasu pracy", statusTone: "missing" as const };
+  if (margin === null) return { status: "Brak przychodu", statusTone: "missing" as const };
+  if (margin >= 0.4) return { status: "Chronić", statusTone: "good" as const };
+  if (margin >= 0.25) return { status: "Obserwować", statusTone: "watch" as const };
+  if (margin >= 0.15) return { status: "Podwyżka", statusTone: "warn" as const };
+  return { status: "Konieczna podwyżka / rozważyć zakończenie", statusTone: "bad" as const };
+}
 
 function buildCfoView(period: string, revenueLines: CfoInvoiceLine[], costs: CfoCostItem[], employees: CfoEmployeeCost[], bank: CfoBankTransaction[]) {
   const revenue = sum(revenueLines.map((line) => Number(line.kwota_netto || 0)));
@@ -614,10 +675,12 @@ function buildCfoView(period: string, revenueLines: CfoInvoiceLine[], costs: Cfo
     const category = revenueLabel(line.cfo_przychod_kategoria || "pozostale");
     revenueByCategory.set(category, (revenueByCategory.get(category) || 0) + Number(line.kwota_netto || 0));
     const name = invoiceClientName(line);
-    const current = clientsByName.get(name) || { name, revenue: 0, mrr: 0 };
+    const clientId = invoiceClientId(line);
+    const key = clientId || name;
+    const current = clientsByName.get(key) || { key, id: clientId, name, revenue: 0, mrr: 0 };
     current.revenue += Number(line.kwota_netto || 0);
     if (line.cfo_przychod_kategoria === "abonamenty") current.mrr += Number(line.kwota_netto || 0);
-    clientsByName.set(name, current);
+    clientsByName.set(key, current);
   });
 
   costs.forEach((cost) => {
@@ -818,6 +881,11 @@ function invoiceClientName(line: CfoInvoiceLine) {
   return client?.nazwa || invoice?.kontrahent_nazwa || "Klient bez nazwy";
 }
 
+function invoiceClientId(line: CfoInvoiceLine) {
+  const invoice = Array.isArray(line.faktury) ? line.faktury[0] : line.faktury;
+  return invoice?.klient_id || null;
+}
+
 function teamMemberName(member: CfoTeamMember) {
   return member.full_name || member.email || "Użytkownik";
 }
@@ -870,6 +938,15 @@ function monthToDate(value: string) {
 
 function formatMoney(value: number | string | null | undefined) {
   return `${Number(value || 0).toLocaleString("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} zł`;
+}
+
+function formatHours(value: number) {
+  return `${Number(value || 0).toLocaleString("pl-PL", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} h`;
+}
+
+function formatPercent(value: number | null) {
+  if (value === null) return "Brak";
+  return `${(value * 100).toLocaleString("pl-PL", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
 }
 
 function formatDate(value: string | null | undefined) {
@@ -961,3 +1038,15 @@ const formFooterStyle: CSSProperties = { display: "flex", justifyContent: "space
 const miniListStyle: CSSProperties = { display: "grid", gap: "8px" };
 const miniItemStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto auto", gap: "10px", border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "10px 12px", color: colors.text, alignItems: "center" };
 const badgeStyle: CSSProperties = { display: "inline-flex", borderRadius: radius.badge, background: "rgba(23, 59, 115, 0.10)", color: colors.navy, padding: "7px 10px", fontSize: "12px", fontWeight: 900 };
+
+function clientStatusStyle(tone: CfoClientProfitabilityRow["statusTone"]): CSSProperties {
+  const palette = {
+    good: { background: "#dcfce7", color: colors.success },
+    watch: { background: "#e9eef7", color: colors.navy },
+    warn: { background: "#fef3c7", color: colors.warning },
+    bad: { background: "#fee2e2", color: colors.danger },
+    missing: { background: "rgba(23, 59, 115, 0.10)", color: colors.navy },
+  }[tone];
+
+  return { ...badgeStyle, ...palette };
+}

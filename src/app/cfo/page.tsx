@@ -1019,7 +1019,9 @@ function emptyManualCost(period: string): CfoCostImportRow {
 }
 
 function currentMonthInput() {
-  return new Date().toISOString().slice(0, 7);
+  const date = new Date();
+  date.setMonth(date.getMonth() - 1);
+  return date.toISOString().slice(0, 7);
 }
 
 function currentMonthDate() {

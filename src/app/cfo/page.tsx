@@ -308,11 +308,11 @@ function renderDashboard(view: CfoView) {
           <h2 style={panelTitleStyle}>Dashboard właścicielski</h2>
         </div>
         <div style={recommendationStyle}>
-          <strong>{view.ownerGoalGap <= 0 ? "Cel właściciela jest pokryty" : "Brakująca marża do bezpiecznej wypłaty"}</strong>
+          <strong>{view.ownerGoalGap <= 0 ? "Cel właścicielski jest pokryty" : "Brakujący wynik do celu właścicielskiego"}</strong>
           <span>
             {view.ownerGoalGap <= 0
-              ? `Aktualny wynik operacyjny pokrywa wypłatę ${formatMoney(OWNER_MONTHLY_PAYOUT)} i bufor spółki ${formatMoney(view.companyBufferTarget)}.`
-              : `Brakuje ${formatMoney(view.ownerGoalGap)} miesięcznej marży. Cel obejmuje wypłatę ${formatMoney(OWNER_MONTHLY_PAYOUT)} oraz minimum ${formatMoney(view.companyBufferTarget)} pozostające w spółce. Przy marży 40% oznacza to około ${formatMoney(view.ownerGoalGap / 0.4)} dodatkowego MRR albo równoważną poprawę kosztów.`}
+              ? `Po kosztach zostaje ${formatMoney(view.operatingResult)}. Po wypłacie właściciela ${formatMoney(OWNER_MONTHLY_PAYOUT)} w spółce zostaje ${formatMoney(view.retainedProfitAfterOwner)}, czyli ${formatPercent(view.retainedProfitMargin)} przychodów. Minimum to ${formatMoney(view.companyBufferTarget)}.`
+              : `Po kosztach zostaje ${formatMoney(view.operatingResult)}. Żeby wypłacić właścicielowi ${formatMoney(OWNER_MONTHLY_PAYOUT)} i zostawić w spółce 10% przychodów, czyli ${formatMoney(view.companyBufferTarget)}, brakuje ${formatMoney(view.ownerGoalGap)}.`}
           </span>
         </div>
         <div style={quickGridStyle}>
@@ -787,6 +787,8 @@ function buildCfoView(period: string, revenueLines: CfoInvoiceLine[], costs: Cfo
   const cashFlow = sum(bank.filter((transaction) => !transaction.ignoruj && transaction.typ !== "transfer_wewnetrzny").map((transaction) => Number(transaction.kwota || 0)));
   const companyBufferTarget = revenue * COMPANY_BUFFER_RATE;
   const ownerGoalTarget = OWNER_MONTHLY_PAYOUT + companyBufferTarget;
+  const retainedProfitAfterOwner = operatingResult - OWNER_MONTHLY_PAYOUT;
+  const retainedProfitMargin = revenue > 0 ? retainedProfitAfterOwner / revenue : null;
   const ownerGoalGap = Math.max(0, ownerGoalTarget - operatingResult);
   const clientsByName = new Map<string, CfoClientRow>();
   const revenueByCategory = new Map<string, number>();
@@ -823,6 +825,8 @@ function buildCfoView(period: string, revenueLines: CfoInvoiceLine[], costs: Cfo
     cashFlow,
     companyBufferTarget,
     ownerGoalTarget,
+    retainedProfitAfterOwner,
+    retainedProfitMargin,
     ownerGoalGap,
     ownerGoalText: ownerGoalGap <= 0 ? "Pokryty" : `Brakuje ${formatMoney(ownerGoalGap)}`,
     invoiceLineCount: revenueLines.length,

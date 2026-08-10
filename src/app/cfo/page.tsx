@@ -317,7 +317,7 @@ function renderDashboard(view: CfoView) {
         </div>
         <div style={quickGridStyle}>
           <MiniStat label="Pozycje faktur" value={String(view.invoiceLineCount)} helper={`${view.uncategorizedRevenue} bez kategorii CFO`} />
-          <MiniStat label="Koszty" value={String(view.costCount)} helper={`${formatMoney(view.managementCosts)} w tym okresie`} />
+          <MiniStat label="Koszty" value={String(view.costCount)} helper={`${formatMoney(view.operatingCosts + view.managementCosts)} w tym okresie`} />
           <MiniStat label="Transakcje bankowe" value={String(view.bankTransactionCount)} helper={`${view.unassignedBankCount} do przypisania`} />
           <MiniStat label="Godziny zespołu" value={`${view.availableHours.toLocaleString("pl-PL")} h`} helper="na podstawie dni roboczych i etatów" />
         </div>
@@ -780,9 +780,10 @@ function buildCfoView(period: string, revenueLines: CfoInvoiceLine[], costs: Cfo
   const revenue = sum(revenueLines.map((line) => Number(line.kwota_netto || 0)));
   const mrr = sum(revenueLines.filter((line) => line.cfo_przychod_kategoria === "abonamenty").map((line) => Number(line.kwota_netto || 0)));
   const employeeBase = sum(employees.map((employee) => Number(employee.podstawa || 0) + Number(employee.zus_pracodawcy || 0) + Number(employee.benefity || 0) + Number(employee.premie || 0) + Number(employee.szkolenia || 0)));
-  const operatingCosts = sum(costs.filter((cost) => !cost.ignoruj).map(monthlyCostShare));
-  const managementCosts = operatingCosts + employeeBase;
-  const operatingResult = revenue - managementCosts;
+  const activeCosts = costs.filter((cost) => !cost.ignoruj);
+  const managementCosts = sum(activeCosts.filter((cost) => cost.kategoria === "zarzad_wlasciciel").map(monthlyCostShare));
+  const operatingCosts = sum(activeCosts.filter((cost) => cost.kategoria !== "zarzad_wlasciciel").map(monthlyCostShare)) + employeeBase;
+  const operatingResult = revenue - operatingCosts - managementCosts;
   const cashFlow = sum(bank.filter((transaction) => !transaction.ignoruj && transaction.typ !== "transfer_wewnetrzny").map((transaction) => Number(transaction.kwota || 0)));
   const companyBufferTarget = revenue * COMPANY_BUFFER_RATE;
   const ownerGoalTarget = OWNER_MONTHLY_PAYOUT + companyBufferTarget;

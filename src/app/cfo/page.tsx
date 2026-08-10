@@ -678,9 +678,9 @@ function renderCostSection(
               <col style={{ width: "22%" }} />
               <col style={{ width: "16%" }} />
               <col style={{ width: "16%" }} />
-              <col style={{ width: "16%" }} />
+              <col style={{ width: "14%" }} />
               <col style={{ width: "10%" }} />
-              <col style={{ width: "6%" }} />
+              <col style={{ width: "8%" }} />
             </colgroup>
             <thead><tr><Th>Dokument</Th><Th>Kontrahent</Th><Th>Kategoria</Th><Th>Podkategoria</Th><Th>Okres</Th><Th align="right">Netto CFO</Th><Th align="right">Brutto cash flow</Th></tr></thead>
             <tbody>
@@ -722,7 +722,7 @@ function renderCostSection(
                         zł
                       </span>
                     </Td>
-                    <Td align="right">{formatMoney(cost.kwota_brutto)}</Td>
+                    <Td align="right" style={nowrapMoneyCellStyle}>{formatMoney(cost.kwota_brutto)}</Td>
                   </tr>
                 );
               })}
@@ -1645,6 +1645,7 @@ const primaryButtonStyle: CSSProperties = { border: `1px solid ${colors.red}`, b
 const secondaryButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.navy, minHeight: "42px", padding: "9px 14px", fontWeight: 850, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "8px", cursor: "pointer" };
 const moneyEditStyle: CSSProperties = { display: "inline-flex", alignItems: "center", justifyContent: "flex-end", gap: "6px", color: colors.navy, fontWeight: 850, whiteSpace: "nowrap" };
 const moneyInputStyle: CSSProperties = { ...inputStyle, minHeight: "36px", padding: "7px 9px", width: "102px" };
+const nowrapMoneyCellStyle: CSSProperties = { whiteSpace: "nowrap" };
 const mutedRowStyle: CSSProperties = { opacity: 0.58, background: "#f1f5f9" };
 const formFooterStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", marginTop: "14px", flexWrap: "wrap" };
 const miniListStyle: CSSProperties = { display: "grid", gap: "8px" };

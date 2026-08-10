@@ -961,13 +961,13 @@ function CostBreakdown({ rows }: { rows: CfoCostBreakdownRow[] }) {
         <div key={row.label} style={costBreakdownItemStyle}>
           <div style={costBreakdownHeaderStyle}>
             <strong>{row.label}</strong>
-            <strong>{formatMoney(row.value)}</strong>
+            <strong style={costBreakdownAmountStyle}>{formatMoney(row.value)}</strong>
           </div>
           <div style={costSubListStyle}>
             {row.children.length === 0 ? <small style={smallStyle}>Brak podkategorii</small> : row.children.map((child) => (
               <div key={child.label} style={costSubItemStyle}>
                 <span>{child.label}</span>
-                <strong>{formatMoney(child.value)}</strong>
+                <strong style={costBreakdownAmountStyle}>{formatMoney(child.value)}</strong>
               </div>
             ))}
           </div>
@@ -1703,11 +1703,12 @@ const miniItemStyle: CSSProperties = { display: "grid", gridTemplateColumns: "mi
 const teamCapacityItemStyle: CSSProperties = { ...miniItemStyle, gridTemplateColumns: "minmax(220px, 1.4fr) repeat(5, minmax(120px, auto))", alignItems: "center" };
 const infoNoticeStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: "#e9eef7", color: colors.navy, padding: "12px", fontWeight: 800 };
 const badgeStyle: CSSProperties = { display: "inline-flex", borderRadius: radius.badge, background: "rgba(23, 59, 115, 0.10)", color: colors.navy, padding: "7px 10px", fontSize: "12px", fontWeight: 900 };
-const costBreakdownGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "12px" };
-const costBreakdownItemStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "13px", display: "grid", gap: "10px", minWidth: 0 };
-const costBreakdownHeaderStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "12px", color: colors.navy, alignItems: "center" };
+const costBreakdownGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(310px, 1fr))", gap: "12px" };
+const costBreakdownItemStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "14px", display: "grid", gap: "11px", minWidth: 0 };
+const costBreakdownHeaderStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: "14px", color: colors.navy, alignItems: "start" };
+const costBreakdownAmountStyle: CSSProperties = { whiteSpace: "nowrap", textAlign: "right", fontVariantNumeric: "tabular-nums" };
 const costSubListStyle: CSSProperties = { display: "grid", gap: "7px" };
-const costSubItemStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "12px", color: colors.text, fontSize: "13px", borderTop: `1px solid ${colors.border}`, paddingTop: "7px" };
+const costSubItemStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: "14px", color: colors.text, fontSize: "13px", borderTop: `1px solid ${colors.border}`, paddingTop: "7px", alignItems: "start" };
 
 function clientStatusStyle(tone: CfoClientProfitabilityRow["statusTone"]): CSSProperties {
   const palette = {

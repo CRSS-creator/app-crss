@@ -654,7 +654,12 @@ function renderCostSection(
           <div style={manualTopRowStyle}>
             <input style={inputStyle} placeholder="Kontrahent" value={manualCost.kontrahent} onChange={(event) => setManualCost((current) => ({ ...current, kontrahent: event.target.value }))} />
             <input style={inputStyle} placeholder="Numer dokumentu" value={manualCost.numer_dokumentu || ""} onChange={(event) => setManualCost((current) => ({ ...current, numer_dokumentu: documentNumberOrNull(event.target.value) }))} />
-            <input style={inputStyle} placeholder="Kwota netto CFO" type="number" value={manualCost.kwota_netto_cfo} onChange={(event) => setManualCost((current) => ({ ...current, kwota_netto_cfo: Number(event.target.value || 0), kwota_netto_import: Number(event.target.value || 0) }))} />
+            <MoneyTextInput
+              style={inputStyle}
+              placeholder="Kwota netto CFO"
+              value={manualCost.kwota_netto_cfo}
+              onValueChange={(value) => setManualCost((current) => ({ ...current, kwota_netto_cfo: value, kwota_netto_import: value }))}
+            />
           </div>
           <div style={manualBottomRowStyle}>
             <AppSelect value={manualCost.kategoria} options={MANUAL_COST_OPTIONS} onChange={(value) => setManualCost((current) => ({ ...current, kategoria: value as CfoCostCategory | "", podkategoria: null }))} />
@@ -727,7 +732,12 @@ function renderCostSection(
                     </Td>
                     <Td align="right">
                       <span style={moneyEditStyle}>
-                        <input style={moneyInputStyle} type="number" value={cost.kwota_netto_cfo} onChange={(event) => setCosts((current) => current.map((item) => item.id === cost.id ? { ...item, kwota_netto_cfo: Number(event.target.value || 0) } : item))} onBlur={(event) => void updateCost(cost.id, { kwota_netto_cfo: Number(event.target.value || 0) })} />
+                        <MoneyTextInput
+                          style={moneyInputStyle}
+                          value={cost.kwota_netto_cfo}
+                          onValueChange={(value) => setCosts((current) => current.map((item) => item.id === cost.id ? { ...item, kwota_netto_cfo: value } : item))}
+                          onCommit={(value) => void updateCost(cost.id, { kwota_netto_cfo: value })}
+                        />
                         zł
                       </span>
                     </Td>
@@ -939,6 +949,45 @@ function TeamInput({ value, onChange }: { value: number; onChange: (value: numbe
     <Td align="right">
       <input style={teamInputStyle} type="number" value={value} onChange={(event) => onChange(Number(event.target.value || 0))} />
     </Td>
+  );
+}
+
+function MoneyTextInput({
+  value,
+  onValueChange,
+  onCommit,
+  placeholder,
+  style,
+}: {
+  value: number;
+  onValueChange: (value: number) => void;
+  onCommit?: (value: number) => void;
+  placeholder?: string;
+  style?: CSSProperties;
+}) {
+  const [text, setText] = useState(formatNumberInput(value));
+
+  function commit(nextText: string) {
+    const parsed = parsePolishNumber(nextText);
+    onValueChange(parsed);
+    onCommit?.(parsed);
+    setText(formatNumberInput(parsed));
+  }
+
+  return (
+    <input
+      style={style || inputStyle}
+      inputMode="decimal"
+      placeholder={placeholder}
+      value={text}
+      onChange={(event) => {
+        setText(event.target.value);
+      }}
+      onBlur={(event) => commit(event.target.value)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") event.currentTarget.blur();
+      }}
+    />
   );
 }
 
@@ -1539,6 +1588,10 @@ function formatMoney(value: number | string | null | undefined) {
   return `${formatPlNumber(Number(value || 0), { minimumFractionDigits: 2, maximumFractionDigits: 2 })} zł`;
 }
 
+function formatNumberInput(value: number | string | null | undefined) {
+  return formatPlNumber(Number(value || 0), { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+}
+
 function formatHours(value: number) {
   return `${formatPlNumber(Number(value || 0), { minimumFractionDigits: 1, maximumFractionDigits: 1 })} h`;
 }
@@ -1549,7 +1602,18 @@ function formatPercent(value: number | null) {
 }
 
 function formatPlNumber(value: number, options: Intl.NumberFormatOptions) {
-  return value.toLocaleString("pl-PL", options).replace(/[\u00a0\u202f]/g, " ");
+  const normalized = value.toLocaleString("pl-PL", { useGrouping: false, ...options }).replace(/[\u00a0\u202f]/g, " ");
+  const [integer, decimal] = normalized.split(",");
+  const sign = integer.startsWith("-") ? "-" : "";
+  const unsignedInteger = sign ? integer.slice(1) : integer;
+  const grouped = unsignedInteger.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+  return `${sign}${grouped}${decimal === undefined ? "" : `,${decimal}`}`;
+}
+
+function parsePolishNumber(value: string) {
+  const normalized = value.replace(/\s/g, "").replace(",", ".");
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function formatDate(value: string | null | undefined) {

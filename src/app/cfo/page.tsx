@@ -259,7 +259,7 @@ function CfoContent() {
 
       <section style={metricGridStyle}>
         <Metric label="Przychody" value={formatMoney(view.revenue)} />
-        <Metric label="MRR" value={formatMoney(view.mrr)} />
+        <Metric label="Koszty operacyjne" value={formatMoney(view.operatingCosts)} />
         <Metric label="Koszty zarządcze" value={formatMoney(view.managementCosts)} />
         <Metric label="Wynik operacyjny" value={formatMoney(view.operatingResult)} tone={view.operatingResult >= 0 ? "good" : "bad"} />
         <Metric label="Cash flow" value={formatMoney(view.cashFlow)} tone={view.cashFlow >= 0 ? "good" : "bad"} />
@@ -780,8 +780,8 @@ function buildCfoView(period: string, revenueLines: CfoInvoiceLine[], costs: Cfo
   const revenue = sum(revenueLines.map((line) => Number(line.kwota_netto || 0)));
   const mrr = sum(revenueLines.filter((line) => line.cfo_przychod_kategoria === "abonamenty").map((line) => Number(line.kwota_netto || 0)));
   const employeeBase = sum(employees.map((employee) => Number(employee.podstawa || 0) + Number(employee.zus_pracodawcy || 0) + Number(employee.benefity || 0) + Number(employee.premie || 0) + Number(employee.szkolenia || 0)));
-  const costBase = sum(costs.filter((cost) => !cost.ignoruj).map(monthlyCostShare));
-  const managementCosts = costBase + employeeBase;
+  const operatingCosts = sum(costs.filter((cost) => !cost.ignoruj).map(monthlyCostShare));
+  const managementCosts = operatingCosts + employeeBase;
   const operatingResult = revenue - managementCosts;
   const cashFlow = sum(bank.filter((transaction) => !transaction.ignoruj && transaction.typ !== "transfer_wewnetrzny").map((transaction) => Number(transaction.kwota || 0)));
   const companyBufferTarget = revenue * COMPANY_BUFFER_RATE;
@@ -816,6 +816,7 @@ function buildCfoView(period: string, revenueLines: CfoInvoiceLine[], costs: Cfo
   return {
     revenue,
     mrr,
+    operatingCosts,
     managementCosts,
     operatingResult,
     cashFlow,

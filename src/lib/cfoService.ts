@@ -76,6 +76,14 @@ export type CfoEmployeeCost = {
   nadgodziny: number;
 };
 
+export type CfoTeamMember = {
+  id: string;
+  full_name: string | null;
+  email: string | null;
+  role: string | null;
+  aktywne: boolean | null;
+};
+
 export type CfoBankAccount = {
   id: string;
   numer_rachunku: string;
@@ -215,6 +223,15 @@ export async function fetchCfoEmployeeCosts(period: string) {
     .select("*")
     .eq("okres", period)
     .order("osoba_nazwa", { ascending: true });
+}
+
+export async function fetchCfoTeamMembers() {
+  return supabase
+    .from("profiles")
+    .select("id, full_name, email, role, aktywne")
+    .in("role", ["accountant", "manager", "opiekun_ksiegowy", "ksiegowy"])
+    .neq("aktywne", false)
+    .order("full_name", { ascending: true });
 }
 
 export async function upsertCfoEmployeeCost(row: Omit<CfoEmployeeCost, "id"> & { id?: string }) {

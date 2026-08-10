@@ -1336,8 +1336,10 @@ function classifyBankTransaction(title: string, contractor: string): CfoBankTran
 }
 
 function monthlyCostShare(cost: CfoCostItem) {
-  if (cost.ujecie_zarzadcze !== "rozliczenie_w_czasie") return Number(cost.kwota_netto_cfo || 0);
-  return Number(cost.kwota_netto_cfo || 0) / Math.max(1, monthsBetween(cost.okres_start, cost.okres_end));
+  const amount = Number(cost.kwota_netto_cfo || 0);
+  const months = Math.max(1, monthsBetween(cost.okres_start, cost.okres_end));
+  if (months === 1 && cost.ujecie_zarzadcze !== "rozliczenie_w_czasie") return amount;
+  return amount / months;
 }
 
 function isOwnerPayoutCost(cost: CfoCostItem) {

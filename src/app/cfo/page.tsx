@@ -314,15 +314,21 @@ function renderDashboard(view: CfoView) {
           <h2 style={panelTitleStyle}>Dashboard właścicielski</h2>
         </div>
         <div style={recommendationStyle}>
-          <strong>{view.ownerGoalGap <= 0 ? "Nadwyżka ponad cel właścicielski" : "Brakuje do celu właścicielskiego"}</strong>
+          <strong>{view.ownerGoalGap <= 0 ? "Nadwyżka ponad ideał właścicielski" : "Brakuje do ideału właścicielskiego"}</strong>
           <span>
             {view.ownerGoalGap <= 0
-              ? <><strong style={successInlineStyle}>Nadwyżka {formatMoney(view.ownerGoalSurplus)}</strong>. Cel obejmuje wypłatę netto {formatMoney(OWNER_MONTHLY_PAYOUT)}, w tym {formatMoney(view.ownerPayoutRecorded)} netto już ujęte w kosztach, oraz minimum {formatMoney(view.companyBufferTarget)} pozostające w spółce.</>
-              : <><strong style={dangerInlineStyle}>Brakuje {formatMoney(view.ownerGoalGap)}</strong>. Cel obejmuje wypłatę netto {formatMoney(OWNER_MONTHLY_PAYOUT)}, w tym {formatMoney(view.ownerPayoutRecorded)} netto już ujęte w kosztach, oraz minimum {formatMoney(view.companyBufferTarget)} pozostające w spółce.</>}
+              ? <><strong style={successInlineStyle}>Nadwyżka {formatMoney(view.ownerGoalSurplus)}</strong>. Wypłata netto właściciela i wymagany bufor są pokryte.</>
+              : <><strong style={dangerInlineStyle}>Brakuje {formatMoney(view.ownerGoalGap)}</strong>. Poniżej widać, z czego składa się brakująca kwota.</>}
           </span>
+          <div style={ownerGoalBreakdownStyle}>
+            <span>Brakująca wypłata netto</span><strong>{formatMoney(view.ownerPayoutRemaining)}</strong>
+            <span>Brakuje do pokrycia straty</span><strong>{formatMoney(view.ownerLossCoverage)}</strong>
+            <span>Wymagany bufor w spółce</span><strong>{formatMoney(view.companyBufferTarget)}</strong>
+            {view.ownerPositiveResult > 0 ? <><span>Pokryte wynikiem po kosztach</span><strong>-{formatMoney(view.ownerPositiveResult)}</strong></> : null}
+          </div>
         </div>
         <div style={quickGridStyle}>
-          <MiniStat label="Wymagany wynik" value={formatMoney(view.ownerGoalTarget)} helper="brakująca wypłata + 10% przychodów" />
+          <MiniStat label="Potrzebne po kosztach" value={formatMoney(view.ownerGoalTarget)} helper="brakująca wypłata netto + bufor" />
           <MiniStat label="Wypłata netto w kosztach" value={formatMoney(view.ownerPayoutRecorded)} helper={`do wypłaty netto brakuje: ${formatMoney(view.ownerPayoutRemaining)}`} />
           <MiniStat label="Wynik po kosztach" value={formatMoney(view.operatingResult)} helper="przychody minus koszty operacyjne i zarządcze" />
           <MiniStat label="Zostaje po wypłacie" value={formatMoney(view.retainedProfitAfterOwner)} helper={`${formatPercent(view.retainedProfitMargin)} przychodów po dopłacie właściciela`} />
@@ -1117,6 +1123,8 @@ function buildCfoView(period: string, revenueLines: CfoInvoiceLine[], costs: Cfo
   const cashFlow = sum(bank.filter((transaction) => !transaction.ignoruj && transaction.typ !== "transfer_wewnetrzny").map((transaction) => Number(transaction.kwota || 0)));
   const companyBufferTarget = revenue * COMPANY_BUFFER_RATE;
   const ownerGoalTarget = ownerPayoutRemaining + companyBufferTarget;
+  const ownerLossCoverage = Math.max(0, -operatingResult);
+  const ownerPositiveResult = Math.max(0, operatingResult);
   const retainedProfitAfterOwner = operatingResult - ownerPayoutRemaining;
   const retainedProfitMargin = revenue > 0 ? retainedProfitAfterOwner / revenue : null;
   const ownerGoalGap = Math.max(0, ownerGoalTarget - operatingResult);
@@ -1158,6 +1166,8 @@ function buildCfoView(period: string, revenueLines: CfoInvoiceLine[], costs: Cfo
     ownerGoalTarget,
     ownerPayoutRecorded,
     ownerPayoutRemaining,
+    ownerLossCoverage,
+    ownerPositiveResult,
     retainedProfitAfterOwner,
     retainedProfitMargin,
     ownerGoalGap,
@@ -1521,16 +1531,20 @@ function calendarDays(monthDate: Date) {
 }
 
 function formatMoney(value: number | string | null | undefined) {
-  return `${Number(value || 0).toLocaleString("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} zł`;
+  return `${formatPlNumber(Number(value || 0), { minimumFractionDigits: 2, maximumFractionDigits: 2 })} zł`;
 }
 
 function formatHours(value: number) {
-  return `${Number(value || 0).toLocaleString("pl-PL", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} h`;
+  return `${formatPlNumber(Number(value || 0), { minimumFractionDigits: 1, maximumFractionDigits: 1 })} h`;
 }
 
 function formatPercent(value: number | null) {
   if (value === null) return "Brak";
-  return `${(value * 100).toLocaleString("pl-PL", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+  return `${formatPlNumber(value * 100, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+}
+
+function formatPlNumber(value: number, options: Intl.NumberFormatOptions) {
+  return value.toLocaleString("pl-PL", options).replace(/[\u00a0\u202f]/g, " ");
 }
 
 function formatDate(value: string | null | undefined) {
@@ -1631,6 +1645,7 @@ const panelHeaderStyle: CSSProperties = { display: "flex", alignItems: "center",
 const panelIconStyle: CSSProperties = { color: colors.red, display: "inline-flex" };
 const panelTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "21px" };
 const recommendationStyle: CSSProperties = { display: "grid", gap: "6px", background: "#e9eef7", border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "16px", color: colors.navy };
+const ownerGoalBreakdownStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: "7px 14px", marginTop: "8px", maxWidth: "560px" };
 const dangerInlineStyle: CSSProperties = { color: colors.danger, fontWeight: 900 };
 const successInlineStyle: CSSProperties = { color: colors.success, fontWeight: 900 };
 const quickGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "12px", marginTop: "14px" };

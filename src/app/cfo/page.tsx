@@ -336,9 +336,12 @@ function renderDashboard(view: CfoView) {
         </div>
       </article>
       <article style={panelStyle}>
-        <div style={panelHeaderStyle}>
-          <ReceiptText size={21} style={panelIconStyle} />
-          <h2 style={panelTitleStyle}>Struktura przychodów</h2>
+        <div style={panelHeaderWithTotalStyle}>
+          <div style={panelTitleGroupStyle}>
+            <ReceiptText size={21} style={panelIconStyle} />
+            <h2 style={panelTitleStyle}>Struktura przychodów</h2>
+          </div>
+          <strong style={panelHeaderTotalStyle}>Przychody łącznie: {formatMoney(view.revenue)}</strong>
         </div>
         <Breakdown rows={view.revenueBreakdown} />
       </article>
@@ -1642,6 +1645,9 @@ const sectionStackStyle: CSSProperties = { display: "grid", gap: "18px" };
 const panelStyle: CSSProperties = { background: colors.card, border: `1px solid ${colors.border}`, borderRadius: radius.card, boxShadow: shadow.soft, padding: "20px", minWidth: 0 };
 const widePanelStyle: CSSProperties = { ...panelStyle, gridColumn: "1 / -1" };
 const panelHeaderStyle: CSSProperties = { display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px" };
+const panelHeaderWithTotalStyle: CSSProperties = { ...panelHeaderStyle, justifyContent: "space-between", flexWrap: "wrap" };
+const panelTitleGroupStyle: CSSProperties = { display: "inline-flex", alignItems: "center", gap: "10px", minWidth: 0 };
+const panelHeaderTotalStyle: CSSProperties = { color: colors.navy, fontSize: "15px", whiteSpace: "nowrap" };
 const panelIconStyle: CSSProperties = { color: colors.red, display: "inline-flex" };
 const panelTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "21px" };
 const recommendationStyle: CSSProperties = { display: "grid", gap: "6px", background: "#e9eef7", border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "16px", color: colors.navy };

@@ -192,7 +192,7 @@ function CfoContent() {
       const result = await insertCfoCosts(rows);
       if (result.error) {
         console.error(result.error);
-        return alert("Nie udało się zaimportować kosztów.");
+        return alert(`Nie udało się zaimportować kosztów: ${errorMessage(result.error)}`);
       }
       await loadData();
       alert(`Zaimportowano pozycje kosztowe: ${result.data?.length || 0}.`);
@@ -209,7 +209,7 @@ function CfoContent() {
       const result = await importBankTransactions(rows);
       if (result.error) {
         console.error(result.error);
-        return alert("Nie udało się zaimportować historii rachunku.");
+        return alert(`Nie udało się zaimportować historii rachunku: ${errorMessage(result.error)}`);
       }
       await loadData();
       alert(`Zaimportowano transakcje: ${result.data?.length || 0}.`);
@@ -1159,6 +1159,11 @@ function normalizeAccount(value: unknown) {
 function emptyToNull(value: string) {
   const trimmed = value.trim();
   return trimmed ? trimmed : null;
+}
+
+function errorMessage(error: unknown) {
+  if (error && typeof error === "object" && "message" in error && typeof error.message === "string") return error.message;
+  return "sprawdź format pliku i uprawnienia użytkownika";
 }
 
 function polishCount(count: number, one: string, few: string, many: string) {

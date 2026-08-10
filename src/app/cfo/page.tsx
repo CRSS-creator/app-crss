@@ -644,7 +644,7 @@ function renderCostSection(
         <div style={manualFormStyle}>
           <div style={manualTopRowStyle}>
             <input style={inputStyle} placeholder="Kontrahent" value={manualCost.kontrahent} onChange={(event) => setManualCost((current) => ({ ...current, kontrahent: event.target.value }))} />
-            <input style={inputStyle} placeholder="Numer dokumentu" value={manualCost.numer_dokumentu || ""} onChange={(event) => setManualCost((current) => ({ ...current, numer_dokumentu: emptyToNull(event.target.value) }))} />
+            <input style={inputStyle} placeholder="Numer dokumentu" value={manualCost.numer_dokumentu || ""} onChange={(event) => setManualCost((current) => ({ ...current, numer_dokumentu: documentNumberOrNull(event.target.value) }))} />
             <input style={inputStyle} placeholder="Kwota netto CFO" type="number" value={manualCost.kwota_netto_cfo} onChange={(event) => setManualCost((current) => ({ ...current, kwota_netto_cfo: Number(event.target.value || 0), kwota_netto_import: Number(event.target.value || 0) }))} />
           </div>
           <div style={manualBottomRowStyle}>
@@ -1578,6 +1578,10 @@ function normalizeAccount(value: unknown) {
 function emptyToNull(value: string) {
   const trimmed = value.trim();
   return trimmed ? trimmed : null;
+}
+
+function documentNumberOrNull(value: string) {
+  return value.trim() ? value : null;
 }
 
 function errorMessage(error: unknown) {

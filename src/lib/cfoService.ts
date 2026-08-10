@@ -32,9 +32,11 @@ export type CfoInvoiceLine = {
 
 export type CfoInvoiceParent = {
     id: string;
+    numer: string | null;
     okres: string | null;
     typ: string;
     status: string;
+    data_wystawienia: string | null;
     klient_id: string | null;
     kontrahent_nazwa: string | null;
     klienci?: { nazwa: string | null } | { nazwa: string | null }[] | null;
@@ -164,9 +166,11 @@ const INVOICE_LINE_SELECT = `
   cfo_przychod_kategoria,
   faktury!inner (
     id,
+    numer,
     okres,
     typ,
     status,
+    data_wystawienia,
     klient_id,
     kontrahent_nazwa,
     klienci (

@@ -341,6 +341,8 @@ function renderDashboard(view: CfoView) {
 }
 
 function renderRevenueSection(lines: CfoInvoiceLine[], onChange: (line: CfoInvoiceLine, category: CfoRevenueCategory) => void) {
+  const groups = groupRevenueLinesByInvoice(lines);
+
   return (
     <section style={panelStyle}>
       <div style={panelHeaderStyle}>
@@ -349,18 +351,26 @@ function renderRevenueSection(lines: CfoInvoiceLine[], onChange: (line: CfoInvoi
       </div>
       <div style={tableWrapperStyle}>
         <table style={tableStyle}>
-          <thead><tr><Th>Klient</Th><Th>Pozycja</Th><Th>Kategoria CFO</Th><Th align="right">Netto</Th></tr></thead>
+          <thead><tr><Th>Faktura / pozycja</Th><Th>Kategoria CFO</Th><Th align="right">Netto</Th></tr></thead>
           <tbody>
-            {lines.length === 0 ? <EmptyRow colSpan={4} text="Brak pozycji faktur dla okresu." /> : lines.map((line) => (
-              <tr key={line.id}>
-                <Td>{invoiceClientName(line)}</Td>
-                <Td>{line.nazwa}</Td>
-                <Td>
-                  <AppSelect value={line.cfo_przychod_kategoria || "pozostale"} options={REVENUE_OPTIONS} onChange={(value) => onChange(line, value as CfoRevenueCategory)} style={compactSelectStyle} />
-                </Td>
-                <Td align="right">{formatMoney(line.kwota_netto)}</Td>
-              </tr>
-            ))}
+            {groups.length === 0 ? <EmptyRow colSpan={3} text="Brak pozycji faktur dla okresu." /> : groups.flatMap((group) => [
+              <tr key={`${group.id}:header`}>
+                <td style={invoiceGroupCellStyle} colSpan={2}>
+                  <strong>{group.clientName}</strong>
+                  <small style={smallStyle}>{group.number} · {formatDate(group.date)} · {group.lines.length} {polishCount(group.lines.length, "pozycja", "pozycje", "pozycji")}</small>
+                </td>
+                <td style={{ ...invoiceGroupCellStyle, textAlign: "right" }}><strong>{formatMoney(group.total)}</strong></td>
+              </tr>,
+              ...group.lines.map((line) => (
+                <tr key={line.id}>
+                  <Td><span style={invoiceLineIndentStyle}>{line.nazwa}</span></Td>
+                  <Td>
+                    <AppSelect value={line.cfo_przychod_kategoria || "pozostale"} options={REVENUE_OPTIONS} onChange={(value) => onChange(line, value as CfoRevenueCategory)} style={compactSelectStyle} />
+                  </Td>
+                  <Td align="right">{formatMoney(line.kwota_netto)}</Td>
+                </tr>
+              )),
+            ])}
           </tbody>
         </table>
       </div>
@@ -672,6 +682,7 @@ async function updateCost(costId: string, payload: Partial<CfoCostItem>) {
 
 type CfoClientRow = { key: string; id: string | null; name: string; revenue: number; mrr: number };
 type CfoCostBreakdownRow = { label: string; value: number; children: { label: string; value: number }[] };
+type CfoRevenueInvoiceGroup = { id: string; number: string; date: string | null; clientName: string; total: number; lines: CfoInvoiceLine[] };
 type CfoClientProfitabilityRow = CfoClientRow & {
   hours: number;
   laborCost: number;
@@ -681,6 +692,32 @@ type CfoClientProfitabilityRow = CfoClientRow & {
   statusTone: "good" | "watch" | "warn" | "bad" | "missing";
 };
 type CfoView = ReturnType<typeof buildCfoView>;
+
+function groupRevenueLinesByInvoice(lines: CfoInvoiceLine[]): CfoRevenueInvoiceGroup[] {
+  const groups = new Map<string, CfoRevenueInvoiceGroup>();
+
+  lines.forEach((line) => {
+    const invoice = invoiceParent(line);
+    const id = invoice?.id || `no-invoice:${line.id}`;
+    const current = groups.get(id) || {
+      id,
+      number: invoice?.numer || "Faktura bez numeru",
+      date: invoice?.data_wystawienia || null,
+      clientName: invoiceClientName(line),
+      total: 0,
+      lines: [],
+    };
+    current.total += Number(line.kwota_netto || 0);
+    current.lines.push(line);
+    groups.set(id, current);
+  });
+
+  return Array.from(groups.values()).sort((a, b) => {
+    const dateCompare = String(b.date || "").localeCompare(String(a.date || ""));
+    if (dateCompare !== 0) return dateCompare;
+    return a.clientName.localeCompare(b.clientName, "pl");
+  });
+}
 
 function buildEmployeeDrafts(teamMembers: CfoTeamMember[], employeeCosts: CfoEmployeeCost[], period: string): Record<string, EmployeeCostDraft> {
   const existingByPerson = new Map(employeeCosts.filter((employee) => employee.osoba_id).map((employee) => [employee.osoba_id as string, employee]));
@@ -970,14 +1007,18 @@ function businessDaysInMonth(period: string) {
 }
 
 function invoiceClientName(line: CfoInvoiceLine) {
-  const invoice = Array.isArray(line.faktury) ? line.faktury[0] : line.faktury;
+  const invoice = invoiceParent(line);
   const client = Array.isArray(invoice?.klienci) ? invoice?.klienci[0] : invoice?.klienci;
   return client?.nazwa || invoice?.kontrahent_nazwa || "Klient bez nazwy";
 }
 
 function invoiceClientId(line: CfoInvoiceLine) {
-  const invoice = Array.isArray(line.faktury) ? line.faktury[0] : line.faktury;
+  const invoice = invoiceParent(line);
   return invoice?.klient_id || null;
+}
+
+function invoiceParent(line: CfoInvoiceLine) {
+  return Array.isArray(line.faktury) ? line.faktury[0] : line.faktury;
 }
 
 function teamMemberName(member: CfoTeamMember) {
@@ -1090,6 +1131,14 @@ function emptyToNull(value: string) {
   return trimmed ? trimmed : null;
 }
 
+function polishCount(count: number, one: string, few: string, many: string) {
+  if (count === 1) return one;
+  const last = count % 10;
+  const lastTwo = count % 100;
+  if (last >= 2 && last <= 4 && (lastTwo < 12 || lastTwo > 14)) return few;
+  return many;
+}
+
 function sum(values: number[]) {
   return values.reduce((total, value) => total + value, 0);
 }
@@ -1124,6 +1173,8 @@ const tableWrapperStyle: CSSProperties = { overflowX: "auto" };
 const tableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse" };
 const thStyle: CSSProperties = { color: colors.muted, borderBottom: `1px solid ${colors.border}`, padding: "11px 9px", fontSize: "12px", textTransform: "uppercase", letterSpacing: 0 };
 const tdStyle: CSSProperties = { color: colors.text, borderBottom: `1px solid ${colors.border}`, padding: "10px 9px", verticalAlign: "middle" };
+const invoiceGroupCellStyle: CSSProperties = { ...tdStyle, background: "#f1f5f9", color: colors.navy, paddingTop: "14px", paddingBottom: "14px" };
+const invoiceLineIndentStyle: CSSProperties = { display: "inline-flex", paddingLeft: "18px" };
 const smallStyle: CSSProperties = { display: "block", color: colors.muted, marginTop: "4px", fontSize: "12px", fontWeight: 650 };
 const compactSelectStyle: CSSProperties = { minHeight: "36px", padding: "7px 10px", background: colors.white };
 const uploadBoxStyle: CSSProperties = { border: `1px dashed ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, cursor: "pointer", padding: "18px", color: colors.text, display: "grid", gap: "8px", justifyItems: "start" };

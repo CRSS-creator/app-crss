@@ -103,6 +103,9 @@ const EMPTY_EMPLOYEE: Omit<CfoEmployeeCost, "id"> = {
   nadgodziny: 0,
 };
 
+const OWNER_MONTHLY_PAYOUT = 15000;
+const COMPANY_BUFFER_RATE = 0.1;
+
 export default function CfoPage() {
   return (
     <AppLayout activePage="cfo">
@@ -308,8 +311,8 @@ function renderDashboard(view: CfoView) {
           <strong>{view.ownerGoalGap <= 0 ? "Cel właściciela jest pokryty" : "Brakująca marża do bezpiecznej wypłaty"}</strong>
           <span>
             {view.ownerGoalGap <= 0
-              ? "Aktualny wynik operacyjny pokrywa miesięczny cel właściciela."
-              : `Brakuje ${formatMoney(view.ownerGoalGap)} miesięcznej marży. Przy marży 40% oznacza to około ${formatMoney(view.ownerGoalGap / 0.4)} dodatkowego MRR albo równoważną poprawę kosztów.`}
+              ? `Aktualny wynik operacyjny pokrywa wypłatę ${formatMoney(OWNER_MONTHLY_PAYOUT)} i bufor spółki ${formatMoney(view.companyBufferTarget)}.`
+              : `Brakuje ${formatMoney(view.ownerGoalGap)} miesięcznej marży. Cel obejmuje wypłatę ${formatMoney(OWNER_MONTHLY_PAYOUT)} oraz minimum ${formatMoney(view.companyBufferTarget)} pozostające w spółce. Przy marży 40% oznacza to około ${formatMoney(view.ownerGoalGap / 0.4)} dodatkowego MRR albo równoważną poprawę kosztów.`}
           </span>
         </div>
         <div style={quickGridStyle}>
@@ -718,7 +721,9 @@ function buildCfoView(period: string, revenueLines: CfoInvoiceLine[], costs: Cfo
   const managementCosts = costBase + employeeBase;
   const operatingResult = revenue - managementCosts;
   const cashFlow = sum(bank.filter((transaction) => !transaction.ignoruj && transaction.typ !== "transfer_wewnetrzny").map((transaction) => Number(transaction.kwota || 0)));
-  const ownerGoalGap = Math.max(0, 15000 - operatingResult);
+  const companyBufferTarget = revenue * COMPANY_BUFFER_RATE;
+  const ownerGoalTarget = OWNER_MONTHLY_PAYOUT + companyBufferTarget;
+  const ownerGoalGap = Math.max(0, ownerGoalTarget - operatingResult);
   const clientsByName = new Map<string, CfoClientRow>();
   const revenueByCategory = new Map<string, number>();
   const costsByCategory = new Map<string, number>();
@@ -746,6 +751,8 @@ function buildCfoView(period: string, revenueLines: CfoInvoiceLine[], costs: Cfo
     managementCosts,
     operatingResult,
     cashFlow,
+    companyBufferTarget,
+    ownerGoalTarget,
     ownerGoalGap,
     ownerGoalText: ownerGoalGap <= 0 ? "Pokryty" : `Brakuje ${formatMoney(ownerGoalGap)}`,
     invoiceLineCount: revenueLines.length,

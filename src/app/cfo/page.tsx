@@ -831,8 +831,15 @@ function groupRevenueLinesByInvoice(lines: CfoInvoiceLine[]): CfoRevenueInvoiceG
   return Array.from(groups.values()).sort((a, b) => {
     const dateCompare = String(b.date || "").localeCompare(String(a.date || ""));
     if (dateCompare !== 0) return dateCompare;
-    return a.clientName.localeCompare(b.clientName, "pl");
+    const numberCompare = invoiceNumberSortValue(b.number) - invoiceNumberSortValue(a.number);
+    if (numberCompare !== 0) return numberCompare;
+    return b.number.localeCompare(a.number, "pl", { numeric: true });
   });
+}
+
+function invoiceNumberSortValue(value: string) {
+  const match = value.match(/(\d+)\s*\/\s*\d{4}/);
+  return match ? Number(match[1]) : 0;
 }
 
 function buildEmployeeDrafts(teamMembers: CfoTeamMember[], employeeCosts: CfoEmployeeCost[], period: string): Record<string, EmployeeCostDraft> {

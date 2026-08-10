@@ -251,10 +251,7 @@ function CfoContent() {
           <h1 style={titleStyle}>CFO</h1>
         </div>
         <div style={headerActionsStyle}>
-          <label style={monthFieldStyle}>
-            <CalendarDays size={17} />
-            <input style={monthInputStyle} type="month" value={period} onChange={(event) => setPeriod(event.target.value)} />
-          </label>
+          <MonthField value={period} onChange={setPeriod} />
           <button type="button" style={secondaryButtonStyle} onClick={loadData} disabled={loading || saving}>
             <RefreshCw size={17} />
             Odśwież
@@ -480,6 +477,112 @@ function DateField({ value, onChange }: { value: string; onChange: (value: strin
             })}
           </div>
           <button type="button" style={todayButtonStyle} onClick={() => pickDate(new Date())}>Dzisiaj</button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function MonthField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState(formatMonthField(value));
+  const [visibleYear, setVisibleYear] = useState(() => Number(value.slice(0, 4)) || new Date().getFullYear());
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const selectedMonth = parseMonthValue(value);
+  const fieldText = open ? text : formatMonthField(value);
+
+  useEffect(() => {
+    if (!open) return;
+    function closeOnOutside(event: MouseEvent) {
+      if (rootRef.current?.contains(event.target as Node)) return;
+      setOpen(false);
+    }
+    document.addEventListener("mousedown", closeOnOutside);
+    return () => document.removeEventListener("mousedown", closeOnOutside);
+  }, [open]);
+
+  function commitText(nextText: string) {
+    const parsed = parseMonthFieldText(nextText);
+    if (parsed) onChange(parsed);
+    else setText(formatMonthField(value));
+  }
+
+  function pickMonth(monthIndex: number) {
+    const nextValue = `${visibleYear}-${String(monthIndex + 1).padStart(2, "0")}`;
+    onChange(nextValue);
+    setText(formatMonthField(nextValue));
+    setOpen(false);
+  }
+
+  return (
+    <div ref={rootRef} style={monthFieldWrapperStyle}>
+      <div style={monthControlStyle}>
+        <CalendarDays size={17} style={monthIconStyle} />
+        <input
+          style={monthTextInputStyle}
+          value={fieldText}
+          placeholder="miesiąc rrrr"
+          onChange={(event) => {
+            setText(event.target.value);
+            const parsed = parseMonthFieldText(event.target.value);
+            if (parsed) onChange(parsed);
+          }}
+          onBlur={() => commitText(text)}
+          onFocus={() => {
+            setText(formatMonthField(value));
+            setVisibleYear(Number(value.slice(0, 4)) || new Date().getFullYear());
+            setOpen(true);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.currentTarget.blur();
+              commitText(text);
+            }
+            if (event.key === "Escape") setOpen(false);
+          }}
+        />
+        <button
+          type="button"
+          style={dateIconButtonStyle}
+          onClick={() => {
+            setText(formatMonthField(value));
+            setVisibleYear(Number(value.slice(0, 4)) || new Date().getFullYear());
+            setOpen((current) => !current);
+          }}
+          aria-label="Wybierz miesiąc"
+        >
+          <CalendarDays size={17} />
+        </button>
+      </div>
+      {open ? (
+        <div style={monthPickerStyle}>
+          <div style={datePickerHeaderStyle}>
+            <button type="button" style={dateNavButtonStyle} onClick={() => setVisibleYear((year) => year - 1)}>‹</button>
+            <strong>{visibleYear}</strong>
+            <button type="button" style={dateNavButtonStyle} onClick={() => setVisibleYear((year) => year + 1)}>›</button>
+          </div>
+          <div style={monthGridStyle}>
+            {MONTH_LABELS.map((label, index) => {
+              const selected = selectedMonth.year === visibleYear && selectedMonth.month === index + 1;
+              return (
+                <button
+                  key={label}
+                  type="button"
+                  style={{ ...monthButtonStyle, ...(selected ? monthSelectedButtonStyle : null) }}
+                  onClick={() => pickMonth(index)}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          <button type="button" style={todayButtonStyle} onClick={() => {
+            const today = new Date();
+            const nextValue = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
+            onChange(nextValue);
+            setText(formatMonthField(nextValue));
+            setOpen(false);
+          }}>Bieżący miesiąc</button>
         </div>
       ) : null}
     </div>
@@ -1212,6 +1315,37 @@ function monthEndDate(value: string) {
   return new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
 }
 
+function parseMonthValue(value: string) {
+  const [year, month] = value.split("-").map(Number);
+  return { year: year || new Date().getFullYear(), month: month || new Date().getMonth() + 1 };
+}
+
+function formatMonthField(value: string) {
+  const { year, month } = parseMonthValue(value);
+  return `${MONTH_LABELS[month - 1] || ""} ${year}`.trim();
+}
+
+function parseMonthFieldText(value: string) {
+  const normalized = value.trim().toLowerCase();
+  const isoMatch = /^(\d{4})-(\d{1,2})$/.exec(normalized);
+  if (isoMatch) return validMonthValue(Number(isoMatch[1]), Number(isoMatch[2]));
+  const numericMatch = /^(\d{1,2})[./-](\d{4})$/.exec(normalized);
+  if (numericMatch) return validMonthValue(Number(numericMatch[2]), Number(numericMatch[1]));
+  const textMatch = /^([a-ząćęłńóśźż]+)\s+(\d{4})$/.exec(normalized);
+  if (!textMatch) return null;
+  const monthIndex = MONTH_LABELS.findIndex((label) => normalizePolishText(label).startsWith(normalizePolishText(textMatch[1])));
+  return monthIndex >= 0 ? validMonthValue(Number(textMatch[2]), monthIndex + 1) : null;
+}
+
+function validMonthValue(year: number, month: number) {
+  if (!year || month < 1 || month > 12) return null;
+  return `${year}-${String(month).padStart(2, "0")}`;
+}
+
+function normalizePolishText(value: string) {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace("ł", "l");
+}
+
 function dateFromIso(value: string) {
   const [year, month, day] = value.split("-").map(Number);
   if (!year || !month || !day) return new Date();
@@ -1347,8 +1481,14 @@ const headerStyle: CSSProperties = { display: "flex", justifyContent: "space-bet
 const headerActionsStyle: CSSProperties = { display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" };
 const eyebrowStyle: CSSProperties = { color: colors.red, fontWeight: 850, margin: "0 0 8px" };
 const titleStyle: CSSProperties = { color: colors.navy, fontSize: "42px", margin: 0, lineHeight: 1.05 };
-const monthFieldStyle: CSSProperties = { display: "inline-flex", alignItems: "center", gap: "8px", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, padding: "0 12px", minHeight: "42px" };
-const monthInputStyle: CSSProperties = { border: 0, outline: 0, background: "transparent", color: colors.text, fontWeight: 850, fontSize: "15px" };
+const monthFieldWrapperStyle: CSSProperties = { position: "relative", width: "235px" };
+const monthControlStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, minHeight: "42px", display: "grid", gridTemplateColumns: "32px minmax(0, 1fr) 38px", alignItems: "center", overflow: "hidden" };
+const monthIconStyle: CSSProperties = { color: colors.navy, justifySelf: "center" };
+const monthTextInputStyle: CSSProperties = { border: 0, outline: "none", background: "transparent", color: colors.text, minHeight: "40px", padding: "9px 0", fontWeight: 850, width: "100%", boxSizing: "border-box", fontSize: "15px" };
+const monthPickerStyle: CSSProperties = { position: "absolute", top: "48px", right: 0, zIndex: 1100, width: "285px", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.card, boxShadow: shadow.card, padding: "12px", color: colors.text };
+const monthGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "7px" };
+const monthButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: "10px", background: colors.inputBackground, color: colors.text, minHeight: "38px", padding: "8px", fontSize: "13px", fontWeight: 850, cursor: "pointer", textAlign: "center" };
+const monthSelectedButtonStyle: CSSProperties = { background: colors.navy, borderColor: colors.navy, color: colors.white };
 const metricGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: "12px" };
 const metricStyle: CSSProperties = { background: colors.card, border: `1px solid ${colors.border}`, borderRadius: radius.input, boxShadow: shadow.soft, display: "grid", gap: "9px", padding: "16px", color: colors.muted, fontWeight: 800 };
 const metricValueStyle: CSSProperties = { color: colors.navy, fontSize: "21px", lineHeight: 1.1 };

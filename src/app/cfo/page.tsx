@@ -83,7 +83,7 @@ const BANK_TYPE_OPTIONS: { value: CfoBankTransactionType; label: string }[] = [
 const SUBCATEGORIES: Record<CfoCostCategory, string[]> = {
   koszty_zespolu: ["Wynagrodzenie podstawowe", "ZUS pracodawcy", "Benefity", "Premie", "Szkolenia"],
   lokal_infrastruktura: ["Czynsz", "Prąd", "Gaz", "Śmieci", "Woda", "Sprzątanie", "Wyposażenie", "Materiały gospodarcze"],
-  systemy_technologia: ["wFirma", "Google Workspace", "MS Office", "OpenAI", "T-Mobile"],
+  systemy_technologia: ["wFirma", "Google Workspace", "MS Office", "OpenAI", "T-Mobile", "Inne"],
   marketing_sprzedaz: ["Meta ADS", "Google ADS", "Canva", "Koszt zespołu marketingowego", "Koszt zespołu sprzedażowego"],
   administracja_ogolne: ["Wynagrodzenie pracowników administracji - podstawa", "Wynagrodzenie pracowników administracji - ZUS pracodawcy", "Wynagrodzenie pracowników administracji - benefity", "Wynagrodzenie pracowników administracji - premie", "Wynagrodzenie pracowników administracji - szkolenia", "Artykuły biurowe / spożywcze", "Prawne / podatkowe", "OC", "Bank", "Poczta / kurier", "Reprezentacja", "Inne"],
   zarzad_wlasciciel: ["Wynagrodzenie podstawowe Prezesa", "Premia Prezesa", "Samochód służbowy"],

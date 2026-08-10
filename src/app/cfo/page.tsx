@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Banknote, BriefcaseBusiness, CalendarDays, FileSpreadsheet, LayoutDashboard, Plus, ReceiptText, RefreshCw, Save, TrendingUp, Upload, Users } from "lucide-react";
 import * as XLSX from "xlsx";
 
@@ -108,6 +108,7 @@ const EMPTY_EMPLOYEE: Omit<CfoEmployeeCost, "id"> = {
 
 const OWNER_MONTHLY_PAYOUT = 15000;
 const COMPANY_BUFFER_RATE = 0.1;
+const MONTH_LABELS = ["styczeń", "luty", "marzec", "kwiecień", "maj", "czerwiec", "lipiec", "sierpień", "wrzesień", "październik", "listopad", "grudzień"];
 
 export default function CfoPage() {
   return (
@@ -382,6 +383,109 @@ function renderRevenueSection(lines: CfoInvoiceLine[], onChange: (line: CfoInvoi
   );
 }
 
+function DateField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState(formatDateForField(value));
+  const [visibleMonth, setVisibleMonth] = useState(() => dateFromIso(value));
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const selectedDate = dateFromIso(value);
+  const days = calendarDays(visibleMonth);
+  const fieldText = open ? text : formatDateForField(value);
+
+  useEffect(() => {
+    if (!open) return;
+    function closeOnOutside(event: MouseEvent) {
+      if (rootRef.current?.contains(event.target as Node)) return;
+      setOpen(false);
+    }
+    document.addEventListener("mousedown", closeOnOutside);
+    return () => document.removeEventListener("mousedown", closeOnOutside);
+  }, [open]);
+
+  function commitText(nextText: string) {
+    const parsed = parseDateFieldText(nextText);
+    if (parsed) onChange(parsed);
+    else setText(formatDateForField(value));
+  }
+
+  function pickDate(date: Date) {
+    const iso = formatIsoDate(date);
+    onChange(iso);
+    setText(formatDateForField(iso));
+    setOpen(false);
+  }
+
+  return (
+    <div ref={rootRef} style={dateFieldStyle}>
+      <div style={dateControlStyle}>
+        <input
+          style={dateTextInputStyle}
+          value={fieldText}
+          placeholder="dd.mm.rrrr"
+          onChange={(event) => {
+            setText(event.target.value);
+            const parsed = parseDateFieldText(event.target.value);
+            if (parsed) onChange(parsed);
+          }}
+          onBlur={() => commitText(text)}
+          onFocus={() => {
+            setText(formatDateForField(value));
+            setVisibleMonth(dateFromIso(value));
+            setOpen(true);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.currentTarget.blur();
+              commitText(text);
+            }
+            if (event.key === "Escape") setOpen(false);
+          }}
+        />
+        <button
+          type="button"
+          style={dateIconButtonStyle}
+          onClick={() => {
+            setText(formatDateForField(value));
+            setVisibleMonth(dateFromIso(value));
+            setOpen((current) => !current);
+          }}
+          aria-label="Wybierz datę"
+        >
+          <CalendarDays size={17} />
+        </button>
+      </div>
+      {open ? (
+        <div style={datePickerStyle}>
+          <div style={datePickerHeaderStyle}>
+            <button type="button" style={dateNavButtonStyle} onClick={() => setVisibleMonth(addMonths(visibleMonth, -1))}>‹</button>
+            <strong>{MONTH_LABELS[visibleMonth.getMonth()]} {visibleMonth.getFullYear()}</strong>
+            <button type="button" style={dateNavButtonStyle} onClick={() => setVisibleMonth(addMonths(visibleMonth, 1))}>›</button>
+          </div>
+          <div style={dateWeekGridStyle}>
+            {["pon", "wt", "śr", "czw", "pt", "sob", "nie"].map((day) => <span key={day} style={dateWeekdayStyle}>{day}</span>)}
+            {days.map((day) => {
+              const iso = formatIsoDate(day);
+              const currentMonth = day.getMonth() === visibleMonth.getMonth();
+              const selected = iso === formatIsoDate(selectedDate);
+              return (
+                <button
+                  key={iso}
+                  type="button"
+                  style={{ ...dateDayStyle, ...(currentMonth ? null : dateMutedDayStyle), ...(selected ? dateSelectedDayStyle : null) }}
+                  onClick={() => pickDate(day)}
+                >
+                  {day.getDate()}
+                </button>
+              );
+            })}
+          </div>
+          <button type="button" style={todayButtonStyle} onClick={() => pickDate(new Date())}>Dzisiaj</button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function renderCostSection(
   costs: CfoCostItem[],
   manualCost: ManualCostDraft,
@@ -415,8 +519,8 @@ function renderCostSection(
             <AppSelect value={manualCost.kategoria} options={MANUAL_COST_OPTIONS} onChange={(value) => setManualCost((current) => ({ ...current, kategoria: value as CfoCostCategory | "", podkategoria: null }))} />
             {hasSubcategories ? <AppSelect value={manualCost.podkategoria || ""} options={[{ value: "", label: "Wybierz podkategorię" }, ...subcategoryOptions]} onChange={(value) => setManualCost((current) => ({ ...current, podkategoria: emptyToNull(value) }))} /> : null}
             <div style={dateRangeStyle}>
-              <input style={inputStyle} type="date" value={manualCost.okres_start} onChange={(event) => setManualCost((current) => ({ ...current, okres_start: event.target.value }))} />
-              <input style={inputStyle} type="date" value={manualCost.okres_end} onChange={(event) => setManualCost((current) => ({ ...current, okres_end: event.target.value }))} />
+              <DateField value={manualCost.okres_start} onChange={(value) => setManualCost((current) => ({ ...current, okres_start: value }))} />
+              <DateField value={manualCost.okres_end} onChange={(value) => setManualCost((current) => ({ ...current, okres_end: value }))} />
             </div>
             <button type="button" style={primaryButtonStyle} onClick={addManualCost} disabled={saving}><Plus size={17} />Dodaj</button>
           </div>
@@ -1101,6 +1205,59 @@ function monthEndDate(value: string) {
   return new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
 }
 
+function dateFromIso(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return new Date();
+  return new Date(year, month - 1, day);
+}
+
+function formatIsoDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function formatDateForField(value: string) {
+  const [year, month, day] = value.split("-");
+  if (!year || !month || !day) return "";
+  return `${day}.${month}.${year}`;
+}
+
+function parseDateFieldText(value: string) {
+  const trimmed = value.trim();
+  const isoMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+  if (isoMatch) return isValidDateParts(Number(isoMatch[1]), Number(isoMatch[2]), Number(isoMatch[3])) ? trimmed : null;
+  const polishMatch = /^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/.exec(trimmed);
+  if (!polishMatch) return null;
+  const day = Number(polishMatch[1]);
+  const month = Number(polishMatch[2]);
+  const year = Number(polishMatch[3]);
+  if (!isValidDateParts(year, month, day)) return null;
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function isValidDateParts(year: number, month: number, day: number) {
+  const date = new Date(year, month - 1, day);
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+}
+
+function addMonths(date: Date, count: number) {
+  return new Date(date.getFullYear(), date.getMonth() + count, 1);
+}
+
+function calendarDays(monthDate: Date) {
+  const firstDay = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+  const mondayOffset = (firstDay.getDay() + 6) % 7;
+  const start = new Date(firstDay);
+  start.setDate(firstDay.getDate() - mondayOffset);
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(start);
+    date.setDate(start.getDate() + index);
+    return date;
+  });
+}
+
 function formatMoney(value: number | string | null | undefined) {
   return `${Number(value || 0).toLocaleString("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} zł`;
 }
@@ -1221,6 +1378,19 @@ const manualTopRowStyle: CSSProperties = { display: "grid", gridTemplateColumns:
 const manualBottomRowStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(220px, 1fr) minmax(210px, 1fr) minmax(330px, 1.2fr) auto", gap: "10px", alignItems: "start" };
 const dateRangeStyle: CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" };
 const inputStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, minHeight: "42px", padding: "9px 12px", fontWeight: 750, width: "100%", boxSizing: "border-box" };
+const dateFieldStyle: CSSProperties = { position: "relative", minWidth: 0 };
+const dateControlStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, minHeight: "42px", display: "grid", gridTemplateColumns: "minmax(0, 1fr) 38px", alignItems: "center", overflow: "hidden" };
+const dateTextInputStyle: CSSProperties = { border: 0, outline: "none", background: "transparent", color: colors.text, minHeight: "40px", padding: "9px 0 9px 12px", fontWeight: 750, width: "100%", boxSizing: "border-box" };
+const dateIconButtonStyle: CSSProperties = { border: 0, background: "transparent", color: colors.navy, width: "38px", minHeight: "40px", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer" };
+const datePickerStyle: CSSProperties = { position: "absolute", top: "48px", right: 0, zIndex: 1100, width: "270px", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.card, boxShadow: shadow.card, padding: "12px", color: colors.text };
+const datePickerHeaderStyle: CSSProperties = { display: "grid", gridTemplateColumns: "34px minmax(0, 1fr) 34px", alignItems: "center", gap: "8px", color: colors.navy, marginBottom: "10px", textAlign: "center" };
+const dateNavButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: "10px", background: colors.inputBackground, color: colors.navy, minHeight: "32px", fontSize: "20px", fontWeight: 850, cursor: "pointer" };
+const dateWeekGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "4px" };
+const dateWeekdayStyle: CSSProperties = { color: colors.muted, fontSize: "11px", fontWeight: 900, textAlign: "center", padding: "4px 0", textTransform: "uppercase" };
+const dateDayStyle: CSSProperties = { border: 0, borderRadius: "9px", background: "transparent", color: colors.text, minHeight: "30px", fontSize: "13px", fontWeight: 800, cursor: "pointer" };
+const dateMutedDayStyle: CSSProperties = { color: "#94a3b8" };
+const dateSelectedDayStyle: CSSProperties = { background: colors.navy, color: colors.white };
+const todayButtonStyle: CSSProperties = { border: 0, background: "transparent", color: colors.red, fontWeight: 850, marginTop: "10px", padding: "7px 8px", cursor: "pointer", justifySelf: "start" };
 const teamInputStyle: CSSProperties = { ...inputStyle, minHeight: "34px", padding: "6px 8px", width: "96px", textAlign: "right" };
 const primaryButtonStyle: CSSProperties = { border: `1px solid ${colors.red}`, borderRadius: radius.input, background: colors.red, color: colors.white, minHeight: "42px", padding: "9px 14px", fontWeight: 850, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "8px", cursor: "pointer", whiteSpace: "nowrap" };
 const secondaryButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.navy, minHeight: "42px", padding: "9px 14px", fontWeight: 850, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "8px", cursor: "pointer" };

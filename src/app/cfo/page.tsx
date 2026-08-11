@@ -766,8 +766,8 @@ function renderCostSection(
                         <MoneyTextInput
                           style={moneyInputStyle}
                           value={cost.kwota_netto_cfo}
-                          onValueChange={(value) => setCosts((current) => current.map((item) => item.id === cost.id ? { ...item, kwota_netto_cfo: value } : item))}
-                          onCommit={(value) => void updateCost(cost.id, { kwota_netto_cfo: value })}
+                          onValueChange={(value) => setCosts((current) => current.map((item) => item.id === cost.id ? { ...item, kwota_netto_cfo: value, kwota_brutto: value } : item))}
+                          onCommit={(value) => void updateCost(cost.id, { kwota_netto_cfo: value, kwota_brutto: value })}
                         />
                         zł
                       </span>

@@ -919,8 +919,8 @@ function renderCashflowSection(
               <col style={{ width: "24%" }} />
               <col style={{ width: "11%" }} />
               <col style={{ width: "4%" }} />
-              <col style={{ width: "31%" }} />
-              <col style={{ width: "9%" }} />
+              <col style={{ width: "29%" }} />
+              <col style={{ width: "11%" }} />
             </colgroup>
             <thead><tr><Th>Data</Th><Th>Kontrahent</Th><Th>Tytuł</Th><Th>Typ</Th><Th>Uwzgl.</Th><Th>Powiązanie</Th><Th align="right">Kwota</Th></tr></thead>
             <tbody>
@@ -936,7 +936,7 @@ function renderCashflowSection(
                       <Td>{transaction.tytul || "Brak tytułu"}</Td>
                       <Td><AppSelect value={bankTypeSelectValue(transaction.typ)} options={BANK_TYPE_OPTIONS} onChange={(value) => void changeTransactionType(transaction, value)} style={compactSelectStyle} /></Td>
                       <Td align="right"><input type="checkbox" checked={!transaction.ignoruj} onChange={(event) => void changeTransaction(transaction, { ignoruj: !event.target.checked })} /></Td>
-                      <Td>
+                      <Td style={cashflowLinkTdStyle}>
                         <div style={cashflowLinkCellStyle}>
                           {linkMode === "cost" ? (
                             <>
@@ -2120,9 +2120,10 @@ const invoiceGroupCellStyle: CSSProperties = { ...tdStyle, background: "#f1f5f9"
 const invoiceLineIndentStyle: CSSProperties = { display: "inline-flex", paddingLeft: "18px" };
 const smallStyle: CSSProperties = { display: "block", color: colors.muted, marginTop: "4px", fontSize: "12px", fontWeight: 650 };
 const compactSelectStyle: CSSProperties = { minHeight: "36px", padding: "7px 10px", background: colors.white };
-const costLinkSelectStyle: CSSProperties = { ...compactSelectStyle, width: "100%", maxWidth: "100%", paddingLeft: "9px", paddingRight: "8px", gap: "6px" };
+const costLinkSelectStyle: CSSProperties = { ...compactSelectStyle, width: "100%", minWidth: 0, maxWidth: "100%", paddingLeft: "9px", paddingRight: "8px", gap: "6px" };
 const costLinkMenuStyle: CSSProperties = { width: "560px", maxWidth: "min(560px, calc(100vw - 32px))" };
-const cashflowLinkCellStyle: CSSProperties = { display: "grid", gap: "8px", minWidth: 0 };
+const cashflowLinkTdStyle: CSSProperties = { minWidth: 0, overflow: "hidden" };
+const cashflowLinkCellStyle: CSSProperties = { display: "grid", gap: "8px", minWidth: 0, maxWidth: "100%", overflow: "hidden" };
 const inlineCheckboxStyle: CSSProperties = { display: "inline-flex", alignItems: "center", gap: "6px", color: colors.navy, fontWeight: 850, fontSize: "12px", cursor: "pointer" };
 const paymentSplitBoxStyle: CSSProperties = { display: "grid", gap: "10px", margin: "6px 0 10px 84px", padding: "12px", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, maxWidth: "940px" };
 const paymentSplitHeaderStyle: CSSProperties = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", color: colors.navy };

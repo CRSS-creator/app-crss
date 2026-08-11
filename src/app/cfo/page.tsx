@@ -240,7 +240,8 @@ function CfoContent() {
     if (!manualCost.kontrahent.trim()) return alert("Podaj kontrahenta.");
     if (!manualCost.kategoria) return alert("Wybierz kategorię kosztu.");
     setSaving(true);
-    const result = await insertCfoCosts([{ ...manualCost, kategoria: manualCost.kategoria, import_key: `manual:${crypto.randomUUID()}`, zrodlo: "recznie" }]);
+    const amount = Number(manualCost.kwota_netto_cfo || 0);
+    const result = await insertCfoCosts([{ ...manualCost, kategoria: manualCost.kategoria, kwota_brutto: amount, import_key: `manual:${crypto.randomUUID()}`, zrodlo: "recznie" }]);
     setSaving(false);
     if (result.error) return alert("Nie udało się dodać kosztu.");
     await loadData();
@@ -762,7 +763,7 @@ function renderCostSection(
                         zł
                       </span>
                     </Td>
-                    <Td align="right" style={nowrapMoneyCellStyle}>{formatMoney(cost.kwota_brutto)}</Td>
+                    <Td align="right" style={nowrapMoneyCellStyle}>{formatMoney(costGrossValue(cost))}</Td>
                     <Td><CostPaymentStatus cost={cost} paid={paid} compact /></Td>
                   </tr>
                 );
@@ -1321,7 +1322,9 @@ function bankTypeSelectValue(type: CfoBankTransactionType) {
 }
 
 function costGrossValue(cost: CfoCostItem) {
-  return Number(cost.kwota_brutto ?? cost.kwota_netto_cfo ?? 0);
+  const gross = Number(cost.kwota_brutto || 0);
+  if (gross > 0) return gross;
+  return Number(cost.kwota_netto_cfo || 0);
 }
 
 function costOptionLabel(cost: CfoCostItem) {

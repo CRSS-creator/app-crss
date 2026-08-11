@@ -768,13 +768,23 @@ function renderCostSection(
                         <MoneyTextInput
                           style={moneyInputStyle}
                           value={cost.kwota_netto_cfo}
-                          onValueChange={(value) => setCosts((current) => current.map((item) => item.id === cost.id ? { ...item, kwota_netto_cfo: value, kwota_brutto: value } : item))}
-                          onCommit={(value) => void updateCost(cost.id, { kwota_netto_cfo: value, kwota_brutto: value })}
+                          onValueChange={(value) => setCosts((current) => current.map((item) => item.id === cost.id ? { ...item, kwota_netto_cfo: value } : item))}
+                          onCommit={(value) => void updateCost(cost.id, { kwota_netto_cfo: value })}
                         />
                         zł
                       </span>
                     </Td>
-                    <Td align="right" style={{ ...nowrapMoneyCellStyle, ...settlementStyle }}>{formatMoney(costGrossValue(cost))}</Td>
+                    <Td align="right">
+                      <span style={{ ...moneyEditStyle, ...settlementStyle }}>
+                        <MoneyTextInput
+                          style={moneyInputStyle}
+                          value={costGrossValue(cost)}
+                          onValueChange={(value) => setCosts((current) => current.map((item) => item.id === cost.id ? { ...item, kwota_brutto: value } : item))}
+                          onCommit={(value) => void updateCost(cost.id, { kwota_brutto: value })}
+                        />
+                        zł
+                      </span>
+                    </Td>
                     <Td><CostPaymentStatus cost={cost} paid={paid} compact /></Td>
                   </tr>
                 );

@@ -854,6 +854,16 @@ function renderCashflowSection(
         </div>
         <div style={tableWrapperStyle}>
           <table style={cashflowTableStyle}>
+            <colgroup>
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "15%" }} />
+              <col style={{ width: "25%" }} />
+              <col style={{ width: "12%" }} />
+              <col style={{ width: "24%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "6%" }} />
+              <col style={{ width: "2%" }} />
+            </colgroup>
             <thead><tr><Th>Data</Th><Th>Kontrahent</Th><Th>Tytuł</Th><Th>Typ</Th><Th>Powiązanie</Th><Th>Rozliczenie</Th><Th align="right">Kwota</Th><Th>Uwzględniać</Th></tr></thead>
             <tbody>
               {transactions.length === 0 ? <EmptyRow colSpan={8} text="Brak transakcji w tym okresie." /> : transactions.map((transaction) => {
@@ -1930,7 +1940,7 @@ const successInlineStyle: CSSProperties = { color: colors.success, fontWeight: 9
 const tableWrapperStyle: CSSProperties = { overflowX: "auto" };
 const tableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse" };
 const wideCostTableStyle: CSSProperties = { ...tableStyle, minWidth: "1380px", tableLayout: "fixed" };
-const cashflowTableStyle: CSSProperties = { ...tableStyle, minWidth: "1500px", tableLayout: "fixed" };
+const cashflowTableStyle: CSSProperties = { ...tableStyle, minWidth: "1660px", tableLayout: "fixed" };
 const thStyle: CSSProperties = { color: colors.muted, borderBottom: `1px solid ${colors.border}`, padding: "11px 9px", fontSize: "12px", textTransform: "uppercase", letterSpacing: 0 };
 const tdStyle: CSSProperties = { color: colors.text, borderBottom: `1px solid ${colors.border}`, padding: "10px 9px", verticalAlign: "middle" };
 const contractorCostCellStyle: CSSProperties = { width: "230px", maxWidth: "230px", whiteSpace: "normal", overflowWrap: "anywhere" };
@@ -1939,7 +1949,7 @@ const invoiceLineIndentStyle: CSSProperties = { display: "inline-flex", paddingL
 const smallStyle: CSSProperties = { display: "block", color: colors.muted, marginTop: "4px", fontSize: "12px", fontWeight: 650 };
 const compactSelectStyle: CSSProperties = { minHeight: "36px", padding: "7px 10px", background: colors.white };
 const costLinkSelectStyle: CSSProperties = { ...compactSelectStyle, width: "100%" };
-const costLinkMenuStyle: CSSProperties = { width: "420px", maxWidth: "min(420px, calc(100vw - 32px))" };
+const costLinkMenuStyle: CSSProperties = { width: "560px", maxWidth: "min(560px, calc(100vw - 32px))" };
 const uploadBoxStyle: CSSProperties = { border: `1px dashed ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, cursor: "pointer", padding: "18px", color: colors.text, display: "grid", gap: "8px", justifyItems: "start" };
 const manualFormStyle: CSSProperties = { display: "grid", gap: "10px", marginTop: "14px", maxWidth: "1120px" };
 const manualTopRowStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(230px, 1.4fr) minmax(200px, 1fr) minmax(180px, 0.8fr)", gap: "10px", alignItems: "start" };

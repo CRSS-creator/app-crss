@@ -345,6 +345,7 @@ function renderDashboard(view: CfoView, viewMode: CfoViewMode, period: string) {
               : <><strong style={dangerInlineStyle}>Brakuje {formatMoney(view.ownerGoalGap)}</strong>. Poniżej widać, z czego składa się brakująca kwota.</>}
           </span>
           <div style={ownerGoalBreakdownStyle}>
+            {view.ownerPayoutRecorded > 0 ? <><span>Wypłata netto Prezesa ujęta w kosztach</span><strong>{formatMoney(view.ownerPayoutRecorded)}</strong></> : null}
             <span>Brakująca wypłata netto</span><strong>{formatMoney(view.ownerPayoutRemaining)}</strong>
             {view.ownerPayrollBurden > 0 ? <><span>PIT/ZUS Prezesa ujęte w kosztach</span><strong>{formatMoney(view.ownerPayrollBurden)}</strong></> : null}
             <span>Brakuje do pokrycia straty</span><strong>{formatMoney(view.ownerLossCoverage)}</strong>

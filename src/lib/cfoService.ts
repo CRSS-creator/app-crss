@@ -127,9 +127,20 @@ export type CfoBankTransaction = {
   typ: CfoBankTransactionType;
   koszt_id: string | null;
   faktura_id: string | null;
+  rozbita: boolean;
   ignoruj: boolean;
   dopasowanie_status: string;
   cfo_rachunki_bankowe?: CfoBankAccount | CfoBankAccount[] | null;
+  cfo_rozbicia_platnosci?: CfoPaymentSplit[] | null;
+};
+
+export type CfoPaymentSplit = {
+  id: string;
+  transakcja_id: string;
+  koszt_id: string | null;
+  opis: string | null;
+  kwota: number;
+  poza_kosztem_cfo: boolean;
 };
 
 export type CfoCostImportRow = {
@@ -197,6 +208,14 @@ const BANK_TRANSACTION_SELECT = `
     numer_rachunku,
     nazwa,
     waluta
+  ),
+  cfo_rozbicia_platnosci (
+    id,
+    transakcja_id,
+    koszt_id,
+    opis,
+    kwota,
+    poza_kosztem_cfo
   )
 `;
 
@@ -399,6 +418,30 @@ export async function updateBankTransaction(transactionId: string, payload: Part
     .eq("id", transactionId)
     .select(BANK_TRANSACTION_SELECT)
     .single();
+}
+
+export async function insertPaymentSplit(row: Omit<CfoPaymentSplit, "id">) {
+  return supabase
+    .from("cfo_rozbicia_platnosci")
+    .insert(row)
+    .select("*")
+    .single();
+}
+
+export async function updatePaymentSplit(splitId: string, payload: Partial<CfoPaymentSplit>) {
+  return supabase
+    .from("cfo_rozbicia_platnosci")
+    .update(payload)
+    .eq("id", splitId)
+    .select("*")
+    .single();
+}
+
+export async function deletePaymentSplit(splitId: string) {
+  return supabase
+    .from("cfo_rozbicia_platnosci")
+    .delete()
+    .eq("id", splitId);
 }
 
 function endOfMonth(period: string) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Banknote, BriefcaseBusiness, CalendarDays, FileSpreadsheet, LayoutDashboard, Plus, ReceiptText, RefreshCw, Save, TrendingUp, Upload, Users } from "lucide-react";
 import * as XLSX from "xlsx";
 
@@ -22,10 +22,13 @@ import {
   fetchCfoRevenueLinesRange,
   fetchCfoTeamMembers,
   importBankTransactions,
+  deletePaymentSplit,
   insertCfoCosts,
+  insertPaymentSplit,
   updateBankTransaction,
   updateCfoCost,
   updateInvoiceLineCfoCategory,
+  updatePaymentSplit,
   upsertCfoEmployeeCost,
   type CfoBankImportRow,
   type CfoBankTransaction,
@@ -37,6 +40,7 @@ import {
   type CfoCostItem,
   type CfoEmployeeCost,
   type CfoInvoiceLine,
+  type CfoPaymentSplit,
   type CfoRevenueCategory,
   type CfoTeamMember,
 } from "@/lib/cfoService";
@@ -792,6 +796,10 @@ function renderCashflowSection(
     { value: "", label: "Nie przypisano do kosztu" },
     ...costs.filter((cost) => !cost.ignoruj).map((cost) => ({ value: cost.id, label: costOptionLabel(cost) })),
   ];
+  const splitCostOptions = [
+    { value: "__outside", label: "Poza kosztem CFO" },
+    ...costs.filter((cost) => !cost.ignoruj).map((cost) => ({ value: cost.id, label: costOptionLabel(cost) })),
+  ];
   const invoiceOptions = [
     { value: "", label: "Nie przypisano do faktury" },
     ...invoices.map((invoice) => ({ value: invoice.id, label: invoiceOptionLabel(invoice, period) })),
@@ -836,6 +844,49 @@ function renderCashflowSection(
     });
   }
 
+  async function toggleSplitPayment(transaction: CfoBankTransaction, enabled: boolean) {
+    await changeTransaction(transaction, {
+      rozbita: enabled,
+      koszt_id: enabled ? null : transaction.koszt_id,
+      dopasowanie_status: enabled ? "reczne" : transaction.dopasowanie_status,
+    });
+  }
+
+  async function addPaymentSplit(transaction: CfoBankTransaction) {
+    const splits = paymentSplits(transaction);
+    const remaining = Math.max(0, Math.abs(Number(transaction.kwota || 0)) - sum(splits.map((split) => Number(split.kwota || 0))));
+    const result = await insertPaymentSplit({
+      transakcja_id: transaction.id,
+      koszt_id: null,
+      opis: null,
+      kwota: remaining,
+      poza_kosztem_cfo: false,
+    });
+    if (result.error) return alert("Nie udało się dodać linii rozbicia.");
+    setTransactions((current) => current.map((item) => item.id === transaction.id ? {
+      ...item,
+      cfo_rozbicia_platnosci: [...paymentSplits(item), result.data as CfoPaymentSplit],
+    } : item));
+  }
+
+  async function changePaymentSplit(transaction: CfoBankTransaction, split: CfoPaymentSplit, payload: Partial<CfoPaymentSplit>) {
+    const result = await updatePaymentSplit(split.id, payload);
+    if (result.error) return alert("Nie udało się zapisać linii rozbicia.");
+    setTransactions((current) => current.map((item) => item.id === transaction.id ? {
+      ...item,
+      cfo_rozbicia_platnosci: paymentSplits(item).map((row) => row.id === split.id ? { ...row, ...payload, ...(result.data as CfoPaymentSplit) } : row),
+    } : item));
+  }
+
+  async function removePaymentSplit(transaction: CfoBankTransaction, split: CfoPaymentSplit) {
+    const result = await deletePaymentSplit(split.id);
+    if (result.error) return alert("Nie udało się usunąć linii rozbicia.");
+    setTransactions((current) => current.map((item) => item.id === transaction.id ? {
+      ...item,
+      cfo_rozbicia_platnosci: paymentSplits(item).filter((row) => row.id !== split.id),
+    } : item));
+  }
+
   return (
     <section style={sectionStackStyle}>
       <article style={panelStyle}>
@@ -873,43 +924,102 @@ function renderCashflowSection(
                 const selectedCost = transaction.koszt_id ? costsById.get(transaction.koszt_id) || null : null;
                 const selectedInvoice = transaction.faktura_id ? invoicesById.get(transaction.faktura_id) || null : null;
                 const linkMode = transaction.typ === "faktura_sprzedazowa" || (transaction.typ !== "koszt" && transaction.kwota > 0) ? "invoice" : "cost";
+                const splits = paymentSplits(transaction);
+                const isSplitMode = linkMode === "cost" && transaction.rozbita;
+                const splitTotal = sum(splits.map((split) => Number(split.kwota || 0)));
+                const splitRemaining = Math.abs(Number(transaction.kwota || 0)) - splitTotal;
                 return (
-                  <tr key={transaction.id} style={transaction.ignoruj ? mutedRowStyle : undefined}>
-                    <Td>{formatDate(transaction.data_ksiegowania)}</Td>
-                    <Td>{transaction.kontrahent || "Brak kontrahenta"}</Td>
-                    <Td>{transaction.tytul || "Brak tytułu"}</Td>
-                    <Td><AppSelect value={bankTypeSelectValue(transaction.typ)} options={BANK_TYPE_OPTIONS} onChange={(value) => void changeTransactionType(transaction, value)} style={compactSelectStyle} /></Td>
-                    <Td>
-                      {linkMode === "cost" ? (
-                        <AppSelect
-                          value={transaction.koszt_id || ""}
-                          options={costOptions}
-                          onChange={(value) => void assignCost(transaction, value)}
-                          searchable
-                          searchPlaceholder="Szukaj kosztu..."
-                          style={costLinkSelectStyle}
-                          menuStyle={costLinkMenuStyle}
-                        />
-                      ) : (
-                        <AppSelect
-                          value={transaction.faktura_id || ""}
-                          options={invoiceOptions}
-                          onChange={(value) => void assignInvoice(transaction, value)}
-                          searchable
-                          searchPlaceholder="Szukaj faktury..."
-                          style={costLinkSelectStyle}
-                          menuStyle={costLinkMenuStyle}
-                        />
-                      )}
-                    </Td>
-                    <Td>
-                      {linkMode === "cost"
-                        ? <CostPaymentStatus cost={selectedCost} paid={selectedCost ? costPaymentMap.get(selectedCost.id) || 0 : 0} />
-                        : <InvoicePaymentStatus invoice={selectedInvoice} paid={selectedInvoice ? invoicePaymentMap.get(selectedInvoice.id) || 0 : 0} />}
-                    </Td>
-                    <Td align="right" style={cashflowAmountCellStyle}>{formatMoney(transaction.kwota)}</Td>
-                    <Td><input type="checkbox" checked={!transaction.ignoruj} onChange={(event) => void changeTransaction(transaction, { ignoruj: !event.target.checked })} /></Td>
-                  </tr>
+                  <Fragment key={transaction.id}>
+                    <tr style={transaction.ignoruj ? mutedRowStyle : undefined}>
+                      <Td>{formatDate(transaction.data_ksiegowania)}</Td>
+                      <Td>{transaction.kontrahent || "Brak kontrahenta"}</Td>
+                      <Td>{transaction.tytul || "Brak tytułu"}</Td>
+                      <Td><AppSelect value={bankTypeSelectValue(transaction.typ)} options={BANK_TYPE_OPTIONS} onChange={(value) => void changeTransactionType(transaction, value)} style={compactSelectStyle} /></Td>
+                      <Td>
+                        <div style={cashflowLinkCellStyle}>
+                          {linkMode === "cost" ? (
+                            <>
+                              <label style={inlineCheckboxStyle}>
+                                <input type="checkbox" checked={transaction.rozbita} onChange={(event) => void toggleSplitPayment(transaction, event.target.checked)} />
+                                Rozbij płatność
+                              </label>
+                              {!isSplitMode ? (
+                                <AppSelect
+                                  value={transaction.koszt_id || ""}
+                                  options={costOptions}
+                                  onChange={(value) => void assignCost(transaction, value)}
+                                  searchable
+                                  searchPlaceholder="Szukaj kosztu..."
+                                  style={costLinkSelectStyle}
+                                  menuStyle={costLinkMenuStyle}
+                                />
+                              ) : <span style={smallStyle}>Rozliczenie w liniach poniżej</span>}
+                            </>
+                          ) : (
+                            <AppSelect
+                              value={transaction.faktura_id || ""}
+                              options={invoiceOptions}
+                              onChange={(value) => void assignInvoice(transaction, value)}
+                              searchable
+                              searchPlaceholder="Szukaj faktury..."
+                              style={costLinkSelectStyle}
+                              menuStyle={costLinkMenuStyle}
+                            />
+                          )}
+                        </div>
+                      </Td>
+                      <Td>
+                        {isSplitMode
+                          ? <SplitPaymentStatus total={Math.abs(Number(transaction.kwota || 0))} assigned={splitTotal} remaining={splitRemaining} />
+                          : linkMode === "cost"
+                            ? <CostPaymentStatus cost={selectedCost} paid={selectedCost ? costPaymentMap.get(selectedCost.id) || 0 : 0} />
+                            : <InvoicePaymentStatus invoice={selectedInvoice} paid={selectedInvoice ? invoicePaymentMap.get(selectedInvoice.id) || 0 : 0} />}
+                      </Td>
+                      <Td align="right" style={cashflowAmountCellStyle}>{formatMoney(transaction.kwota)}</Td>
+                      <Td><input type="checkbox" checked={!transaction.ignoruj} onChange={(event) => void changeTransaction(transaction, { ignoruj: !event.target.checked })} /></Td>
+                    </tr>
+                    {isSplitMode ? (
+                      <tr style={transaction.ignoruj ? mutedRowStyle : undefined}>
+                        <Td colSpan={8}>
+                          <div style={paymentSplitBoxStyle}>
+                            <div style={paymentSplitHeaderStyle}>
+                              <strong>Rozbicie płatności</strong>
+                              <button type="button" style={smallActionButtonStyle} onClick={() => void addPaymentSplit(transaction)}>+ Dodaj linię</button>
+                            </div>
+                            {splits.length === 0 ? <span style={smallStyle}>Dodaj linię, aby przypisać część płatności do kosztu CFO albo oznaczyć ją jako poza kosztem CFO.</span> : null}
+                            {splits.map((split) => (
+                              <div key={split.id} style={paymentSplitLineStyle}>
+                                <MoneyTextInput
+                                  value={Number(split.kwota || 0)}
+                                  onValueChange={(value) => setTransactions((current) => current.map((item) => item.id === transaction.id ? {
+                                    ...item,
+                                    cfo_rozbicia_platnosci: paymentSplits(item).map((row) => row.id === split.id ? { ...row, kwota: value } : row),
+                                  } : item))}
+                                  onCommit={(value) => void changePaymentSplit(transaction, split, { kwota: Math.max(0, value) })}
+                                  style={splitAmountInputStyle}
+                                />
+                                <span style={currencySuffixStyle}>zł</span>
+                                <AppSelect
+                                  value={split.poza_kosztem_cfo ? "__outside" : split.koszt_id || ""}
+                                  options={splitCostOptions}
+                                  onChange={(value) => void changePaymentSplit(transaction, split, {
+                                    koszt_id: value && value !== "__outside" ? value : null,
+                                    poza_kosztem_cfo: value === "__outside",
+                                    opis: value === "__outside" ? "Poza kosztem CFO" : null,
+                                  })}
+                                  searchable
+                                  searchPlaceholder="Szukaj kosztu..."
+                                  style={splitCostSelectStyle}
+                                  menuStyle={costLinkMenuStyle}
+                                />
+                                <button type="button" style={smallGhostButtonStyle} onClick={() => void removePaymentSplit(transaction, split)}>Usuń</button>
+                              </div>
+                            ))}
+                          </div>
+                        </Td>
+                      </tr>
+                    ) : null}
+                  </Fragment>
                 );
               })}
             </tbody>
@@ -1153,6 +1263,17 @@ function CostPaymentStatus({ cost, paid, compact = false }: { cost: CfoCostItem 
   );
 }
 
+function SplitPaymentStatus({ total, assigned, remaining }: { total: number; assigned: number; remaining: number }) {
+  const toneStyle = Math.abs(remaining) <= 0.01 ? successInlineStyle : dangerInlineStyle;
+  return (
+    <div style={costPaymentStatusStyle}>
+      <span>Kwota: <strong>{formatMoney(total)}</strong></span>
+      <span>Rozbito: <strong>{formatMoney(assigned)}</strong></span>
+      <span style={toneStyle}>{remaining >= 0 ? "Zostało" : "Nadmiar"}: <strong>{formatMoney(Math.abs(remaining))}</strong></span>
+    </div>
+  );
+}
+
 function InvoicePaymentStatus({ invoice, paid }: { invoice: CfoCashflowInvoice | null; paid: number }) {
   if (!invoice) return <span style={smallStyle}>Nie przypisano</span>;
 
@@ -1175,8 +1296,8 @@ function Th({ children, align = "left" }: { children: React.ReactNode; align?: "
   return <th style={{ ...thStyle, textAlign: align }}>{children}</th>;
 }
 
-function Td({ children, align = "left", style }: { children: React.ReactNode; align?: "left" | "right"; style?: CSSProperties }) {
-  return <td style={{ ...tdStyle, textAlign: align, ...style }}>{children}</td>;
+function Td({ children, align = "left", style, colSpan }: { children: React.ReactNode; align?: "left" | "right"; style?: CSSProperties; colSpan?: number }) {
+  return <td colSpan={colSpan} style={{ ...tdStyle, textAlign: align, ...style }}>{children}</td>;
 }
 
 function EmptyRow({ colSpan, text }: { colSpan: number; text: string }) {
@@ -1301,11 +1422,25 @@ function buildTeamWorkTime(timeEntries: CfoClientTimeEntry[]) {
 function buildCostPaymentMap(transactions: CfoBankTransaction[]) {
   const byCost = new Map<string, number>();
   transactions.forEach((transaction) => {
-    if (!transaction.koszt_id || transaction.ignoruj || transaction.typ !== "koszt") return;
-    const paid = Math.abs(Number(transaction.kwota || 0));
-    byCost.set(transaction.koszt_id, (byCost.get(transaction.koszt_id) || 0) + paid);
+    if (transaction.ignoruj || transaction.typ !== "koszt") return;
+    const splits = paymentSplits(transaction);
+    if (splits.length > 0 || transaction.rozbita) {
+      splits.forEach((split) => {
+        if (!split.koszt_id || split.poza_kosztem_cfo) return;
+        const paid = Number(split.kwota || 0);
+        byCost.set(split.koszt_id, (byCost.get(split.koszt_id) || 0) + paid);
+      });
+      return;
+    }
+    if (!transaction.koszt_id) return;
+    byCost.set(transaction.koszt_id, (byCost.get(transaction.koszt_id) || 0) + Math.abs(Number(transaction.kwota || 0)));
   });
   return byCost;
+}
+
+function paymentSplits(transaction: CfoBankTransaction) {
+  const rows = transaction.cfo_rozbicia_platnosci || [];
+  return Array.isArray(rows) ? rows : [rows].filter(Boolean);
 }
 
 function buildInvoicePaymentMap(transactions: CfoBankTransaction[]) {
@@ -1961,6 +2096,16 @@ const smallStyle: CSSProperties = { display: "block", color: colors.muted, margi
 const compactSelectStyle: CSSProperties = { minHeight: "36px", padding: "7px 10px", background: colors.white };
 const costLinkSelectStyle: CSSProperties = { ...compactSelectStyle, width: "100%" };
 const costLinkMenuStyle: CSSProperties = { width: "560px", maxWidth: "min(560px, calc(100vw - 32px))" };
+const cashflowLinkCellStyle: CSSProperties = { display: "grid", gap: "8px", minWidth: 0 };
+const inlineCheckboxStyle: CSSProperties = { display: "inline-flex", alignItems: "center", gap: "6px", color: colors.navy, fontWeight: 850, fontSize: "12px", cursor: "pointer" };
+const paymentSplitBoxStyle: CSSProperties = { display: "grid", gap: "10px", margin: "6px 0 10px 84px", padding: "12px", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, maxWidth: "940px" };
+const paymentSplitHeaderStyle: CSSProperties = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", color: colors.navy };
+const paymentSplitLineStyle: CSSProperties = { display: "grid", gridTemplateColumns: "130px auto minmax(260px, 1fr) auto", gap: "8px", alignItems: "center" };
+const splitAmountInputStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, minHeight: "42px", padding: "9px 12px", fontWeight: 750, boxSizing: "border-box", width: "130px", minWidth: "130px", fontVariantNumeric: "tabular-nums" };
+const currencySuffixStyle: CSSProperties = { color: colors.navy, fontWeight: 850, whiteSpace: "nowrap" };
+const splitCostSelectStyle: CSSProperties = { ...compactSelectStyle, width: "100%", minWidth: 0 };
+const smallActionButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.navy, fontWeight: 900, padding: "8px 12px", cursor: "pointer" };
+const smallGhostButtonStyle: CSSProperties = { ...smallActionButtonStyle, color: colors.red };
 const uploadBoxStyle: CSSProperties = { border: `1px dashed ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, cursor: "pointer", padding: "18px", color: colors.text, display: "grid", gap: "8px", justifyItems: "start" };
 const manualFormStyle: CSSProperties = { display: "grid", gap: "10px", marginTop: "14px", maxWidth: "1120px" };
 const manualTopRowStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(230px, 1.4fr) minmax(200px, 1fr) minmax(180px, 0.8fr)", gap: "10px", alignItems: "start" };

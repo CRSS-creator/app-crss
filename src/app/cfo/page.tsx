@@ -930,7 +930,7 @@ function renderCashflowSection(
                 const isSplitMode = linkMode === "cost" && transaction.rozbita;
                 return (
                   <Fragment key={transaction.id}>
-                    <tr style={transaction.ignoruj ? mutedRowStyle : undefined}>
+                    <tr style={bankTransactionRowStyle(transaction)}>
                       <Td>{formatDate(transaction.data_ksiegowania)}</Td>
                       <Td>{transaction.kontrahent || "Brak kontrahenta"}</Td>
                       <Td>{transaction.tytul || "Brak tytułu"}</Td>
@@ -972,7 +972,7 @@ function renderCashflowSection(
                       <Td align="right" style={cashflowAmountCellStyle}>{formatMoney(transaction.kwota)}</Td>
                     </tr>
                     {isSplitMode ? (
-                      <tr style={transaction.ignoruj ? mutedRowStyle : undefined}>
+                      <tr style={bankTransactionRowStyle(transaction)}>
                         <Td colSpan={7}>
                           <div style={paymentSplitBoxStyle}>
                             <div style={paymentSplitHeaderStyle}>
@@ -1474,6 +1474,12 @@ function bankTypeSelectValue(type: CfoBankTransactionType) {
 
 function bankTypeLabel(type: CfoBankTransactionType) {
   return BANK_TYPE_OPTIONS.find((option) => option.value === bankTypeSelectValue(type))?.label || type;
+}
+
+function bankTransactionRowStyle(transaction: CfoBankTransaction): CSSProperties | undefined {
+  if (transaction.ignoruj) return mutedRowStyle;
+  if (transaction.typ === "do_przypisania") return unassignedRowStyle;
+  return undefined;
 }
 
 function costGrossValue(cost: CfoCostItem) {
@@ -2161,6 +2167,7 @@ const moneyInputStyle: CSSProperties = { ...inputStyle, minHeight: "36px", paddi
 const nowrapMoneyCellStyle: CSSProperties = { whiteSpace: "nowrap" };
 const cashflowAmountCellStyle: CSSProperties = { ...nowrapMoneyCellStyle, fontVariantNumeric: "tabular-nums" };
 const mutedRowStyle: CSSProperties = { opacity: 0.58, background: "#f1f5f9" };
+const unassignedRowStyle: CSSProperties = { background: "#fffbeb" };
 const formFooterStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", marginTop: "14px", flexWrap: "wrap" };
 const miniListStyle: CSSProperties = { display: "grid", gap: "8px" };
 const miniItemStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto auto", gap: "10px", border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "10px 12px", color: colors.text, alignItems: "center" };

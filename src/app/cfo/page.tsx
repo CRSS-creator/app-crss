@@ -918,11 +918,11 @@ function renderCashflowSection(
               <col style={{ width: "14%" }} />
               <col style={{ width: "24%" }} />
               <col style={{ width: "11%" }} />
-              <col style={{ width: "31%" }} />
               <col style={{ width: "4%" }} />
+              <col style={{ width: "31%" }} />
               <col style={{ width: "9%" }} />
             </colgroup>
-            <thead><tr><Th>Data</Th><Th>Kontrahent</Th><Th>Tytuł</Th><Th>Typ</Th><Th>Powiązanie</Th><Th>Uwzgl.</Th><Th align="right">Kwota</Th></tr></thead>
+            <thead><tr><Th>Data</Th><Th>Kontrahent</Th><Th>Tytuł</Th><Th>Typ</Th><Th>Uwzgl.</Th><Th>Powiązanie</Th><Th align="right">Kwota</Th></tr></thead>
             <tbody>
               {visibleTransactions.length === 0 ? <EmptyRow colSpan={7} text={transactions.length === 0 ? "Brak transakcji w tym okresie." : "Brak transakcji pasujących do wyszukiwania."} /> : visibleTransactions.map((transaction) => {
                 const linkMode = transaction.typ === "faktura_sprzedazowa" || (transaction.typ !== "koszt" && transaction.kwota > 0) ? "invoice" : "cost";
@@ -935,6 +935,7 @@ function renderCashflowSection(
                       <Td>{transaction.kontrahent || "Brak kontrahenta"}</Td>
                       <Td>{transaction.tytul || "Brak tytułu"}</Td>
                       <Td><AppSelect value={bankTypeSelectValue(transaction.typ)} options={BANK_TYPE_OPTIONS} onChange={(value) => void changeTransactionType(transaction, value)} style={compactSelectStyle} /></Td>
+                      <Td align="right"><input type="checkbox" checked={!transaction.ignoruj} onChange={(event) => void changeTransaction(transaction, { ignoruj: !event.target.checked })} /></Td>
                       <Td>
                         <div style={cashflowLinkCellStyle}>
                           {linkMode === "cost" ? (
@@ -968,7 +969,6 @@ function renderCashflowSection(
                           )}
                         </div>
                       </Td>
-                      <Td><input type="checkbox" checked={!transaction.ignoruj} onChange={(event) => void changeTransaction(transaction, { ignoruj: !event.target.checked })} /></Td>
                       <Td align="right" style={cashflowAmountCellStyle}>{formatMoney(transaction.kwota)}</Td>
                     </tr>
                     {isSplitMode ? (

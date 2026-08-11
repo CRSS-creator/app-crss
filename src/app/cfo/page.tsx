@@ -731,11 +731,13 @@ function renderCostSection(
                 const rowSubcategoryOptions = SUBCATEGORIES[cost.kategoria].map((item) => ({ value: item, label: item }));
                 const isInterperiod = expandedCostPeriods[cost.id] || !isFullMonthPeriod(cost.okres_start, cost.okres_end);
                 const paid = costPaymentMap.get(cost.id) || 0;
-                const isSettled = isCostSettled(cost, paid);
+                const paymentState = costPaymentState(cost, paid);
+                const settlementStyle = paymentState === "settled" ? settledTextStyle : paymentState === "overpaid" ? overpaidTextStyle : null;
+                const settlementSmallStyle = paymentState === "settled" ? settledSmallStyle : paymentState === "overpaid" ? overpaidSmallStyle : smallStyle;
                 return (
                   <tr key={cost.id} style={cost.ignoruj ? mutedRowStyle : undefined}>
-                    <Td style={{ ...documentCostCellStyle, ...(isSettled ? settledTextStyle : null) }}>{cost.numer_dokumentu || "Brak numeru"}<small style={isSettled ? settledSmallStyle : smallStyle}>{formatDate(cost.data_dokumentu)}</small></Td>
-                    <Td style={{ ...contractorCostCellStyle, ...(isSettled ? settledTextStyle : null) }}>{cost.kontrahent}</Td>
+                    <Td style={{ ...documentCostCellStyle, ...settlementStyle }}>{cost.numer_dokumentu || "Brak numeru"}<small style={settlementSmallStyle}>{formatDate(cost.data_dokumentu)}</small></Td>
+                    <Td style={{ ...contractorCostCellStyle, ...settlementStyle }}>{cost.kontrahent}</Td>
                     <Td><AppSelect value={cost.kategoria} options={COST_OPTIONS} onChange={(value) => void changeCost(cost, { kategoria: value as CfoCostCategory, podkategoria: null })} style={compactSelectStyle} /></Td>
                     <Td>
                       {rowSubcategoryOptions.length > 0 ? (
@@ -772,7 +774,7 @@ function renderCostSection(
                         zł
                       </span>
                     </Td>
-                    <Td align="right" style={{ ...nowrapMoneyCellStyle, ...(isSettled ? settledTextStyle : null) }}>{formatMoney(costGrossValue(cost))}</Td>
+                    <Td align="right" style={{ ...nowrapMoneyCellStyle, ...settlementStyle }}>{formatMoney(costGrossValue(cost))}</Td>
                     <Td><CostPaymentStatus cost={cost} paid={paid} compact /></Td>
                   </tr>
                 );
@@ -803,7 +805,7 @@ function renderCashflowSection(
     ...costs.filter((cost) => !cost.ignoruj).map((cost) => ({
       value: cost.id,
       label: costOptionLabel(cost),
-      tone: isCostSettled(cost, costPaymentMap.get(cost.id) || 0) ? "success" as const : undefined,
+      tone: costPaymentState(cost, costPaymentMap.get(cost.id) || 0) === "settled" ? "success" as const : undefined,
     })),
   ];
   const splitCostOptions = [
@@ -811,7 +813,7 @@ function renderCashflowSection(
     ...costs.filter((cost) => !cost.ignoruj).map((cost) => ({
       value: cost.id,
       label: costOptionLabel(cost),
-      tone: isCostSettled(cost, costPaymentMap.get(cost.id) || 0) ? "success" as const : undefined,
+      tone: costPaymentState(cost, costPaymentMap.get(cost.id) || 0) === "settled" ? "success" as const : undefined,
     })),
   ];
   const invoiceOptions = [
@@ -1269,7 +1271,8 @@ function CostPaymentStatus({ cost, paid, compact = false }: { cost: CfoCostItem 
 
   const gross = costGrossValue(cost);
   const remaining = gross - paid;
-  const remainingStyle = remaining <= 0 ? successInlineStyle : dangerInlineStyle;
+  const state = costPaymentState(cost, paid);
+  const remainingStyle = state === "settled" ? successInlineStyle : state === "overpaid" ? warningInlineStyle : dangerInlineStyle;
 
   return (
     <div style={costPaymentStatusStyle}>
@@ -1438,14 +1441,17 @@ function buildInvoicePaymentMap(transactions: CfoBankTransaction[]) {
   return byInvoice;
 }
 
-function isCostSettled(cost: CfoCostItem, paid: number) {
+function costPaymentState(cost: CfoCostItem, paid: number): "none" | "partial" | "settled" | "overpaid" {
   const gross = costGrossValue(cost);
-  return gross > 0 && paid + 0.01 >= gross;
+  if (gross <= 0 || paid <= 0) return "none";
+  const remaining = gross - paid;
+  if (Math.abs(remaining) <= 0.01) return "settled";
+  return remaining < 0 ? "overpaid" : "partial";
 }
 
 function isInvoiceSettled(invoice: CfoCashflowInvoice, paid: number) {
   const gross = Number(invoice.kwota_brutto || 0);
-  return gross > 0 && paid + 0.01 >= gross;
+  return gross > 0 && Math.abs(gross - paid) <= 0.01;
 }
 
 function paymentSplits(transaction: CfoBankTransaction) {
@@ -2140,6 +2146,7 @@ const recommendationStyle: CSSProperties = { display: "grid", gap: "6px", backgr
 const ownerGoalBreakdownStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: "7px 14px", marginTop: "8px", maxWidth: "560px" };
 const dangerInlineStyle: CSSProperties = { color: colors.danger, fontWeight: 900 };
 const successInlineStyle: CSSProperties = { color: colors.success, fontWeight: 900 };
+const warningInlineStyle: CSSProperties = { color: colors.warning, fontWeight: 900 };
 const tableWrapperStyle: CSSProperties = { overflowX: "auto" };
 const tableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse" };
 const wideCostTableStyle: CSSProperties = { ...tableStyle, minWidth: "1380px", tableLayout: "fixed" };
@@ -2153,6 +2160,8 @@ const invoiceLineIndentStyle: CSSProperties = { display: "inline-flex", paddingL
 const smallStyle: CSSProperties = { display: "block", color: colors.muted, marginTop: "4px", fontSize: "12px", fontWeight: 650 };
 const settledTextStyle: CSSProperties = { color: colors.success, fontWeight: 850 };
 const settledSmallStyle: CSSProperties = { ...smallStyle, color: colors.success };
+const overpaidTextStyle: CSSProperties = { color: colors.warning, fontWeight: 850 };
+const overpaidSmallStyle: CSSProperties = { ...smallStyle, color: colors.warning };
 const compactSelectStyle: CSSProperties = { minHeight: "36px", padding: "7px 10px", background: colors.white };
 const costLinkSelectStyle: CSSProperties = { ...compactSelectStyle, width: "100%", minWidth: 0, maxWidth: "100%", paddingLeft: "9px", paddingRight: "8px", gap: "6px" };
 const costLinkMenuStyle: CSSProperties = { width: "560px", maxWidth: "min(560px, calc(100vw - 32px))" };

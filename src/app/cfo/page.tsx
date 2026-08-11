@@ -305,7 +305,7 @@ function CfoContent() {
       {!loading && activeTab === "dashboard" ? renderDashboard(view, viewMode, period) : null}
       {!loading && activeTab === "przychody" ? renderRevenueSection(revenueLines, changeRevenueCategory) : null}
       {!loading && activeTab === "koszty" ? renderCostSection(period, costs, setCosts, manualCost, setManualCost, manualInterperiod, setManualInterperiod, expandedCostPeriods, setExpandedCostPeriods, addManualCost, importCostsFile, saving) : null}
-      {!loading && activeTab === "cashflow" ? renderCashflowSection(bankTransactions, importBankFile, saving, setBankTransactions) : null}
+      {!loading && activeTab === "cashflow" ? renderCashflowSection(bankTransactions, costs, importBankFile, saving, setBankTransactions) : null}
       {!loading && activeTab === "zespol" ? renderTeamSectionTable(teamMembers, employeeDrafts, setEmployeeDrafts, saveTeamCosts, saving, period, clientTimeEntries) : null}
       {!loading && activeTab === "klienci" ? renderClientsSection(clientProfitability) : null}
     </main>
@@ -766,14 +766,41 @@ function renderCostSection(
 
 function renderCashflowSection(
   transactions: CfoBankTransaction[],
+  costs: CfoCostItem[],
   importBankFile: (file: File) => void,
   saving: boolean,
   setTransactions: (next: CfoBankTransaction[] | ((current: CfoBankTransaction[]) => CfoBankTransaction[])) => void,
 ) {
+  const costPaymentMap = buildCostPaymentMap(transactions);
+  const costOptions = [
+    { value: "", label: "Nie przypisano do kosztu" },
+    ...costs.filter((cost) => !cost.ignoruj).map((cost) => ({ value: cost.id, label: costOptionLabel(cost) })),
+  ];
+  const costsById = new Map(costs.map((cost) => [cost.id, cost]));
+
   async function changeTransaction(transaction: CfoBankTransaction, payload: Partial<CfoBankTransaction>) {
     const result = await updateBankTransaction(transaction.id, payload);
     if (result.error) return alert("Nie udało się zapisać transakcji bankowej.");
     setTransactions((current) => current.map((item) => item.id === transaction.id ? ((result.data || { ...item, ...payload }) as unknown as CfoBankTransaction) : item));
+  }
+
+  async function changeTransactionType(transaction: CfoBankTransaction, value: string) {
+    const typ = value as CfoBankTransactionType;
+    const payload: Partial<CfoBankTransaction> = {
+      typ,
+      ignoruj: typ === "ignoruj" || typ === "transfer_wewnetrzny",
+    };
+    if (typ !== "koszt") payload.koszt_id = null;
+    await changeTransaction(transaction, payload);
+  }
+
+  async function assignCost(transaction: CfoBankTransaction, costId: string) {
+    await changeTransaction(transaction, {
+      koszt_id: costId || null,
+      typ: costId ? "koszt" : "do_przypisania",
+      ignoruj: false,
+      dopasowanie_status: costId ? "reczne" : "nieprzypisane",
+    });
   }
 
   return (
@@ -796,19 +823,32 @@ function renderCashflowSection(
           <h2 style={panelTitleStyle}>Transakcje bankowe</h2>
         </div>
         <div style={tableWrapperStyle}>
-          <table style={tableStyle}>
-            <thead><tr><Th>Data</Th><Th>Kontrahent</Th><Th>Tytuł</Th><Th>Typ</Th><Th align="right">Kwota</Th><Th>Uwzględniać</Th></tr></thead>
+          <table style={cashflowTableStyle}>
+            <thead><tr><Th>Data</Th><Th>Kontrahent</Th><Th>Tytuł</Th><Th>Typ</Th><Th>Pozycja kosztowa</Th><Th>Rozliczenie kosztu</Th><Th align="right">Kwota</Th><Th>Uwzględniać</Th></tr></thead>
             <tbody>
-              {transactions.length === 0 ? <EmptyRow colSpan={6} text="Brak transakcji w tym okresie." /> : transactions.map((transaction) => (
-                <tr key={transaction.id} style={transaction.ignoruj ? mutedRowStyle : undefined}>
-                  <Td>{formatDate(transaction.data_ksiegowania)}</Td>
-                  <Td>{transaction.kontrahent || "Brak kontrahenta"}</Td>
-                  <Td>{transaction.tytul || "Brak tytułu"}</Td>
-                  <Td><AppSelect value={transaction.typ} options={BANK_TYPE_OPTIONS} onChange={(value) => void changeTransaction(transaction, { typ: value as CfoBankTransactionType, ignoruj: value === "ignoruj" || value === "transfer_wewnetrzny" })} style={compactSelectStyle} /></Td>
-                  <Td align="right">{formatMoney(transaction.kwota)}</Td>
-                  <Td><input type="checkbox" checked={!transaction.ignoruj} onChange={(event) => void changeTransaction(transaction, { ignoruj: !event.target.checked })} /></Td>
-                </tr>
-              ))}
+              {transactions.length === 0 ? <EmptyRow colSpan={8} text="Brak transakcji w tym okresie." /> : transactions.map((transaction) => {
+                const selectedCost = transaction.koszt_id ? costsById.get(transaction.koszt_id) || null : null;
+                return (
+                  <tr key={transaction.id} style={transaction.ignoruj ? mutedRowStyle : undefined}>
+                    <Td>{formatDate(transaction.data_ksiegowania)}</Td>
+                    <Td>{transaction.kontrahent || "Brak kontrahenta"}</Td>
+                    <Td>{transaction.tytul || "Brak tytułu"}</Td>
+                    <Td><AppSelect value={transaction.typ} options={BANK_TYPE_OPTIONS} onChange={(value) => void changeTransactionType(transaction, value)} style={compactSelectStyle} /></Td>
+                    <Td>
+                      <AppSelect
+                        value={transaction.koszt_id || ""}
+                        options={costOptions}
+                        onChange={(value) => void assignCost(transaction, value)}
+                        style={costLinkSelectStyle}
+                        menuStyle={costLinkMenuStyle}
+                      />
+                    </Td>
+                    <Td><CostPaymentStatus cost={selectedCost} paid={selectedCost ? costPaymentMap.get(selectedCost.id) || 0 : 0} /></Td>
+                    <Td align="right" style={nowrapMoneyCellStyle}>{formatMoney(transaction.kwota)}</Td>
+                    <Td><input type="checkbox" checked={!transaction.ignoruj} onChange={(event) => void changeTransaction(transaction, { ignoruj: !event.target.checked })} /></Td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -1032,6 +1072,24 @@ function CostBreakdown({ rows }: { rows: CfoCostBreakdownRow[] }) {
   );
 }
 
+function CostPaymentStatus({ cost, paid }: { cost: CfoCostItem | null; paid: number }) {
+  if (!cost) return <span style={smallStyle}>Nie przypisano</span>;
+
+  const gross = costGrossValue(cost);
+  const remaining = gross - paid;
+  const remainingStyle = remaining <= 0 ? successInlineStyle : dangerInlineStyle;
+
+  return (
+    <div style={costPaymentStatusStyle}>
+      <span>Brutto: <strong>{formatMoney(gross)}</strong></span>
+      <span>Zapłacono: <strong>{formatMoney(paid)}</strong></span>
+      <span style={remainingStyle}>
+        {remaining >= 0 ? "Zostało" : "Nadpłata"}: <strong>{formatMoney(Math.abs(remaining))}</strong>
+      </span>
+    </div>
+  );
+}
+
 function Th({ children, align = "left" }: { children: React.ReactNode; align?: "left" | "right" }) {
   return <th style={{ ...thStyle, textAlign: align }}>{children}</th>;
 }
@@ -1157,6 +1215,26 @@ function buildTeamWorkTime(timeEntries: CfoClientTimeEntry[]) {
     byPerson.set(entry.osoba_id, current);
   });
   return byPerson;
+}
+
+function buildCostPaymentMap(transactions: CfoBankTransaction[]) {
+  const byCost = new Map<string, number>();
+  transactions.forEach((transaction) => {
+    if (!transaction.koszt_id || transaction.ignoruj || transaction.typ !== "koszt") return;
+    const paid = Math.abs(Number(transaction.kwota || 0));
+    byCost.set(transaction.koszt_id, (byCost.get(transaction.koszt_id) || 0) + paid);
+  });
+  return byCost;
+}
+
+function costGrossValue(cost: CfoCostItem) {
+  return Number(cost.kwota_brutto ?? cost.kwota_netto_cfo ?? 0);
+}
+
+function costOptionLabel(cost: CfoCostItem) {
+  const number = cost.numer_dokumentu || "Bez numeru";
+  const contractor = cost.kontrahent || "Bez kontrahenta";
+  return `${number} · ${contractor} · ${formatMoney(costGrossValue(cost))}`;
 }
 
 function clientProfitabilityStatus(margin: number | null, hours: number) {
@@ -1760,6 +1838,7 @@ const successInlineStyle: CSSProperties = { color: colors.success, fontWeight: 9
 const tableWrapperStyle: CSSProperties = { overflowX: "auto" };
 const tableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse" };
 const wideCostTableStyle: CSSProperties = { ...tableStyle, minWidth: "1220px", tableLayout: "fixed" };
+const cashflowTableStyle: CSSProperties = { ...tableStyle, minWidth: "1420px", tableLayout: "fixed" };
 const thStyle: CSSProperties = { color: colors.muted, borderBottom: `1px solid ${colors.border}`, padding: "11px 9px", fontSize: "12px", textTransform: "uppercase", letterSpacing: 0 };
 const tdStyle: CSSProperties = { color: colors.text, borderBottom: `1px solid ${colors.border}`, padding: "10px 9px", verticalAlign: "middle" };
 const contractorCostCellStyle: CSSProperties = { width: "230px", maxWidth: "230px", whiteSpace: "normal", overflowWrap: "anywhere" };
@@ -1767,6 +1846,8 @@ const invoiceGroupCellStyle: CSSProperties = { ...tdStyle, background: "#f1f5f9"
 const invoiceLineIndentStyle: CSSProperties = { display: "inline-flex", paddingLeft: "18px" };
 const smallStyle: CSSProperties = { display: "block", color: colors.muted, marginTop: "4px", fontSize: "12px", fontWeight: 650 };
 const compactSelectStyle: CSSProperties = { minHeight: "36px", padding: "7px 10px", background: colors.white };
+const costLinkSelectStyle: CSSProperties = { ...compactSelectStyle, width: "100%" };
+const costLinkMenuStyle: CSSProperties = { width: "420px", maxWidth: "min(420px, calc(100vw - 32px))" };
 const uploadBoxStyle: CSSProperties = { border: `1px dashed ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, cursor: "pointer", padding: "18px", color: colors.text, display: "grid", gap: "8px", justifyItems: "start" };
 const manualFormStyle: CSSProperties = { display: "grid", gap: "10px", marginTop: "14px", maxWidth: "1120px" };
 const manualTopRowStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(230px, 1.4fr) minmax(200px, 1fr) minmax(180px, 0.8fr)", gap: "10px", alignItems: "start" };
@@ -1810,6 +1891,7 @@ const costBreakdownHeaderStyle: CSSProperties = { display: "grid", gridTemplateC
 const costBreakdownAmountStyle: CSSProperties = { whiteSpace: "nowrap", textAlign: "right", fontVariantNumeric: "tabular-nums" };
 const costSubListStyle: CSSProperties = { display: "grid", gap: "7px" };
 const costSubItemStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: "14px", color: colors.text, fontSize: "13px", borderTop: `1px solid ${colors.border}`, paddingTop: "7px", alignItems: "start" };
+const costPaymentStatusStyle: CSSProperties = { display: "grid", gap: "3px", color: colors.text, fontSize: "12px", lineHeight: 1.25, minWidth: 0 };
 
 function clientStatusStyle(tone: CfoClientProfitabilityRow["statusTone"]): CSSProperties {
   const palette = {

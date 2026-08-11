@@ -148,6 +148,8 @@ function CfoContent() {
   const [manualInterperiod, setManualInterperiod] = useState(false);
   const [expandedCostPeriods, setExpandedCostPeriods] = useState<Record<string, boolean>>({});
   const [employeeDrafts, setEmployeeDrafts] = useState<Record<string, EmployeeCostDraft>>({});
+  const [costSearch, setCostSearch] = useState("");
+  const [cashflowSearch, setCashflowSearch] = useState("");
 
   useEffect(() => {
     void loadData();
@@ -314,8 +316,8 @@ function CfoContent() {
       {loading ? <section style={panelStyle}>Ładowanie danych CFO...</section> : null}
       {!loading && activeTab === "dashboard" ? renderDashboard(view, viewMode, period) : null}
       {!loading && activeTab === "przychody" ? renderRevenueSection(revenueLines, changeRevenueCategory) : null}
-      {!loading && activeTab === "koszty" ? renderCostSection(period, costs, bankTransactions, setCosts, manualCost, setManualCost, manualInterperiod, setManualInterperiod, expandedCostPeriods, setExpandedCostPeriods, addManualCost, importCostsFile, saving) : null}
-      {!loading && activeTab === "cashflow" ? renderCashflowSection(period, bankTransactions, costs, cashflowInvoices, importBankFile, saving, setBankTransactions) : null}
+      {!loading && activeTab === "koszty" ? renderCostSection(period, costs, bankTransactions, setCosts, manualCost, setManualCost, manualInterperiod, setManualInterperiod, expandedCostPeriods, setExpandedCostPeriods, addManualCost, importCostsFile, saving, costSearch, setCostSearch) : null}
+      {!loading && activeTab === "cashflow" ? renderCashflowSection(period, bankTransactions, costs, cashflowInvoices, importBankFile, saving, setBankTransactions, cashflowSearch, setCashflowSearch) : null}
       {!loading && activeTab === "zespol" ? renderTeamSectionTable(teamMembers, employeeDrafts, setEmployeeDrafts, saveTeamCosts, saving, period, clientTimeEntries) : null}
       {!loading && activeTab === "klienci" ? renderClientsSection(clientProfitability) : null}
     </main>
@@ -640,10 +642,13 @@ function renderCostSection(
   addManualCost: () => void,
   importCostsFile: (file: File) => void,
   saving: boolean,
+  search: string,
+  setSearch: (value: string) => void,
 ) {
   const subcategoryOptions = manualCost.kategoria ? SUBCATEGORIES[manualCost.kategoria].map((item) => ({ value: item, label: item })) : [];
   const hasSubcategories = subcategoryOptions.length > 0;
   const costPaymentMap = buildCostPaymentMap(transactions);
+  const visibleCosts = filterCosts(costs, search);
 
   async function changeCost(cost: CfoCostItem, payload: Partial<CfoCostItem>) {
     setCosts((current) => current.map((item) => item.id === cost.id ? { ...item, ...payload } : item));
@@ -710,27 +715,28 @@ function renderCostSection(
           <ReceiptText size={21} style={panelIconStyle} />
           <h2 style={panelTitleStyle}>Koszty CFO</h2>
         </div>
+        <SearchField value={search} onChange={setSearch} placeholder="Szukaj kosztu po dokumencie, kontrahencie, kategorii albo kwocie..." />
         <div style={tableWrapperStyle}>
           <table style={wideCostTableStyle}>
             <colgroup>
-              <col style={{ width: "12%" }} />
-              <col style={{ width: "19%" }} />
+              <col style={{ width: "14%" }} />
+              <col style={{ width: "18%" }} />
               <col style={{ width: "14%" }} />
               <col style={{ width: "14%" }} />
               <col style={{ width: "12%" }} />
               <col style={{ width: "9%" }} />
               <col style={{ width: "9%" }} />
-              <col style={{ width: "11%" }} />
+              <col style={{ width: "10%" }} />
             </colgroup>
             <thead><tr><Th>Dokument</Th><Th>Kontrahent</Th><Th>Kategoria</Th><Th>Podkategoria</Th><Th>Okres</Th><Th align="right">Netto CFO</Th><Th align="right">Brutto cash flow</Th><Th>Rozliczenie CF</Th></tr></thead>
             <tbody>
-              {costs.length === 0 ? <EmptyRow colSpan={8} text="Brak kosztów w tym okresie." /> : costs.map((cost) => {
+              {visibleCosts.length === 0 ? <EmptyRow colSpan={8} text={costs.length === 0 ? "Brak kosztów w tym okresie." : "Brak kosztów pasujących do wyszukiwania."} /> : visibleCosts.map((cost) => {
                 const rowSubcategoryOptions = SUBCATEGORIES[cost.kategoria].map((item) => ({ value: item, label: item }));
                 const isInterperiod = expandedCostPeriods[cost.id] || !isFullMonthPeriod(cost.okres_start, cost.okres_end);
                 const paid = costPaymentMap.get(cost.id) || 0;
                 return (
                   <tr key={cost.id} style={cost.ignoruj ? mutedRowStyle : undefined}>
-                    <Td>{cost.numer_dokumentu || "Brak numeru"}<small style={smallStyle}>{formatDate(cost.data_dokumentu)}</small></Td>
+                    <Td style={documentCostCellStyle}>{cost.numer_dokumentu || "Brak numeru"}<small style={smallStyle}>{formatDate(cost.data_dokumentu)}</small></Td>
                     <Td style={contractorCostCellStyle}>{cost.kontrahent}</Td>
                     <Td><AppSelect value={cost.kategoria} options={COST_OPTIONS} onChange={(value) => void changeCost(cost, { kategoria: value as CfoCostCategory, podkategoria: null })} style={compactSelectStyle} /></Td>
                     <Td>
@@ -789,6 +795,8 @@ function renderCashflowSection(
   importBankFile: (file: File) => void,
   saving: boolean,
   setTransactions: (next: CfoBankTransaction[] | ((current: CfoBankTransaction[]) => CfoBankTransaction[])) => void,
+  search: string,
+  setSearch: (value: string) => void,
 ) {
   const costOptions = [
     { value: "", label: "Nie przypisano do kosztu" },
@@ -802,6 +810,7 @@ function renderCashflowSection(
     { value: "", label: "Nie przypisano do faktury" },
     ...invoices.map((invoice) => ({ value: invoice.id, label: invoiceOptionLabel(invoice, period) })),
   ];
+  const visibleTransactions = filterBankTransactions(transactions, search, costs, invoices);
   async function changeTransaction(transaction: CfoBankTransaction, payload: Partial<CfoBankTransaction>) {
     const result = await updateBankTransaction(transaction.id, payload);
     if (result.error) return alert("Nie udało się zapisać transakcji bankowej.");
@@ -901,6 +910,7 @@ function renderCashflowSection(
           <ReceiptText size={21} style={panelIconStyle} />
           <h2 style={panelTitleStyle}>Transakcje bankowe</h2>
         </div>
+        <SearchField value={search} onChange={setSearch} placeholder="Szukaj transakcji po dacie, kontrahencie, tytule, powiązaniu albo kwocie..." />
         <div style={tableWrapperStyle}>
           <table style={cashflowTableStyle}>
             <colgroup>
@@ -914,7 +924,7 @@ function renderCashflowSection(
             </colgroup>
             <thead><tr><Th>Data</Th><Th>Kontrahent</Th><Th>Tytuł</Th><Th>Typ</Th><Th>Powiązanie</Th><Th>Uwzgl.</Th><Th align="right">Kwota</Th></tr></thead>
             <tbody>
-              {transactions.length === 0 ? <EmptyRow colSpan={7} text="Brak transakcji w tym okresie." /> : transactions.map((transaction) => {
+              {visibleTransactions.length === 0 ? <EmptyRow colSpan={7} text={transactions.length === 0 ? "Brak transakcji w tym okresie." : "Brak transakcji pasujących do wyszukiwania."} /> : visibleTransactions.map((transaction) => {
                 const linkMode = transaction.typ === "faktura_sprzedazowa" || (transaction.typ !== "koszt" && transaction.kwota > 0) ? "invoice" : "cost";
                 const splits = paymentSplits(transaction);
                 const isSplitMode = linkMode === "cost" && transaction.rozbita;
@@ -1198,6 +1208,20 @@ function MoneyTextInput({
   );
 }
 
+function SearchField({ value, onChange, placeholder }: { value: string; onChange: (value: string) => void; placeholder: string }) {
+  return (
+    <div style={searchFieldWrapStyle}>
+      <input
+        style={searchFieldStyle}
+        value={value}
+        placeholder={placeholder}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      {value ? <button type="button" style={searchClearButtonStyle} onClick={() => onChange("")}>Wyczyść</button> : null}
+    </div>
+  );
+}
+
 function Breakdown({ rows }: { rows: { label: string; value: number }[] }) {
   if (rows.length === 0) return <span style={smallStyle}>Brak danych w tym okresie.</span>;
   return <div style={miniListStyle}>{rows.map((row) => <div key={row.label} style={miniItemStyle}><span>{row.label}</span><strong>{formatMoney(row.value)}</strong></div>)}</div>;
@@ -1397,8 +1421,59 @@ function paymentSplits(transaction: CfoBankTransaction) {
   return Array.isArray(rows) ? rows : [rows].filter(Boolean);
 }
 
+function filterCosts(costs: CfoCostItem[], search: string) {
+  const query = normalizeSearchValue(search);
+  if (!query) return costs;
+  return costs.filter((cost) => normalizeSearchValue([
+    cost.numer_dokumentu,
+    cost.kontrahent,
+    cost.opis,
+    costLabel(cost.kategoria),
+    cost.podkategoria,
+    formatDate(cost.data_dokumentu),
+    formatCostPeriod(cost.okres_start, cost.okres_end),
+    formatMoney(cost.kwota_netto_cfo),
+    formatMoney(costGrossValue(cost)),
+  ].filter(Boolean).join(" ")).includes(query));
+}
+
+function filterBankTransactions(transactions: CfoBankTransaction[], search: string, costs: CfoCostItem[], invoices: CfoCashflowInvoice[]) {
+  const query = normalizeSearchValue(search);
+  if (!query) return transactions;
+  const costLabels = new Map(costs.map((cost) => [cost.id, costOptionLabel(cost)]));
+  const invoiceLabels = new Map(invoices.map((invoice) => [invoice.id, invoiceOptionLabel(invoice, "")]));
+
+  return transactions.filter((transaction) => {
+    const splitLabels = paymentSplits(transaction).map((split) => split.poza_kosztem_cfo ? "Poza kosztem CFO" : split.koszt_id ? costLabels.get(split.koszt_id) : "").join(" ");
+    return normalizeSearchValue([
+      formatDate(transaction.data_ksiegowania),
+      transaction.kontrahent,
+      transaction.tytul,
+      bankTypeLabel(transaction.typ),
+      transaction.koszt_id ? costLabels.get(transaction.koszt_id) : null,
+      transaction.faktura_id ? invoiceLabels.get(transaction.faktura_id) : null,
+      splitLabels,
+      formatMoney(transaction.kwota),
+    ].filter(Boolean).join(" ")).includes(query);
+  });
+}
+
+function normalizeSearchValue(value: string | number | null | undefined) {
+  return String(value ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/ł/g, "l")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function bankTypeSelectValue(type: CfoBankTransactionType) {
   return type === "ignoruj" ? "do_przypisania" : type;
+}
+
+function bankTypeLabel(type: CfoBankTransactionType) {
+  return BANK_TYPE_OPTIONS.find((option) => option.value === bankTypeSelectValue(type))?.label || type;
 }
 
 function costGrossValue(cost: CfoCostItem) {
@@ -2033,7 +2108,8 @@ const wideCostTableStyle: CSSProperties = { ...tableStyle, minWidth: "1380px", t
 const cashflowTableStyle: CSSProperties = { ...tableStyle, minWidth: "0", tableLayout: "fixed" };
 const thStyle: CSSProperties = { color: colors.muted, borderBottom: `1px solid ${colors.border}`, padding: "11px 9px", fontSize: "12px", textTransform: "uppercase", letterSpacing: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" };
 const tdStyle: CSSProperties = { color: colors.text, borderBottom: `1px solid ${colors.border}`, padding: "10px 9px", verticalAlign: "middle" };
-const contractorCostCellStyle: CSSProperties = { width: "230px", maxWidth: "230px", whiteSpace: "normal", overflowWrap: "anywhere" };
+const documentCostCellStyle: CSSProperties = { whiteSpace: "normal", overflowWrap: "anywhere", wordBreak: "break-word" };
+const contractorCostCellStyle: CSSProperties = { whiteSpace: "normal", overflowWrap: "anywhere", wordBreak: "break-word" };
 const invoiceGroupCellStyle: CSSProperties = { ...tdStyle, background: "#f1f5f9", color: colors.navy, paddingTop: "14px", paddingBottom: "14px" };
 const invoiceLineIndentStyle: CSSProperties = { display: "inline-flex", paddingLeft: "18px" };
 const smallStyle: CSSProperties = { display: "block", color: colors.muted, marginTop: "4px", fontSize: "12px", fontWeight: 650 };
@@ -2061,6 +2137,9 @@ const periodMonthBadgeStyle: CSSProperties = { display: "inline-flex", alignItem
 const costPeriodCellStyle: CSSProperties = { display: "grid", gap: "8px", minWidth: 0 };
 const costDateRangeStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 150px)", gap: "8px" };
 const inputStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, minHeight: "42px", padding: "9px 12px", fontWeight: 750, width: "100%", boxSizing: "border-box" };
+const searchFieldWrapStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(260px, 1fr) auto", gap: "10px", alignItems: "center", margin: "12px 0 14px" };
+const searchFieldStyle: CSSProperties = { ...inputStyle, minHeight: "40px", padding: "8px 12px" };
+const searchClearButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.navy, minHeight: "40px", padding: "8px 12px", fontWeight: 850, cursor: "pointer" };
 const dateFieldStyle: CSSProperties = { position: "relative", minWidth: 0 };
 const dateControlStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, minHeight: "42px", display: "grid", gridTemplateColumns: "minmax(0, 1fr) 38px", alignItems: "center", overflow: "hidden" };
 const dateTextInputStyle: CSSProperties = { border: 0, outline: "none", background: "transparent", color: colors.text, minHeight: "40px", padding: "9px 0 9px 12px", fontWeight: 750, width: "100%", boxSizing: "border-box" };

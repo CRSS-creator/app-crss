@@ -7,6 +7,7 @@ import { colors, radius, shadow } from "@/app/design";
 type SelectOption = {
   value: string;
   label: string;
+  tone?: "success";
 };
 
 type MenuPosition = {
@@ -40,6 +41,7 @@ export default function AppSelect({
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const selected = options.find((option) => option.value === value) || options[0];
+  const selectedToneStyle = selected?.tone === "success" ? successTextStyle : null;
   const normalizedQuery = normalizeSelectText(query);
   const visibleOptions = normalizedQuery
     ? options.filter((option) => normalizeSelectText(option.label).includes(normalizedQuery))
@@ -85,7 +87,7 @@ export default function AppSelect({
           return !current;
         })}
       >
-        <span style={selectLabelStyle}>{selected?.label || "Wybierz"}</span>
+        <span style={{ ...selectLabelStyle, ...selectedToneStyle }}>{selected?.label || "Wybierz"}</span>
         <ChevronDown size={16} strokeWidth={2.5} style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 0.16s ease" }} />
       </button>
 
@@ -123,7 +125,7 @@ export default function AppSelect({
               <button
                 key={option.value}
                 type="button"
-                style={isSelected ? selectedOptionStyle : optionStyle}
+                style={{ ...(isSelected ? selectedOptionStyle : optionStyle), ...(option.tone === "success" ? successTextStyle : null) }}
                 onClick={() => {
                   onChange(option.value);
                   setQuery("");
@@ -225,4 +227,8 @@ const selectedOptionStyle: CSSProperties = {
   ...optionStyle,
   background: "#e8eef8",
   color: colors.navy,
+};
+
+const successTextStyle: CSSProperties = {
+  color: colors.success,
 };

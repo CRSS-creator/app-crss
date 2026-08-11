@@ -734,10 +734,11 @@ function renderCostSection(
                 const rowSubcategoryOptions = SUBCATEGORIES[cost.kategoria].map((item) => ({ value: item, label: item }));
                 const isInterperiod = expandedCostPeriods[cost.id] || !isFullMonthPeriod(cost.okres_start, cost.okres_end);
                 const paid = costPaymentMap.get(cost.id) || 0;
+                const isSettled = isCostSettled(cost, paid);
                 return (
                   <tr key={cost.id} style={cost.ignoruj ? mutedRowStyle : undefined}>
-                    <Td style={documentCostCellStyle}>{cost.numer_dokumentu || "Brak numeru"}<small style={smallStyle}>{formatDate(cost.data_dokumentu)}</small></Td>
-                    <Td style={contractorCostCellStyle}>{cost.kontrahent}</Td>
+                    <Td style={{ ...documentCostCellStyle, ...(isSettled ? settledTextStyle : null) }}>{cost.numer_dokumentu || "Brak numeru"}<small style={isSettled ? settledSmallStyle : smallStyle}>{formatDate(cost.data_dokumentu)}</small></Td>
+                    <Td style={{ ...contractorCostCellStyle, ...(isSettled ? settledTextStyle : null) }}>{cost.kontrahent}</Td>
                     <Td><AppSelect value={cost.kategoria} options={COST_OPTIONS} onChange={(value) => void changeCost(cost, { kategoria: value as CfoCostCategory, podkategoria: null })} style={compactSelectStyle} /></Td>
                     <Td>
                       {rowSubcategoryOptions.length > 0 ? (
@@ -774,7 +775,7 @@ function renderCostSection(
                         zł
                       </span>
                     </Td>
-                    <Td align="right" style={nowrapMoneyCellStyle}>{formatMoney(costGrossValue(cost))}</Td>
+                    <Td align="right" style={{ ...nowrapMoneyCellStyle, ...(isSettled ? settledTextStyle : null) }}>{formatMoney(costGrossValue(cost))}</Td>
                     <Td><CostPaymentStatus cost={cost} paid={paid} compact /></Td>
                   </tr>
                 );
@@ -798,17 +799,31 @@ function renderCashflowSection(
   search: string,
   setSearch: (value: string) => void,
 ) {
+  const costPaymentMap = buildCostPaymentMap(transactions);
+  const invoicePaymentMap = buildInvoicePaymentMap(transactions);
   const costOptions = [
     { value: "", label: "Nie przypisano do kosztu" },
-    ...costs.filter((cost) => !cost.ignoruj).map((cost) => ({ value: cost.id, label: costOptionLabel(cost) })),
+    ...costs.filter((cost) => !cost.ignoruj).map((cost) => ({
+      value: cost.id,
+      label: costOptionLabel(cost),
+      tone: isCostSettled(cost, costPaymentMap.get(cost.id) || 0) ? "success" as const : undefined,
+    })),
   ];
   const splitCostOptions = [
     { value: "__outside", label: "Poza kosztem CFO" },
-    ...costs.filter((cost) => !cost.ignoruj).map((cost) => ({ value: cost.id, label: costOptionLabel(cost) })),
+    ...costs.filter((cost) => !cost.ignoruj).map((cost) => ({
+      value: cost.id,
+      label: costOptionLabel(cost),
+      tone: isCostSettled(cost, costPaymentMap.get(cost.id) || 0) ? "success" as const : undefined,
+    })),
   ];
   const invoiceOptions = [
     { value: "", label: "Nie przypisano do faktury" },
-    ...invoices.map((invoice) => ({ value: invoice.id, label: invoiceOptionLabel(invoice, period) })),
+    ...invoices.map((invoice) => ({
+      value: invoice.id,
+      label: invoiceOptionLabel(invoice, period),
+      tone: isInvoiceSettled(invoice, invoicePaymentMap.get(invoice.id) || 0) ? "success" as const : undefined,
+    })),
   ];
   const visibleTransactions = filterBankTransactions(transactions, search, costs, invoices);
   async function changeTransaction(transaction: CfoBankTransaction, payload: Partial<CfoBankTransaction>) {
@@ -1414,6 +1429,26 @@ function buildCostPaymentMap(transactions: CfoBankTransaction[]) {
     byCost.set(transaction.koszt_id, (byCost.get(transaction.koszt_id) || 0) + Math.abs(Number(transaction.kwota || 0)));
   });
   return byCost;
+}
+
+function buildInvoicePaymentMap(transactions: CfoBankTransaction[]) {
+  const byInvoice = new Map<string, number>();
+  transactions.forEach((transaction) => {
+    if (!transaction.faktura_id || transaction.ignoruj || transaction.typ !== "faktura_sprzedazowa") return;
+    const paid = Math.abs(Number(transaction.kwota || 0));
+    byInvoice.set(transaction.faktura_id, (byInvoice.get(transaction.faktura_id) || 0) + paid);
+  });
+  return byInvoice;
+}
+
+function isCostSettled(cost: CfoCostItem, paid: number) {
+  const gross = costGrossValue(cost);
+  return gross > 0 && paid + 0.01 >= gross;
+}
+
+function isInvoiceSettled(invoice: CfoCashflowInvoice, paid: number) {
+  const gross = Number(invoice.kwota_brutto || 0);
+  return gross > 0 && paid + 0.01 >= gross;
 }
 
 function paymentSplits(transaction: CfoBankTransaction) {
@@ -2119,6 +2154,8 @@ const contractorCostCellStyle: CSSProperties = { whiteSpace: "normal", overflowW
 const invoiceGroupCellStyle: CSSProperties = { ...tdStyle, background: "#f1f5f9", color: colors.navy, paddingTop: "14px", paddingBottom: "14px" };
 const invoiceLineIndentStyle: CSSProperties = { display: "inline-flex", paddingLeft: "18px" };
 const smallStyle: CSSProperties = { display: "block", color: colors.muted, marginTop: "4px", fontSize: "12px", fontWeight: 650 };
+const settledTextStyle: CSSProperties = { color: colors.success, fontWeight: 850 };
+const settledSmallStyle: CSSProperties = { ...smallStyle, color: colors.success };
 const compactSelectStyle: CSSProperties = { minHeight: "36px", padding: "7px 10px", background: colors.white };
 const costLinkSelectStyle: CSSProperties = { ...compactSelectStyle, width: "100%", minWidth: 0, maxWidth: "100%", paddingLeft: "9px", paddingRight: "8px", gap: "6px" };
 const costLinkMenuStyle: CSSProperties = { width: "560px", maxWidth: "min(560px, calc(100vw - 32px))" };

@@ -11,6 +11,7 @@ import AppSelect from "@/components/AppSelect";
 import {
   fetchCfoBankTransactions,
   fetchCfoBankTransactionsRange,
+  fetchCfoCashflowInvoices,
   fetchCfoClientTimeEntries,
   fetchCfoClientTimeEntriesRange,
   fetchCfoCosts,
@@ -29,6 +30,7 @@ import {
   type CfoBankImportRow,
   type CfoBankTransaction,
   type CfoBankTransactionType,
+  type CfoCashflowInvoice,
   type CfoClientTimeEntry,
   type CfoCostCategory,
   type CfoCostImportRow,
@@ -135,6 +137,7 @@ function CfoContent() {
   const [costs, setCosts] = useState<CfoCostItem[]>([]);
   const [employeeCosts, setEmployeeCosts] = useState<CfoEmployeeCost[]>([]);
   const [bankTransactions, setBankTransactions] = useState<CfoBankTransaction[]>([]);
+  const [cashflowInvoices, setCashflowInvoices] = useState<CfoCashflowInvoice[]>([]);
   const [clientTimeEntries, setClientTimeEntries] = useState<CfoClientTimeEntry[]>([]);
   const [teamMembers, setTeamMembers] = useState<CfoTeamMember[]>([]);
   const [manualCost, setManualCost] = useState<ManualCostDraft>(() => emptyManualCost(period));
@@ -161,11 +164,12 @@ function CfoContent() {
   async function loadData() {
     setLoading(true);
     const range = cfoPeriodRange(period, viewMode);
-    const [revenueResult, costsResult, employeeResult, bankResult, teamResult, timeResult] = await Promise.all([
+    const [revenueResult, costsResult, employeeResult, bankResult, invoicesResult, teamResult, timeResult] = await Promise.all([
       viewMode === "year" ? fetchCfoRevenueLinesRange(range.from, range.to) : fetchCfoRevenueLines(range.from),
       viewMode === "year" ? fetchCfoCostsRange(range.from, range.to) : fetchCfoCosts(range.from),
       viewMode === "year" ? fetchCfoEmployeeCostsRange(range.from, range.to) : fetchCfoEmployeeCosts(range.from),
       viewMode === "year" ? fetchCfoBankTransactionsRange(range.from, range.to) : fetchCfoBankTransactions(range.from),
+      fetchCfoCashflowInvoices(period),
       fetchCfoTeamMembers(),
       viewMode === "year" ? fetchCfoClientTimeEntriesRange(range.from, range.to) : fetchCfoClientTimeEntries(range.from),
     ]);
@@ -174,6 +178,7 @@ function CfoContent() {
     if (costsResult.error) console.error("Błąd pobierania kosztów CFO:", costsResult.error);
     if (employeeResult.error) console.error("Błąd pobierania kosztów pracowników CFO:", employeeResult.error);
     if (bankResult.error) console.error("Błąd pobierania transakcji bankowych CFO:", bankResult.error);
+    if (invoicesResult.error) console.error("Błąd pobierania faktur do cash flow CFO:", invoicesResult.error);
     if (teamResult.error) console.error("Błąd pobierania zespołu CFO:", teamResult.error);
     if (timeResult.error) console.error("Błąd pobierania czasu pracy klientów CFO:", timeResult.error);
 
@@ -181,6 +186,7 @@ function CfoContent() {
     setCosts((costsResult.data || []) as CfoCostItem[]);
     setEmployeeCosts((employeeResult.data || []) as CfoEmployeeCost[]);
     setBankTransactions((bankResult.data || []) as CfoBankTransaction[]);
+    setCashflowInvoices((invoicesResult.data || []) as CfoCashflowInvoice[]);
     setClientTimeEntries((timeResult.data || []) as CfoClientTimeEntry[]);
     setTeamMembers((teamResult.data || []) as CfoTeamMember[]);
     setManualCost(emptyManualCost(period));
@@ -304,7 +310,7 @@ function CfoContent() {
       {!loading && activeTab === "dashboard" ? renderDashboard(view, viewMode, period) : null}
       {!loading && activeTab === "przychody" ? renderRevenueSection(revenueLines, changeRevenueCategory) : null}
       {!loading && activeTab === "koszty" ? renderCostSection(period, costs, setCosts, manualCost, setManualCost, manualInterperiod, setManualInterperiod, expandedCostPeriods, setExpandedCostPeriods, addManualCost, importCostsFile, saving) : null}
-      {!loading && activeTab === "cashflow" ? renderCashflowSection(bankTransactions, costs, importBankFile, saving, setBankTransactions) : null}
+      {!loading && activeTab === "cashflow" ? renderCashflowSection(period, bankTransactions, costs, cashflowInvoices, importBankFile, saving, setBankTransactions) : null}
       {!loading && activeTab === "zespol" ? renderTeamSectionTable(teamMembers, employeeDrafts, setEmployeeDrafts, saveTeamCosts, saving, period, clientTimeEntries) : null}
       {!loading && activeTab === "klienci" ? renderClientsSection(clientProfitability) : null}
     </main>
@@ -764,18 +770,26 @@ function renderCostSection(
 }
 
 function renderCashflowSection(
+  period: string,
   transactions: CfoBankTransaction[],
   costs: CfoCostItem[],
+  invoices: CfoCashflowInvoice[],
   importBankFile: (file: File) => void,
   saving: boolean,
   setTransactions: (next: CfoBankTransaction[] | ((current: CfoBankTransaction[]) => CfoBankTransaction[])) => void,
 ) {
   const costPaymentMap = buildCostPaymentMap(transactions);
+  const invoicePaymentMap = buildInvoicePaymentMap(transactions);
   const costOptions = [
     { value: "", label: "Nie przypisano do kosztu" },
     ...costs.filter((cost) => !cost.ignoruj).map((cost) => ({ value: cost.id, label: costOptionLabel(cost) })),
   ];
+  const invoiceOptions = [
+    { value: "", label: "Nie przypisano do faktury" },
+    ...invoices.map((invoice) => ({ value: invoice.id, label: invoiceOptionLabel(invoice, period) })),
+  ];
   const costsById = new Map(costs.map((cost) => [cost.id, cost]));
+  const invoicesById = new Map(invoices.map((invoice) => [invoice.id, invoice]));
 
   async function changeTransaction(transaction: CfoBankTransaction, payload: Partial<CfoBankTransaction>) {
     const result = await updateBankTransaction(transaction.id, payload);
@@ -790,15 +804,27 @@ function renderCashflowSection(
       ignoruj: typ === "transfer_wewnetrzny",
     };
     if (typ !== "koszt") payload.koszt_id = null;
+    if (typ !== "faktura_sprzedazowa") payload.faktura_id = null;
     await changeTransaction(transaction, payload);
   }
 
   async function assignCost(transaction: CfoBankTransaction, costId: string) {
     await changeTransaction(transaction, {
       koszt_id: costId || null,
+      faktura_id: null,
       typ: costId ? "koszt" : "do_przypisania",
       ignoruj: false,
       dopasowanie_status: costId ? "reczne" : "nieprzypisane",
+    });
+  }
+
+  async function assignInvoice(transaction: CfoBankTransaction, invoiceId: string) {
+    await changeTransaction(transaction, {
+      faktura_id: invoiceId || null,
+      koszt_id: null,
+      typ: invoiceId ? "faktura_sprzedazowa" : "do_przypisania",
+      ignoruj: false,
+      dopasowanie_status: invoiceId ? "reczne" : "nieprzypisane",
     });
   }
 
@@ -812,7 +838,7 @@ function renderCashflowSection(
         <label style={uploadBoxStyle}>
           <Upload size={22} />
           <strong>Wczytaj CSV z Erste Bank</strong>
-          <span>Obsługiwane są pliki z przecinkiem jako separatorem. Przelewy własne będą domyślnie oznaczane jako wewnętrzne.</span>
+          <span>Obsługiwane są pliki z przecinkiem jako separatorem. Przelewy własne będą domyślnie oznaczane jako wewnętrzne. Wpływy możesz przypisać do faktur, a wypływy do kosztów.</span>
           <input type="file" accept=".csv,.txt" hidden disabled={saving} onChange={(event) => event.target.files?.[0] && importBankFile(event.target.files[0])} />
         </label>
       </article>
@@ -823,10 +849,12 @@ function renderCashflowSection(
         </div>
         <div style={tableWrapperStyle}>
           <table style={cashflowTableStyle}>
-            <thead><tr><Th>Data</Th><Th>Kontrahent</Th><Th>Tytuł</Th><Th>Typ</Th><Th>Pozycja kosztowa</Th><Th>Rozliczenie kosztu</Th><Th align="right">Kwota</Th><Th>Uwzględniać</Th></tr></thead>
+            <thead><tr><Th>Data</Th><Th>Kontrahent</Th><Th>Tytuł</Th><Th>Typ</Th><Th>Powiązanie</Th><Th>Rozliczenie</Th><Th align="right">Kwota</Th><Th>Uwzględniać</Th></tr></thead>
             <tbody>
               {transactions.length === 0 ? <EmptyRow colSpan={8} text="Brak transakcji w tym okresie." /> : transactions.map((transaction) => {
                 const selectedCost = transaction.koszt_id ? costsById.get(transaction.koszt_id) || null : null;
+                const selectedInvoice = transaction.faktura_id ? invoicesById.get(transaction.faktura_id) || null : null;
+                const linkMode = transaction.typ === "faktura_sprzedazowa" || (transaction.typ !== "koszt" && transaction.kwota > 0) ? "invoice" : "cost";
                 return (
                   <tr key={transaction.id} style={transaction.ignoruj ? mutedRowStyle : undefined}>
                     <Td>{formatDate(transaction.data_ksiegowania)}</Td>
@@ -834,15 +862,29 @@ function renderCashflowSection(
                     <Td>{transaction.tytul || "Brak tytułu"}</Td>
                     <Td><AppSelect value={bankTypeSelectValue(transaction.typ)} options={BANK_TYPE_OPTIONS} onChange={(value) => void changeTransactionType(transaction, value)} style={compactSelectStyle} /></Td>
                     <Td>
-                      <AppSelect
-                        value={transaction.koszt_id || ""}
-                        options={costOptions}
-                        onChange={(value) => void assignCost(transaction, value)}
-                        style={costLinkSelectStyle}
-                        menuStyle={costLinkMenuStyle}
-                      />
+                      {linkMode === "cost" ? (
+                        <AppSelect
+                          value={transaction.koszt_id || ""}
+                          options={costOptions}
+                          onChange={(value) => void assignCost(transaction, value)}
+                          style={costLinkSelectStyle}
+                          menuStyle={costLinkMenuStyle}
+                        />
+                      ) : (
+                        <AppSelect
+                          value={transaction.faktura_id || ""}
+                          options={invoiceOptions}
+                          onChange={(value) => void assignInvoice(transaction, value)}
+                          style={costLinkSelectStyle}
+                          menuStyle={costLinkMenuStyle}
+                        />
+                      )}
                     </Td>
-                    <Td><CostPaymentStatus cost={selectedCost} paid={selectedCost ? costPaymentMap.get(selectedCost.id) || 0 : 0} /></Td>
+                    <Td>
+                      {linkMode === "cost"
+                        ? <CostPaymentStatus cost={selectedCost} paid={selectedCost ? costPaymentMap.get(selectedCost.id) || 0 : 0} />
+                        : <InvoicePaymentStatus invoice={selectedInvoice} paid={selectedInvoice ? invoicePaymentMap.get(selectedInvoice.id) || 0 : 0} />}
+                    </Td>
                     <Td align="right" style={cashflowAmountCellStyle}>{formatMoney(transaction.kwota)}</Td>
                     <Td><input type="checkbox" checked={!transaction.ignoruj} onChange={(event) => void changeTransaction(transaction, { ignoruj: !event.target.checked })} /></Td>
                   </tr>
@@ -1089,6 +1131,24 @@ function CostPaymentStatus({ cost, paid }: { cost: CfoCostItem | null; paid: num
   );
 }
 
+function InvoicePaymentStatus({ invoice, paid }: { invoice: CfoCashflowInvoice | null; paid: number }) {
+  if (!invoice) return <span style={smallStyle}>Nie przypisano</span>;
+
+  const gross = Number(invoice.kwota_brutto || 0);
+  const remaining = gross - paid;
+  const remainingStyle = remaining <= 0 ? successInlineStyle : dangerInlineStyle;
+
+  return (
+    <div style={costPaymentStatusStyle}>
+      <span>Brutto: <strong>{formatMoney(gross)}</strong></span>
+      <span>Wpłacono: <strong>{formatMoney(paid)}</strong></span>
+      <span style={remainingStyle}>
+        {remaining >= 0 ? "Zostało" : "Nadpłata"}: <strong>{formatMoney(Math.abs(remaining))}</strong>
+      </span>
+    </div>
+  );
+}
+
 function Th({ children, align = "left" }: { children: React.ReactNode; align?: "left" | "right" }) {
   return <th style={{ ...thStyle, textAlign: align }}>{children}</th>;
 }
@@ -1226,6 +1286,16 @@ function buildCostPaymentMap(transactions: CfoBankTransaction[]) {
   return byCost;
 }
 
+function buildInvoicePaymentMap(transactions: CfoBankTransaction[]) {
+  const byInvoice = new Map<string, number>();
+  transactions.forEach((transaction) => {
+    if (!transaction.faktura_id || transaction.ignoruj || transaction.typ !== "faktura_sprzedazowa") return;
+    const paid = Math.abs(Number(transaction.kwota || 0));
+    byInvoice.set(transaction.faktura_id, (byInvoice.get(transaction.faktura_id) || 0) + paid);
+  });
+  return byInvoice;
+}
+
 function bankTypeSelectValue(type: CfoBankTransactionType) {
   return type === "ignoruj" ? "do_przypisania" : type;
 }
@@ -1238,6 +1308,16 @@ function costOptionLabel(cost: CfoCostItem) {
   const number = cost.numer_dokumentu || "Bez numeru";
   const contractor = cost.kontrahent || "Bez kontrahenta";
   return `${number} · ${contractor} · ${formatMoney(costGrossValue(cost))}`;
+}
+
+function invoiceOptionLabel(invoice: CfoCashflowInvoice, selectedPeriod: string) {
+  const issuePeriod = invoice.data_wystawienia?.slice(0, 7) || "";
+  const scope = issuePeriod === selectedPeriod.slice(0, 7)
+    ? formatMonthField(selectedPeriod)
+    : `Inne okresy · ${issuePeriod ? formatMonthField(issuePeriod) : "bez daty"}`;
+  const number = invoice.numer || "Faktura bez numeru";
+  const contractor = invoice.kontrahent_nazwa || "Bez kontrahenta";
+  return `${scope} · ${number} · ${contractor} · ${formatMoney(invoice.kwota_brutto)}`;
 }
 
 function clientProfitabilityStatus(margin: number | null, hours: number) {

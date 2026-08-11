@@ -42,6 +42,16 @@ export type CfoInvoiceParent = {
     klienci?: { nazwa: string | null } | { nazwa: string | null }[] | null;
 };
 
+export type CfoCashflowInvoice = {
+  id: string;
+  numer: string | null;
+  okres: string | null;
+  status: string;
+  data_wystawienia: string | null;
+  kontrahent_nazwa: string | null;
+  kwota_brutto: number;
+};
+
 export type CfoCostItem = {
   id: string;
   data_dokumentu: string | null;
@@ -116,6 +126,7 @@ export type CfoBankTransaction = {
   saldo_po: number | null;
   typ: CfoBankTransactionType;
   koszt_id: string | null;
+  faktura_id: string | null;
   ignoruj: boolean;
   dopasowanie_status: string;
   cfo_rachunki_bankowe?: CfoBankAccount | CfoBankAccount[] | null;
@@ -217,6 +228,23 @@ export async function updateInvoiceLineCfoCategory(lineId: string, category: Cfo
     .eq("id", lineId)
     .select(INVOICE_LINE_SELECT)
     .single();
+}
+
+export async function fetchCfoCashflowInvoices(period: string) {
+  const [year] = period.slice(0, 7).split("-").map(Number);
+  const from = `${year - 1}-12-01`;
+  const to = endOfMonth(period);
+
+  return supabase
+    .from("faktury")
+    .select("id,numer,okres,status,data_wystawienia,kontrahent_nazwa,kwota_brutto")
+    .eq("typ", "sprzedaz")
+    .neq("status", "anulowana")
+    .gte("data_wystawienia", from)
+    .lte("data_wystawienia", to)
+    .order("data_wystawienia", { ascending: false, nullsFirst: false })
+    .order("numer", { ascending: false })
+    .limit(1000);
 }
 
 export async function fetchCfoCosts(period: string) {

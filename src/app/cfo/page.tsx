@@ -309,7 +309,7 @@ function CfoContent() {
       {loading ? <section style={panelStyle}>Ładowanie danych CFO...</section> : null}
       {!loading && activeTab === "dashboard" ? renderDashboard(view, viewMode, period) : null}
       {!loading && activeTab === "przychody" ? renderRevenueSection(revenueLines, changeRevenueCategory) : null}
-      {!loading && activeTab === "koszty" ? renderCostSection(period, costs, setCosts, manualCost, setManualCost, manualInterperiod, setManualInterperiod, expandedCostPeriods, setExpandedCostPeriods, addManualCost, importCostsFile, saving) : null}
+      {!loading && activeTab === "koszty" ? renderCostSection(period, costs, bankTransactions, setCosts, manualCost, setManualCost, manualInterperiod, setManualInterperiod, expandedCostPeriods, setExpandedCostPeriods, addManualCost, importCostsFile, saving) : null}
       {!loading && activeTab === "cashflow" ? renderCashflowSection(period, bankTransactions, costs, cashflowInvoices, importBankFile, saving, setBankTransactions) : null}
       {!loading && activeTab === "zespol" ? renderTeamSectionTable(teamMembers, employeeDrafts, setEmployeeDrafts, saveTeamCosts, saving, period, clientTimeEntries) : null}
       {!loading && activeTab === "klienci" ? renderClientsSection(clientProfitability) : null}
@@ -622,6 +622,7 @@ function MonthField({ value, onChange }: { value: string; onChange: (value: stri
 function renderCostSection(
   period: string,
   costs: CfoCostItem[],
+  transactions: CfoBankTransaction[],
   setCosts: (next: CfoCostItem[] | ((current: CfoCostItem[]) => CfoCostItem[])) => void,
   manualCost: ManualCostDraft,
   setManualCost: (next: ManualCostDraft | ((current: ManualCostDraft) => ManualCostDraft)) => void,
@@ -635,6 +636,7 @@ function renderCostSection(
 ) {
   const subcategoryOptions = manualCost.kategoria ? SUBCATEGORIES[manualCost.kategoria].map((item) => ({ value: item, label: item })) : [];
   const hasSubcategories = subcategoryOptions.length > 0;
+  const costPaymentMap = buildCostPaymentMap(transactions);
 
   async function changeCost(cost: CfoCostItem, payload: Partial<CfoCostItem>) {
     setCosts((current) => current.map((item) => item.id === cost.id ? { ...item, ...payload } : item));
@@ -704,19 +706,21 @@ function renderCostSection(
         <div style={tableWrapperStyle}>
           <table style={wideCostTableStyle}>
             <colgroup>
+              <col style={{ width: "12%" }} />
+              <col style={{ width: "19%" }} />
               <col style={{ width: "14%" }} />
-              <col style={{ width: "22%" }} />
-              <col style={{ width: "16%" }} />
-              <col style={{ width: "16%" }} />
               <col style={{ width: "14%" }} />
-              <col style={{ width: "10%" }} />
-              <col style={{ width: "8%" }} />
+              <col style={{ width: "12%" }} />
+              <col style={{ width: "9%" }} />
+              <col style={{ width: "9%" }} />
+              <col style={{ width: "11%" }} />
             </colgroup>
-            <thead><tr><Th>Dokument</Th><Th>Kontrahent</Th><Th>Kategoria</Th><Th>Podkategoria</Th><Th>Okres</Th><Th align="right">Netto CFO</Th><Th align="right">Brutto cash flow</Th></tr></thead>
+            <thead><tr><Th>Dokument</Th><Th>Kontrahent</Th><Th>Kategoria</Th><Th>Podkategoria</Th><Th>Okres</Th><Th align="right">Netto CFO</Th><Th align="right">Brutto cash flow</Th><Th>Rozliczenie CF</Th></tr></thead>
             <tbody>
-              {costs.length === 0 ? <EmptyRow colSpan={7} text="Brak kosztów w tym okresie." /> : costs.map((cost) => {
+              {costs.length === 0 ? <EmptyRow colSpan={8} text="Brak kosztów w tym okresie." /> : costs.map((cost) => {
                 const rowSubcategoryOptions = SUBCATEGORIES[cost.kategoria].map((item) => ({ value: item, label: item }));
                 const isInterperiod = expandedCostPeriods[cost.id] || !isFullMonthPeriod(cost.okres_start, cost.okres_end);
+                const paid = costPaymentMap.get(cost.id) || 0;
                 return (
                   <tr key={cost.id} style={cost.ignoruj ? mutedRowStyle : undefined}>
                     <Td>{cost.numer_dokumentu || "Brak numeru"}<small style={smallStyle}>{formatDate(cost.data_dokumentu)}</small></Td>
@@ -758,6 +762,7 @@ function renderCostSection(
                       </span>
                     </Td>
                     <Td align="right" style={nowrapMoneyCellStyle}>{formatMoney(cost.kwota_brutto)}</Td>
+                    <Td><CostPaymentStatus cost={cost} paid={paid} compact /></Td>
                   </tr>
                 );
               })}
@@ -1117,7 +1122,7 @@ function CostBreakdown({ rows }: { rows: CfoCostBreakdownRow[] }) {
   );
 }
 
-function CostPaymentStatus({ cost, paid }: { cost: CfoCostItem | null; paid: number }) {
+function CostPaymentStatus({ cost, paid, compact = false }: { cost: CfoCostItem | null; paid: number; compact?: boolean }) {
   if (!cost) return <span style={smallStyle}>Nie przypisano</span>;
 
   const gross = costGrossValue(cost);
@@ -1126,7 +1131,7 @@ function CostPaymentStatus({ cost, paid }: { cost: CfoCostItem | null; paid: num
 
   return (
     <div style={costPaymentStatusStyle}>
-      <span>Brutto: <strong>{formatMoney(gross)}</strong></span>
+      {compact ? null : <span>Brutto: <strong>{formatMoney(gross)}</strong></span>}
       <span>Zapłacono: <strong>{formatMoney(paid)}</strong></span>
       <span style={remainingStyle}>
         {remaining >= 0 ? "Zostało" : "Nadpłata"}: <strong>{formatMoney(Math.abs(remaining))}</strong>
@@ -1924,7 +1929,7 @@ const dangerInlineStyle: CSSProperties = { color: colors.danger, fontWeight: 900
 const successInlineStyle: CSSProperties = { color: colors.success, fontWeight: 900 };
 const tableWrapperStyle: CSSProperties = { overflowX: "auto" };
 const tableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse" };
-const wideCostTableStyle: CSSProperties = { ...tableStyle, minWidth: "1220px", tableLayout: "fixed" };
+const wideCostTableStyle: CSSProperties = { ...tableStyle, minWidth: "1380px", tableLayout: "fixed" };
 const cashflowTableStyle: CSSProperties = { ...tableStyle, minWidth: "1500px", tableLayout: "fixed" };
 const thStyle: CSSProperties = { color: colors.muted, borderBottom: `1px solid ${colors.border}`, padding: "11px 9px", fontSize: "12px", textTransform: "uppercase", letterSpacing: 0 };
 const tdStyle: CSSProperties = { color: colors.text, borderBottom: `1px solid ${colors.border}`, padding: "10px 9px", verticalAlign: "middle" };

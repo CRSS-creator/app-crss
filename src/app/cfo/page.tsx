@@ -275,12 +275,10 @@ function CfoContent() {
           <h1 style={titleStyle}>CFO</h1>
         </div>
         <div style={headerActionsStyle}>
-          {activeTab === "dashboard" ? (
-            <div style={viewModeToggleStyle} aria-label="Zakres dashboardu">
-              <button type="button" style={viewMode === "month" ? viewModeActiveButtonStyle : viewModeButtonStyle} onClick={() => setViewMode("month")}>Miesiąc</button>
-              <button type="button" style={viewMode === "year" ? viewModeActiveButtonStyle : viewModeButtonStyle} onClick={() => setViewMode("year")}>Rok</button>
-            </div>
-          ) : null}
+          <div style={viewModeToggleStyle} aria-label="Zakres CFO">
+            <button type="button" style={viewMode === "month" ? viewModeActiveButtonStyle : viewModeButtonStyle} onClick={() => setViewMode("month")}>Miesiąc</button>
+            <button type="button" style={viewMode === "year" ? viewModeActiveButtonStyle : viewModeButtonStyle} onClick={() => setViewMode("year")}>Rok</button>
+          </div>
           <MonthField value={period} onChange={setPeriod} />
           <button type="button" style={secondaryButtonStyle} onClick={loadData} disabled={loading || saving}>
             <RefreshCw size={17} />
@@ -304,7 +302,6 @@ function CfoContent() {
           return (
             <button key={tab.id} type="button" style={activeTab === tab.id ? activeTabStyle : tabStyle} onClick={() => {
               setActiveTab(tab.id);
-              if (tab.id !== "dashboard") setViewMode("month");
             }}>
               <Icon size={17} />
               {tab.label}

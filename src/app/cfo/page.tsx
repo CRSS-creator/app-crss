@@ -82,7 +82,6 @@ const BANK_TYPE_OPTIONS: { value: CfoBankTransactionType; label: string }[] = [
   { value: "vat", label: "VAT" },
   { value: "faktura_sprzedazowa", label: "Faktura sprzedażowa" },
   { value: "transfer_wewnetrzny", label: "Przelew wewnętrzny" },
-  { value: "ignoruj", label: "Ignoruj" },
   { value: "inne", label: "Inne" },
 ];
 
@@ -788,7 +787,7 @@ function renderCashflowSection(
     const typ = value as CfoBankTransactionType;
     const payload: Partial<CfoBankTransaction> = {
       typ,
-      ignoruj: typ === "ignoruj" || typ === "transfer_wewnetrzny",
+      ignoruj: typ === "transfer_wewnetrzny",
     };
     if (typ !== "koszt") payload.koszt_id = null;
     await changeTransaction(transaction, payload);
@@ -833,7 +832,7 @@ function renderCashflowSection(
                     <Td>{formatDate(transaction.data_ksiegowania)}</Td>
                     <Td>{transaction.kontrahent || "Brak kontrahenta"}</Td>
                     <Td>{transaction.tytul || "Brak tytułu"}</Td>
-                    <Td><AppSelect value={transaction.typ} options={BANK_TYPE_OPTIONS} onChange={(value) => void changeTransactionType(transaction, value)} style={compactSelectStyle} /></Td>
+                    <Td><AppSelect value={bankTypeSelectValue(transaction.typ)} options={BANK_TYPE_OPTIONS} onChange={(value) => void changeTransactionType(transaction, value)} style={compactSelectStyle} /></Td>
                     <Td>
                       <AppSelect
                         value={transaction.koszt_id || ""}
@@ -1225,6 +1224,10 @@ function buildCostPaymentMap(transactions: CfoBankTransaction[]) {
     byCost.set(transaction.koszt_id, (byCost.get(transaction.koszt_id) || 0) + paid);
   });
   return byCost;
+}
+
+function bankTypeSelectValue(type: CfoBankTransactionType) {
+  return type === "ignoruj" ? "do_przypisania" : type;
 }
 
 function costGrossValue(cost: CfoCostItem) {

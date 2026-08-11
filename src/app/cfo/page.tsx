@@ -283,7 +283,7 @@ function CfoContent() {
         <Metric label="Koszty zarządcze" value={formatMoney(view.managementCosts)} />
         <Metric label="Wynik operacyjny" value={formatMoney(view.operatingResult)} tone={view.operatingResult >= 0 ? "good" : "bad"} />
         <Metric label="Cash flow" value={formatMoney(view.cashFlow)} tone={view.cashFlow >= 0 ? "good" : "bad"} />
-        <Metric label="Cel właściciela" value={view.ownerGoalText} tone={view.ownerGoalGap <= 0 ? "good" : "warn"} />
+        <Metric label="Cel właściciela" value={view.ownerGoalText} tone={view.ownerGoalGap <= 0 ? "good" : "bad"} />
       </section>
 
       <nav style={tabsStyle} aria-label="Sekcje CFO">
@@ -1235,7 +1235,7 @@ function buildCfoView(period: string, viewMode: CfoViewMode, revenueLines: CfoIn
     retainedProfitMargin,
     ownerGoalGap,
     ownerGoalSurplus,
-    ownerGoalText: ownerGoalGap <= 0 ? formatMoney(ownerGoalSurplus) : `-${formatMoney(ownerGoalGap)}`,
+    ownerGoalText: ownerGoalGap <= 0 ? `+${formatMoney(ownerGoalSurplus)}` : `-${formatMoney(ownerGoalGap)}`,
     clients: Array.from(clientsByName.values()).sort((a, b) => b.revenue - a.revenue),
     revenueBreakdown: Array.from(revenueByCategory, ([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value),
     costBreakdown: Array.from(costsByCategory, ([label, entry]) => ({

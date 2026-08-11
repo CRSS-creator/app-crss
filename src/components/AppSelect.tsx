@@ -20,6 +20,8 @@ export default function AppSelect({
   options,
   onChange,
   disabled = false,
+  searchable = false,
+  searchPlaceholder = "Szukaj...",
   style,
   menuStyle,
 }: {
@@ -27,14 +29,21 @@ export default function AppSelect({
   options: readonly SelectOption[];
   onChange: (value: string) => void;
   disabled?: boolean;
+  searchable?: boolean;
+  searchPlaceholder?: string;
   style?: CSSProperties;
   menuStyle?: CSSProperties;
 }) {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
   const [position, setPosition] = useState<MenuPosition | null>(null);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const selected = options.find((option) => option.value === value) || options[0];
+  const normalizedQuery = normalizeSelectText(query);
+  const visibleOptions = normalizedQuery
+    ? options.filter((option) => normalizeSelectText(option.label).includes(normalizedQuery))
+    : options;
 
   useEffect(() => {
     if (!open) return;
@@ -48,6 +57,7 @@ export default function AppSelect({
     function closeOnOutside(event: MouseEvent) {
       const target = event.target as Node;
       if (buttonRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      setQuery("");
       setOpen(false);
     }
 
@@ -70,7 +80,10 @@ export default function AppSelect({
         type="button"
         disabled={disabled}
         style={{ ...selectButtonStyle, ...(disabled ? disabledSelectStyle : null), ...style }}
-        onClick={() => setOpen((current) => !current)}
+        onClick={() => setOpen((current) => {
+          if (current) setQuery("");
+          return !current;
+        })}
       >
         <span style={selectLabelStyle}>{selected?.label || "Wybierz"}</span>
         <ChevronDown size={16} strokeWidth={2.5} style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 0.16s ease" }} />
@@ -87,7 +100,24 @@ export default function AppSelect({
             ...menuStyle,
           }}
         >
-          {options.map((option) => {
+          {searchable ? (
+            <input
+              autoFocus
+              value={query}
+              placeholder={searchPlaceholder}
+              style={searchInputStyle}
+              onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  setQuery("");
+                  setOpen(false);
+                }
+                event.stopPropagation();
+              }}
+            />
+          ) : null}
+          {visibleOptions.length === 0 ? <span style={emptyOptionStyle}>Brak wyników</span> : null}
+          {visibleOptions.map((option) => {
             const isSelected = option.value === value;
             return (
               <button
@@ -96,6 +126,7 @@ export default function AppSelect({
                 style={isSelected ? selectedOptionStyle : optionStyle}
                 onClick={() => {
                   onChange(option.value);
+                  setQuery("");
                   setOpen(false);
                 }}
               >
@@ -107,6 +138,10 @@ export default function AppSelect({
       )}
     </>
   );
+}
+
+function normalizeSelectText(value: string) {
+  return value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace("ł", "l");
 }
 
 const selectButtonStyle: CSSProperties = {
@@ -152,6 +187,26 @@ const selectMenuStyle: CSSProperties = {
   borderRadius: radius.input,
   background: colors.card,
   boxShadow: shadow.card,
+};
+
+const searchInputStyle: CSSProperties = {
+  border: `1px solid ${colors.border}`,
+  borderRadius: "10px",
+  background: colors.white,
+  color: colors.text,
+  minHeight: "38px",
+  padding: "8px 10px",
+  fontSize: "14px",
+  fontWeight: 750,
+  outline: "none",
+  marginBottom: "4px",
+};
+
+const emptyOptionStyle: CSSProperties = {
+  color: colors.muted,
+  padding: "10px 11px",
+  fontSize: "13px",
+  fontWeight: 750,
 };
 
 const optionStyle: CSSProperties = {

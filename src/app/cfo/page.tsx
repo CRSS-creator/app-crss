@@ -867,6 +867,8 @@ function renderCashflowSection(
                           value={transaction.koszt_id || ""}
                           options={costOptions}
                           onChange={(value) => void assignCost(transaction, value)}
+                          searchable
+                          searchPlaceholder="Szukaj kosztu..."
                           style={costLinkSelectStyle}
                           menuStyle={costLinkMenuStyle}
                         />
@@ -875,6 +877,8 @@ function renderCashflowSection(
                           value={transaction.faktura_id || ""}
                           options={invoiceOptions}
                           onChange={(value) => void assignInvoice(transaction, value)}
+                          searchable
+                          searchPlaceholder="Szukaj faktury..."
                           style={costLinkSelectStyle}
                           menuStyle={costLinkMenuStyle}
                         />

@@ -790,8 +790,6 @@ function renderCashflowSection(
   saving: boolean,
   setTransactions: (next: CfoBankTransaction[] | ((current: CfoBankTransaction[]) => CfoBankTransaction[])) => void,
 ) {
-  const costPaymentMap = buildCostPaymentMap(transactions);
-  const invoicePaymentMap = buildInvoicePaymentMap(transactions);
   const costOptions = [
     { value: "", label: "Nie przypisano do kosztu" },
     ...costs.filter((cost) => !cost.ignoruj).map((cost) => ({ value: cost.id, label: costOptionLabel(cost) })),
@@ -804,9 +802,6 @@ function renderCashflowSection(
     { value: "", label: "Nie przypisano do faktury" },
     ...invoices.map((invoice) => ({ value: invoice.id, label: invoiceOptionLabel(invoice, period) })),
   ];
-  const costsById = new Map(costs.map((cost) => [cost.id, cost]));
-  const invoicesById = new Map(invoices.map((invoice) => [invoice.id, invoice]));
-
   async function changeTransaction(transaction: CfoBankTransaction, payload: Partial<CfoBankTransaction>) {
     const result = await updateBankTransaction(transaction.id, payload);
     if (result.error) return alert("Nie udało się zapisać transakcji bankowej.");
@@ -910,24 +905,19 @@ function renderCashflowSection(
           <table style={cashflowTableStyle}>
             <colgroup>
               <col style={{ width: "8%" }} />
-              <col style={{ width: "15%" }} />
-              <col style={{ width: "25%" }} />
+              <col style={{ width: "16%" }} />
+              <col style={{ width: "28%" }} />
               <col style={{ width: "12%" }} />
-              <col style={{ width: "24%" }} />
-              <col style={{ width: "8%" }} />
-              <col style={{ width: "6%" }} />
-              <col style={{ width: "2%" }} />
+              <col style={{ width: "27%" }} />
+              <col style={{ width: "4%" }} />
+              <col style={{ width: "5%" }} />
             </colgroup>
-            <thead><tr><Th>Data</Th><Th>Kontrahent</Th><Th>Tytuł</Th><Th>Typ</Th><Th>Powiązanie</Th><Th>Rozliczenie</Th><Th align="right">Kwota</Th><Th>Uwzględniać</Th></tr></thead>
+            <thead><tr><Th>Data</Th><Th>Kontrahent</Th><Th>Tytuł</Th><Th>Typ</Th><Th>Powiązanie</Th><Th>Uwzględniać</Th><Th align="right">Kwota transakcji</Th></tr></thead>
             <tbody>
-              {transactions.length === 0 ? <EmptyRow colSpan={8} text="Brak transakcji w tym okresie." /> : transactions.map((transaction) => {
-                const selectedCost = transaction.koszt_id ? costsById.get(transaction.koszt_id) || null : null;
-                const selectedInvoice = transaction.faktura_id ? invoicesById.get(transaction.faktura_id) || null : null;
+              {transactions.length === 0 ? <EmptyRow colSpan={7} text="Brak transakcji w tym okresie." /> : transactions.map((transaction) => {
                 const linkMode = transaction.typ === "faktura_sprzedazowa" || (transaction.typ !== "koszt" && transaction.kwota > 0) ? "invoice" : "cost";
                 const splits = paymentSplits(transaction);
                 const isSplitMode = linkMode === "cost" && transaction.rozbita;
-                const splitTotal = sum(splits.map((split) => Number(split.kwota || 0)));
-                const splitRemaining = Math.abs(Number(transaction.kwota || 0)) - splitTotal;
                 return (
                   <Fragment key={transaction.id}>
                     <tr style={transaction.ignoruj ? mutedRowStyle : undefined}>
@@ -968,19 +958,12 @@ function renderCashflowSection(
                           )}
                         </div>
                       </Td>
-                      <Td>
-                        {isSplitMode
-                          ? <SplitPaymentStatus total={Math.abs(Number(transaction.kwota || 0))} assigned={splitTotal} remaining={splitRemaining} />
-                          : linkMode === "cost"
-                            ? <CostPaymentStatus cost={selectedCost} paid={selectedCost ? costPaymentMap.get(selectedCost.id) || 0 : 0} />
-                            : <InvoicePaymentStatus invoice={selectedInvoice} paid={selectedInvoice ? invoicePaymentMap.get(selectedInvoice.id) || 0 : 0} />}
-                      </Td>
-                      <Td align="right" style={cashflowAmountCellStyle}>{formatMoney(transaction.kwota)}</Td>
                       <Td><input type="checkbox" checked={!transaction.ignoruj} onChange={(event) => void changeTransaction(transaction, { ignoruj: !event.target.checked })} /></Td>
+                      <Td align="right" style={cashflowAmountCellStyle}>{formatMoney(transaction.kwota)}</Td>
                     </tr>
                     {isSplitMode ? (
                       <tr style={transaction.ignoruj ? mutedRowStyle : undefined}>
-                        <Td colSpan={8}>
+                        <Td colSpan={7}>
                           <div style={paymentSplitBoxStyle}>
                             <div style={paymentSplitHeaderStyle}>
                               <strong>Rozbicie płatności</strong>
@@ -1263,35 +1246,6 @@ function CostPaymentStatus({ cost, paid, compact = false }: { cost: CfoCostItem 
   );
 }
 
-function SplitPaymentStatus({ total, assigned, remaining }: { total: number; assigned: number; remaining: number }) {
-  const toneStyle = Math.abs(remaining) <= 0.01 ? successInlineStyle : dangerInlineStyle;
-  return (
-    <div style={costPaymentStatusStyle}>
-      <span>Kwota: <strong>{formatMoney(total)}</strong></span>
-      <span>Rozbito: <strong>{formatMoney(assigned)}</strong></span>
-      <span style={toneStyle}>{remaining >= 0 ? "Zostało" : "Nadmiar"}: <strong>{formatMoney(Math.abs(remaining))}</strong></span>
-    </div>
-  );
-}
-
-function InvoicePaymentStatus({ invoice, paid }: { invoice: CfoCashflowInvoice | null; paid: number }) {
-  if (!invoice) return <span style={smallStyle}>Nie przypisano</span>;
-
-  const gross = Number(invoice.kwota_brutto || 0);
-  const remaining = gross - paid;
-  const remainingStyle = remaining <= 0 ? successInlineStyle : dangerInlineStyle;
-
-  return (
-    <div style={costPaymentStatusStyle}>
-      <span>Brutto: <strong>{formatMoney(gross)}</strong></span>
-      <span>Wpłacono: <strong>{formatMoney(paid)}</strong></span>
-      <span style={remainingStyle}>
-        {remaining >= 0 ? "Zostało" : "Nadpłata"}: <strong>{formatMoney(Math.abs(remaining))}</strong>
-      </span>
-    </div>
-  );
-}
-
 function Th({ children, align = "left" }: { children: React.ReactNode; align?: "left" | "right" }) {
   return <th style={{ ...thStyle, textAlign: align }}>{children}</th>;
 }
@@ -1441,16 +1395,6 @@ function buildCostPaymentMap(transactions: CfoBankTransaction[]) {
 function paymentSplits(transaction: CfoBankTransaction) {
   const rows = transaction.cfo_rozbicia_platnosci || [];
   return Array.isArray(rows) ? rows : [rows].filter(Boolean);
-}
-
-function buildInvoicePaymentMap(transactions: CfoBankTransaction[]) {
-  const byInvoice = new Map<string, number>();
-  transactions.forEach((transaction) => {
-    if (!transaction.faktura_id || transaction.ignoruj || transaction.typ !== "faktura_sprzedazowa") return;
-    const paid = Math.abs(Number(transaction.kwota || 0));
-    byInvoice.set(transaction.faktura_id, (byInvoice.get(transaction.faktura_id) || 0) + paid);
-  });
-  return byInvoice;
 }
 
 function bankTypeSelectValue(type: CfoBankTransactionType) {
@@ -2086,7 +2030,7 @@ const successInlineStyle: CSSProperties = { color: colors.success, fontWeight: 9
 const tableWrapperStyle: CSSProperties = { overflowX: "auto" };
 const tableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse" };
 const wideCostTableStyle: CSSProperties = { ...tableStyle, minWidth: "1380px", tableLayout: "fixed" };
-const cashflowTableStyle: CSSProperties = { ...tableStyle, minWidth: "1660px", tableLayout: "fixed" };
+const cashflowTableStyle: CSSProperties = { ...tableStyle, minWidth: "1460px", tableLayout: "fixed" };
 const thStyle: CSSProperties = { color: colors.muted, borderBottom: `1px solid ${colors.border}`, padding: "11px 9px", fontSize: "12px", textTransform: "uppercase", letterSpacing: 0 };
 const tdStyle: CSSProperties = { color: colors.text, borderBottom: `1px solid ${colors.border}`, padding: "10px 9px", verticalAlign: "middle" };
 const contractorCostCellStyle: CSSProperties = { width: "230px", maxWidth: "230px", whiteSpace: "normal", overflowWrap: "anywhere" };

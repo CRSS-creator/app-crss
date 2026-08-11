@@ -345,6 +345,7 @@ function renderDashboard(view: CfoView, viewMode: CfoViewMode, period: string) {
           </span>
           <div style={ownerGoalBreakdownStyle}>
             <span>Brakująca wypłata netto</span><strong>{formatMoney(view.ownerPayoutRemaining)}</strong>
+            {view.ownerPayrollBurden > 0 ? <><span>PIT/ZUS Prezesa ujęte w kosztach</span><strong>{formatMoney(view.ownerPayrollBurden)}</strong></> : null}
             <span>Brakuje do pokrycia straty</span><strong>{formatMoney(view.ownerLossCoverage)}</strong>
             <span>Wymagany bufor w spółce</span><strong>{formatMoney(view.companyBufferTarget)}</strong>
             {view.ownerPositiveResult > 0 ? <><span>Pokryte wynikiem po kosztach</span><strong>-{formatMoney(view.ownerPositiveResult)}</strong></> : null}
@@ -1359,6 +1360,7 @@ function buildCfoView(period: string, viewMode: CfoViewMode, revenueLines: CfoIn
   const costValue = (cost: CfoCostItem) => costShareForRange(cost, range.from, range.to);
   const managementCosts = sum(activeCosts.filter((cost) => cost.kategoria === "zarzad_wlasciciel").map(costValue));
   const ownerPayoutRecorded = Math.min(ownerPayoutTarget, sum(activeCosts.filter(isOwnerPayoutCost).map(costValue)));
+  const ownerPayrollBurden = sum(activeCosts.filter(isOwnerPayrollBurdenCost).map(costValue));
   const ownerPayoutRemaining = Math.max(0, ownerPayoutTarget - ownerPayoutRecorded);
   const operatingCosts = sum(activeCosts.filter((cost) => cost.kategoria !== "zarzad_wlasciciel").map(costValue)) + employeeBase;
   const operatingResult = revenue - operatingCosts - managementCosts;
@@ -1408,6 +1410,7 @@ function buildCfoView(period: string, viewMode: CfoViewMode, revenueLines: CfoIn
     ownerPayoutTarget,
     ownerGoalTarget,
     ownerPayoutRecorded,
+    ownerPayrollBurden,
     ownerPayoutRemaining,
     ownerLossCoverage,
     ownerPositiveResult,
@@ -1588,6 +1591,10 @@ function costShareForRange(cost: CfoCostItem, rangeStart: string, rangeEnd: stri
 
 function isOwnerPayoutCost(cost: CfoCostItem) {
   return cost.kategoria === "zarzad_wlasciciel" && ["Wynagrodzenie netto Prezesa", "Premia netto Prezesa", "Wynagrodzenie podstawowe Prezesa", "Premia Prezesa"].includes(cost.podkategoria || "");
+}
+
+function isOwnerPayrollBurdenCost(cost: CfoCostItem) {
+  return cost.kategoria === "zarzad_wlasciciel" && ["PIT od wynagrodzenia Prezesa", "ZUS od wynagrodzenia Prezesa", "Inne obciążenia wynagrodzenia Prezesa"].includes(cost.podkategoria || "");
 }
 
 function monthsBetween(start: string, end: string) {

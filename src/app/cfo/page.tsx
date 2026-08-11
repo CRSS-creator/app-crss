@@ -844,7 +844,7 @@ function renderCashflowSection(
                       />
                     </Td>
                     <Td><CostPaymentStatus cost={selectedCost} paid={selectedCost ? costPaymentMap.get(selectedCost.id) || 0 : 0} /></Td>
-                    <Td align="right" style={nowrapMoneyCellStyle}>{formatMoney(transaction.kwota)}</Td>
+                    <Td align="right" style={cashflowAmountCellStyle}>{formatMoney(transaction.kwota)}</Td>
                     <Td><input type="checkbox" checked={!transaction.ignoruj} onChange={(event) => void changeTransaction(transaction, { ignoruj: !event.target.checked })} /></Td>
                   </tr>
                 );
@@ -1838,7 +1838,7 @@ const successInlineStyle: CSSProperties = { color: colors.success, fontWeight: 9
 const tableWrapperStyle: CSSProperties = { overflowX: "auto" };
 const tableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse" };
 const wideCostTableStyle: CSSProperties = { ...tableStyle, minWidth: "1220px", tableLayout: "fixed" };
-const cashflowTableStyle: CSSProperties = { ...tableStyle, minWidth: "1420px", tableLayout: "fixed" };
+const cashflowTableStyle: CSSProperties = { ...tableStyle, minWidth: "1500px", tableLayout: "fixed" };
 const thStyle: CSSProperties = { color: colors.muted, borderBottom: `1px solid ${colors.border}`, padding: "11px 9px", fontSize: "12px", textTransform: "uppercase", letterSpacing: 0 };
 const tdStyle: CSSProperties = { color: colors.text, borderBottom: `1px solid ${colors.border}`, padding: "10px 9px", verticalAlign: "middle" };
 const contractorCostCellStyle: CSSProperties = { width: "230px", maxWidth: "230px", whiteSpace: "normal", overflowWrap: "anywhere" };
@@ -1878,6 +1878,7 @@ const secondaryButtonStyle: CSSProperties = { border: `1px solid ${colors.border
 const moneyEditStyle: CSSProperties = { display: "inline-flex", alignItems: "center", justifyContent: "flex-end", gap: "6px", color: colors.navy, fontWeight: 850, whiteSpace: "nowrap" };
 const moneyInputStyle: CSSProperties = { ...inputStyle, minHeight: "36px", padding: "7px 9px", width: "102px" };
 const nowrapMoneyCellStyle: CSSProperties = { whiteSpace: "nowrap" };
+const cashflowAmountCellStyle: CSSProperties = { ...nowrapMoneyCellStyle, minWidth: "118px", width: "118px", fontVariantNumeric: "tabular-nums" };
 const mutedRowStyle: CSSProperties = { opacity: 0.58, background: "#f1f5f9" };
 const formFooterStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", marginTop: "14px", flexWrap: "wrap" };
 const miniListStyle: CSSProperties = { display: "grid", gap: "8px" };

@@ -1644,6 +1644,10 @@ function buildCfoView(period: string, viewMode: CfoViewMode, revenueLines: CfoIn
     costsByCategory.set(label, current);
   });
 
+  employees.forEach((employee) => {
+    addEmployeeCostBreakdown(costsByCategory, employee);
+  });
+
   return {
     revenue,
     mrr,
@@ -1673,6 +1677,37 @@ function buildCfoView(period: string, viewMode: CfoViewMode, revenueLines: CfoIn
       children: Array.from(entry.children, ([childLabel, childValue]) => ({ label: childLabel, value: childValue })).sort((a, b) => b.value - a.value),
     })).sort((a, b) => b.value - a.value),
   };
+}
+
+function addEmployeeCostBreakdown(costsByCategory: Map<string, { value: number; children: Map<string, number> }>, employee: CfoEmployeeCost) {
+  const label = employeeCostCategoryLabel(employee.zespol);
+  const current = costsByCategory.get(label) || { value: 0, children: new Map<string, number>() };
+  const rows = [
+    { label: `${employeeCostPrefix(employee.zespol)} - podstawa`, value: Number(employee.podstawa || 0) },
+    { label: `${employeeCostPrefix(employee.zespol)} - ZUS pracodawcy`, value: Number(employee.zus_pracodawcy || 0) },
+    { label: `${employeeCostPrefix(employee.zespol)} - benefity`, value: Number(employee.benefity || 0) },
+    { label: `${employeeCostPrefix(employee.zespol)} - premie`, value: Number(employee.premie || 0) },
+    { label: `${employeeCostPrefix(employee.zespol)} - szkolenia`, value: Number(employee.szkolenia || 0) },
+  ];
+
+  rows.forEach((row) => {
+    if (row.value <= 0) return;
+    current.value += row.value;
+    current.children.set(row.label, (current.children.get(row.label) || 0) + row.value);
+  });
+  if (current.value > 0) costsByCategory.set(label, current);
+}
+
+function employeeCostCategoryLabel(team: CfoEmployeeCost["zespol"]) {
+  if (team === "marketingowy") return "Marketing i sprzedaż";
+  if (team === "sprzedazowy") return "Marketing i sprzedaż";
+  return "Koszty zespołu";
+}
+
+function employeeCostPrefix(team: CfoEmployeeCost["zespol"]) {
+  if (team === "marketingowy") return "Koszt zespołu marketingowego";
+  if (team === "sprzedazowy") return "Koszt zespołu sprzedażowego";
+  return "Zespół księgowy";
 }
 
 async function parseCostWorkbook(file: File, period: string): Promise<CfoCostImportRow[]> {

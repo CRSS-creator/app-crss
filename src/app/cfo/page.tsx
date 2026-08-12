@@ -1370,9 +1370,11 @@ function filterRevenueLinesForRange(lines: CfoInvoiceLine[], from: string, to: s
 
 function revenueLineEffectivePeriod(line: CfoInvoiceLine) {
   const settlementPeriod = revenueLineSettlementPeriod(line);
-  if (settlementPeriod) return monthToDate(settlementPeriod);
-  const periodFromName = revenueLinePeriodFromName(line.nazwa);
-  if (periodFromName) return monthToDate(periodFromName);
+  if (settlementPeriod) return monthToDate(shiftMonth(settlementPeriod, 1));
+  if (line.source_key === "dodatkowe_dokumenty") {
+    const periodFromName = revenueLinePeriodFromName(line.nazwa);
+    if (periodFromName) return monthToDate(periodFromName);
+  }
   return invoiceParent(line)?.okres || monthToDate(currentMonthInput());
 }
 

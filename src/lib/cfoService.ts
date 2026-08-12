@@ -25,6 +25,7 @@ export type CfoBankTransactionType =
 export type CfoInvoiceLine = {
   id: string;
   nazwa: string;
+  source_key: string | null;
   kwota_netto: number;
   cfo_przychod_kategoria: CfoRevenueCategory | null;
   rozliczenie_oplata_id: string | null;
@@ -192,6 +193,7 @@ export type CfoBankImportRow = {
 const INVOICE_LINE_SELECT = `
   id,
   nazwa,
+  source_key,
   kwota_netto,
   cfo_przychod_kategoria,
   rozliczenie_oplata_id,

@@ -1615,7 +1615,7 @@ function costGrossValue(cost: CfoCostItem) {
 }
 
 function costOptionLabel(cost: CfoCostItem) {
-  const number = cost.numer_dokumentu || "Bez numeru";
+  const number = `${formatCostPeriod(cost.okres_start, cost.okres_end)} - ${cost.numer_dokumentu || "Bez numeru"}`;
   const contractor = cost.kontrahent || "Bez kontrahenta";
   return `${number} · ${contractor} · brutto: ${formatMoney(costGrossValue(cost))}`;
 }

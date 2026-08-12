@@ -85,6 +85,13 @@ export type CfoCostItem = {
   okres_end: string;
   ujecie_zarzadcze: string;
   ignoruj: boolean;
+  cfo_transakcje_bankowe?: {
+    id: string;
+    kwota: number;
+    typ: CfoBankTransactionType;
+    ignoruj: boolean;
+  }[] | null;
+  cfo_rozbicia_platnosci?: CfoPaymentSplit[] | null;
 };
 
 export type CfoEmployeeCost = {
@@ -156,6 +163,15 @@ export type CfoPaymentSplit = {
   opis: string | null;
   kwota: number;
   poza_kosztem_cfo: boolean;
+  cfo_transakcje_bankowe?: {
+    id: string;
+    typ: CfoBankTransactionType;
+    ignoruj: boolean;
+  } | {
+    id: string;
+    typ: CfoBankTransactionType;
+    ignoruj: boolean;
+  }[] | null;
 };
 
 export type CfoCostImportRow = {
@@ -243,6 +259,29 @@ const BANK_TRANSACTION_SELECT = `
   )
 `;
 
+const COST_SELECT = `
+  *,
+  cfo_transakcje_bankowe:cfo_transakcje_bankowe_koszt_id_fkey (
+    id,
+    kwota,
+    typ,
+    ignoruj
+  ),
+  cfo_rozbicia_platnosci:cfo_rozbicia_platnosci_koszt_id_fkey (
+    id,
+    transakcja_id,
+    koszt_id,
+    opis,
+    kwota,
+    poza_kosztem_cfo,
+    cfo_transakcje_bankowe:cfo_rozbicia_platnosci_transakcja_id_fkey (
+      id,
+      typ,
+      ignoruj
+    )
+  )
+`;
+
 export async function fetchCfoRevenueLines(period: string) {
   return supabase
     .from("faktury_pozycje")
@@ -307,7 +346,7 @@ export async function fetchCfoCashflowInvoices(period: string) {
 export async function fetchCfoCosts(period: string) {
   return supabase
     .from("cfo_koszty")
-    .select("*")
+    .select(COST_SELECT)
     .lte("okres_start", period)
     .gte("okres_end", period)
     .order("data_dokumentu", { ascending: false, nullsFirst: false })
@@ -317,7 +356,7 @@ export async function fetchCfoCosts(period: string) {
 export async function fetchCfoCostsRange(from: string, to: string) {
   return supabase
     .from("cfo_koszty")
-    .select("*")
+    .select(COST_SELECT)
     .lte("okres_start", to)
     .gte("okres_end", from)
     .order("data_dokumentu", { ascending: false, nullsFirst: false })
@@ -336,7 +375,7 @@ export async function updateCfoCost(costId: string, payload: Partial<CfoCostItem
     .from("cfo_koszty")
     .update(payload)
     .eq("id", costId)
-    .select("*")
+    .select(COST_SELECT)
     .single();
 }
 

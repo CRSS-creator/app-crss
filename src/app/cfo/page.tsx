@@ -847,7 +847,7 @@ function renderCashflowSection(
     ...costs.filter((cost) => !cost.ignoruj).map((cost) => ({
       value: cost.id,
       label: costOptionLabel(cost),
-      tone: costPaymentState(cost, costPaymentMap.get(cost.id) || 0) === "settled" ? "success" as const : undefined,
+      tone: costPaymentState(cost, costPaidValue(cost, currentTransactionIds) + (costPaymentMap.get(cost.id) || 0)) === "settled" ? "success" as const : undefined,
     })),
   ];
   const splitCostOptions = [
@@ -855,7 +855,7 @@ function renderCashflowSection(
     ...costs.filter((cost) => !cost.ignoruj).map((cost) => ({
       value: cost.id,
       label: costOptionLabel(cost),
-      tone: costPaymentState(cost, costPaymentMap.get(cost.id) || 0) === "settled" ? "success" as const : undefined,
+      tone: costPaymentState(cost, costPaidValue(cost, currentTransactionIds) + (costPaymentMap.get(cost.id) || 0)) === "settled" ? "success" as const : undefined,
     })),
   ];
   const invoiceOptions = [
@@ -1528,6 +1528,24 @@ function costPaymentState(cost: CfoCostItem, paid: number): "none" | "partial" |
   return remaining < 0 ? "overpaid" : "partial";
 }
 
+function costPaidValue(cost: CfoCostItem, excludeTransactionIds = new Set<string>()) {
+  const directRows = cost.cfo_transakcje_bankowe || [];
+  const directPaid = (Array.isArray(directRows) ? directRows : [directRows].filter(Boolean)).reduce((sum, transaction) => {
+    if (!transaction || excludeTransactionIds.has(transaction.id) || transaction.ignoruj || transaction.typ !== "koszt") return sum;
+    return sum + Math.abs(Number(transaction.kwota || 0));
+  }, 0);
+
+  const splitRows = cost.cfo_rozbicia_platnosci || [];
+  const splitPaid = (Array.isArray(splitRows) ? splitRows : [splitRows].filter(Boolean)).reduce((sum, split) => {
+    const transaction = split ? splitParentTransaction(split) : null;
+    if (!split || split.poza_kosztem_cfo || !split.koszt_id) return sum;
+    if (transaction && (excludeTransactionIds.has(transaction.id) || transaction.ignoruj || transaction.typ !== "koszt")) return sum;
+    return sum + Number(split.kwota || 0);
+  }, 0);
+
+  return directPaid + splitPaid;
+}
+
 function isInvoiceSettled(invoice: CfoCashflowInvoice, paid: number) {
   const gross = Number(invoice.kwota_brutto || 0);
   return gross > 0 && Math.abs(gross - paid) <= 0.01;
@@ -1545,6 +1563,11 @@ function invoicePaidValue(invoice: CfoCashflowInvoice, excludeTransactionIds = n
 function paymentSplits(transaction: CfoBankTransaction) {
   const rows = transaction.cfo_rozbicia_platnosci || [];
   return Array.isArray(rows) ? rows : [rows].filter(Boolean);
+}
+
+function splitParentTransaction(split: CfoPaymentSplit) {
+  const parent = split.cfo_transakcje_bankowe;
+  return Array.isArray(parent) ? parent[0] : parent;
 }
 
 function filterCosts(costs: CfoCostItem[], search: string) {

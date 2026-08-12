@@ -18,7 +18,6 @@ import {
   fetchCfoCostsRange,
   fetchCfoEmployeeCosts,
   fetchCfoEmployeeCostsRange,
-  fetchCfoRevenueLines,
   fetchCfoRevenueLinesRange,
   fetchCfoTeamMembers,
   importBankTransactions,
@@ -170,8 +169,9 @@ function CfoContent() {
   async function loadData() {
     setLoading(true);
     const range = cfoPeriodRange(period, viewMode);
+    const revenueRange = revenueFetchRange(range.from, range.to);
     const [revenueResult, costsResult, employeeResult, bankResult, invoicesResult, teamResult, timeResult] = await Promise.all([
-      viewMode === "year" ? fetchCfoRevenueLinesRange(range.from, range.to) : fetchCfoRevenueLines(range.from),
+      fetchCfoRevenueLinesRange(revenueRange.from, revenueRange.to),
       viewMode === "year" ? fetchCfoCostsRange(range.from, range.to) : fetchCfoCosts(range.from),
       viewMode === "year" ? fetchCfoEmployeeCostsRange(range.from, range.to) : fetchCfoEmployeeCosts(range.from),
       viewMode === "year" ? fetchCfoBankTransactionsRange(range.from, range.to) : fetchCfoBankTransactions(range.from),
@@ -312,7 +312,7 @@ function CfoContent() {
 
       {loading ? <section style={panelStyle}>Ładowanie danych CFO...</section> : null}
       {!loading && activeTab === "dashboard" ? renderDashboard(view, viewMode, period) : null}
-      {!loading && activeTab === "przychody" ? renderRevenueSection(revenueLines, changeRevenueCategory) : null}
+      {!loading && activeTab === "przychody" ? renderRevenueSection(view.revenueLines, changeRevenueCategory) : null}
       {!loading && activeTab === "koszty" ? renderCostSection(period, costs, bankTransactions, setCosts, manualCost, setManualCost, manualInterperiod, setManualInterperiod, expandedCostPeriods, setExpandedCostPeriods, addManualCost, importCostsFile, saving, costSearch, setCostSearch) : null}
       {!loading && activeTab === "cashflow" ? renderCashflowSection(period, bankTransactions, costs, cashflowInvoices, importBankFile, saving, setBankTransactions, cashflowSearch, setCashflowSearch) : null}
       {!loading && activeTab === "zespol" ? renderTeamSectionTable(teamMembers, employeeDrafts, setEmployeeDrafts, saveTeamCosts, saving, period, clientTimeEntries) : null}
@@ -401,7 +401,12 @@ function renderRevenueSection(lines: CfoInvoiceLine[], onChange: (line: CfoInvoi
               </tr>,
               ...group.lines.map((line) => (
                 <tr key={line.id}>
-                  <Td><span style={invoiceLineIndentStyle}>{line.nazwa}</span></Td>
+                  <Td>
+                    <span style={invoiceLineIndentStyle}>{line.nazwa}</span>
+                    {revenueLineEffectivePeriod(line).slice(0, 7) !== invoiceParent(line)?.okres?.slice(0, 7) ? (
+                      <small style={invoiceLinePeriodStyle}>Okres usługi: {formatMonthField(revenueLineEffectivePeriod(line))}</small>
+                    ) : null}
+                  </Td>
                   <Td>
                     <AppSelect value={line.cfo_przychod_kategoria || "pozostale"} options={REVENUE_OPTIONS} onChange={(value) => onChange(line, value as CfoRevenueCategory)} style={compactSelectStyle} />
                   </Td>
@@ -1356,6 +1361,33 @@ function groupRevenueLinesByInvoice(lines: CfoInvoiceLine[]): CfoRevenueInvoiceG
   });
 }
 
+function filterRevenueLinesForRange(lines: CfoInvoiceLine[], from: string, to: string) {
+  return lines.filter((line) => {
+    const effectivePeriod = revenueLineEffectivePeriod(line);
+    return effectivePeriod >= from && effectivePeriod <= to;
+  });
+}
+
+function revenueLineEffectivePeriod(line: CfoInvoiceLine) {
+  const periodFromName = revenueLinePeriodFromName(line.nazwa);
+  if (periodFromName) return monthToDate(periodFromName);
+  return invoiceParent(line)?.okres || monthToDate(currentMonthInput());
+}
+
+function revenueLinePeriodFromName(name: string) {
+  const normalized = normalizePolishText(name.toLowerCase());
+  const numericMatch = /(?:^|\D)(0?[1-9]|1[0-2])\s*[./-]\s*(20\d{2})(?:\D|$)/.exec(normalized);
+  if (numericMatch) return validMonthValue(Number(numericMatch[2]), Number(numericMatch[1]));
+
+  for (let index = 0; index < MONTH_LABELS.length; index += 1) {
+    const monthName = normalizePolishText(MONTH_LABELS[index]);
+    const match = new RegExp(`${monthName}\\w*\\s+(20\\d{2})`).exec(normalized);
+    if (match) return validMonthValue(Number(match[1]), index + 1);
+  }
+
+  return null;
+}
+
 function invoiceNumberSortValue(value: string) {
   const match = value.match(/(\d+)\s*\/\s*\d{4}/);
   return match ? Number(match[1]) : 0;
@@ -1564,9 +1596,10 @@ function clientProfitabilityStatus(margin: number | null, hours: number) {
 function buildCfoView(period: string, viewMode: CfoViewMode, revenueLines: CfoInvoiceLine[], costs: CfoCostItem[], employees: CfoEmployeeCost[], bank: CfoBankTransaction[]) {
   const range = cfoPeriodRange(period, viewMode);
   const periodMonths = monthsBetween(range.from, range.to);
+  const activeRevenueLines = filterRevenueLinesForRange(revenueLines, range.from, range.to);
   const ownerPayoutTarget = OWNER_MONTHLY_PAYOUT * periodMonths;
-  const revenue = sum(revenueLines.map((line) => Number(line.kwota_netto || 0)));
-  const mrr = sum(revenueLines.filter((line) => line.cfo_przychod_kategoria === "abonamenty").map((line) => Number(line.kwota_netto || 0)));
+  const revenue = sum(activeRevenueLines.map((line) => Number(line.kwota_netto || 0)));
+  const mrr = sum(activeRevenueLines.filter((line) => line.cfo_przychod_kategoria === "abonamenty").map((line) => Number(line.kwota_netto || 0)));
   const employeeBase = sum(employees.map((employee) => Number(employee.podstawa || 0) + Number(employee.zus_pracodawcy || 0) + Number(employee.benefity || 0) + Number(employee.premie || 0) + Number(employee.szkolenia || 0)));
   const activeCosts = costs.filter((cost) => !cost.ignoruj);
   const costValue = (cost: CfoCostItem) => costShareForRange(cost, range.from, range.to);
@@ -1589,7 +1622,7 @@ function buildCfoView(period: string, viewMode: CfoViewMode, revenueLines: CfoIn
   const revenueByCategory = new Map<string, number>();
   const costsByCategory = new Map<string, { value: number; children: Map<string, number> }>();
 
-  revenueLines.forEach((line) => {
+  activeRevenueLines.forEach((line) => {
     const category = revenueLabel(line.cfo_przychod_kategoria || "pozostale");
     revenueByCategory.set(category, (revenueByCategory.get(category) || 0) + Number(line.kwota_netto || 0));
     const name = invoiceClientName(line);
@@ -1631,6 +1664,7 @@ function buildCfoView(period: string, viewMode: CfoViewMode, revenueLines: CfoIn
     ownerGoalGap,
     ownerGoalSurplus,
     ownerGoalText: ownerGoalGap <= 0 ? `+${formatMoney(ownerGoalSurplus)}` : `-${formatMoney(ownerGoalGap)}`,
+    revenueLines: activeRevenueLines,
     clients: Array.from(clientsByName.values()).sort((a, b) => b.revenue - a.revenue),
     revenueBreakdown: Array.from(revenueByCategory, ([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value),
     costBreakdown: Array.from(costsByCategory, ([label, entry]) => ({
@@ -1904,6 +1938,12 @@ function cfoPeriodRange(period: string, viewMode: CfoViewMode) {
   return { from: monthToDate(period), to: monthEndDate(period) };
 }
 
+function revenueFetchRange(from: string, to: string) {
+  const fromMonth = shiftMonth(from.slice(0, 7), -1);
+  const toMonth = shiftMonth(to.slice(0, 7), 1);
+  return { from: monthToDate(fromMonth), to: monthEndDate(toMonth) };
+}
+
 function cfoPeriodLabel(period: string, viewMode: CfoViewMode) {
   if (viewMode === "month") return formatMonthField(period);
   const range = cfoPeriodRange(period, viewMode);
@@ -1957,6 +1997,12 @@ function parseMonthFieldText(value: string) {
 function validMonthValue(year: number, month: number) {
   if (!year || month < 1 || month > 12) return null;
   return `${year}-${String(month).padStart(2, "0")}`;
+}
+
+function shiftMonth(value: string, delta: number) {
+  const { year, month } = parseMonthValue(value);
+  const date = new Date(year, month - 1 + delta, 1);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
 
 function normalizePolishText(value: string) {
@@ -2168,6 +2214,7 @@ const contractorCostCellStyle: CSSProperties = { whiteSpace: "normal", overflowW
 const invoiceGroupCellStyle: CSSProperties = { ...tdStyle, background: "#f1f5f9", color: colors.navy, paddingTop: "14px", paddingBottom: "14px" };
 const invoiceLineIndentStyle: CSSProperties = { display: "inline-flex", paddingLeft: "18px" };
 const smallStyle: CSSProperties = { display: "block", color: colors.muted, marginTop: "4px", fontSize: "12px", fontWeight: 650 };
+const invoiceLinePeriodStyle: CSSProperties = { ...smallStyle, paddingLeft: "18px", color: colors.navy };
 const settledTextStyle: CSSProperties = { color: colors.success, fontWeight: 850 };
 const settledSmallStyle: CSSProperties = { ...smallStyle, color: colors.success };
 const overpaidTextStyle: CSSProperties = { color: colors.warning, fontWeight: 850 };

@@ -663,20 +663,19 @@ function renderCostSection(
   }
 
   async function removeCost(cost: CfoCostItem, paid: number) {
-    const label = cost.numer_dokumentu || cost.kontrahent || "pozycjÄ™ kosztowÄ…";
+    const label = cost.numer_dokumentu || cost.kontrahent || "pozycję kosztową";
     const message = paid > 0
-      ? `UsunÄ…Ä‡ koszt ${label}? Do tej pozycji przypisano pĹ‚atnoĹ›ci na ${formatMoney(paid)}. Transakcje bankowe zostanÄ… w cash flow, ale stracÄ… to powiÄ…zanie.`
-      : `UsunÄ…Ä‡ koszt ${label}?`;
+      ? `Usunąć koszt ${label}? Do tej pozycji przypisano płatności na ${formatMoney(paid)}. Transakcje bankowe zostaną w cash flow, ale stracą to powiązanie.`
+      : `Usunąć koszt ${label}?`;
     if (!confirm(message)) return;
     const result = await deleteCfoCost(cost.id);
     if (result.error) {
       console.error(result.error);
-      alert("Nie udaĹ‚o siÄ™ usunÄ…Ä‡ kosztu.");
+      alert("Nie udało się usunąć kosztu.");
       return;
     }
     setCosts((current) => current.filter((item) => item.id !== cost.id));
   }
-
   function toggleManualInterperiod(enabled: boolean) {
     setManualInterperiod(enabled);
     if (!enabled) {

@@ -139,6 +139,7 @@ function CfoContent() {
   const [saving, setSaving] = useState(false);
   const [revenueLines, setRevenueLines] = useState<CfoInvoiceLine[]>([]);
   const [costs, setCosts] = useState<CfoCostItem[]>([]);
+  const [cashflowCosts, setCashflowCosts] = useState<CfoCostItem[]>([]);
   const [employeeCosts, setEmployeeCosts] = useState<CfoEmployeeCost[]>([]);
   const [bankTransactions, setBankTransactions] = useState<CfoBankTransaction[]>([]);
   const [cashflowInvoices, setCashflowInvoices] = useState<CfoCashflowInvoice[]>([]);
@@ -171,9 +172,11 @@ function CfoContent() {
     setLoading(true);
     const range = cfoPeriodRange(period, viewMode);
     const revenueRange = revenueFetchRange(range.from, range.to);
-    const [revenueResult, costsResult, employeeResult, bankResult, invoicesResult, teamResult, timeResult] = await Promise.all([
+    const cashflowCostRange = cfoCashflowCostLinkRange(period);
+    const [revenueResult, costsResult, cashflowCostsResult, employeeResult, bankResult, invoicesResult, teamResult, timeResult] = await Promise.all([
       fetchCfoRevenueLinesRange(revenueRange.from, revenueRange.to),
       viewMode === "year" ? fetchCfoCostsRange(range.from, range.to) : fetchCfoCosts(range.from),
+      fetchCfoCostsRange(cashflowCostRange.from, cashflowCostRange.to),
       viewMode === "year" ? fetchCfoEmployeeCostsRange(range.from, range.to) : fetchCfoEmployeeCosts(range.from),
       viewMode === "year" ? fetchCfoBankTransactionsRange(range.from, range.to) : fetchCfoBankTransactions(range.from),
       fetchCfoCashflowInvoices(period),
@@ -191,6 +194,7 @@ function CfoContent() {
 
     setRevenueLines((revenueResult.data || []) as unknown as CfoInvoiceLine[]);
     setCosts((costsResult.data || []) as CfoCostItem[]);
+    setCashflowCosts((cashflowCostsResult.data || []) as CfoCostItem[]);
     setEmployeeCosts((employeeResult.data || []) as CfoEmployeeCost[]);
     setBankTransactions((bankResult.data || []) as CfoBankTransaction[]);
     setCashflowInvoices((invoicesResult.data || []) as CfoCashflowInvoice[]);
@@ -315,7 +319,7 @@ function CfoContent() {
       {!loading && activeTab === "dashboard" ? renderDashboard(view, viewMode, period) : null}
       {!loading && activeTab === "przychody" ? renderRevenueSection(view.revenueLines, changeRevenueCategory) : null}
       {!loading && activeTab === "koszty" ? renderCostSection(period, costs, bankTransactions, setCosts, manualCost, setManualCost, manualInterperiod, setManualInterperiod, expandedCostPeriods, setExpandedCostPeriods, addManualCost, importCostsFile, saving, costSearch, setCostSearch) : null}
-      {!loading && activeTab === "cashflow" ? renderCashflowSection(period, bankTransactions, costs, cashflowInvoices, importBankFile, saving, setBankTransactions, cashflowSearch, setCashflowSearch) : null}
+      {!loading && activeTab === "cashflow" ? renderCashflowSection(period, bankTransactions, mergeCostLists(costs, cashflowCosts), cashflowInvoices, importBankFile, saving, setBankTransactions, cashflowSearch, setCashflowSearch) : null}
       {!loading && activeTab === "zespol" ? renderTeamSectionTable(teamMembers, employeeDrafts, setEmployeeDrafts, saveTeamCosts, saving, period, clientTimeEntries) : null}
       {!loading && activeTab === "klienci" ? renderClientsSection(clientProfitability) : null}
     </main>
@@ -2019,6 +2023,23 @@ function revenueFetchRange(from: string, to: string) {
   const fromMonth = shiftMonth(from.slice(0, 7), -1);
   const toMonth = shiftMonth(to.slice(0, 7), 1);
   return { from: monthToDate(fromMonth), to: monthEndDate(toMonth) };
+}
+
+function cfoCashflowCostLinkRange(period: string) {
+  const fromMonth = shiftMonth(period, -12);
+  const toMonth = shiftMonth(period, 12);
+  return { from: monthToDate(fromMonth), to: monthEndDate(toMonth) };
+}
+
+function mergeCostLists(primary: CfoCostItem[], secondary: CfoCostItem[]) {
+  const byId = new Map<string, CfoCostItem>();
+  secondary.forEach((cost) => byId.set(cost.id, cost));
+  primary.forEach((cost) => byId.set(cost.id, cost));
+  return Array.from(byId.values()).sort((first, second) => {
+    const firstDate = first.data_dokumentu || first.okres_start || "";
+    const secondDate = second.data_dokumentu || second.okres_start || "";
+    return secondDate.localeCompare(firstDate);
+  });
 }
 
 function cfoPeriodLabel(period: string, viewMode: CfoViewMode) {

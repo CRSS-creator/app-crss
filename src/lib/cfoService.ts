@@ -59,6 +59,12 @@ export type CfoCashflowInvoice = {
   data_wystawienia: string | null;
   kontrahent_nazwa: string | null;
   kwota_brutto: number;
+  cfo_transakcje_bankowe?: {
+    id: string;
+    kwota: number;
+    typ: CfoBankTransactionType;
+    ignoruj: boolean;
+  }[] | null;
 };
 
 export type CfoCostItem = {
@@ -274,7 +280,21 @@ export async function fetchCfoCashflowInvoices(period: string) {
 
   return supabase
     .from("faktury")
-    .select("id,numer,okres,status,data_wystawienia,kontrahent_nazwa,kwota_brutto")
+    .select(`
+      id,
+      numer,
+      okres,
+      status,
+      data_wystawienia,
+      kontrahent_nazwa,
+      kwota_brutto,
+      cfo_transakcje_bankowe:cfo_transakcje_bankowe_faktura_id_fkey (
+        id,
+        kwota,
+        typ,
+        ignoruj
+      )
+    `)
     .eq("typ", "sprzedaz")
     .neq("status", "anulowana")
     .gte("data_wystawienia", from)

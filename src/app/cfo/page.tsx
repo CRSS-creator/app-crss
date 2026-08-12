@@ -837,6 +837,7 @@ function renderCashflowSection(
 ) {
   const costPaymentMap = buildCostPaymentMap(transactions);
   const invoicePaymentMap = buildInvoicePaymentMap(transactions);
+  const currentTransactionIds = new Set(transactions.map((transaction) => transaction.id));
   const costOptions = [
     { value: "", label: "Nie przypisano do kosztu" },
     ...costs.filter((cost) => !cost.ignoruj).map((cost) => ({
@@ -858,7 +859,7 @@ function renderCashflowSection(
     ...invoices.map((invoice) => ({
       value: invoice.id,
       label: invoiceOptionLabel(invoice, period),
-      tone: isInvoiceSettled(invoice, invoicePaymentMap.get(invoice.id) || 0) ? "success" as const : undefined,
+      tone: isInvoiceSettled(invoice, invoicePaidValue(invoice, currentTransactionIds) + (invoicePaymentMap.get(invoice.id) || 0)) ? "success" as const : undefined,
     })),
   ];
   const visibleTransactions = filterBankTransactions(transactions, search, costs, invoices);
@@ -1526,6 +1527,15 @@ function costPaymentState(cost: CfoCostItem, paid: number): "none" | "partial" |
 function isInvoiceSettled(invoice: CfoCashflowInvoice, paid: number) {
   const gross = Number(invoice.kwota_brutto || 0);
   return gross > 0 && Math.abs(gross - paid) <= 0.01;
+}
+
+function invoicePaidValue(invoice: CfoCashflowInvoice, excludeTransactionIds = new Set<string>()) {
+  const rows = invoice.cfo_transakcje_bankowe || [];
+  const transactions = Array.isArray(rows) ? rows : [rows].filter(Boolean);
+  return transactions.reduce((sum, transaction) => {
+    if (!transaction || excludeTransactionIds.has(transaction.id) || transaction.ignoruj || transaction.typ !== "faktura_sprzedazowa") return sum;
+    return sum + Math.abs(Number(transaction.kwota || 0));
+  }, 0);
 }
 
 function paymentSplits(transaction: CfoBankTransaction) {

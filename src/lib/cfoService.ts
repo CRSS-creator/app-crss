@@ -320,6 +320,13 @@ export async function updateCfoCost(costId: string, payload: Partial<CfoCostItem
     .single();
 }
 
+export async function deleteCfoCost(costId: string) {
+  return supabase
+    .from("cfo_koszty")
+    .delete()
+    .eq("id", costId);
+}
+
 export async function fetchCfoEmployeeCosts(period: string) {
   return supabase
     .from("cfo_koszty_pracownikow")

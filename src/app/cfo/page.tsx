@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { Banknote, BriefcaseBusiness, CalendarDays, FileSpreadsheet, LayoutDashboard, Plus, ReceiptText, RefreshCw, Save, TrendingUp, Upload, Users } from "lucide-react";
+import { Banknote, BriefcaseBusiness, CalendarDays, FileSpreadsheet, LayoutDashboard, Plus, ReceiptText, RefreshCw, Save, Trash2, TrendingUp, Upload, Users } from "lucide-react";
 import * as XLSX from "xlsx";
 
 import { colors, radius, shadow } from "@/app/design";
@@ -21,6 +21,7 @@ import {
   fetchCfoRevenueLinesRange,
   fetchCfoTeamMembers,
   importBankTransactions,
+  deleteCfoCost,
   deletePaymentSplit,
   insertCfoCosts,
   insertPaymentSplit,
@@ -657,6 +658,21 @@ function renderCostSection(
     await updateCost(cost.id, payload);
   }
 
+  async function removeCost(cost: CfoCostItem, paid: number) {
+    const label = cost.numer_dokumentu || cost.kontrahent || "pozycjÄ™ kosztowÄ…";
+    const message = paid > 0
+      ? `UsunÄ…Ä‡ koszt ${label}? Do tej pozycji przypisano pĹ‚atnoĹ›ci na ${formatMoney(paid)}. Transakcje bankowe zostanÄ… w cash flow, ale stracÄ… to powiÄ…zanie.`
+      : `UsunÄ…Ä‡ koszt ${label}?`;
+    if (!confirm(message)) return;
+    const result = await deleteCfoCost(cost.id);
+    if (result.error) {
+      console.error(result.error);
+      alert("Nie udaĹ‚o siÄ™ usunÄ…Ä‡ kosztu.");
+      return;
+    }
+    setCosts((current) => current.filter((item) => item.id !== cost.id));
+  }
+
   function toggleManualInterperiod(enabled: boolean) {
     setManualInterperiod(enabled);
     if (!enabled) {
@@ -721,18 +737,19 @@ function renderCostSection(
         <div style={tableWrapperStyle}>
           <table style={wideCostTableStyle}>
             <colgroup>
-              <col style={{ width: "14%" }} />
-              <col style={{ width: "18%" }} />
-              <col style={{ width: "14%" }} />
-              <col style={{ width: "14%" }} />
+              <col style={{ width: "13%" }} />
+              <col style={{ width: "17%" }} />
+              <col style={{ width: "13%" }} />
+              <col style={{ width: "13%" }} />
               <col style={{ width: "12%" }} />
               <col style={{ width: "9%" }} />
               <col style={{ width: "9%" }} />
               <col style={{ width: "10%" }} />
+              <col style={{ width: "4%" }} />
             </colgroup>
-            <thead><tr><Th>Dokument</Th><Th>Kontrahent</Th><Th>Kategoria</Th><Th>Podkategoria</Th><Th>Okres</Th><Th align="right">Netto CFO</Th><Th align="right">Brutto cash flow</Th><Th>Rozliczenie CF</Th></tr></thead>
+            <thead><tr><Th>Dokument</Th><Th>Kontrahent</Th><Th>Kategoria</Th><Th>Podkategoria</Th><Th>Okres</Th><Th align="right">Netto CFO</Th><Th align="right">Brutto cash flow</Th><Th>Rozliczenie CF</Th><Th align="right"><span aria-hidden="true"> </span></Th></tr></thead>
             <tbody>
-              {visibleCosts.length === 0 ? <EmptyRow colSpan={8} text={costs.length === 0 ? "Brak kosztów w tym okresie." : "Brak kosztów pasujących do wyszukiwania."} /> : visibleCosts.map((cost) => {
+              {visibleCosts.length === 0 ? <EmptyRow colSpan={9} text={costs.length === 0 ? "Brak kosztów w tym okresie." : "Brak kosztów pasujących do wyszukiwania."} /> : visibleCosts.map((cost) => {
                 const rowSubcategoryOptions = SUBCATEGORIES[cost.kategoria].map((item) => ({ value: item, label: item }));
                 const isInterperiod = expandedCostPeriods[cost.id] || !isFullMonthPeriod(cost.okres_start, cost.okres_end);
                 const paid = costPaymentMap.get(cost.id) || 0;
@@ -791,6 +808,11 @@ function renderCostSection(
                       </span>
                     </Td>
                     <Td><CostPaymentStatus cost={cost} paid={paid} compact /></Td>
+                    <Td align="right">
+                      <button type="button" style={iconDangerButtonStyle} onClick={() => void removeCost(cost, paid)} title="UsuĹ„ koszt" aria-label="UsuĹ„ koszt">
+                        <Trash2 size={17} />
+                      </button>
+                    </Td>
                   </tr>
                 );
               })}
@@ -2278,6 +2300,7 @@ const currencySuffixStyle: CSSProperties = { color: colors.navy, fontWeight: 850
 const splitCostSelectStyle: CSSProperties = { ...compactSelectStyle, width: "100%", minWidth: 0 };
 const smallActionButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.navy, fontWeight: 900, padding: "8px 12px", cursor: "pointer" };
 const smallGhostButtonStyle: CSSProperties = { ...smallActionButtonStyle, color: colors.red };
+const iconDangerButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: "12px", background: colors.white, color: colors.red, width: "38px", minWidth: "38px", height: "38px", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer" };
 const uploadBoxStyle: CSSProperties = { border: `1px dashed ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, cursor: "pointer", padding: "18px", color: colors.text, display: "grid", gap: "8px", justifyItems: "start" };
 const manualFormStyle: CSSProperties = { display: "grid", gap: "10px", marginTop: "14px", maxWidth: "1120px" };
 const manualTopRowStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(230px, 1.4fr) minmax(200px, 1fr) minmax(180px, 0.8fr)", gap: "10px", alignItems: "start" };

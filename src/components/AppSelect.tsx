@@ -7,7 +7,7 @@ import { colors, radius, shadow } from "@/app/design";
 type SelectOption = {
   value: string;
   label: string;
-  tone?: "success";
+  tone?: "success" | "warning";
 };
 
 type MenuPosition = {
@@ -41,7 +41,7 @@ export default function AppSelect({
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const selected = options.find((option) => option.value === value) || options[0];
-  const selectedToneStyle = selected?.tone === "success" ? successTextStyle : null;
+  const selectedToneStyle = optionToneStyle(selected?.tone);
   const normalizedQuery = normalizeSelectText(query);
   const visibleOptions = normalizedQuery
     ? sortSearchOptions(options.filter((option) => normalizeSelectText(option.label).includes(normalizedQuery)))
@@ -125,7 +125,7 @@ export default function AppSelect({
               <button
                 key={option.value}
                 type="button"
-                style={{ ...(isSelected ? selectedOptionStyle : optionStyle), ...(option.tone === "success" ? successTextStyle : null) }}
+                style={{ ...(isSelected ? selectedOptionStyle : optionStyle), ...optionToneStyle(option.tone) }}
                 onClick={() => {
                   onChange(option.value);
                   setQuery("");
@@ -151,7 +151,13 @@ function sortSearchOptions(options: readonly SelectOption[]) {
 }
 
 function optionSearchRank(option: SelectOption) {
-  return option.tone === "success" ? 1 : 0;
+  return option.tone === "success" || option.tone === "warning" ? 1 : 0;
+}
+
+function optionToneStyle(tone: SelectOption["tone"]) {
+  if (tone === "success") return successTextStyle;
+  if (tone === "warning") return warningTextStyle;
+  return null;
 }
 
 const selectButtonStyle: CSSProperties = {
@@ -239,4 +245,8 @@ const selectedOptionStyle: CSSProperties = {
 
 const successTextStyle: CSSProperties = {
   color: colors.success,
+};
+
+const warningTextStyle: CSSProperties = {
+  color: colors.warning,
 };

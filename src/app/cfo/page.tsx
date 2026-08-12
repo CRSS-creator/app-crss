@@ -655,6 +655,7 @@ function renderCostSection(
   const subcategoryOptions = manualCost.kategoria ? SUBCATEGORIES[manualCost.kategoria].map((item) => ({ value: item, label: item })) : [];
   const hasSubcategories = subcategoryOptions.length > 0;
   const costPaymentMap = buildCostPaymentMap(transactions);
+  const currentTransactionIds = new Set(transactions.map((transaction) => transaction.id));
   const visibleCosts = filterCosts(costs, search);
 
   async function changeCost(cost: CfoCostItem, payload: Partial<CfoCostItem>) {
@@ -755,7 +756,7 @@ function renderCostSection(
               {visibleCosts.length === 0 ? <EmptyRow colSpan={9} text={costs.length === 0 ? "Brak kosztów w tym okresie." : "Brak kosztów pasujących do wyszukiwania."} /> : visibleCosts.map((cost) => {
                 const rowSubcategoryOptions = SUBCATEGORIES[cost.kategoria].map((item) => ({ value: item, label: item }));
                 const isInterperiod = expandedCostPeriods[cost.id] || !isFullMonthPeriod(cost.okres_start, cost.okres_end);
-                const paid = costPaymentMap.get(cost.id) || 0;
+                const paid = costPaidValue(cost, currentTransactionIds) + (costPaymentMap.get(cost.id) || 0);
                 const paymentState = costPaymentState(cost, paid);
                 const settlementStyle = paymentState === "settled" ? settledTextStyle : paymentState === "overpaid" ? overpaidTextStyle : null;
                 const settlementSmallStyle = paymentState === "settled" ? settledSmallStyle : paymentState === "overpaid" ? overpaidSmallStyle : smallStyle;
@@ -846,7 +847,7 @@ function renderCashflowSection(
     ...costs.filter((cost) => !cost.ignoruj).map((cost) => ({
       value: cost.id,
       label: costOptionLabel(cost),
-      tone: costPaymentState(cost, costPaidValue(cost, currentTransactionIds) + (costPaymentMap.get(cost.id) || 0)) === "settled" ? "success" as const : undefined,
+      tone: costOptionTone(cost, costPaidValue(cost, currentTransactionIds) + (costPaymentMap.get(cost.id) || 0)),
     })),
   ];
   const splitCostOptions = [
@@ -854,7 +855,7 @@ function renderCashflowSection(
     ...costs.filter((cost) => !cost.ignoruj).map((cost) => ({
       value: cost.id,
       label: costOptionLabel(cost),
-      tone: costPaymentState(cost, costPaidValue(cost, currentTransactionIds) + (costPaymentMap.get(cost.id) || 0)) === "settled" ? "success" as const : undefined,
+      tone: costOptionTone(cost, costPaidValue(cost, currentTransactionIds) + (costPaymentMap.get(cost.id) || 0)),
     })),
   ];
   const invoiceOptions = [
@@ -1525,6 +1526,13 @@ function costPaymentState(cost: CfoCostItem, paid: number): "none" | "partial" |
   const remaining = gross - paid;
   if (Math.abs(remaining) <= 0.01) return "settled";
   return remaining < 0 ? "overpaid" : "partial";
+}
+
+function costOptionTone(cost: CfoCostItem, paid: number): "success" | "warning" | undefined {
+  const state = costPaymentState(cost, paid);
+  if (state === "settled") return "success";
+  if (state === "overpaid") return "warning";
+  return undefined;
 }
 
 function costPaidValue(cost: CfoCostItem, excludeTransactionIds = new Set<string>()) {

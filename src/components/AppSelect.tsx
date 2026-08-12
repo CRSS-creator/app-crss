@@ -44,7 +44,7 @@ export default function AppSelect({
   const selectedToneStyle = selected?.tone === "success" ? successTextStyle : null;
   const normalizedQuery = normalizeSelectText(query);
   const visibleOptions = normalizedQuery
-    ? options.filter((option) => normalizeSelectText(option.label).includes(normalizedQuery))
+    ? sortSearchOptions(options.filter((option) => normalizeSelectText(option.label).includes(normalizedQuery)))
     : options;
 
   useEffect(() => {
@@ -144,6 +144,14 @@ export default function AppSelect({
 
 function normalizeSelectText(value: string) {
   return value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace("ł", "l");
+}
+
+function sortSearchOptions(options: readonly SelectOption[]) {
+  return [...options].sort((first, second) => optionSearchRank(first) - optionSearchRank(second));
+}
+
+function optionSearchRank(option: SelectOption) {
+  return option.tone === "success" ? 1 : 0;
 }
 
 const selectButtonStyle: CSSProperties = {

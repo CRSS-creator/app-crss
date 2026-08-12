@@ -1369,9 +1369,17 @@ function filterRevenueLinesForRange(lines: CfoInvoiceLine[], from: string, to: s
 }
 
 function revenueLineEffectivePeriod(line: CfoInvoiceLine) {
+  const settlementPeriod = revenueLineSettlementPeriod(line);
+  if (settlementPeriod) return monthToDate(settlementPeriod);
   const periodFromName = revenueLinePeriodFromName(line.nazwa);
   if (periodFromName) return monthToDate(periodFromName);
   return invoiceParent(line)?.okres || monthToDate(currentMonthInput());
+}
+
+function revenueLineSettlementPeriod(line: CfoInvoiceLine) {
+  const fee = Array.isArray(line.rozliczenia_oplaty_dodatkowe) ? line.rozliczenia_oplaty_dodatkowe[0] : line.rozliczenia_oplaty_dodatkowe;
+  const settlement = Array.isArray(fee?.rozliczenia_miesieczne) ? fee?.rozliczenia_miesieczne[0] : fee?.rozliczenia_miesieczne;
+  return settlement?.okres?.slice(0, 7) || null;
 }
 
 function revenueLinePeriodFromName(name: string) {

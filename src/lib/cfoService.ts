@@ -27,7 +27,15 @@ export type CfoInvoiceLine = {
   nazwa: string;
   kwota_netto: number;
   cfo_przychod_kategoria: CfoRevenueCategory | null;
+  rozliczenie_oplata_id: string | null;
+  rozliczenia_oplaty_dodatkowe?: CfoInvoiceAdditionalFee | CfoInvoiceAdditionalFee[] | null;
   faktury?: CfoInvoiceParent | CfoInvoiceParent[] | null;
+};
+
+export type CfoInvoiceAdditionalFee = {
+  id: string;
+  rozliczenie_id: string | null;
+  rozliczenia_miesieczne?: { okres: string | null } | { okres: string | null }[] | null;
 };
 
 export type CfoInvoiceParent = {
@@ -186,6 +194,14 @@ const INVOICE_LINE_SELECT = `
   nazwa,
   kwota_netto,
   cfo_przychod_kategoria,
+  rozliczenie_oplata_id,
+  rozliczenia_oplaty_dodatkowe:faktury_pozycje_rozliczenie_oplata_id_fkey (
+    id,
+    rozliczenie_id,
+    rozliczenia_miesieczne:rozliczenia_oplaty_dodatkowe_rozliczenie_id_fkey (
+      okres
+    )
+  ),
   faktury!inner (
     id,
     numer,

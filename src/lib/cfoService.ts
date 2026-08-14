@@ -21,6 +21,7 @@ export type CfoBankTransactionType =
   | "transfer_wewnetrzny"
   | "ignoruj"
   | "inne";
+export type CfoPaymentSplitType = CfoBankTransactionType | "poza_kosztem_cfo";
 
 export type CfoInvoiceLine = {
   id: string;
@@ -160,6 +161,7 @@ export type CfoPaymentSplit = {
   id: string;
   transakcja_id: string;
   koszt_id: string | null;
+  typ: CfoPaymentSplitType;
   opis: string | null;
   kwota: number;
   poza_kosztem_cfo: boolean;
@@ -253,6 +255,7 @@ const BANK_TRANSACTION_SELECT = `
     id,
     transakcja_id,
     koszt_id,
+    typ,
     opis,
     kwota,
     poza_kosztem_cfo
@@ -271,6 +274,7 @@ const COST_SELECT = `
     id,
     transakcja_id,
     koszt_id,
+    typ,
     opis,
     kwota,
     poza_kosztem_cfo,

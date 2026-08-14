@@ -1,4 +1,4 @@
-export type UserRole = "owner" | "manager" | "admin" | "accountant" | string;
+export type UserRole = "owner" | "manager" | "admin" | "accountant" | "handlowiec" | string;
 
 export type AppModule =
   | "dashboard"
@@ -21,6 +21,7 @@ export type AppModule =
   | "uzytkownicy";
 
 const accountingRoles = ["accountant", "opiekun_ksiegowy", "ksiegowy"];
+const salesRoles = ["handlowiec"];
 
 const moduleAccess: Record<AppModule, string[]> = {
   dashboard: ["owner", "manager", "admin", ...accountingRoles],
@@ -33,10 +34,10 @@ const moduleAccess: Record<AppModule, string[]> = {
   limity: ["owner", "manager", "admin", ...accountingRoles],
   onboarding: ["owner", "manager", "admin", ...accountingRoles],
   "zamykanie-roku": ["owner", "manager", "admin"],
-  crm: ["owner", "admin"],
+  crm: ["owner", "admin", ...salesRoles],
   umowy: ["owner", "admin"],
   faktury: ["owner", "admin"],
-  cso: ["owner", "admin"],
+  cso: ["owner", "admin", ...salesRoles],
   cfo: ["owner"],
   aml: ["owner", "manager", "admin"],
   rodo: ["owner", "manager", "admin"],

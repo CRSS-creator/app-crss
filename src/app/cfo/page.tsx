@@ -923,6 +923,7 @@ function renderCashflowSection(
     await changeTransaction(transaction, {
       rozbita: enabled,
       koszt_id: enabled ? null : transaction.koszt_id,
+      faktura_id: enabled ? null : transaction.faktura_id,
       dopasowanie_status: enabled ? "reczne" : transaction.dopasowanie_status,
     });
   }
@@ -930,10 +931,12 @@ function renderCashflowSection(
   async function addPaymentSplit(transaction: CfoBankTransaction) {
     const splits = paymentSplits(transaction);
     const remaining = Math.max(0, Math.abs(Number(transaction.kwota || 0)) - sum(splits.map((split) => Number(split.kwota || 0))));
+    const isRevenue = transaction.typ === "faktura_sprzedazowa" || transaction.kwota > 0;
     const result = await insertPaymentSplit({
       transakcja_id: transaction.id,
       koszt_id: null,
-      typ: "koszt",
+      faktura_id: null,
+      typ: isRevenue ? "faktura_sprzedazowa" : "koszt",
       opis: null,
       kwota: remaining,
       poza_kosztem_cfo: false,
@@ -958,6 +961,7 @@ function renderCashflowSection(
     await changePaymentSplit(transaction, split, {
       typ,
       koszt_id: typ === "koszt" ? split.koszt_id : null,
+      faktura_id: typ === "faktura_sprzedazowa" ? split.faktura_id : null,
       poza_kosztem_cfo: typ === "poza_kosztem_cfo",
       opis: typ === "poza_kosztem_cfo" ? "Poza kosztem CFO" : null,
     });
@@ -1008,7 +1012,7 @@ function renderCashflowSection(
               {visibleTransactions.length === 0 ? <EmptyRow colSpan={7} text={transactions.length === 0 ? "Brak transakcji w tym okresie." : "Brak transakcji pasujących do wyszukiwania."} /> : visibleTransactions.map((transaction) => {
                 const linkMode = transaction.typ === "faktura_sprzedazowa" || (transaction.typ !== "koszt" && transaction.kwota > 0) ? "invoice" : "cost";
                 const splits = paymentSplits(transaction);
-                const isSplitMode = linkMode === "cost" && transaction.rozbita;
+                const isSplitMode = transaction.rozbita;
                 return (
                   <Fragment key={transaction.id}>
                     <tr style={bankTransactionRowStyle(transaction)}>
@@ -1038,15 +1042,23 @@ function renderCashflowSection(
                               ) : <span style={smallStyle}>Rozliczenie w liniach poniżej</span>}
                             </>
                           ) : (
-                            <AppSelect
-                              value={transaction.faktura_id || ""}
-                              options={invoiceOptions}
-                              onChange={(value) => void assignInvoice(transaction, value)}
-                              searchable
-                              searchPlaceholder="Szukaj faktury..."
-                              style={costLinkSelectStyle}
-                              menuStyle={costLinkMenuStyle}
-                            />
+                            <>
+                              <label style={inlineCheckboxStyle}>
+                                <input type="checkbox" checked={transaction.rozbita} onChange={(event) => void toggleSplitPayment(transaction, event.target.checked)} />
+                                Rozbij płatność
+                              </label>
+                              {!isSplitMode ? (
+                                <AppSelect
+                                  value={transaction.faktura_id || ""}
+                                  options={invoiceOptions}
+                                  onChange={(value) => void assignInvoice(transaction, value)}
+                                  searchable
+                                  searchPlaceholder="Szukaj faktury..."
+                                  style={costLinkSelectStyle}
+                                  menuStyle={costLinkMenuStyle}
+                                />
+                              ) : <span style={smallStyle}>Rozliczenie w liniach poniżej</span>}
+                            </>
                           )}
                         </div>
                       </Td>
@@ -1087,11 +1099,28 @@ function renderCashflowSection(
                                     onChange={(value) => void changePaymentSplit(transaction, split, {
                                       typ: "koszt",
                                       koszt_id: value || null,
+                                      faktura_id: null,
                                       poza_kosztem_cfo: false,
                                       opis: null,
                                     })}
                                     searchable
                                     searchPlaceholder="Szukaj kosztu..."
+                                    style={splitCostSelectStyle}
+                                    menuStyle={costLinkMenuStyle}
+                                  />
+                                ) : split.typ === "faktura_sprzedazowa" ? (
+                                  <AppSelect
+                                    value={split.faktura_id || ""}
+                                    options={invoiceOptions}
+                                    onChange={(value) => void changePaymentSplit(transaction, split, {
+                                      typ: "faktura_sprzedazowa",
+                                      koszt_id: null,
+                                      faktura_id: value || null,
+                                      poza_kosztem_cfo: false,
+                                      opis: null,
+                                    })}
+                                    searchable
+                                    searchPlaceholder="Szukaj faktury..."
                                     style={splitCostSelectStyle}
                                     menuStyle={costLinkMenuStyle}
                                   />
@@ -1550,6 +1579,15 @@ function buildCostPaymentMap(transactions: CfoBankTransaction[]) {
 function buildInvoicePaymentMap(transactions: CfoBankTransaction[]) {
   const byInvoice = new Map<string, number>();
   transactions.forEach((transaction) => {
+    if (transaction.ignoruj) return;
+    const splits = paymentSplits(transaction);
+    if (splits.length > 0 || transaction.rozbita) {
+      splits.forEach((split) => {
+        if (!split.faktura_id || split.poza_kosztem_cfo || split.typ !== "faktura_sprzedazowa") return;
+        byInvoice.set(split.faktura_id, (byInvoice.get(split.faktura_id) || 0) + Number(split.kwota || 0));
+      });
+      return;
+    }
     if (!transaction.faktura_id || transaction.ignoruj || transaction.typ !== "faktura_sprzedazowa") return;
     const paid = Math.abs(Number(transaction.kwota || 0));
     byInvoice.set(transaction.faktura_id, (byInvoice.get(transaction.faktura_id) || 0) + paid);
@@ -1598,10 +1636,20 @@ function isInvoiceSettled(invoice: CfoCashflowInvoice, paid: number) {
 function invoicePaidValue(invoice: CfoCashflowInvoice, excludeTransactionIds = new Set<string>()) {
   const rows = invoice.cfo_transakcje_bankowe || [];
   const transactions = Array.isArray(rows) ? rows : [rows].filter(Boolean);
-  return transactions.reduce((sum, transaction) => {
+  const directPaid = transactions.reduce((sum, transaction) => {
     if (!transaction || excludeTransactionIds.has(transaction.id) || transaction.ignoruj || transaction.typ !== "faktura_sprzedazowa") return sum;
     return sum + Math.abs(Number(transaction.kwota || 0));
   }, 0);
+
+  const splitRows = invoice.cfo_rozbicia_platnosci || [];
+  const splitPaid = (Array.isArray(splitRows) ? splitRows : [splitRows].filter(Boolean)).reduce((sum, split) => {
+    const transaction = split ? splitParentTransaction(split) : null;
+    if (!split || split.poza_kosztem_cfo || split.typ !== "faktura_sprzedazowa" || !split.faktura_id) return sum;
+    if (transaction && (excludeTransactionIds.has(transaction.id) || transaction.ignoruj)) return sum;
+    return sum + Number(split.kwota || 0);
+  }, 0);
+
+  return directPaid + splitPaid;
 }
 
 function paymentSplits(transaction: CfoBankTransaction) {
@@ -1638,7 +1686,11 @@ function filterBankTransactions(transactions: CfoBankTransaction[], search: stri
 
   return transactions.filter((transaction) => {
     const splitLabels = paymentSplits(transaction)
-      .map((split) => [paymentSplitTypeLabel(split.typ), split.koszt_id ? costLabels.get(split.koszt_id) : null].filter(Boolean).join(" "))
+      .map((split) => [
+        paymentSplitTypeLabel(split.typ),
+        split.koszt_id ? costLabels.get(split.koszt_id) : null,
+        split.faktura_id ? invoiceLabels.get(split.faktura_id) : null,
+      ].filter(Boolean).join(" "))
       .join(" ");
     return normalizeSearchValue([
       formatDate(transaction.data_ksiegowania),

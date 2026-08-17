@@ -66,6 +66,7 @@ export type CfoCashflowInvoice = {
     typ: CfoBankTransactionType;
     ignoruj: boolean;
   }[] | null;
+  cfo_rozbicia_platnosci?: CfoPaymentSplit[] | null;
 };
 
 export type CfoCostItem = {
@@ -161,6 +162,7 @@ export type CfoPaymentSplit = {
   id: string;
   transakcja_id: string;
   koszt_id: string | null;
+  faktura_id: string | null;
   typ: CfoPaymentSplitType;
   opis: string | null;
   kwota: number;
@@ -255,6 +257,7 @@ const BANK_TRANSACTION_SELECT = `
     id,
     transakcja_id,
     koszt_id,
+    faktura_id,
     typ,
     opis,
     kwota,
@@ -336,6 +339,21 @@ export async function fetchCfoCashflowInvoices(period: string) {
         kwota,
         typ,
         ignoruj
+      ),
+      cfo_rozbicia_platnosci:cfo_rozbicia_platnosci_faktura_id_fkey (
+        id,
+        transakcja_id,
+        koszt_id,
+        faktura_id,
+        typ,
+        opis,
+        kwota,
+        poza_kosztem_cfo,
+        cfo_transakcje_bankowe:cfo_rozbicia_platnosci_transakcja_id_fkey (
+          id,
+          typ,
+          ignoruj
+        )
       )
     `)
     .eq("typ", "sprzedaz")

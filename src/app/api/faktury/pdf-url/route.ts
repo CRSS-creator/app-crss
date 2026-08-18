@@ -38,9 +38,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Ta faktura nie ma jeszcze pobranego PDF." }, { status: 404 });
   }
 
+  const fileName = cleanTechnicalPdfName(invoice.wfirma_pdf_name || invoice.wfirma_pdf_path) || "faktura.pdf";
   const signedUrl = await auth.admin.storage
     .from(INVOICE_PDF_BUCKET)
-    .createSignedUrl(invoice.wfirma_pdf_path, 10 * 60);
+    .createSignedUrl(invoice.wfirma_pdf_path, 10 * 60, {
+      download: fileName,
+    });
 
   if (signedUrl.error || !signedUrl.data?.signedUrl) {
     return NextResponse.json({ error: "Nie udało się otworzyć PDF faktury." }, { status: 500 });
@@ -48,6 +51,12 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({
     url: signedUrl.data.signedUrl,
-    name: invoice.wfirma_pdf_name || "faktura.pdf",
+    name: fileName,
   });
+}
+
+function cleanTechnicalPdfName(value: string | null | undefined) {
+  if (!value) return "";
+  const fileName = value.split("/").pop() || value;
+  return fileName.replace(/^\d{10,}-/, "");
 }

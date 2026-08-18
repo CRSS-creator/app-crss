@@ -259,7 +259,7 @@ async function saveWfirmaInvoicePdf(params: {
   try {
     const pdf = await downloadWfirmaInvoicePdf(params.config, params.wfirmaId);
     const name = buildInvoicePdfName(params.invoiceNumber, params.wfirmaId);
-    const path = `${params.invoiceId}/${Date.now()}-${name}`;
+    const path = `${params.invoiceId}/${name}`;
     const upload = await params.admin.storage.from(INVOICE_PDF_BUCKET).upload(path, pdf, {
       contentType: "application/pdf",
       upsert: true,

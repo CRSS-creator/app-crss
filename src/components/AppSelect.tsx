@@ -14,6 +14,7 @@ type MenuPosition = {
   top: number;
   left: number;
   width: number;
+  maxHeight: number;
 };
 
 export default function AppSelect({
@@ -53,7 +54,22 @@ export default function AppSelect({
     function placeMenu() {
       const rect = buttonRef.current?.getBoundingClientRect();
       if (!rect) return;
-      setPosition({ top: rect.bottom + 6, left: rect.left, width: rect.width });
+      const gap = 6;
+      const viewportMargin = 12;
+      const preferredMaxHeight = 290;
+      const minimumUsefulHeight = 160;
+      const belowSpace = window.innerHeight - rect.bottom - viewportMargin - gap;
+      const aboveSpace = rect.top - viewportMargin - gap;
+      const openUp = belowSpace < minimumUsefulHeight && aboveSpace > belowSpace;
+      const availableHeight = Math.max(minimumUsefulHeight, openUp ? aboveSpace : belowSpace);
+      const maxHeight = Math.min(preferredMaxHeight, availableHeight);
+
+      setPosition({
+        top: openUp ? Math.max(viewportMargin, rect.top - gap - maxHeight) : rect.bottom + gap,
+        left: rect.left,
+        width: rect.width,
+        maxHeight,
+      });
     }
 
     function closeOnOutside(event: MouseEvent) {
@@ -99,6 +115,7 @@ export default function AppSelect({
             top: position.top,
             left: position.left,
             width: Math.max(position.width, 220),
+            maxHeight: position.maxHeight,
             ...menuStyle,
           }}
         >

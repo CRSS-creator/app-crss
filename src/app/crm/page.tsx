@@ -317,7 +317,6 @@ function CrmContent() {
               <StatTile label="Śr. MRR na szansę" value={formatMoney(crmStats.averageMrrPerLead)} hint={`${crmStats.totalCount} szans w okresie`} />
               <StatTile label="Potencjał aktywny" value={formatMoney(crmStats.activeMrr)} hint={`${crmStats.activeCount} otwartych szans`} />
               <StatTile label="MRR utracony" value={formatMoney(crmStats.lostMrr)} hint={`${crmStats.lostCount} przegranych szans`} />
-              <StatTile label="Kadry w szansach" value={formatPercent(crmStats.payrollShare)} hint={`${crmStats.payrollCount} z ${crmStats.totalCount} szans`} />
             </div>
             <div style={stageTimingGridStyle}>
               {crmStats.stageTimingRows.map((row) => (
@@ -708,7 +707,6 @@ function buildCrmStats(leads: Lead[], period: CrmStatsPeriod, selectedMonth: str
   const lostMrr = sumMrr(lostLeads);
   const closedMrr = wonMrr + lostMrr;
   const activeMrr = sumMrr(activeLeads);
-  const payrollCount = periodLeads.filter((lead) => Boolean(lead.czy_kadry)).length;
   const followUpCount = activeLeads.filter((lead) => Boolean(lead.data_follow_up)).length;
   const averageMonthsCount = countMonthsFromFirstLead(periodLeads);
   const fullCycleDurations = periodLeads
@@ -769,8 +767,6 @@ function buildCrmStats(leads: Lead[], period: CrmStatsPeriod, selectedMonth: str
     wonMrr,
     lostMrr,
     closedMrr,
-    payrollCount,
-    payrollShare: totalCount ? Math.round((payrollCount / totalCount) * 100) : 0,
     followUpCount,
     periodLabel: label,
     stageTimingRows,

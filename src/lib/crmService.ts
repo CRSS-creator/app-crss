@@ -30,6 +30,13 @@ export async function updateCrmTaskStatus(
     .eq("id", taskId);
 }
 
+export async function deleteCrmTask(taskId: string) {
+  return supabase
+    .from("crm_zadania")
+    .delete()
+    .eq("id", taskId);
+}
+
 export async function createCrmTasks(
   tasks: {
     crm_id: string;

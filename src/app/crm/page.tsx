@@ -10,6 +10,7 @@ import { colors, radius, shadow } from "@/app/design";
 import { normalizeContactList } from "@/lib/contactFields";
 import { supabase } from "@/lib/supabaseClient";
 import {
+  deleteCrmTask,
   deleteCrmLead,
   fetchCrmLeads,
   fetchCrmTasks,
@@ -23,7 +24,7 @@ import {
   uploadCrmDocument,
   type CrmDocument,
 } from "@/lib/crmDocumentsService";
-import { X } from "lucide-react";
+import { Trash2, X } from "lucide-react";
 
 type Lead = {
   id: string;
@@ -95,13 +96,14 @@ type CrmTask = {
 type CrmStatsPeriod = "all" | "month" | "year";
 
 const EMPTY_FILTER = "Wszystkie";
-const PIPELINE_STAGES = ["nowy_lead", "kontakt_proba_kontaktu", "rozmowa_online", "propozycja_wspolpracy_wyslana", "decyzja"];
+const PIPELINE_STAGES = ["nowy_lead", "rozmowa_online", "propozycja_wspolpracy_wyslana", "decyzja", "finalizacja_podpisanie_umowy"];
 const PIPELINE_LABELS: Record<string, string> = {
-  nowy_lead: "Nowy lead",
-  kontakt_proba_kontaktu: "Kontakt / próba kontaktu",
+  nowy_lead: "Nowy lead (kwalifikowany)",
   rozmowa_online: "Rozmowa online",
-  propozycja_wspolpracy_wyslana: "Propozycja współpracy wysłana",
-  decyzja: "Decyzja",
+  propozycja_wspolpracy_wyslana: "Propozycja współpracy",
+  decyzja: "Decyzja / klient zaakceptował ofertę",
+  finalizacja_podpisanie_umowy: "Finalizacja / podpisanie umowy",
+  kontakt_proba_kontaktu: "Nowy lead (kwalifikowany)",
 };
 const STATUSES = [
   { value: "otwarta", label: "Otwarta" },
@@ -154,8 +156,11 @@ function CrmContent() {
     if (!leadId) return;
     const leadToOpen = leads.find((lead) => lead.id === leadId);
     if (leadToOpen) {
-      setSelectedLead(leadToOpen);
-      setOpenedLeadFromUrl(true);
+      const timeoutId = window.setTimeout(() => {
+        setSelectedLead(leadToOpen);
+        setOpenedLeadFromUrl(true);
+      }, 0);
+      return () => window.clearTimeout(timeoutId);
     }
   }, [leads, loading, openedLeadFromUrl, selectedLead]);
 
@@ -198,6 +203,20 @@ function CrmContent() {
       console.error("Błąd zmiany statusu zadania CRM:", error);
       setTasks((current) => current.map((task) => task.id === taskId ? currentTask : task));
       alert("Nie udało się zmienić statusu zadania.");
+    }
+  }
+
+  async function removeTask(task: CrmTask) {
+    const confirmed = window.confirm(`Usunąć zadanie "${task.tytul}" tylko z tej szansy sprzedaży?`);
+    if (!confirmed) return;
+
+    const previousTasks = tasks;
+    setTasks((current) => current.filter((item) => item.id !== task.id));
+    const { error } = await deleteCrmTask(task.id);
+    if (error) {
+      console.error("Błąd usuwania zadania CRM:", error);
+      setTasks(previousTasks);
+      alert("Nie udało się usunąć zadania.");
     }
   }
 
@@ -393,12 +412,12 @@ function CrmContent() {
       </section>
 
       {creatingLead && <LeadDrawer mode="create" tasks={[]} onClose={() => setCreatingLead(false)} onCreated={(lead) => { setLeads((current) => [lead, ...current]); setCreatingLead(false); void loadInitialData(); }} />}
-      {selectedLead && <LeadDrawer mode="edit" lead={selectedLead} tasks={tasks.filter((task) => task.crm_id === selectedLead.id)} onClose={() => setSelectedLead(null)} onSaved={(lead) => { setLeads((current) => current.map((item) => item.id === lead.id ? lead : item)); setSelectedLead(lead); void loadInitialData(); }} onDeleted={removeLead} onToggleTaskStatus={toggleTaskStatus} />}
+      {selectedLead && <LeadDrawer mode="edit" lead={selectedLead} tasks={tasks.filter((task) => task.crm_id === selectedLead.id)} onClose={() => setSelectedLead(null)} onSaved={(lead) => { setLeads((current) => current.map((item) => item.id === lead.id ? lead : item)); setSelectedLead(lead); void loadInitialData(); }} onDeleted={removeLead} onToggleTaskStatus={toggleTaskStatus} onDeleteTask={removeTask} />}
     </>
   );
 }
 
-function LeadDrawer({ mode, lead, tasks, onClose, onCreated, onSaved, onDeleted, onToggleTaskStatus }: { mode: "create" | "edit"; lead?: Lead; tasks: CrmTask[]; onClose: () => void; onCreated?: (lead: Lead) => void; onSaved?: (lead: Lead) => void; onDeleted?: (lead: Lead) => Promise<boolean>; onToggleTaskStatus?: (taskId: string) => void | Promise<void>; }) {
+function LeadDrawer({ mode, lead, tasks, onClose, onCreated, onSaved, onDeleted, onToggleTaskStatus, onDeleteTask }: { mode: "create" | "edit"; lead?: Lead; tasks: CrmTask[]; onClose: () => void; onCreated?: (lead: Lead) => void; onSaved?: (lead: Lead) => void; onDeleted?: (lead: Lead) => Promise<boolean>; onToggleTaskStatus?: (taskId: string) => void | Promise<void>; onDeleteTask?: (task: CrmTask) => void | Promise<void>; }) {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [draft, setDraft] = useState<LeadDraft>(() => lead ? createDraft(lead) : createEmptyDraft());
@@ -545,7 +564,12 @@ function LeadDrawer({ mode, lead, tasks, onClose, onCreated, onSaved, onDeleted,
                         <div style={{ ...taskMetaStyle, color: isDone ? "#059669" : "#475569" }}>{PIPELINE_LABELS[task.etap] || task.etap}{task.termin ? ` · termin: ${task.termin}` : ""}</div>
                       </div>
                     </label>
-                    <button type="button" onClick={() => onToggleTaskStatus?.(task.id)} style={{ ...taskStatusButtonStyle, background: isDone ? "#bbf7d0" : "#e2e8f0", color: isDone ? "#047857" : "#0f172a" }}>{isDone ? "Zrobione" : "Do zrobienia"}</button>
+                    <div style={taskActionsStyle}>
+                      <button type="button" onClick={() => onToggleTaskStatus?.(task.id)} style={{ ...taskStatusButtonStyle, background: isDone ? "#bbf7d0" : "#e2e8f0", color: isDone ? "#047857" : "#0f172a" }}>{isDone ? "Zrobione" : "Do zrobienia"}</button>
+                      <button type="button" onClick={() => onDeleteTask?.(task)} style={taskDeleteButtonStyle} aria-label={`Usuń zadanie ${task.tytul}`} title="Usuń zadanie">
+                        <Trash2 size={17} />
+                      </button>
+                    </div>
                   </div>
                 );
               })}
@@ -871,7 +895,9 @@ const taskCheckLabelStyle: React.CSSProperties = { display: "flex", alignItems: 
 const taskCheckboxStyle: React.CSSProperties = { width: 18, height: 18, marginTop: 4, cursor: "pointer" };
 const taskTitleStyle: React.CSSProperties = { fontWeight: 850, color: colors.text, marginBottom: "5px" };
 const taskMetaStyle: React.CSSProperties = { color: colors.muted, fontSize: "13px", fontWeight: 650 };
+const taskActionsStyle: React.CSSProperties = { display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 };
 const taskStatusButtonStyle: React.CSSProperties = { width: 118, minWidth: 118, height: 44, borderRadius: 999, border: "none", cursor: "pointer", fontWeight: 800, fontSize: 13 };
+const taskDeleteButtonStyle: React.CSSProperties = { width: 44, height: 44, borderRadius: 999, border: "none", background: "rgba(220, 38, 38, 0.10)", color: colors.danger, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" };
 const offerLinkPanelStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "16px", background: colors.inputBackground, display: "flex", justifyContent: "center" };
 const proposalButtonStyle: React.CSSProperties = { ...primaryButtonStyle, minHeight: "54px", width: "100%", fontSize: "16px" };
 const fileDropzoneStyle: React.CSSProperties = { border: `1px dashed ${colors.border}`, borderRadius: radius.input, padding: "18px", background: colors.inputBackground, display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "center" };

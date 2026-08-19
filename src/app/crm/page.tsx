@@ -334,9 +334,9 @@ function CrmContent() {
                     <strong>{row.label}</strong>
                   </div>
                   <div style={funnelBarStyle}>
-                    {row.reachedCount > 0 && (
-                      <div style={{ ...funnelSegmentStyle, ...funnelPassedSegmentStyle, flexGrow: row.reachedCount }}>
-                        {row.reachedCount || ""}
+                    {row.passedCount > 0 && (
+                      <div style={{ ...funnelSegmentStyle, ...funnelPassedSegmentStyle, flexGrow: row.passedCount }}>
+                        {row.passedCount || ""}
                       </div>
                     )}
                     {row.dropCount > 0 && (
@@ -726,26 +726,22 @@ function buildCrmStats(leads: Lead[], period: CrmStatsPeriod, selectedMonth: str
   });
   const stageRows = reachedCounts.map((stageResult, index) => {
     const { stage, reachedLeads, reachedCount } = stageResult;
-    const previousReachedLeads = index === 0 ? periodLeads : reachedCounts[index - 1]?.reachedLeads || [];
-    const previousCount = previousReachedLeads.length;
-    const dropLeads = index === 0
-      ? []
-      : previousReachedLeads.filter((lead) => !reachedLeads.some((reachedLead) => reachedLead.id === lead.id));
+    const previouslyDroppedLeads = periodLeads.filter((lead) => lead.status === "przegrana" && lostStageIndex(lead) < index);
+    const dropLeads = reachedLeads.filter((lead) => lead.status === "przegrana" && lostStageIndex(lead) === index);
     const dropCount = dropLeads.length;
-    const previousDropCount = Math.max(0, totalCount - previousCount);
+    const passedCount = Math.max(0, reachedCount - dropCount);
+    const previousDropCount = previouslyDroppedLeads.length;
     const dropMrr = sumMrr(dropLeads);
     return {
       stage,
       label: PIPELINE_LABELS[stage],
-      reachedCount,
+      passedCount,
       notReachedCount: Math.max(0, totalCount - reachedCount),
       reachedRate: totalCount ? Math.round((reachedCount / totalCount) * 100) : 0,
-      stepRate: totalCount === 0 ? 0 : index === 0 ? 100 : previousCount ? Math.round((reachedCount / previousCount) * 100) : 0,
       dropCount,
       previousDropCount,
-      dropRate: previousCount ? Math.round((dropCount / previousCount) * 100) : 0,
       dropMrr,
-      reachedMrr: sumMrr(reachedLeads),
+      reachedMrr: sumMrr(reachedLeads.filter((lead) => !dropLeads.some((dropLead) => dropLead.id === lead.id))),
       notReachedMrr: Math.max(0, totalMrr - sumMrr(reachedLeads)),
     };
   });
@@ -835,6 +831,16 @@ function didReachStage(lead: Lead, stageIndex: number) {
   }
 
   return false;
+}
+
+function lostStageIndex(lead: Lead) {
+  if (lead.status !== "przegrana") return -1;
+
+  const currentStageIndex = PIPELINE_STAGES.indexOf(lead.etap || "");
+  if (currentStageIndex >= 0) return currentStageIndex;
+
+  const dates = leadStageDates(lead);
+  return findLastKnownStageIndex(dates);
 }
 
 function buildStageTimingRows(leads: Lead[]): StageTimingRow[] {

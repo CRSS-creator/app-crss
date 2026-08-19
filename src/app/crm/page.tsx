@@ -726,11 +726,15 @@ function buildCrmStats(leads: Lead[], period: CrmStatsPeriod, selectedMonth: str
   });
   const stageRows = reachedCounts.map((stageResult, index) => {
     const { stage, reachedLeads, reachedCount } = stageResult;
-    const previouslyDroppedLeads = periodLeads.filter((lead) => lead.status === "przegrana" && lostStageIndex(lead) < index);
-    const dropLeads = reachedLeads.filter((lead) => lead.status === "przegrana" && lostStageIndex(lead) === index);
+    const nextReachedLeads = reachedCounts[index + 1]?.reachedLeads || [];
+    const nextReachedIds = new Set(nextReachedLeads.map((lead) => lead.id));
+    const dropLeads = index === PIPELINE_STAGES.length - 1
+      ? []
+      : reachedLeads.filter((lead) => !nextReachedIds.has(lead.id));
     const dropCount = dropLeads.length;
-    const passedCount = Math.max(0, reachedCount - dropCount);
-    const previousDropCount = previouslyDroppedLeads.length;
+    const passedLeads = reachedLeads.filter((lead) => !dropLeads.some((dropLead) => dropLead.id === lead.id));
+    const passedCount = passedLeads.length;
+    const previousDropCount = Math.max(0, totalCount - reachedCount);
     const dropMrr = sumMrr(dropLeads);
     return {
       stage,
@@ -741,7 +745,7 @@ function buildCrmStats(leads: Lead[], period: CrmStatsPeriod, selectedMonth: str
       dropCount,
       previousDropCount,
       dropMrr,
-      reachedMrr: sumMrr(reachedLeads.filter((lead) => !dropLeads.some((dropLead) => dropLead.id === lead.id))),
+      reachedMrr: sumMrr(passedLeads),
       notReachedMrr: Math.max(0, totalMrr - sumMrr(reachedLeads)),
     };
   });
@@ -831,16 +835,6 @@ function didReachStage(lead: Lead, stageIndex: number) {
   }
 
   return false;
-}
-
-function lostStageIndex(lead: Lead) {
-  if (lead.status !== "przegrana") return -1;
-
-  const currentStageIndex = PIPELINE_STAGES.indexOf(lead.etap || "");
-  if (currentStageIndex >= 0) return currentStageIndex;
-
-  const dates = leadStageDates(lead);
-  return findLastKnownStageIndex(dates);
 }
 
 function buildStageTimingRows(leads: Lead[]): StageTimingRow[] {

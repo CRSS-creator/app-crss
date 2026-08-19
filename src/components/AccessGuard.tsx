@@ -11,11 +11,11 @@ import {
 
 type AccessGuardProps = {
   moduleName: AppModule;
-  children: ReactNode | ((role: UserRole | null) => ReactNode);
+  children: ReactNode | ((role: UserRole | null, userId: string | null) => ReactNode);
 };
 
 export default function AccessGuard({ moduleName, children }: AccessGuardProps) {
-  const { role, loading, error } = useCurrentUserRole();
+  const { role, userId, loading, error } = useCurrentUserRole();
 
   if (loading) {
     return <AccessState title="Ładowanie" description="Sprawdzamy dostęp do modułu." />;
@@ -25,7 +25,7 @@ export default function AccessGuard({ moduleName, children }: AccessGuardProps) 
     return <AccessState title="Brak dostępu" description="Nie masz uprawnień do tego modułu." />;
   }
 
-  return <>{typeof children === "function" ? children(role) : children}</>;
+  return <>{typeof children === "function" ? children(role, userId) : children}</>;
 }
 
 function AccessState({ title, description }: { title: string; description: string }) {

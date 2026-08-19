@@ -22,6 +22,7 @@ export type AppModule =
 
 const accountingRoles = ["accountant", "opiekun_ksiegowy", "ksiegowy"];
 const salesRoles = ["handlowiec"];
+const fullClientEditorUserIds = ["282ae06c-5d1f-4fe6-a5e9-8495b478c247"];
 
 const moduleAccess: Record<AppModule, string[]> = {
   dashboard: ["owner", "manager", "admin", ...accountingRoles],
@@ -54,6 +55,6 @@ export function canManageClients(role: UserRole | null) {
   return role === "owner" || role === "manager" || role === "admin";
 }
 
-export function canEditClientAdministrative(role: UserRole | null) {
-  return canManageClients(role);
+export function canEditClientAdministrative(role: UserRole | null, userId?: string | null) {
+  return canManageClients(role) || Boolean(userId && fullClientEditorUserIds.includes(userId));
 }

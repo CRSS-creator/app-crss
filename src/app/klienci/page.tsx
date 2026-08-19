@@ -239,13 +239,21 @@ export default function ClientsPage() {
   return (
     <AppLayout activePage="klienci">
       <AccessGuard moduleName="klienci">
-        {(currentRole) => <ClientsContent currentRole={currentRole} />}
+        {(currentRole, currentUserId) => (
+          <ClientsContent currentRole={currentRole} currentUserId={currentUserId} />
+        )}
       </AccessGuard>
     </AppLayout>
   );
 }
 
-function ClientsContent({ currentRole }: { currentRole: UserRole | null }) {
+function ClientsContent({
+  currentRole,
+  currentUserId,
+}: {
+  currentRole: UserRole | null;
+  currentUserId: string | null;
+}) {
   const [clients, setClients] = useState<Client[]>([]);
   const [opiekunowie, setOpiekunowie] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -519,6 +527,7 @@ return (
         <ClientDrawer
           client={selectedClient}
           role={currentRole}
+          userId={currentUserId}
           opiekunowie={opiekunowie}
           onClose={() => setSelectedClient(null)}
           onSaved={handleClientSaved}
@@ -539,12 +548,14 @@ return (
 function ClientDrawer({
   client,
   role,
+  userId,
   opiekunowie,
   onClose,
   onSaved,
 }: {
   client: Client;
   role: UserRole | null;
+  userId: string | null;
   opiekunowie: Profile[];
   onClose: () => void;
   onSaved: (client: Client) => void;
@@ -558,7 +569,7 @@ function ClientDrawer({
   const [uploadingDocument, setUploadingDocument] = useState(false);
   const [draft, setDraft] = useState<ClientDraft>(() => createDraft(client));
 
-  const canEditAdministrative = canEditClientAdministrative(role);
+  const canEditAdministrative = canEditClientAdministrative(role, userId);
   const isDraftJdg = isJdgLegalForm(draft.forma_prawna);
   const isClientJdg = isJdgLegalForm(client.forma_prawna || "");
   const amlDocuments = documents.filter(isAmlDocument);

@@ -726,11 +726,7 @@ function buildCrmStats(leads: Lead[], period: CrmStatsPeriod, selectedMonth: str
   });
   const stageRows = reachedCounts.map((stageResult, index) => {
     const { stage, reachedLeads, reachedCount } = stageResult;
-    const nextReachedLeads = reachedCounts[index + 1]?.reachedLeads || [];
-    const nextReachedIds = new Set(nextReachedLeads.map((lead) => lead.id));
-    const dropLeads = index === PIPELINE_STAGES.length - 1
-      ? []
-      : reachedLeads.filter((lead) => !nextReachedIds.has(lead.id));
+    const dropLeads = reachedLeads.filter((lead) => lead.status === "przegrana" && lostStageIndex(lead) === index);
     const dropCount = dropLeads.length;
     const passedLeads = reachedLeads.filter((lead) => !dropLeads.some((dropLead) => dropLead.id === lead.id));
     const passedCount = passedLeads.length;
@@ -825,7 +821,7 @@ function didReachStage(lead: Lead, stageIndex: number) {
     return Boolean(lead.data_telefonu || lead.data_spotkania_online || lead.data_wyslania_oferty || lead.data_follow_up || isClosed);
   }
   if (stageIndex === 2) {
-    return Boolean(lead.data_spotkania_online || lead.data_wyslania_oferty || lead.data_follow_up || isClosed);
+    return Boolean(lead.data_wyslania_oferty || lead.data_follow_up || isClosed);
   }
   if (stageIndex === 3) {
     return Boolean(lead.data_wyslania_oferty);
@@ -835,6 +831,16 @@ function didReachStage(lead: Lead, stageIndex: number) {
   }
 
   return false;
+}
+
+function lostStageIndex(lead: Lead) {
+  if (lead.status !== "przegrana") return -1;
+
+  const currentStageIndex = PIPELINE_STAGES.indexOf(lead.etap || "");
+  if (currentStageIndex >= 0) return currentStageIndex;
+
+  const dates = leadStageDates(lead);
+  return findLastKnownStageIndex(dates);
 }
 
 function buildStageTimingRows(leads: Lead[]): StageTimingRow[] {

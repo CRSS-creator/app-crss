@@ -94,6 +94,12 @@ type CrmTask = {
 };
 
 type CrmStatsPeriod = "all" | "month" | "year";
+type StageTimingRow = {
+  key: string;
+  label: string;
+  averageDays: number | null;
+  sampleCount: number;
+};
 
 const EMPTY_FILTER = "Wszystkie";
 const PIPELINE_STAGES = ["nowy_lead", "rozmowa_online", "propozycja_wspolpracy_wyslana", "decyzja", "finalizacja_podpisanie_umowy"];
@@ -120,6 +126,7 @@ const LEGAL_FORM_OPTIONS = [
 const STAGE_FILTER_OPTIONS = [{ value: EMPTY_FILTER, label: "Etap" }, ...PIPELINE_STAGES.map((stage) => ({ value: stage, label: PIPELINE_LABELS[stage] }))];
 const STATUS_FILTER_OPTIONS = [{ value: EMPTY_FILTER, label: "Status" }, ...STATUSES];
 const PAYROLL_FILTER_OPTIONS = [{ value: EMPTY_FILTER, label: "Kadry" }, { value: "Tak", label: "Tak" }, { value: "Nie", label: "Nie" }];
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 export default function CrmPage() {
   return (
@@ -145,6 +152,7 @@ function CrmContent() {
   const [openedLeadFromUrl, setOpenedLeadFromUrl] = useState(false);
   const [statsOpen, setStatsOpen] = useState(false);
   const [statsPeriod, setStatsPeriod] = useState<CrmStatsPeriod>("month");
+  const [statsMonth, setStatsMonth] = useState(currentMonthValue());
 
   useEffect(() => {
     loadInitialData();
@@ -259,8 +267,8 @@ function CrmContent() {
     const matchesSearch = !normalizedSearch || searchableText.includes(normalizedSearch);
     return matchesSearch && matchesStage && matchesStatus && matchesKadry;
   });
-  const currentMonthStats = buildCrmStats(leads, "month");
-  const crmStats = buildCrmStats(leads, statsPeriod);
+  const currentMonthStats = buildCrmStats(leads, "month", currentMonthValue());
+  const crmStats = buildCrmStats(leads, statsPeriod, statsMonth);
 
   return (
     <>
@@ -296,18 +304,25 @@ function CrmContent() {
           <div style={statsPanelStyle}>
             <div style={statsTabsStyle}>
               <button type="button" style={statsTabStyle(statsPeriod === "all")} onClick={() => setStatsPeriod("all")}>Wszystkie</button>
-              <button type="button" style={statsTabStyle(statsPeriod === "month")} onClick={() => setStatsPeriod("month")}>Ten miesiąc</button>
+              <button type="button" style={statsTabStyle(statsPeriod === "month")} onClick={() => setStatsPeriod("month")}>Miesiąc</button>
               <button type="button" style={statsTabStyle(statsPeriod === "year")} onClick={() => setStatsPeriod("year")}>Ten rok</button>
+              <input type="month" value={statsMonth} onChange={(event) => { setStatsMonth(event.target.value); setStatsPeriod("month"); }} style={statsMonthInputStyle} />
             </div>
             <div style={statsKpiGridStyle}>
               <StatTile label="Skuteczność" value={formatPercent(crmStats.successRate)} hint={`${crmStats.wonCount} wygranych / ${crmStats.closedCount} zamkniętych`} />
               <StatTile label="MRR wygrany" value={formatMoney(crmStats.wonMrr)} hint="Suma miesięcznych abonamentów z wygranych szans" />
               <StatTile label="Skuteczność kwotowa" value={formatPercent(crmStats.valueSuccessRate)} hint={`${formatMoney(crmStats.wonMrr)} z ${formatMoney(crmStats.closedMrr)} zamkniętego MRR`} />
               {statsPeriod !== "month" && <StatTile label="Śr. miesięczny MRR" value={formatMoney(crmStats.averageMonthlyWonMrr)} hint={`Wygrany MRR / ${crmStats.averageMonthsCount} mies.`} />}
+              <StatTile label="Śr. czas procesu" value={formatDuration(crmStats.averageFullCycleDays)} hint={`${crmStats.fullCycleCount} szans z dojściem do ostatniego etapu`} />
               <StatTile label="Śr. MRR na szansę" value={formatMoney(crmStats.averageMrrPerLead)} hint={`${crmStats.totalCount} szans w okresie`} />
               <StatTile label="Potencjał aktywny" value={formatMoney(crmStats.activeMrr)} hint={`${crmStats.activeCount} otwartych szans`} />
               <StatTile label="MRR utracony" value={formatMoney(crmStats.lostMrr)} hint={`${crmStats.lostCount} przegranych szans`} />
               <StatTile label="Kadry w szansach" value={formatPercent(crmStats.payrollShare)} hint={`${crmStats.payrollCount} z ${crmStats.totalCount} szans`} />
+            </div>
+            <div style={stageTimingGridStyle}>
+              {crmStats.stageTimingRows.map((row) => (
+                <StatTile key={row.key} label={row.label} value={formatDuration(row.averageDays)} hint={`${row.sampleCount} szans z kompletem dat`} />
+              ))}
             </div>
             <div style={funnelStyle}>
               <div style={funnelTopRowStyle}>
@@ -395,7 +410,7 @@ function CrmContent() {
         {loading ? <div style={emptyStyle}>Ładowanie danych...</div> : filteredLeads.length === 0 ? <div style={emptyStyle}>Brak szans sprzedaży do wyświetlenia</div> : (
           <div style={tableWrapperStyle}>
             <table style={tableStyle}>
-              <thead><tr><Th>Firma</Th><Th>Etap</Th><Th>Status</Th><Th>Kadry</Th><Th>MRR</Th><Th>Akcje</Th></tr></thead>
+              <thead><tr><Th>Firma</Th><Th>Etap</Th><Th>Status</Th><Th>Kadry</Th><Th>MRR</Th><Th>Czas w procesie</Th><Th>Akcje</Th></tr></thead>
               <tbody>{filteredLeads.map((lead) => (
                 <tr key={lead.id} style={rowStyle}>
                   <Td strong>{lead.nazwa || "—"}</Td>
@@ -403,6 +418,7 @@ function CrmContent() {
                   <Td><Badge>{statusLabel(lead.status)}</Badge></Td>
                   <Td>{lead.czy_kadry ? "Tak" : "Nie"}</Td>
                   <Td>{lead.szacowany_mrr ? `${lead.szacowany_mrr.toLocaleString("pl-PL")} zł` : "—"}</Td>
+                  <Td>{formatLeadTimingShort(lead)}</Td>
                   <Td><button style={secondaryButtonStyle} onClick={() => setSelectedLead(lead)}>Szczegóły</button></Td>
                 </tr>
               ))}</tbody>
@@ -519,6 +535,15 @@ function LeadDrawer({ mode, lead, tasks, onClose, onCreated, onSaved, onDeleted,
         </div>
 
         <div style={drawerContentStyle}>
+          {lead && (
+            <FormSection title="Czas procesu">
+              <div style={leadTimingPanelStyle}>
+                <strong>{formatLeadTimingShort(lead)}</strong>
+                <span>{formatLeadTimingDetail(lead)}</span>
+              </div>
+            </FormSection>
+          )}
+
           <FormSection title="Dane podstawowe">
             <EditableInput label="Nazwa firmy" value={draft.nazwa} onChange={(value) => updateDraft("nazwa", value)} />
             <EditableInput label="Osoba kontaktowa" value={draft.osoba_kontaktowa} onChange={(value) => updateDraft("osoba_kontaktowa", value)} />
@@ -670,8 +695,8 @@ function StatTile({ label, value, hint }: { label: string; value: string | numbe
   return <div style={statTileStyle}><span>{label}</span><strong style={statTileValueStyle}>{value}</strong><small style={statTileHintStyle}>{hint}</small></div>;
 }
 
-function buildCrmStats(leads: Lead[], period: CrmStatsPeriod) {
-  const { start, end, label } = currentStatsRange(period);
+function buildCrmStats(leads: Lead[], period: CrmStatsPeriod, selectedMonth: string) {
+  const { start, end, label } = currentStatsRange(period, selectedMonth);
   const periodLeads = start && end ? leads.filter((lead) => isDateInRange(lead.created_at, start, end)) : leads;
   const totalCount = periodLeads.length;
   const activeLeads = periodLeads.filter((lead) => lead.status === "otwarta");
@@ -686,6 +711,10 @@ function buildCrmStats(leads: Lead[], period: CrmStatsPeriod) {
   const payrollCount = periodLeads.filter((lead) => Boolean(lead.czy_kadry)).length;
   const followUpCount = activeLeads.filter((lead) => Boolean(lead.data_follow_up)).length;
   const averageMonthsCount = countMonthsFromFirstLead(periodLeads);
+  const fullCycleDurations = periodLeads
+    .map((lead) => leadFullCycleDays(lead))
+    .filter((value): value is number => value !== null);
+  const stageTimingRows = buildStageTimingRows(periodLeads);
   let previousStageLeads = periodLeads;
   const reachedCounts = PIPELINE_STAGES.map((stage, index) => {
     const candidates = index === 0 ? periodLeads : previousStageLeads;
@@ -733,6 +762,8 @@ function buildCrmStats(leads: Lead[], period: CrmStatsPeriod) {
     valueSuccessRate: closedMrr ? Math.round((wonMrr / closedMrr) * 100) : 0,
     averageMonthlyWonMrr: averageMonthsCount ? wonMrr / averageMonthsCount : 0,
     averageMonthsCount,
+    averageFullCycleDays: averageDays(fullCycleDurations),
+    fullCycleCount: fullCycleDurations.length,
     averageMrrPerLead: totalCount ? totalMrr / totalCount : 0,
     activeMrr,
     wonMrr,
@@ -742,21 +773,30 @@ function buildCrmStats(leads: Lead[], period: CrmStatsPeriod) {
     payrollShare: totalCount ? Math.round((payrollCount / totalCount) * 100) : 0,
     followUpCount,
     periodLabel: label,
+    stageTimingRows,
     stageRows,
   };
 }
 
-function currentStatsRange(period: CrmStatsPeriod) {
+function currentStatsRange(period: CrmStatsPeriod, selectedMonth: string) {
   const now = new Date();
   if (period === "all") {
     return { start: null, end: null, label: "Wszystkie szanse" };
   }
-  const start = period === "month" ? new Date(now.getFullYear(), now.getMonth(), 1) : new Date(now.getFullYear(), 0, 1);
-  const end = period === "month" ? new Date(now.getFullYear(), now.getMonth() + 1, 1) : new Date(now.getFullYear() + 1, 0, 1);
+  const monthMatch = selectedMonth.match(/^(\d{4})-(\d{2})$/);
+  const selectedYear = monthMatch ? Number(monthMatch[1]) : now.getFullYear();
+  const selectedMonthIndex = monthMatch ? Number(monthMatch[2]) - 1 : now.getMonth();
+  const start = period === "month" ? new Date(selectedYear, selectedMonthIndex, 1) : new Date(now.getFullYear(), 0, 1);
+  const end = period === "month" ? new Date(selectedYear, selectedMonthIndex + 1, 1) : new Date(now.getFullYear() + 1, 0, 1);
   const label = period === "month"
-    ? `Ten miesiąc: ${start.toLocaleDateString("pl-PL", { month: "long", year: "numeric" })}`
+    ? `Miesiąc: ${start.toLocaleDateString("pl-PL", { month: "long", year: "numeric" })}`
     : `Ten rok: ${start.getFullYear()}`;
   return { start, end, label };
+}
+
+function currentMonthValue() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
 
 function countMonthsFromFirstLead(leads: Lead[]) {
@@ -801,6 +841,92 @@ function didReachStage(lead: Lead, stageIndex: number) {
   return false;
 }
 
+function buildStageTimingRows(leads: Lead[]): StageTimingRow[] {
+  return PIPELINE_STAGES.slice(0, -1).map((stage, index) => {
+    const nextStage = PIPELINE_STAGES[index + 1];
+    const durations = leads
+      .map((lead) => stageTransitionDays(lead, index, index + 1))
+      .filter((value): value is number => value !== null);
+
+    return {
+      key: `${stage}-${nextStage}`,
+      label: `${PIPELINE_LABELS[stage]} -> ${PIPELINE_LABELS[nextStage]}`,
+      averageDays: averageDays(durations),
+      sampleCount: durations.length,
+    };
+  });
+}
+
+function stageTransitionDays(lead: Lead, fromIndex: number, toIndex: number) {
+  const dates = leadStageDates(lead);
+  const fromDate = dates[fromIndex];
+  const toDate = dates[toIndex];
+  if (!fromDate || !toDate || toDate < fromDate) return null;
+  return daysBetween(fromDate, toDate);
+}
+
+function leadFullCycleDays(lead: Lead) {
+  const dates = leadStageDates(lead);
+  const start = dates[0];
+  const finish = dates[PIPELINE_STAGES.length - 1];
+  if (!start || !finish || finish < start) return null;
+  return daysBetween(start, finish);
+}
+
+function leadStageDates(lead: Lead) {
+  const stageIndex = PIPELINE_STAGES.indexOf(lead.etap || "");
+  const isClosed = lead.status === "wygrana" || lead.status === "przegrana" || lead.etap === "zamknieta";
+  const updatedAt = parseDate(lead.updated_at);
+  const offerSentAt = parseDate(lead.data_wyslania_oferty);
+
+  return [
+    parseDate(lead.created_at),
+    parseDate(lead.data_spotkania_online) || parseDate(lead.data_telefonu),
+    offerSentAt,
+    isClosed || stageIndex >= 3 ? updatedAt : null,
+    lead.status === "wygrana" || stageIndex >= 4 ? updatedAt : null,
+  ];
+}
+
+function formatLeadTimingShort(lead: Lead) {
+  const dates = leadStageDates(lead);
+  const start = dates[0];
+  const lastIndex = findLastKnownStageIndex(dates);
+  const lastDate = dates[lastIndex];
+  if (!start || !lastDate) return "Brak danych";
+  return formatDuration(daysBetween(start, lastDate));
+}
+
+function formatLeadTimingDetail(lead: Lead) {
+  const dates = leadStageDates(lead);
+  const lastIndex = findLastKnownStageIndex(dates);
+  const lastStage = PIPELINE_STAGES[lastIndex];
+  if (lastIndex <= 0) return "Brak dat kolejnych etapów.";
+  return `Od pierwszego etapu do: ${PIPELINE_LABELS[lastStage]}.`;
+}
+
+function findLastKnownStageIndex(dates: (Date | null)[]) {
+  for (let index = dates.length - 1; index >= 0; index -= 1) {
+    if (dates[index]) return index;
+  }
+  return 0;
+}
+
+function parseDate(value: string | null) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function daysBetween(start: Date, end: Date) {
+  return Math.max(0, (end.getTime() - start.getTime()) / DAY_MS);
+}
+
+function averageDays(values: number[]) {
+  if (values.length === 0) return null;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
 function sumMrr(leads: Lead[]) {
   return leads.reduce((sum, lead) => sum + Number(lead.szacowany_mrr || 0), 0);
 }
@@ -811,6 +937,19 @@ function formatMoney(value: number) {
 
 function formatPercent(value: number) {
   return `${Math.round(value)}%`;
+}
+
+function formatDuration(value: number | null) {
+  if (value === null) return "Brak danych";
+  if (value < 1) return "poniżej 1 dnia";
+  const rounded = Math.round(value * 10) / 10;
+  return `${rounded.toLocaleString("pl-PL")} ${durationDayLabel(rounded)}`;
+}
+
+function durationDayLabel(value: number) {
+  const integerPart = Math.floor(value);
+  if (integerPart === 1 && value === 1) return "dzień";
+  return "dni";
 }
 
 const headerStyle: React.CSSProperties = { display: "flex", justifyContent: "space-between", gap: "24px", alignItems: "flex-start", marginBottom: "28px" };
@@ -828,7 +967,9 @@ const statsHintStyle: React.CSSProperties = { margin: "7px 0 0", color: colors.m
 const statsPanelStyle: React.CSSProperties = { marginTop: "20px", display: "grid", gap: "18px" };
 const statsTabsStyle: React.CSSProperties = { display: "inline-flex", width: "fit-content", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.inputBackground, padding: "4px", gap: "4px" };
 const statsTabStyle = (active: boolean): React.CSSProperties => ({ border: "none", borderRadius: radius.button, background: active ? colors.navy : "transparent", color: active ? colors.white : colors.navy, padding: "9px 13px", fontWeight: 850, cursor: "pointer" });
+const statsMonthInputStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.navy, padding: "8px 10px", fontWeight: 800, minHeight: "38px" };
 const statsKpiGridStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "12px" };
+const stageTimingGridStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "12px" };
 const statTileStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "14px", display: "grid", gap: "6px", color: colors.muted, fontWeight: 750, minHeight: "112px" };
 const statTileValueStyle: React.CSSProperties = { color: colors.navy, fontSize: "22px", lineHeight: 1.1 };
 const statTileHintStyle: React.CSSProperties = { color: colors.muted, lineHeight: 1.35, fontSize: "12px", fontWeight: 650 };
@@ -880,6 +1021,7 @@ const drawerTitleStyle: React.CSSProperties = { margin: 0, color: colors.navy, f
 const closeButtonStyle: React.CSSProperties = { width: "40px", height: "40px", borderRadius: "999px", border: `1px solid ${colors.border}`, background: colors.white, color: colors.navy, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" };
 const drawerContentStyle: React.CSSProperties = { display: "flex", flexDirection: "column", gap: "18px" };
 const drawerSectionStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, padding: "20px", background: colors.white };
+const leadTimingPanelStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "14px", display: "grid", gap: "6px", color: colors.muted, fontWeight: 700 };
 const termsSectionStyle: React.CSSProperties = { ...drawerSectionStyle, position: "relative" };
 const termsGridStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1.45fr) minmax(300px, 0.85fr)", gap: "18px 22px", alignItems: "start" };
 const notesColumnStyle: React.CSSProperties = { display: "flex", flexDirection: "column", gap: "18px", minWidth: 0 };

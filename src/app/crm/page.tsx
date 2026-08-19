@@ -353,6 +353,12 @@ function CrmContent() {
                   <span style={funnelPercentStyle}>{formatPercent(row.reachedRate)}</span>
                 </div>
               ))}
+              <div style={funnelExplanationStyle}>
+                <span><strong>Granatowy</strong> - szanse, które doszły do etapu i nie są na nim przegrane.</span>
+                <span><strong>Czerwony</strong> - szanse oznaczone jako przegrane na tym etapie.</span>
+                <span><strong>Szary</strong> - szanse, które nie doszły jeszcze do tego etapu albo odpadły wcześniej.</span>
+                <span><strong>Procent</strong> - udział szans z wybranego okresu, które doszły do danego etapu.</span>
+              </div>
             </div>
           </div>
         )}
@@ -986,6 +992,7 @@ const funnelPassedSegmentStyle: React.CSSProperties = { background: colors.navy 
 const funnelDroppedSegmentStyle: React.CSSProperties = { background: colors.red };
 const funnelPreviousDropSegmentStyle: React.CSSProperties = { background: "#d8dee8", color: colors.navy };
 const funnelPercentStyle: React.CSSProperties = { color: colors.navy, fontWeight: 900, textAlign: "right", fontSize: "13px" };
+const funnelExplanationStyle: React.CSSProperties = { borderTop: `1px solid ${colors.border}`, color: colors.muted, display: "grid", gap: "6px", fontSize: "12px", lineHeight: 1.5, marginTop: "4px", paddingTop: "12px" };
 const tableHeaderStyle: React.CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "18px" };
 const sectionTitleStyle: React.CSSProperties = { margin: 0, color: colors.navy, fontSize: "24px" };
 const counterStyle: React.CSSProperties = { color: colors.muted, fontWeight: 700 };

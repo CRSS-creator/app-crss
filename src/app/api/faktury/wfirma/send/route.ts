@@ -88,13 +88,14 @@ export async function POST(request: NextRequest) {
     let createdWfirmaId = "";
     let createdWfirmaNumber = invoice.numer;
     let createdWfirmaIssueDate = invoice.data_wystawienia || new Date().toISOString().slice(0, 10);
+    let createdPaymentDate = invoice.termin_platnosci || addDays(createdWfirmaIssueDate, 7);
     try {
       await assertNoDuplicateStandardInvoice(auth.admin, invoice);
       const validationErrors = validateWfirmaInvoice(invoice);
       if (validationErrors.length > 0) throw new Error(`Brakuje danych do wFirmy: ${validationErrors.join(", ")}.`);
 
       const issueDate = invoice.data_wystawienia || new Date().toISOString().slice(0, 10);
-      const defaultPaymentDate = addDays(issueDate, 7);
+      const paymentDate = invoice.termin_platnosci || addDays(issueDate, 7);
       const wfirmaContractorId = await findExistingWfirmaContractorId(wfirma.config, invoice.kontrahent_nip);
       const contractorAddress = wfirmaContractorId ? null : await getContractorAddress(auth.admin, invoice);
       if (!wfirmaContractorId && (!contractorAddress?.zip || !contractorAddress.city)) {
@@ -102,16 +103,17 @@ export async function POST(request: NextRequest) {
       }
       const response = await addWfirmaInvoice(
         wfirma.config,
-        buildWfirmaInvoicePayload(invoice, issueDate, defaultPaymentDate, contractorAddress, wfirmaContractorId)
+        buildWfirmaInvoicePayload(invoice, issueDate, paymentDate, contractorAddress, wfirmaContractorId)
       );
       const wfirmaInvoice = firstWfirmaInvoice(response);
       const wfirmaIssueDate = dateOnly(wfirmaInvoice?.date) || issueDate;
-      const paymentDate = addDays(wfirmaIssueDate, 7);
+      const finalPaymentDate = dateOnly(wfirmaInvoice?.payment_date) || paymentDate;
       const wfirmaId = stringify(wfirmaInvoice?.id);
       const wfirmaNumber = stringify(wfirmaInvoice?.fullnumber || wfirmaInvoice?.number) || invoice.numer;
       createdWfirmaId = wfirmaId;
       createdWfirmaNumber = wfirmaNumber;
       createdWfirmaIssueDate = wfirmaIssueDate;
+      createdPaymentDate = finalPaymentDate;
       const pdfResult = wfirmaId
         ? await saveWfirmaInvoicePdf({
             admin: auth.admin,
@@ -131,7 +133,7 @@ export async function POST(request: NextRequest) {
         zrodlo: "wfirma",
         data_wystawienia: wfirmaIssueDate,
         data_sprzedazy: dateOnly(wfirmaInvoice?.disposaldate) || wfirmaIssueDate,
-        termin_platnosci: paymentDate,
+        termin_platnosci: finalPaymentDate,
         wfirma_id: wfirmaId || null,
         wfirma_url: wfirmaInvoice?.hash ? `https://wfirma.pl/faktury/podglad/${wfirmaInvoice.hash}` : null,
         wfirma_pdf_path: pdfResult?.path || null,
@@ -176,7 +178,7 @@ export async function POST(request: NextRequest) {
             zrodlo: "wfirma",
             data_wystawienia: createdWfirmaIssueDate,
             data_sprzedazy: createdWfirmaIssueDate,
-            termin_platnosci: addDays(createdWfirmaIssueDate, 7),
+            termin_platnosci: createdPaymentDate,
             wfirma_id: createdWfirmaId,
             wfirma_synced_at: new Date().toISOString(),
             wfirma_sync_status: "wyslano",

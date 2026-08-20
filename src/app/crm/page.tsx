@@ -415,10 +415,11 @@ function CrmContent() {
         {loading ? <div style={emptyStyle}>Ładowanie danych...</div> : filteredLeads.length === 0 ? <div style={emptyStyle}>Brak szans sprzedaży do wyświetlenia</div> : (
           <div style={tableWrapperStyle}>
             <table style={tableStyle}>
-              <thead><tr><Th>Firma</Th><Th>Etap</Th><Th>Status</Th><Th>Kadry</Th><Th>MRR</Th><Th>Czas w procesie</Th><Th>Akcje</Th></tr></thead>
+              <thead><tr><Th>Firma</Th><Th>Forma prawna</Th><Th>Etap</Th><Th>Status</Th><Th>Kadry</Th><Th>MRR</Th><Th>Czas w procesie</Th><Th>Akcje</Th></tr></thead>
               <tbody>{filteredLeads.map((lead) => (
                 <tr key={lead.id} style={rowStyle}>
                   <Td strong>{lead.nazwa || "—"}</Td>
+                  <Td>{lead.forma_prawna || "—"}</Td>
                   <Td>{PIPELINE_LABELS[lead.etap || ""] || lead.etap || "—"}</Td>
                   <Td><Badge>{statusLabel(lead.status)}</Badge></Td>
                   <Td>{lead.czy_kadry ? "Tak" : "Nie"}</Td>

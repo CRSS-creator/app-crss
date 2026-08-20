@@ -58,6 +58,7 @@ type InvoiceRow = {
   id: string;
   numer: string | null;
   data_wystawienia: string | null;
+  termin_platnosci: string | null;
   okres: string | null;
   kontrahent_nip: string | null;
   kwota_netto: number | string | null;
@@ -112,7 +113,7 @@ async function syncPayments(request: NextRequest) {
   const requestedRange = requestedMonth ? monthRange(requestedMonth) : null;
   let query = admin
     .from("faktury")
-    .select("id,numer,data_wystawienia,okres,kontrahent_nip,kwota_netto,kwota_vat,kwota_brutto,wfirma_id,wfirma_pdf_path,wfirma_pdf_name,status")
+    .select("id,numer,data_wystawienia,termin_platnosci,okres,kontrahent_nip,kwota_netto,kwota_vat,kwota_brutto,wfirma_id,wfirma_pdf_path,wfirma_pdf_name,status")
     .in("status", STATUSES_TO_CHECK)
     .neq("kategoria", "korekta")
     .not("wfirma_id", "is", null)
@@ -406,6 +407,7 @@ async function syncWfirmaInvoiceSnapshot(
   const issueDate = dateOnly(wfirmaInvoice.date);
   const saleDate = dateOnly(wfirmaInvoice.disposaldate);
   const paymentDate = dateOnly(wfirmaInvoice.payment_date);
+  const finalPaymentDate = specialInvoicePaymentDate(invoice) || paymentDate;
   const net = numberValue(wfirmaInvoice.netto);
   const tax = numberValue(wfirmaInvoice.tax);
   const gross = numberValue(wfirmaInvoice.total_composed ?? wfirmaInvoice.total) || net + tax;
@@ -431,7 +433,7 @@ async function syncWfirmaInvoiceSnapshot(
   if (wfirmaInvoice.hash) updatePayload.wfirma_url = `https://wfirma.pl/faktury/podglad/${wfirmaInvoice.hash}`;
   if (issueDate) updatePayload.data_wystawienia = issueDate;
   if (saleDate) updatePayload.data_sprzedazy = saleDate;
-  if (paymentDate) updatePayload.termin_platnosci = paymentDate;
+  if (finalPaymentDate) updatePayload.termin_platnosci = finalPaymentDate;
   if (net > 0) updatePayload.kwota_netto = net;
   if (tax > 0) updatePayload.kwota_vat = tax;
   if (gross > 0) updatePayload.kwota_brutto = gross;
@@ -464,6 +466,18 @@ async function syncWfirmaInvoiceSnapshot(
     updatedNumber,
     savedPdf: Boolean(pdfResult?.path),
   };
+}
+
+function specialInvoicePaymentDate(invoice: InvoiceRow) {
+  const nip = normalizeNip(invoice.kontrahent_nip);
+  const period = dateOnly(invoice.okres);
+  if (!period || !["5273158702", "5273221116"].includes(nip)) return null;
+
+  const periodDate = new Date(`${period.slice(0, 7)}-01T00:00:00Z`);
+  if (Number.isNaN(periodDate.getTime())) return null;
+
+  const dueDate = new Date(Date.UTC(periodDate.getUTCFullYear(), periodDate.getUTCMonth() + 1, 14));
+  return dueDate.toISOString().slice(0, 10);
 }
 
 function shouldRefreshPdf(invoice: InvoiceRow, invoiceNumber: string | null) {

@@ -183,7 +183,11 @@ function InvoicesContent() {
     }
     const result = await fetchInvoices();
     if (result.error) console.error("Błąd pobierania faktur:", result.error);
-    setInvoices((result.data || []) as Invoice[]);
+    const nextInvoices = (result.data || []) as Invoice[];
+    setInvoices(nextInvoices);
+    setDetailsInvoice((current) =>
+      current ? nextInvoices.find((invoice) => invoice.id === current.id) || current : current
+    );
     setSelectedInvoiceIds((current) =>
       current.filter((invoiceId) => (result.data || []).some((invoice) => invoice.id === invoiceId && canSelectInvoice(invoice as Invoice)))
     );
@@ -1203,8 +1207,9 @@ function formatDateTime(value: string | null) {
 }
 
 function paymentDueDate(invoice: Invoice) {
+  if (invoice.termin_platnosci) return invoice.termin_platnosci;
   if (invoice.data_wystawienia) return addDays(invoice.data_wystawienia, 7);
-  return invoice.termin_platnosci;
+  return null;
 }
 
 function paymentStatusLabel(invoice: Invoice) {

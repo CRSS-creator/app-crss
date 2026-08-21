@@ -110,18 +110,18 @@ function buildAttachments(client: ClientWithCaregiver) {
   const attachments: { fileName: string; url: string }[] = [];
 
   if (legalForm.includes("jdg")) {
-    const fileName = "Dokumenty do rozpoczęcia współpracy - JDG.pdf";
+    const fileName = "Dokumenty-do-rozpoczecia-wspolpracy-JDG.pdf";
     attachments.push({ fileName, url: fileUrl(fileName) });
   } else if (legalForm.includes("organizacja")) {
-    const fileName = "Dokumenty do rozpoczynania współpracy - organizacje.pdf";
+    const fileName = "Dokumenty-do-rozpoczynania-wspolpracy-organizacje.pdf";
     attachments.push({ fileName, url: fileUrl(fileName) });
   } else if (legalForm.includes("spolka z o.o") || legalForm.includes("prosta spolka akcyjna")) {
-    const fileName = "Dokumenty do rozpoczynania współpracy - pełne księgi.pdf";
+    const fileName = "Dokumenty-do-rozpoczynania-wspolpracy-pelne-ksiegi.pdf";
     attachments.push({ fileName, url: fileUrl(fileName) });
   }
 
   if (client.obsluga_kadrowa) {
-    const fileName = "Dokumenty do rozpoczynania współpracy - kadry.pdf";
+    const fileName = "Dokumenty-do-rozpoczynania-wspolpracy-kadry.pdf";
     attachments.push({ fileName, url: fileUrl(fileName) });
   }
 

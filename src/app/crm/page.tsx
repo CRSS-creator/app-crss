@@ -30,6 +30,7 @@ type Lead = {
   id: string;
   created_at: string | null;
   updated_at: string | null;
+  etap_started_at: string | null;
   nazwa: string | null;
   osoba_kontaktowa: string | null;
   telefon: string | null;
@@ -190,7 +191,8 @@ function CrmContent() {
 
   async function moveLeadToStage(leadId: string, newStage: string) {
     const previousLeads = leads;
-    setLeads((current) => current.map((lead) => lead.id === leadId ? { ...lead, etap: newStage } : lead));
+    const stageStartedAt = new Date().toISOString();
+    setLeads((current) => current.map((lead) => lead.id === leadId ? { ...lead, etap: newStage, etap_started_at: stageStartedAt } : lead));
     const { error } = await updateCrmLeadStage(leadId, newStage);
     if (error) {
       console.error("Błąd zmiany etapu:", error);
@@ -313,7 +315,7 @@ function CrmContent() {
               <StatTile label="MRR wygrany" value={formatMoney(crmStats.wonMrr)} hint="Suma miesięcznych abonamentów z wygranych szans" />
               <StatTile label="Skuteczność kwotowa" value={formatPercent(crmStats.valueSuccessRate)} hint={`${formatMoney(crmStats.wonMrr)} z ${formatMoney(crmStats.closedMrr)} zamkniętego MRR`} />
               {statsPeriod !== "month" && <StatTile label="Śr. miesięczny MRR" value={formatMoney(crmStats.averageMonthlyWonMrr)} hint={`Wygrany MRR / ${crmStats.averageMonthsCount} mies.`} />}
-              <StatTile label="Śr. czas procesu" value={formatDuration(crmStats.averageFullCycleDays)} hint={`${crmStats.fullCycleCount} szans z dojściem do ostatniego etapu`} />
+              <StatTile label="Śr. czas procesu" value={formatDuration(crmStats.averageProcessDays)} hint={`${crmStats.processCount} szans liczonych realnie od utworzenia`} />
               <StatTile label="Śr. MRR na szansę" value={formatMoney(crmStats.averageMrrPerLead)} hint={`${crmStats.totalCount} szans w okresie`} />
               <StatTile label="Potencjał aktywny" value={formatMoney(crmStats.activeMrr)} hint={`${crmStats.activeCount} otwartych szans`} />
               <StatTile label="MRR utracony" value={formatMoney(crmStats.lostMrr)} hint={`${crmStats.lostCount} przegranych szans`} />
@@ -716,8 +718,8 @@ function buildCrmStats(leads: Lead[], period: CrmStatsPeriod, selectedMonth: str
   const activeMrr = sumMrr(activeLeads);
   const followUpCount = activeLeads.filter((lead) => Boolean(lead.data_follow_up)).length;
   const averageMonthsCount = countMonthsFromFirstLead(periodLeads);
-  const fullCycleDurations = periodLeads
-    .map((lead) => leadFullCycleDays(lead))
+  const processDurations = periodLeads
+    .map((lead) => leadProcessDays(lead))
     .filter((value): value is number => value !== null);
   const stageTimingRows = buildStageTimingRows(periodLeads);
   let previousStageLeads = periodLeads;
@@ -763,8 +765,8 @@ function buildCrmStats(leads: Lead[], period: CrmStatsPeriod, selectedMonth: str
     valueSuccessRate: closedMrr ? Math.round((wonMrr / closedMrr) * 100) : 0,
     averageMonthlyWonMrr: averageMonthsCount ? wonMrr / averageMonthsCount : 0,
     averageMonthsCount,
-    averageFullCycleDays: averageDays(fullCycleDurations),
-    fullCycleCount: fullCycleDurations.length,
+    averageProcessDays: averageDays(processDurations),
+    processCount: processDurations.length,
     averageMrrPerLead: totalCount ? totalMrr / totalCount : 0,
     activeMrr,
     wonMrr,
@@ -874,10 +876,10 @@ function stageTransitionDays(lead: Lead, fromIndex: number, toIndex: number) {
   return daysBetween(fromDate, toDate);
 }
 
-function leadFullCycleDays(lead: Lead) {
-  const dates = leadStageDates(lead);
-  const start = dates[0];
-  const finish = dates[PIPELINE_STAGES.length - 1];
+function leadProcessDays(lead: Lead) {
+  const start = parseDate(lead.created_at);
+  const isOpen = lead.status === "otwarta" && lead.etap !== "zamknieta";
+  const finish = isOpen ? new Date() : parseDate(lead.updated_at);
   if (!start || !finish || finish < start) return null;
   return daysBetween(start, finish);
 }
@@ -885,12 +887,16 @@ function leadFullCycleDays(lead: Lead) {
 function leadStageDates(lead: Lead) {
   const stageIndex = PIPELINE_STAGES.indexOf(lead.etap || "");
   const isClosed = lead.status === "wygrana" || lead.status === "przegrana" || lead.etap === "zamknieta";
+  const now = new Date();
   const updatedAt = parseDate(lead.updated_at);
-  const offerSentAt = parseDate(lead.data_wyslania_oferty);
+  const currentStageStartedAt = parseDate(lead.etap_started_at) || updatedAt;
+  const phoneAt = pastDate(lead.data_telefonu, now);
+  const meetingAt = pastDate(lead.data_spotkania_online, now);
+  const offerSentAt = pastDate(lead.data_wyslania_oferty, now);
 
   return [
     parseDate(lead.created_at),
-    parseDate(lead.data_spotkania_online) || parseDate(lead.data_telefonu),
+    stageIndex === 1 ? currentStageStartedAt : meetingAt || phoneAt,
     offerSentAt,
     isClosed || stageIndex >= 3 ? updatedAt : null,
     lead.status === "wygrana" || stageIndex >= 4 ? updatedAt : null,
@@ -901,7 +907,8 @@ function formatLeadTimingShort(lead: Lead) {
   const dates = leadStageDates(lead);
   const start = dates[0];
   const lastIndex = findLastKnownStageIndex(dates);
-  const lastDate = dates[lastIndex];
+  const isOpen = lead.status === "otwarta" && lead.etap !== "zamknieta";
+  const lastDate = isOpen ? new Date() : dates[lastIndex];
   if (!start || !lastDate) return "Brak danych";
   return formatDuration(daysBetween(start, lastDate));
 }
@@ -925,6 +932,12 @@ function parseDate(value: string | null) {
   if (!value) return null;
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function pastDate(value: string | null, now: Date) {
+  const date = parseDate(value);
+  if (!date || date > now) return null;
+  return date;
 }
 
 function daysBetween(start: Date, end: Date) {

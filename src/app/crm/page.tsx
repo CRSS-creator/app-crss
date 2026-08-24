@@ -24,7 +24,7 @@ import {
   uploadCrmDocument,
   type CrmDocument,
 } from "@/lib/crmDocumentsService";
-import { Trash2, X } from "lucide-react";
+import { Download, Trash2, X } from "lucide-react";
 
 type Lead = {
   id: string;
@@ -448,6 +448,7 @@ function LeadDrawer({ mode, lead, tasks, onClose, onCreated, onSaved, onDeleted,
   const [documents, setDocuments] = useState<CrmDocument[]>([]);
   const [documentsLoading, setDocumentsLoading] = useState(mode === "edit");
   const [uploadingDocument, setUploadingDocument] = useState(false);
+  const [downloadingDocumentId, setDownloadingDocumentId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   function updateDraft<K extends keyof LeadDraft>(key: K, value: LeadDraft[K]) {
@@ -517,6 +518,32 @@ function LeadDrawer({ mode, lead, tasks, onClose, onCreated, onSaved, onDeleted,
     const { data, error } = await createCrmDocumentSignedUrl(document.sciezka);
     if (error || !data?.signedUrl) return alert("Nie udało się otworzyć dokumentu.");
     window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+  }
+
+  async function downloadDocument(document: CrmDocument) {
+    setDownloadingDocumentId(document.id);
+    try {
+      const { data, error } = await createCrmDocumentSignedUrl(document.sciezka);
+      if (error || !data?.signedUrl) throw new Error("Nie udało się pobrać linku do dokumentu.");
+
+      const response = await fetch(data.signedUrl);
+      if (!response.ok) throw new Error("Nie udało się pobrać dokumentu.");
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = window.document.createElement("a");
+      link.href = url;
+      link.download = document.nazwa || "dokument-szansy";
+      window.document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Błąd pobierania dokumentu CRM:", error);
+      alert("Nie udało się pobrać dokumentu.");
+    } finally {
+      setDownloadingDocumentId(null);
+    }
   }
 
   async function removeDocument(document: CrmDocument) {
@@ -633,6 +660,17 @@ function LeadDrawer({ mode, lead, tasks, onClose, onCreated, onSaved, onDeleted,
                     <div><strong>{document.nazwa}</strong><span>{formatFileSize(document.rozmiar)}</span></div>
                     <div style={fileActionsStyle}>
                       <button style={secondaryButtonStyle} onClick={() => openDocument(document)}>Otwórz</button>
+                      <button
+                        type="button"
+                        style={downloadFileButtonStyle}
+                        onClick={() => downloadDocument(document)}
+                        disabled={downloadingDocumentId === document.id}
+                        title={`Pobierz ${document.nazwa}`}
+                        aria-label={`Pobierz dokument ${document.nazwa}`}
+                      >
+                        <Download size={17} />
+                        {downloadingDocumentId === document.id ? "Pobieranie..." : "Pobierz"}
+                      </button>
                       <button style={dangerButtonStyle} onClick={() => removeDocument(document)}>Usuń</button>
                     </div>
                   </div>
@@ -1070,5 +1108,6 @@ const proposalButtonStyle: React.CSSProperties = { ...primaryButtonStyle, minHei
 const fileDropzoneStyle: React.CSSProperties = { border: `1px dashed ${colors.border}`, borderRadius: radius.input, padding: "18px", background: colors.inputBackground, display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "center" };
 const fileItemStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "12px 14px", background: colors.white, display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", marginTop: "10px" };
 const fileActionsStyle: React.CSSProperties = { display: "flex", gap: "8px" };
+const downloadFileButtonStyle: React.CSSProperties = { ...secondaryButtonStyle, gap: "7px", color: colors.success, borderColor: "#bbf7d0", background: "#f0fdf4" };
 const dangerButtonStyle: React.CSSProperties = { border: "none", borderRadius: radius.button, padding: "8px 12px", background: "rgba(220, 38, 38, 0.10)", color: colors.danger, fontWeight: 800, cursor: "pointer" };
 const hintStyle: React.CSSProperties = { color: colors.muted, fontSize: "13px", lineHeight: 1.6 };

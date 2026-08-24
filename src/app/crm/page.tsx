@@ -963,14 +963,16 @@ function formatPercent(value: number) {
 
 function formatDuration(value: number | null) {
   if (value === null) return "Brak danych";
-  if (value < 1) return "poniżej 1 dnia";
-  const rounded = Math.round(value * 10) / 10;
-  return `${rounded.toLocaleString("pl-PL")} ${durationDayLabel(rounded)}`;
+  const totalHours = Math.max(1, Math.round(value * 24));
+  if (totalHours < 24) return `${totalHours}h`;
+
+  const days = Math.floor(totalHours / 24);
+  const hours = totalHours % 24;
+  return hours > 0 ? `${days} ${durationDayLabel(days)} ${hours}h` : `${days} ${durationDayLabel(days)}`;
 }
 
 function durationDayLabel(value: number) {
-  const integerPart = Math.floor(value);
-  if (integerPart === 1 && value === 1) return "dzień";
+  if (value === 1) return "dzień";
   return "dni";
 }
 

@@ -88,14 +88,14 @@ export async function POST(request: NextRequest) {
     let createdWfirmaId = "";
     let createdWfirmaNumber = invoice.numer;
     let createdWfirmaIssueDate = invoice.data_wystawienia || new Date().toISOString().slice(0, 10);
-    let createdPaymentDate = invoice.termin_platnosci || addDays(createdWfirmaIssueDate, 7);
+    let createdPaymentDate = specialInvoicePaymentDate(invoice, createdWfirmaIssueDate) || invoice.termin_platnosci || addDays(createdWfirmaIssueDate, 7);
     try {
       await assertNoDuplicateStandardInvoice(auth.admin, invoice);
       const validationErrors = validateWfirmaInvoice(invoice);
       if (validationErrors.length > 0) throw new Error(`Brakuje danych do wFirmy: ${validationErrors.join(", ")}.`);
 
       const issueDate = invoice.data_wystawienia || new Date().toISOString().slice(0, 10);
-      const paymentDate = invoice.termin_platnosci || addDays(issueDate, 7);
+      const paymentDate = specialInvoicePaymentDate(invoice, issueDate) || invoice.termin_platnosci || addDays(issueDate, 7);
       const wfirmaContractorId = await findExistingWfirmaContractorId(wfirma.config, invoice.kontrahent_nip);
       const contractorAddress = wfirmaContractorId ? null : await getContractorAddress(auth.admin, invoice);
       if (!wfirmaContractorId && (!contractorAddress?.zip || !contractorAddress.city)) {
@@ -502,6 +502,17 @@ function addDays(value: string, days: number) {
   const date = new Date(`${value}T00:00:00.000Z`);
   date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
+}
+
+function specialInvoicePaymentDate(invoice: InvoiceRow, issueDate: string) {
+  const nip = normalizeNip(invoice.kontrahent_nip);
+  if (!["5273158702", "5273221116"].includes(nip)) return null;
+
+  const issueMonthDate = new Date(`${issueDate.slice(0, 7)}-01T00:00:00Z`);
+  if (Number.isNaN(issueMonthDate.getTime())) return null;
+
+  const dueDate = new Date(Date.UTC(issueMonthDate.getUTCFullYear(), issueMonthDate.getUTCMonth() + 1, 14));
+  return dueDate.toISOString().slice(0, 10);
 }
 
 function buildInvoicePdfName(invoiceNumber: string | null, wfirmaId: string) {

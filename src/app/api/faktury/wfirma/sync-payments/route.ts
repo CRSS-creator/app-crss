@@ -407,7 +407,7 @@ async function syncWfirmaInvoiceSnapshot(
   const issueDate = dateOnly(wfirmaInvoice.date);
   const saleDate = dateOnly(wfirmaInvoice.disposaldate);
   const paymentDate = dateOnly(wfirmaInvoice.payment_date);
-  const finalPaymentDate = specialInvoicePaymentDate(invoice) || paymentDate;
+  const finalPaymentDate = specialInvoicePaymentDate(invoice, issueDate) || paymentDate;
   const net = numberValue(wfirmaInvoice.netto);
   const tax = numberValue(wfirmaInvoice.tax);
   const gross = numberValue(wfirmaInvoice.total_composed ?? wfirmaInvoice.total) || net + tax;
@@ -468,15 +468,15 @@ async function syncWfirmaInvoiceSnapshot(
   };
 }
 
-function specialInvoicePaymentDate(invoice: InvoiceRow) {
+function specialInvoicePaymentDate(invoice: InvoiceRow, syncedIssueDate?: string | null) {
   const nip = normalizeNip(invoice.kontrahent_nip);
-  const period = dateOnly(invoice.okres);
-  if (!period || !["5273158702", "5273221116"].includes(nip)) return null;
+  const issueDate = dateOnly(syncedIssueDate) || dateOnly(invoice.data_wystawienia);
+  if (!issueDate || !["5273158702", "5273221116"].includes(nip)) return null;
 
-  const periodDate = new Date(`${period.slice(0, 7)}-01T00:00:00Z`);
-  if (Number.isNaN(periodDate.getTime())) return null;
+  const issueMonthDate = new Date(`${issueDate.slice(0, 7)}-01T00:00:00Z`);
+  if (Number.isNaN(issueMonthDate.getTime())) return null;
 
-  const dueDate = new Date(Date.UTC(periodDate.getUTCFullYear(), periodDate.getUTCMonth() + 1, 14));
+  const dueDate = new Date(Date.UTC(issueMonthDate.getUTCFullYear(), issueMonthDate.getUTCMonth() + 1, 14));
   return dueDate.toISOString().slice(0, 10);
 }
 

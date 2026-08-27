@@ -16,7 +16,8 @@ type CreateUserPayload = {
 type UserActionPayload = {
   userId?: string;
   password?: string;
-  action?: "reset_password" | "deactivate" | "activate";
+  fullName?: string;
+  action?: "reset_password" | "deactivate" | "activate" | "update_name";
 };
 
 type TemporaryPasswordMailPayload = {
@@ -358,6 +359,41 @@ export async function PATCH(request: NextRequest) {
 
     const profile = await fetchUserProfile(admin, userId);
     return NextResponse.json({ user: profile, active: isActive });
+  }
+
+  if (action === "update_name") {
+    const fullName = payload.fullName?.trim().replace(/\s+/g, " ");
+    if (!fullName) {
+      return NextResponse.json({ error: "Wpisz imię i nazwisko użytkownika." }, { status: 400 });
+    }
+    if (fullName.length > 120) {
+      return NextResponse.json({ error: "Imię i nazwisko może mieć maksymalnie 120 znaków." }, { status: 400 });
+    }
+
+    const previousProfile = await fetchUserProfile(admin, userId);
+    const { error: updateProfileError } = await admin
+      .from("profiles")
+      .update({ full_name: fullName })
+      .eq("id", userId);
+
+    if (updateProfileError) {
+      return NextResponse.json({ error: "Nie udało się zapisać imienia i nazwiska użytkownika." }, { status: 500 });
+    }
+
+    const { error: updateAuthError } = await admin.auth.admin.updateUserById(userId, {
+      user_metadata: {
+        ...(existingUser.user.user_metadata || {}),
+        full_name: fullName,
+      },
+    });
+
+    if (updateAuthError) {
+      await admin.from("profiles").update({ full_name: previousProfile?.full_name || null }).eq("id", userId);
+      return NextResponse.json({ error: updateAuthError.message || "Nie udało się zaktualizować danych konta użytkownika." }, { status: 400 });
+    }
+
+    const updatedProfile = await fetchUserProfile(admin, userId);
+    return NextResponse.json({ user: updatedProfile });
   }
 
   const webhookConfig = getTemporaryPasswordWebhookUrl();

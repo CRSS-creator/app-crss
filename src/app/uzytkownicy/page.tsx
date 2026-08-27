@@ -346,7 +346,13 @@ function SettingsContent({ role }: { role: UserRole | null }) {
       ) : activeTab === "taxHistory" ? (
         <TaxHistoryTab entries={taxHistory} loading={loading} />
       ) : canManageUsers ? (
-        <UsersTab users={users} loading={loading} onRoleChange={updateUserRole} onUserCreated={(user) => setUsers((current) => [user, ...current])} />
+        <UsersTab
+          users={users}
+          loading={loading}
+          onRoleChange={updateUserRole}
+          onUserCreated={(user) => setUsers((current) => [user, ...current])}
+          onUserUpdated={(user) => setUsers((current) => current.map((item) => item.id === user.id ? user : item))}
+        />
       ) : (
         <TemplatesTab
           templates={templates}
@@ -633,10 +639,13 @@ function ClientPicker({ clients, selectedClients, suggestions, search, onSearch,
   );
 }
 
-function UsersTab({ users, loading, onRoleChange, onUserCreated }: { users: UserProfile[]; loading: boolean; onRoleChange: (user: UserProfile, role: string) => void; onUserCreated: (user: UserProfile) => void }) {
+function UsersTab({ users, loading, onRoleChange, onUserCreated, onUserUpdated }: { users: UserProfile[]; loading: boolean; onRoleChange: (user: UserProfile, role: string) => void; onUserCreated: (user: UserProfile) => void; onUserUpdated: (user: UserProfile) => void }) {
   const [newUser, setNewUser] = useState<NewUserDraft>(emptyNewUserDraft);
   const [creatingUser, setCreatingUser] = useState(false);
   const [resettingUserId, setResettingUserId] = useState<string | null>(null);
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [editedFullName, setEditedFullName] = useState("");
+  const [savingUserId, setSavingUserId] = useState<string | null>(null);
 
   async function createUser() {
     if (!newUser.fullName.trim()) return alert("Wpisz imię i nazwisko użytkownika.");
@@ -694,6 +703,45 @@ function UsersTab({ users, loading, onRoleChange, onUserCreated }: { users: User
     }
   }
 
+  function startEditingName(user: UserProfile) {
+    setEditingUserId(user.id);
+    setEditedFullName(user.full_name || "");
+  }
+
+  function cancelEditingName() {
+    setEditingUserId(null);
+    setEditedFullName("");
+  }
+
+  async function saveUserName(user: UserProfile) {
+    const fullName = editedFullName.trim().replace(/\s+/g, " ");
+    if (!fullName) return alert("Wpisz imię i nazwisko użytkownika.");
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (!token) return alert("Sesja wygasła. Zaloguj się ponownie.");
+
+    setSavingUserId(user.id);
+    const response = await fetch("/api/admin/users", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ userId: user.id, action: "update_name", fullName }),
+    });
+    const result = await response.json().catch(() => null);
+    setSavingUserId(null);
+
+    if (!response.ok || !result?.user) {
+      alert(result?.error || "Nie udało się zmienić imienia i nazwiska użytkownika.");
+      return;
+    }
+
+    onUserUpdated(result.user as UserProfile);
+    cancelEditingName();
+  }
+
   return (
     <section style={panelStyle}>
       <div style={panelHeaderStyle}><div><h2 style={sectionTitleStyle}>Użytkownicy</h2><p style={hintStyle}>Lista osób z dostępem do aplikacji oraz ich role.</p></div></div>
@@ -709,7 +757,35 @@ function UsersTab({ users, loading, onRoleChange, onUserCreated }: { users: User
         <table style={tableStyle}>
           <thead><tr><Th>Użytkownik</Th><Th>Email</Th><Th>Rola</Th><Th>Hasło</Th></tr></thead>
           <tbody>
-            {loading ? <tr><Td colSpan={4}>Ładowanie użytkowników...</Td></tr> : users.map((user) => <tr key={user.id} style={rowStyle}><Td strong>{profileName(user)}</Td><Td>{user.email || "Brak emaila"}</Td><Td><AppSelect style={roleSelectStyle} value={user.role || "accountant"} options={ROLE_OPTIONS} onChange={(value) => onRoleChange(user, value)} /></Td><Td><button style={secondaryButtonStyle} type="button" disabled={resettingUserId === user.id} onClick={() => resetPassword(user)}>{resettingUserId === user.id ? "Reset..." : "Reset hasła"}</button></Td></tr>)}
+            {loading ? <tr><Td colSpan={4}>Ładowanie użytkowników...</Td></tr> : users.map((user) => <tr key={user.id} style={rowStyle}>
+              <Td strong>
+                {editingUserId === user.id ? (
+                  <div style={userNameEditStyle}>
+                    <input
+                      style={userNameInputStyle}
+                      value={editedFullName}
+                      autoFocus
+                      maxLength={120}
+                      onChange={(event) => setEditedFullName(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") void saveUserName(user);
+                        if (event.key === "Escape") cancelEditingName();
+                      }}
+                    />
+                    <button style={compactSaveButtonStyle} type="button" disabled={savingUserId === user.id} onClick={() => void saveUserName(user)}>{savingUserId === user.id ? "Zapisywanie..." : "Zapisz"}</button>
+                    <button style={compactCancelButtonStyle} type="button" disabled={savingUserId === user.id} onClick={cancelEditingName}>Anuluj</button>
+                  </div>
+                ) : (
+                  <div style={userNameDisplayStyle}>
+                    <span>{profileName(user)}</span>
+                    <button style={inlineEditButtonStyle} type="button" onClick={() => startEditingName(user)}>Edytuj</button>
+                  </div>
+                )}
+              </Td>
+              <Td>{user.email || "Brak emaila"}</Td>
+              <Td><AppSelect style={roleSelectStyle} value={user.role || "accountant"} options={ROLE_OPTIONS} onChange={(value) => onRoleChange(user, value)} /></Td>
+              <Td><button style={secondaryButtonStyle} type="button" disabled={resettingUserId === user.id} onClick={() => resetPassword(user)}>{resettingUserId === user.id ? "Reset..." : "Reset hasła"}</button></Td>
+            </tr>)}
           </tbody>
         </table>
       </div>
@@ -844,3 +920,9 @@ const inactiveBadgeStyle: CSSProperties = { ...badgeStyle, background: "#f1f5f9"
 const smallTextStyle: CSSProperties = { display: "block", marginTop: "5px", color: colors.muted, fontSize: "12px", fontWeight: 650, lineHeight: 1.35 };
 const actionsStyle: CSSProperties = { display: "flex", gap: "8px", flexWrap: "wrap" };
 const roleSelectStyle: CSSProperties = { ...inputStyle, maxWidth: "210px" };
+const userNameDisplayStyle: CSSProperties = { display: "flex", alignItems: "center", gap: "10px", minWidth: "250px" };
+const inlineEditButtonStyle: CSSProperties = { border: "none", background: "transparent", color: colors.navy, padding: "4px 2px", fontSize: "12px", fontWeight: 850, cursor: "pointer", textDecoration: "underline", textUnderlineOffset: "3px" };
+const userNameEditStyle: CSSProperties = { display: "flex", alignItems: "center", gap: "7px", minWidth: "420px" };
+const userNameInputStyle: CSSProperties = { ...inputStyle, minWidth: "210px", maxWidth: "270px", minHeight: "38px", padding: "8px 10px" };
+const compactSaveButtonStyle: CSSProperties = { ...primaryButtonStyle, minHeight: "38px", padding: "8px 11px" };
+const compactCancelButtonStyle: CSSProperties = { ...secondaryButtonStyle, minHeight: "38px", padding: "8px 11px" };

@@ -212,7 +212,7 @@ export async function sendCrmOfferToN8n(offer: CrmOffer, lead?: CrmOfferLeadCont
   });
 
   if (followup.error) {
-    console.error("Błąd tworzenia follow-upu po wysłaniu propozycji:", followup.error);
+    console.error("Błąd ustawiania follow-upu po wysłaniu propozycji:", followup.error);
   }
 
   return { ok: true, error: null };

@@ -71,6 +71,7 @@ export type CfoCashflowInvoice = {
 
 export type CfoCostItem = {
   id: string;
+  import_key?: string | null;
   data_dokumentu: string | null;
   numer_dokumentu: string | null;
   kontrahent: string;
@@ -194,6 +195,11 @@ export type CfoCostImportRow = {
   okres_end: string;
   zrodlo: "import" | "recznie";
 };
+
+export type CfoCostDuplicateCandidate = Pick<
+  CfoCostItem,
+  "id" | "import_key" | "data_dokumentu" | "numer_dokumentu" | "kontrahent" | "kwota_netto_import" | "kwota_netto_cfo" | "kwota_brutto" | "okres_start"
+>;
 
 export type CfoBankImportRow = {
   account: {
@@ -392,6 +398,34 @@ export async function insertCfoCosts(rows: CfoCostImportRow[]) {
     .select("*");
 }
 
+export async function fetchCfoCostDuplicateCandidates(rows: CfoCostImportRow[]) {
+  const importKeys = uniqueValues(rows.map((row) => row.import_key));
+  const documentNumbers = uniqueValues(rows.map((row) => row.numer_dokumentu).filter((value): value is string => Boolean(value)));
+  const byId = new Map<string, CfoCostDuplicateCandidate>();
+
+  if (importKeys.length > 0) {
+    const result = await supabase
+      .from("cfo_koszty")
+      .select("id,import_key,data_dokumentu,numer_dokumentu,kontrahent,kwota_netto_import,kwota_netto_cfo,kwota_brutto,okres_start")
+      .in("import_key", importKeys);
+
+    if (result.error) return { data: null, error: result.error };
+    (result.data || []).forEach((item) => byId.set(item.id, item as CfoCostDuplicateCandidate));
+  }
+
+  if (documentNumbers.length > 0) {
+    const result = await supabase
+      .from("cfo_koszty")
+      .select("id,import_key,data_dokumentu,numer_dokumentu,kontrahent,kwota_netto_import,kwota_netto_cfo,kwota_brutto,okres_start")
+      .in("numer_dokumentu", documentNumbers);
+
+    if (result.error) return { data: null, error: result.error };
+    (result.data || []).forEach((item) => byId.set(item.id, item as CfoCostDuplicateCandidate));
+  }
+
+  return { data: Array.from(byId.values()), error: null };
+}
+
 export async function updateCfoCost(costId: string, payload: Partial<CfoCostItem>) {
   return supabase
     .from("cfo_koszty")
@@ -558,4 +592,8 @@ function endOfMonth(period: string) {
 function startOfNextMonth(period: string) {
   const [year, month] = period.slice(0, 7).split("-").map(Number);
   return new Date(Date.UTC(year, month, 1)).toISOString().slice(0, 10);
+}
+
+function uniqueValues(values: string[]) {
+  return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
 }

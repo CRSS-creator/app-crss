@@ -16,6 +16,7 @@ import {
   fetchCfoClientTimeEntriesRange,
   fetchCfoCosts,
   fetchCfoCostsRange,
+  fetchCfoCostDuplicateCandidates,
   fetchCfoEmployeeCosts,
   fetchCfoEmployeeCostsRange,
   fetchCfoRevenueLinesRange,
@@ -36,6 +37,7 @@ import {
   type CfoCashflowInvoice,
   type CfoClientTimeEntry,
   type CfoCostCategory,
+  type CfoCostDuplicateCandidate,
   type CfoCostImportRow,
   type CfoCostItem,
   type CfoEmployeeCost,
@@ -233,13 +235,26 @@ function CfoContent() {
     try {
       const rows = await parseCostWorkbook(file, period);
       if (rows.length === 0) return alert("Nie znaleziono pozycji kosztowych w pliku.");
-      const result = await insertCfoCosts(rows);
+      const fileCheck = removeDuplicateCostsFromImport(rows);
+      const duplicateResult = await fetchCfoCostDuplicateCandidates(fileCheck.rows);
+      if (duplicateResult.error) {
+        console.error(duplicateResult.error);
+        return alert(`Nie udało się sprawdzić duplikatów kosztów: ${errorMessage(duplicateResult.error)}`);
+      }
+
+      const databaseCheck = removeExistingDuplicateCosts(fileCheck.rows, duplicateResult.data || []);
+      if (databaseCheck.rows.length === 0) {
+        await loadData();
+        return alert(buildCostImportSummary(0, fileCheck.skipped.length, databaseCheck.skipped, rows.length));
+      }
+
+      const result = await insertCfoCosts(databaseCheck.rows);
       if (result.error) {
         console.error(result.error);
         return alert(`Nie udało się zaimportować kosztów: ${errorMessage(result.error)}`);
       }
       await loadData();
-      alert(`Zaimportowano pozycje kosztowe: ${result.data?.length || 0}.`);
+      alert(buildCostImportSummary(result.data?.length || 0, fileCheck.skipped.length, databaseCheck.skipped, rows.length));
     } finally {
       setSaving(false);
     }
@@ -1895,18 +1910,19 @@ async function parseCostWorkbook(file: File, period: string): Promise<CfoCostImp
   return buildCostImportRows(rows, file.name, period);
 }
 
-function buildCostImportRows(rows: Record<string, unknown>[], fileName: string, period: string): CfoCostImportRow[] {
-  return rows.map((row, index) => {
+function buildCostImportRows(rows: Record<string, unknown>[], _fileName: string, period: string): CfoCostImportRow[] {
+  return rows.map((row) => {
     const documentNumber = stringValue(row["Nr dokumentu"] ?? row["Numer dokumentu"]);
     const contractor = stringValue(row["Kontrahent"]) || "Brak kontrahenta";
     const description = stringValue(row["Opis"]);
     const net = numberValue(row["Kwota netto"]);
     const vat = numberValue(row["Kwota VAT"]);
     const gross = numberValue(row["Razem"] ?? row["Kwota brutto"]);
+    const documentDate = dateValue(row["Data wystawienia"]);
     const category = classifyCost(contractor, description);
     return {
-      import_key: `cost:${fileName}:${documentNumber || index}:${contractor}:${net}`,
-      data_dokumentu: dateValue(row["Data wystawienia"]),
+      import_key: buildCostImportKey(documentNumber, contractor, description, documentDate, net, gross),
+      data_dokumentu: documentDate,
       numer_dokumentu: documentNumber,
       kontrahent: contractor,
       opis: description,
@@ -1921,6 +1937,84 @@ function buildCostImportRows(rows: Record<string, unknown>[], fileName: string, 
       zrodlo: "import" as const,
     };
   }).filter((row) => row.kontrahent || row.kwota_netto_cfo);
+}
+
+function removeDuplicateCostsFromImport(rows: CfoCostImportRow[]) {
+  const seen = new Set<string>();
+  const skipped: CfoCostImportRow[] = [];
+  const uniqueRows: CfoCostImportRow[] = [];
+
+  rows.forEach((row) => {
+    const key = costDuplicateKey(row);
+    if (seen.has(key)) {
+      skipped.push(row);
+      return;
+    }
+    seen.add(key);
+    uniqueRows.push(row);
+  });
+
+  return { rows: uniqueRows, skipped };
+}
+
+function removeExistingDuplicateCosts(rows: CfoCostImportRow[], existingCosts: CfoCostDuplicateCandidate[]) {
+  const existingImportKeys = new Set(existingCosts.map((cost) => cost.import_key).filter(Boolean));
+  const existingNaturalKeys = new Set(existingCosts.map(costDuplicateKey));
+  const skipped: CfoCostImportRow[] = [];
+  const uniqueRows = rows.filter((row) => {
+    const duplicate = existingImportKeys.has(row.import_key) || existingNaturalKeys.has(costDuplicateKey(row));
+    if (duplicate) skipped.push(row);
+    return !duplicate;
+  });
+
+  return { rows: uniqueRows, skipped };
+}
+
+function buildCostImportSummary(importedCount: number, skippedInFileCount: number, skippedExisting: CfoCostImportRow[], totalCount: number) {
+  const skippedCount = skippedInFileCount + skippedExisting.length;
+  const parts = [`Zaimportowano pozycje kosztowe: ${importedCount} z ${totalCount}.`];
+  if (skippedCount > 0) {
+    parts.push(`Pominięto duplikaty: ${skippedCount} (${skippedInFileCount} w pliku, ${skippedExisting.length} już w CFO).`);
+    const examples = skippedExisting.slice(0, 5).map(costImportLabel);
+    if (examples.length > 0) parts.push(`Przykłady pominiętych: ${examples.join("; ")}.`);
+  }
+  return parts.join("\n");
+}
+
+function buildCostImportKey(documentNumber: string | null, contractor: string, description: string, documentDate: string | null, net: number, gross: number | null) {
+  return [
+    "cost",
+    normalizeDuplicatePart(documentNumber || description || "bez-dokumentu"),
+    normalizeDuplicatePart(contractor),
+    documentDate || "bez-daty",
+    duplicateAmount(gross ?? net),
+  ].join(":");
+}
+
+function costDuplicateKey(row: CfoCostImportRow | CfoCostDuplicateCandidate) {
+  return [
+    normalizeDuplicatePart(row.numer_dokumentu || row.import_key || "bez-dokumentu"),
+    normalizeDuplicatePart(row.kontrahent),
+    row.data_dokumentu || "bez-daty",
+    duplicateAmount(row.kwota_brutto ?? row.kwota_netto_import ?? row.kwota_netto_cfo),
+  ].join("|");
+}
+
+function costImportLabel(row: CfoCostImportRow) {
+  return [row.numer_dokumentu || "bez numeru", row.kontrahent, formatMoney(row.kwota_brutto ?? row.kwota_netto_cfo)].join(" / ");
+}
+
+function normalizeDuplicatePart(value: string | null | undefined) {
+  return String(value || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "")
+    || "brak";
+}
+
+function duplicateAmount(value: number | null | undefined) {
+  return Number(value || 0).toFixed(2);
 }
 
 async function parseBankCsv(file: File): Promise<CfoBankImportRow[]> {

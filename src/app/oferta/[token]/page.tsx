@@ -184,7 +184,32 @@ export default function PublicOfferPage() {
       metadata: { fileName: offer.pdf_file_name },
     });
 
-    window.open(offer.pdf_url, "_blank", "noopener,noreferrer");
+    const fileName = buildPdfDownloadFileName(offer);
+
+    try {
+      const response = await fetch(offer.pdf_url);
+      if (!response.ok) throw new Error(`PDF download failed with status ${response.status}`);
+
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch (error) {
+      console.error("Błąd pobierania PDF:", error);
+      const link = document.createElement("a");
+      link.href = offer.pdf_url;
+      link.download = fileName;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    }
   }
 
   if (loading) return <main style={statePageStyle}>Ładowanie propozycji...</main>;
@@ -368,6 +393,19 @@ function statusDecisionLabel(status: CrmOffer["status"]) {
   if (status === "discussion_requested") return "Dziękujemy, poproszono opiekuna CRSS o kontakt. Wrócimy do Ciebie, żeby spokojnie omówić pytania.";
   if (status === "rejected") return "Dziękujemy za informację. Zapisaliśmy Twoją odpowiedź.";
   return null;
+}
+
+function buildPdfDownloadFileName(offer: CrmOffer) {
+  const source = offer.pdf_file_name || offer.tytul || "Propozycja-wspolpracy.pdf";
+  const withoutStoragePrefix = source.replace(/^\d{10,}-/, "");
+  const cleaned = withoutStoragePrefix
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+
+  return cleaned.toLowerCase().endsWith(".pdf") ? cleaned : `${cleaned || "Propozycja-wspolpracy"}.pdf`;
 }
 
 const pageStyle: React.CSSProperties = { minHeight: "100vh", background: colors.background, color: colors.text, padding: "24px" };

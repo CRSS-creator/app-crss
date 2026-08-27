@@ -106,13 +106,13 @@ export async function updateCrmOffer(offerId: string, payload: Partial<CrmOfferP
 
 export async function uploadCrmOfferPdf(offerId: string, file: File) {
   const fileName = sanitizeFileName(file.name || "propozycja.pdf");
-  const storagePath = `${offerId}/${Date.now()}-${fileName}`;
+  const storagePath = `${offerId}/${fileName}`;
   const upload = await supabase.storage
     .from(CRM_OFFER_PDF_BUCKET)
     .upload(storagePath, file, {
       cacheControl: "3600",
       contentType: "application/pdf",
-      upsert: false,
+      upsert: true,
     });
 
   if (upload.error) return { data: null, error: upload.error };

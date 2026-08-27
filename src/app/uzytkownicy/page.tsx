@@ -294,16 +294,6 @@ function SettingsContent({ role }: { role: UserRole | null }) {
     });
   }
 
-  async function updateUserRole(user: UserProfile, role: string) {
-    const result = await supabase.from("profiles").update({ role }).eq("id", user.id).select("id, full_name, email, role").single();
-    if (result.error) {
-      console.error("Błąd zmiany roli:", result.error);
-      alert("Nie udało się zmienić roli użytkownika.");
-      return;
-    }
-    setUsers((current) => current.map((item) => item.id === user.id ? result.data as UserProfile : item));
-  }
-
   const activeTemplates = templates.filter((template) => template.aktywne).length;
 
   return (
@@ -349,7 +339,6 @@ function SettingsContent({ role }: { role: UserRole | null }) {
         <UsersTab
           users={users}
           loading={loading}
-          onRoleChange={updateUserRole}
           onUserCreated={(user) => setUsers((current) => [user, ...current])}
           onUserUpdated={(user) => setUsers((current) => current.map((item) => item.id === user.id ? user : item))}
         />
@@ -639,12 +628,14 @@ function ClientPicker({ clients, selectedClients, suggestions, search, onSearch,
   );
 }
 
-function UsersTab({ users, loading, onRoleChange, onUserCreated, onUserUpdated }: { users: UserProfile[]; loading: boolean; onRoleChange: (user: UserProfile, role: string) => void; onUserCreated: (user: UserProfile) => void; onUserUpdated: (user: UserProfile) => void }) {
+function UsersTab({ users, loading, onUserCreated, onUserUpdated }: { users: UserProfile[]; loading: boolean; onUserCreated: (user: UserProfile) => void; onUserUpdated: (user: UserProfile) => void }) {
   const [newUser, setNewUser] = useState<NewUserDraft>(emptyNewUserDraft);
   const [creatingUser, setCreatingUser] = useState(false);
   const [resettingUserId, setResettingUserId] = useState<string | null>(null);
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [editedFullName, setEditedFullName] = useState("");
+  const [editedEmail, setEditedEmail] = useState("");
+  const [editedRole, setEditedRole] = useState("accountant");
   const [savingUserId, setSavingUserId] = useState<string | null>(null);
 
   async function createUser() {
@@ -703,19 +694,25 @@ function UsersTab({ users, loading, onRoleChange, onUserCreated, onUserUpdated }
     }
   }
 
-  function startEditingName(user: UserProfile) {
+  function startEditingUser(user: UserProfile) {
     setEditingUserId(user.id);
     setEditedFullName(user.full_name || "");
+    setEditedEmail(user.email || "");
+    setEditedRole(user.role || "accountant");
   }
 
-  function cancelEditingName() {
+  function cancelEditingUser() {
     setEditingUserId(null);
     setEditedFullName("");
+    setEditedEmail("");
+    setEditedRole("accountant");
   }
 
-  async function saveUserName(user: UserProfile) {
+  async function saveUser(user: UserProfile) {
     const fullName = editedFullName.trim().replace(/\s+/g, " ");
+    const email = editedEmail.trim().toLowerCase();
     if (!fullName) return alert("Wpisz imię i nazwisko użytkownika.");
+    if (!email) return alert("Wpisz adres email użytkownika.");
 
     const { data: sessionData } = await supabase.auth.getSession();
     const token = sessionData.session?.access_token;
@@ -728,18 +725,18 @@ function UsersTab({ users, loading, onRoleChange, onUserCreated, onUserUpdated }
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ userId: user.id, action: "update_name", fullName }),
+      body: JSON.stringify({ userId: user.id, action: "update_profile", fullName, email, role: editedRole }),
     });
     const result = await response.json().catch(() => null);
     setSavingUserId(null);
 
     if (!response.ok || !result?.user) {
-      alert(result?.error || "Nie udało się zmienić imienia i nazwiska użytkownika.");
+      alert(result?.error || "Nie udało się zmienić danych użytkownika.");
       return;
     }
 
     onUserUpdated(result.user as UserProfile);
-    cancelEditingName();
+    cancelEditingUser();
   }
 
   return (
@@ -755,36 +752,55 @@ function UsersTab({ users, loading, onRoleChange, onUserCreated, onUserUpdated }
       </div>
       <div style={tableShellStyle}>
         <table style={tableStyle}>
-          <thead><tr><Th>Użytkownik</Th><Th>Email</Th><Th>Rola</Th><Th>Hasło</Th></tr></thead>
+          <thead><tr><Th>Użytkownik</Th><Th>Email</Th><Th>Rola</Th><Th>Hasło</Th><th style={thStyle} data-user-actions-header="true">Akcje</th></tr></thead>
           <tbody>
-            {loading ? <tr><Td colSpan={4}>Ładowanie użytkowników...</Td></tr> : users.map((user) => <tr key={user.id} style={rowStyle}>
+            {loading ? <tr><Td colSpan={5}>Ładowanie użytkowników...</Td></tr> : users.map((user) => <tr key={user.id} style={rowStyle}>
               <Td strong>
                 {editingUserId === user.id ? (
-                  <div style={userNameEditStyle}>
-                    <input
-                      style={userNameInputStyle}
-                      value={editedFullName}
-                      autoFocus
-                      maxLength={120}
-                      onChange={(event) => setEditedFullName(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") void saveUserName(user);
-                        if (event.key === "Escape") cancelEditingName();
-                      }}
-                    />
-                    <button style={compactSaveButtonStyle} type="button" disabled={savingUserId === user.id} onClick={() => void saveUserName(user)}>{savingUserId === user.id ? "Zapisywanie..." : "Zapisz"}</button>
-                    <button style={compactCancelButtonStyle} type="button" disabled={savingUserId === user.id} onClick={cancelEditingName}>Anuluj</button>
-                  </div>
+                  <input
+                    style={userNameInputStyle}
+                    value={editedFullName}
+                    autoFocus
+                    maxLength={120}
+                    onChange={(event) => setEditedFullName(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") void saveUser(user);
+                      if (event.key === "Escape") cancelEditingUser();
+                    }}
+                  />
                 ) : (
-                  <div style={userNameDisplayStyle}>
-                    <span>{profileName(user)}</span>
-                    <button style={inlineEditButtonStyle} type="button" onClick={() => startEditingName(user)}>Edytuj</button>
-                  </div>
+                  profileName(user)
                 )}
               </Td>
-              <Td>{user.email || "Brak emaila"}</Td>
-              <Td><AppSelect style={roleSelectStyle} value={user.role || "accountant"} options={ROLE_OPTIONS} onChange={(value) => onRoleChange(user, value)} /></Td>
+              <Td>
+                {editingUserId === user.id ? (
+                  <input
+                    style={userEmailInputStyle}
+                    type="email"
+                    value={editedEmail}
+                    maxLength={254}
+                    onChange={(event) => setEditedEmail(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") void saveUser(user);
+                      if (event.key === "Escape") cancelEditingUser();
+                    }}
+                  />
+                ) : (
+                  user.email || "Brak emaila"
+                )}
+              </Td>
+              <Td>{editingUserId === user.id ? <AppSelect style={roleSelectStyle} value={editedRole} options={ROLE_OPTIONS} onChange={setEditedRole} /> : roleLabel(user.role)}</Td>
               <Td><button style={secondaryButtonStyle} type="button" disabled={resettingUserId === user.id} onClick={() => resetPassword(user)}>{resettingUserId === user.id ? "Reset..." : "Reset hasła"}</button></Td>
+              <td data-user-actions-cell="true" style={tdStyle}>
+                {editingUserId === user.id ? (
+                  <div style={userActionsStyle}>
+                    <button style={compactSaveButtonStyle} type="button" disabled={savingUserId === user.id} onClick={() => void saveUser(user)}>{savingUserId === user.id ? "Zapisywanie..." : "Zapisz"}</button>
+                    <button style={compactCancelButtonStyle} type="button" disabled={savingUserId === user.id} onClick={cancelEditingUser}>Anuluj</button>
+                  </div>
+                ) : (
+                  <button style={secondaryButtonStyle} type="button" onClick={() => startEditingUser(user)}>Edytuj</button>
+                )}
+              </td>
             </tr>)}
           </tbody>
         </table>
@@ -808,6 +824,7 @@ function TaxHistoryTd({ children, colSpan }: { children: ReactNode; colSpan?: nu
 function Badge({ children }: { children: ReactNode }) { return <span style={badgeStyle}>{children}</span>; }
 
 function profileName(user: UserProfile | ProfileSummary) { return user.full_name || user.email || "Użytkownik"; }
+function roleLabel(role: string | null | undefined) { return ROLE_OPTIONS.find((option) => option.value === role)?.label || "Accountant"; }
 function monthLabel(month: number | null | undefined) { return MONTH_OPTIONS.find((item) => item.value === month)?.label || "Rok"; }
 function vatModeToValue(mode: VatMode) { return mode === "active" ? true : mode === "inactive" ? false : null; }
 function valueToVatMode(value: boolean | null | undefined): VatMode { return value === true ? "active" : value === false ? "inactive" : "any"; }
@@ -920,9 +937,8 @@ const inactiveBadgeStyle: CSSProperties = { ...badgeStyle, background: "#f1f5f9"
 const smallTextStyle: CSSProperties = { display: "block", marginTop: "5px", color: colors.muted, fontSize: "12px", fontWeight: 650, lineHeight: 1.35 };
 const actionsStyle: CSSProperties = { display: "flex", gap: "8px", flexWrap: "wrap" };
 const roleSelectStyle: CSSProperties = { ...inputStyle, maxWidth: "210px" };
-const userNameDisplayStyle: CSSProperties = { display: "flex", alignItems: "center", gap: "10px", minWidth: "250px" };
-const inlineEditButtonStyle: CSSProperties = { border: "none", background: "transparent", color: colors.navy, padding: "4px 2px", fontSize: "12px", fontWeight: 850, cursor: "pointer", textDecoration: "underline", textUnderlineOffset: "3px" };
-const userNameEditStyle: CSSProperties = { display: "flex", alignItems: "center", gap: "7px", minWidth: "420px" };
 const userNameInputStyle: CSSProperties = { ...inputStyle, minWidth: "210px", maxWidth: "270px", minHeight: "38px", padding: "8px 10px" };
+const userEmailInputStyle: CSSProperties = { ...inputStyle, minWidth: "230px", maxWidth: "310px", minHeight: "38px", padding: "8px 10px" };
+const userActionsStyle: CSSProperties = { display: "flex", alignItems: "center", gap: "7px", whiteSpace: "nowrap" };
 const compactSaveButtonStyle: CSSProperties = { ...primaryButtonStyle, minHeight: "38px", padding: "8px 11px" };
 const compactCancelButtonStyle: CSSProperties = { ...secondaryButtonStyle, minHeight: "38px", padding: "8px 11px" };

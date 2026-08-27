@@ -17,7 +17,9 @@ type UserActionPayload = {
   userId?: string;
   password?: string;
   fullName?: string;
-  action?: "reset_password" | "deactivate" | "activate" | "update_name";
+  email?: string;
+  role?: string;
+  action?: "reset_password" | "deactivate" | "activate" | "update_name" | "update_profile";
 };
 
 type TemporaryPasswordMailPayload = {
@@ -361,35 +363,67 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ user: profile, active: isActive });
   }
 
-  if (action === "update_name") {
+  if (action === "update_name" || action === "update_profile") {
     const fullName = payload.fullName?.trim().replace(/\s+/g, " ");
+    const email = action === "update_profile" ? payload.email?.trim().toLowerCase() : existingUser.user.email;
+    const role = action === "update_profile" ? payload.role?.trim() : undefined;
     if (!fullName) {
       return NextResponse.json({ error: "Wpisz imię i nazwisko użytkownika." }, { status: 400 });
     }
     if (fullName.length > 120) {
       return NextResponse.json({ error: "Imię i nazwisko może mieć maksymalnie 120 znaków." }, { status: 400 });
     }
-
-    const previousProfile = await fetchUserProfile(admin, userId);
-    const { error: updateProfileError } = await admin
-      .from("profiles")
-      .update({ full_name: fullName })
-      .eq("id", userId);
-
-    if (updateProfileError) {
-      return NextResponse.json({ error: "Nie udało się zapisać imienia i nazwiska użytkownika." }, { status: 500 });
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return NextResponse.json({ error: "Wpisz prawidłowy adres email użytkownika." }, { status: 400 });
+    }
+    if (email.length > 254) {
+      return NextResponse.json({ error: "Adres email może mieć maksymalnie 254 znaki." }, { status: 400 });
+    }
+    if (action === "update_profile" && (!role || !ALLOWED_USER_ROLES.has(role))) {
+      return NextResponse.json({ error: "Wybierz prawidłową rolę użytkownika." }, { status: 400 });
     }
 
+    const previousProfile = await fetchUserProfile(admin, userId);
     const { error: updateAuthError } = await admin.auth.admin.updateUserById(userId, {
+      email,
+      email_confirm: true,
       user_metadata: {
         ...(existingUser.user.user_metadata || {}),
         full_name: fullName,
       },
+      ...(action === "update_profile" ? {
+        app_metadata: {
+          ...(existingUser.user.app_metadata || {}),
+          role,
+        },
+      } : {}),
     });
 
     if (updateAuthError) {
-      await admin.from("profiles").update({ full_name: previousProfile?.full_name || null }).eq("id", userId);
       return NextResponse.json({ error: updateAuthError.message || "Nie udało się zaktualizować danych konta użytkownika." }, { status: 400 });
+    }
+
+    const { error: updateProfileError } = await admin
+      .from("profiles")
+      .update({ full_name: fullName, email, ...(action === "update_profile" ? { role } : {}) })
+      .eq("id", userId);
+
+    if (updateProfileError) {
+      await admin.auth.admin.updateUserById(userId, {
+        email: existingUser.user.email,
+        email_confirm: true,
+        user_metadata: {
+          ...(existingUser.user.user_metadata || {}),
+          full_name: previousProfile?.full_name || existingUser.user.user_metadata?.full_name || null,
+        },
+        ...(action === "update_profile" ? {
+          app_metadata: {
+            ...(existingUser.user.app_metadata || {}),
+            role: previousProfile?.role || existingUser.user.app_metadata?.role || null,
+          },
+        } : {}),
+      });
+      return NextResponse.json({ error: "Nie udało się zapisać danych użytkownika." }, { status: 500 });
     }
 
     const updatedProfile = await fetchUserProfile(admin, userId);

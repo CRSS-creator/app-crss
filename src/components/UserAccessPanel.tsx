@@ -108,9 +108,12 @@ function attachAccessControls(
   const headerRow = table.querySelector<HTMLTableRowElement>("thead tr");
   if (!headerRow) return;
 
+  const actionsHeader = headerRow.querySelector('[data-user-actions-header="true"]');
   if (!headerRow.querySelector('[data-user-access-header="status"]')) {
-    headerRow.appendChild(buildHeaderCell("Status", "status"));
-    headerRow.appendChild(buildHeaderCell("Dostęp", "access"));
+    headerRow.insertBefore(buildHeaderCell("Status", "status"), actionsHeader);
+  }
+  if (!headerRow.querySelector('[data-user-access-header="access"]')) {
+    headerRow.insertBefore(buildHeaderCell("Dostęp", "access"), actionsHeader);
   }
 
   const rows = Array.from(table.querySelectorAll<HTMLTableRowElement>("tbody tr"));
@@ -122,9 +125,10 @@ function attachAccessControls(
     const user = users.find((item) => normalize(item.email || "") === email);
     if (!user) return;
 
+    const actionsCell = row.querySelector('[data-user-actions-cell="true"]');
     row.querySelectorAll('[data-user-access-cell="true"]').forEach((cell) => cell.remove());
-    row.appendChild(buildStatusCell(user));
-    row.appendChild(buildActionCell(user, actionUserId, onChange));
+    row.insertBefore(buildStatusCell(user), actionsCell);
+    row.insertBefore(buildActionCell(user, actionUserId, onChange), actionsCell);
   });
 }
 

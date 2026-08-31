@@ -735,10 +735,19 @@ function sortSettlementsByClientName(first: MonthlySettlement, second: MonthlySe
   });
 }
 function currentMonthInput() { 
-  const today = new Date();
-  const year = today.getMonth() === 0 ? today.getFullYear() - 1 : today.getFullYear();
-  const month = today.getMonth() === 0 ? 12 : today.getMonth();
-  return `${year}-${String(month).padStart(2, "0")}`;
+  const period = currentRecurringGenerationPeriod();
+  return `${period.getFullYear()}-${String(period.getMonth() + 1).padStart(2, "0")}`;
+}
+function currentRecurringGenerationPeriod(reference = new Date()) {
+  const currentMonth = new Date(reference.getFullYear(), reference.getMonth(), 1);
+  const currentMonthEnd = new Date(reference.getFullYear(), reference.getMonth() + 1, 0);
+  const generationStart = new Date(currentMonthEnd);
+  generationStart.setDate(currentMonthEnd.getDate() - 14);
+
+  const today = new Date(reference.getFullYear(), reference.getMonth(), reference.getDate());
+  if (today >= generationStart) return currentMonth;
+
+  return new Date(reference.getFullYear(), reference.getMonth() - 1, 1);
 }
 function vatSettlementPeriodLabel(value: string | null | undefined) { return value === "kwartalny" ? "kwartalny" : "miesięczny"; }
 function formatMonth(value: string) { return new Intl.DateTimeFormat("pl-PL", { month: "long", year: "numeric" }).format(new Date(`${value}-01T12:00:00`)); }

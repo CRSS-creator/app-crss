@@ -295,6 +295,14 @@ function BudgetContent() {
             </div>
           </article>
 
+          <article style={widePanelStyle}>
+            <div style={panelHeaderStyle}>
+              <Banknote size={21} style={panelIconStyle} />
+              <h2 style={panelTitleStyle}>Koszty wg kategorii</h2>
+            </div>
+            <CostBreakdownTable budget={budget} />
+          </article>
+
           <article style={panelStyle}>
             <div style={panelHeaderStyle}>
               <TrendingUp size={21} style={panelIconStyle} />
@@ -400,6 +408,33 @@ function CategoryTable({ rows, reverseDiff = false }: { rows: BudgetCategoryRow[
   );
 }
 
+function CostBreakdownTable({ budget }: { budget: BudgetMonth[] }) {
+  return (
+    <div style={tableWrapperStyle}>
+      <table style={wideTableStyle}>
+        <thead>
+          <tr>
+            <Th>Miesiąc</Th>
+            {COST_OPTIONS.map((category) => <Th key={category.value} align="right">{category.label}</Th>)}
+            <Th align="right">Razem</Th>
+          </tr>
+        </thead>
+        <tbody>
+          {budget.map((month) => (
+            <tr key={month.period}>
+              <Td><strong>{formatMonthField(month.period)}</strong></Td>
+              {COST_OPTIONS.map((category) => (
+                <Td key={category.value} align="right">{formatMoney(costCategoryValue(month, category.value))}</Td>
+              ))}
+              <Td align="right"><strong>{formatMoney(month.plannedCosts)}</strong></Td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function Diff({ value, plain = false }: { value: number; plain?: boolean }) {
   const style = value < -0.01 ? dangerInlineStyle : value > 0.01 ? successInlineStyle : undefined;
   return <strong style={plain ? style : style}>{value > 0 ? "+" : ""}{formatMoney(value)}</strong>;
@@ -454,7 +489,7 @@ function buildBudgetMonths(
     const actual = actualByMonth.get(period) || emptyActual();
     const monthOverrides = overrides.filter((override) => overrideApplies(override, period));
     const plannedRevenueCategories = plannedRevenueForMonth(period, baseline.revenue, clientRevenues, crmForecast);
-    const plannedCostCategories = new Map(baseline.costs);
+    const plannedCostCategories = plannedCostCategoriesForMonth(baseline.costs, actual.costByCategory);
     const crmCumulativeRevenueGrowth = crmForecast.cumulativeRevenueGrowthByMonth.get(period) || 0;
     let plannedCashFlow = baseline.cashFlowWithoutRevenue + plannedClientCashFlowForMonth(period, clientRevenues) + (crmCumulativeRevenueGrowth * 1.23);
 
@@ -554,6 +589,14 @@ function plannedRevenueForMonth(
   const crmSubscription = crmForecast.cumulativeRevenueGrowthByMonth.get(period) || 0;
   planned.set("abonamenty", clientSubscription + crmSubscription);
 
+  return planned;
+}
+
+function plannedCostCategoriesForMonth(baselineCosts: Map<string, number>, knownCosts: Map<string, number>) {
+  const planned = new Map(baselineCosts);
+  knownCosts.forEach((value, key) => {
+    planned.set(key, Math.max(planned.get(key) || 0, value));
+  });
   return planned;
 }
 
@@ -660,6 +703,10 @@ function categoryRows(type: CfoBudgetOverrideType, planned: Map<string, number>,
       diff: actualValue - plannedValue,
     };
   }).filter((row) => row.planned > 0 || row.actual > 0 || Math.abs(row.diff) > 0.01);
+}
+
+function costCategoryValue(month: BudgetMonth, category: CfoCostCategory) {
+  return month.costCategories.find((row) => row.key === category)?.planned || 0;
 }
 
 function overrideApplies(override: CfoBudgetOverride, period: string) {
@@ -789,6 +836,7 @@ const panelIconStyle: CSSProperties = { color: colors.red, display: "inline-flex
 const panelTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "21px" };
 const tableWrapperStyle: CSSProperties = { overflowX: "auto" };
 const tableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse", minWidth: "980px" };
+const wideTableStyle: CSSProperties = { ...tableStyle, minWidth: "1320px" };
 const thStyle: CSSProperties = { color: colors.muted, borderBottom: `1px solid ${colors.border}`, padding: "11px 9px", fontSize: "12px", textTransform: "uppercase", letterSpacing: 0, whiteSpace: "nowrap" };
 const tdStyle: CSSProperties = { color: colors.text, borderBottom: `1px solid ${colors.border}`, padding: "10px 9px", verticalAlign: "middle" };
 const selectedRowStyle: CSSProperties = { background: "#e9eef7", cursor: "pointer" };

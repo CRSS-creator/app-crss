@@ -336,7 +336,7 @@ function OnboardingContent() {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ clientId: row.client.id }),
+        body: JSON.stringify({ clientId: row.client.id, resend: Boolean(stage.actionDone) }),
       });
       setSendingClientCardRequest(false);
 

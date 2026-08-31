@@ -10,6 +10,7 @@ type AuthorizedResult =
 
 type ClientCardPayload = {
   clientId?: string;
+  resend?: boolean;
 };
 
 type ClientWithCaregiver = {
@@ -94,7 +95,7 @@ function caregiverFromClient(client: ClientWithCaregiver) {
   return Array.isArray(client.profiles) ? client.profiles[0] : client.profiles;
 }
 
-function buildClientCardHtml(client: ClientWithCaregiver, formUrl: string) {
+function buildClientCardHtml(client: ClientWithCaregiver, formUrl: string, resend = false) {
   const clientName = client.nazwa || "Państwa firmy";
 
   return `
@@ -105,6 +106,7 @@ function buildClientCardHtml(client: ClientWithCaregiver, formUrl: string) {
         <img src="${APP_URL}/logo-crss-mail.png?v=6" alt="CRSS" width="180" style="display:block;width:180px;max-width:180px;height:auto;border:0;outline:none;text-decoration:none;">
       </div>
       <p style="margin:0 0 16px 0;">Dzień dobry,</p>
+      ${resend ? '<p style="margin:0 0 16px 0;padding:14px 16px;background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;color:#9a3412;font-weight:850;">Przypominamy o konieczności wypełnienia karty klienta.</p>' : ''}
       <p style="margin:0 0 16px 0;">prosimy o uzupełnienie karty klienta biura rachunkowego dla <strong>${clientName}</strong>.</p>
       <div style="background:#eef3fb;border:1px solid #c9d6e8;border-radius:14px;padding:18px;margin:24px 0;">
         <p style="margin:0 0 10px 0;font-weight:850;">Karta klienta</p>
@@ -205,6 +207,7 @@ export async function POST(request: NextRequest) {
   if (webhookConfig.error) return webhookConfig.error;
 
   const caregiver = caregiverFromClient(clientRecord);
+  const isResend = Boolean(payload.resend);
 
   try {
     const response = await fetch(webhookConfig.webhookUrl, {
@@ -217,8 +220,8 @@ export async function POST(request: NextRequest) {
         clientNip: clientRecord.nip,
         recipientEmail: clientRecord.email,
         recipientName: clientRecord.osoba_kontaktowa,
-        subject: "Karta klienta biura rachunkowego do uzupełnienia",
-        html: buildClientCardHtml(clientRecord, formUrl),
+        subject: isResend ? "Przypomnienie: karta klienta biura rachunkowego do uzupełnienia" : "Karta klienta biura rachunkowego do uzupełnienia",
+        html: buildClientCardHtml(clientRecord, formUrl, isResend),
         formUrl,
         caregiverName: caregiver?.full_name || null,
         caregiverEmail: caregiver?.email || null,
@@ -261,7 +264,9 @@ export async function POST(request: NextRequest) {
       klient_id: clientRecord.id,
       etap: "client_card",
       akcja: "wysylka_karty_klienta",
-      opis: `Karta klienta została wysłana do uzupełnienia przez ${auth.requesterName}.`,
+      opis: isResend
+        ? `Ponownie wysłano przypomnienie o konieczności wypełnienia karty klienta przez ${auth.requesterName}.`
+        : `Karta klienta została wysłana do uzupełnienia przez ${auth.requesterName}.`,
       created_by: auth.requesterId,
     });
 

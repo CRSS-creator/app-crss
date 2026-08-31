@@ -21,8 +21,12 @@ import {
 } from "@/lib/cfoService";
 import {
   deleteCfoBudgetOverride,
+  fetchCfoBudgetClientRevenues,
+  fetchCfoBudgetCrmRevenues,
   fetchCfoBudgetOverrides,
   upsertCfoBudgetOverride,
+  type CfoBudgetClientRevenue,
+  type CfoBudgetCrmRevenue,
   type CfoBudgetOverride,
   type CfoBudgetOverrideRepeat,
   type CfoBudgetOverrideType,
@@ -105,8 +109,8 @@ export default function BudgetPage() {
 }
 
 function BudgetContent() {
-  const [startMonth, setStartMonth] = useState(currentClosedMonthInput());
-  const [selectedMonth, setSelectedMonth] = useState(currentClosedMonthInput());
+  const [startMonth, setStartMonth] = useState(currentForecastStartInput());
+  const [selectedMonth, setSelectedMonth] = useState(currentForecastStartInput());
   const [openingCash, setOpeningCash] = useState("0");
   const [safetyThreshold, setSafetyThreshold] = useState("0");
   const [loading, setLoading] = useState(true);
@@ -116,7 +120,9 @@ function BudgetContent() {
   const [employeeCosts, setEmployeeCosts] = useState<CfoEmployeeCost[]>([]);
   const [bankTransactions, setBankTransactions] = useState<CfoBankTransaction[]>([]);
   const [overrides, setOverrides] = useState<CfoBudgetOverride[]>([]);
-  const [draft, setDraft] = useState<BudgetDraft>(() => emptyDraft(currentClosedMonthInput()));
+  const [clientRevenues, setClientRevenues] = useState<CfoBudgetClientRevenue[]>([]);
+  const [crmRevenues, setCrmRevenues] = useState<CfoBudgetCrmRevenue[]>([]);
+  const [draft, setDraft] = useState<BudgetDraft>(() => emptyDraft(currentForecastStartInput()));
 
   useEffect(() => {
     void loadData();
@@ -124,8 +130,8 @@ function BudgetContent() {
   }, [startMonth]);
 
   const budget = useMemo(
-    () => buildBudgetMonths(startMonth, DEFAULT_HORIZON, revenueLines, costs, employeeCosts, bankTransactions, overrides, parsePolishNumber(openingCash)),
-    [startMonth, revenueLines, costs, employeeCosts, bankTransactions, overrides, openingCash],
+    () => buildBudgetMonths(startMonth, DEFAULT_HORIZON, revenueLines, costs, employeeCosts, bankTransactions, overrides, clientRevenues, crmRevenues, parsePolishNumber(openingCash)),
+    [startMonth, revenueLines, costs, employeeCosts, bankTransactions, overrides, clientRevenues, crmRevenues, openingCash],
   );
 
   const selected = budget.find((month) => month.period === selectedMonth) || budget[0];
@@ -135,12 +141,14 @@ function BudgetContent() {
     setLoading(true);
     const historyStart = shiftMonth(startMonth, -3);
     const forecastEnd = shiftMonth(startMonth, DEFAULT_HORIZON - 1);
-    const [revenueResult, costsResult, employeeResult, bankResult, overridesResult] = await Promise.all([
+    const [revenueResult, costsResult, employeeResult, bankResult, overridesResult, clientRevenueResult, crmRevenueResult] = await Promise.all([
       fetchCfoRevenueLinesRange(monthToDate(historyStart), monthEndDate(forecastEnd)),
       fetchCfoCostsRange(monthToDate(historyStart), monthEndDate(forecastEnd)),
       fetchCfoEmployeeCostsRange(monthToDate(historyStart), monthEndDate(forecastEnd)),
       fetchCfoBankTransactionsRange(monthToDate(historyStart), monthEndDate(forecastEnd)),
       fetchCfoBudgetOverrides(monthToDate(startMonth), monthEndDate(forecastEnd)),
+      fetchCfoBudgetClientRevenues(),
+      fetchCfoBudgetCrmRevenues(),
     ]);
 
     if (revenueResult.error) console.error("Błąd pobierania przychodów do budżetu:", revenueResult.error);
@@ -148,12 +156,16 @@ function BudgetContent() {
     if (employeeResult.error) console.error("Błąd pobierania kosztów zespołu do budżetu:", employeeResult.error);
     if (bankResult.error) console.error("Błąd pobierania cash flow do budżetu:", bankResult.error);
     if (overridesResult.error) console.error("Błąd pobierania korekt budżetu:", overridesResult.error);
+    if (clientRevenueResult.error) console.error("Błąd pobierania abonamentów klientów do budżetu:", clientRevenueResult.error);
+    if (crmRevenueResult.error) console.error("Błąd pobierania CRM do budżetu:", crmRevenueResult.error);
 
     setRevenueLines((revenueResult.data || []) as unknown as CfoInvoiceLine[]);
     setCosts((costsResult.data || []) as CfoCostItem[]);
     setEmployeeCosts((employeeResult.data || []) as CfoEmployeeCost[]);
     setBankTransactions((bankResult.data || []) as CfoBankTransaction[]);
     setOverrides((overridesResult.data || []) as CfoBudgetOverride[]);
+    setClientRevenues((clientRevenueResult.data || []) as CfoBudgetClientRevenue[]);
+    setCrmRevenues((crmRevenueResult.data || []) as CfoBudgetCrmRevenue[]);
     setLoading(false);
   }
 
@@ -422,6 +434,8 @@ function buildBudgetMonths(
   employees: CfoEmployeeCost[],
   bankTransactions: CfoBankTransaction[],
   overrides: CfoBudgetOverride[],
+  clientRevenues: CfoBudgetClientRevenue[],
+  crmRevenues: CfoBudgetCrmRevenue[],
   openingCash: number,
 ): BudgetMonth[] {
   const months = monthsForRange(startMonth, horizon);
@@ -433,9 +447,9 @@ function buildBudgetMonths(
   return months.map((period) => {
     const actual = actualByMonth.get(period) || emptyActual();
     const monthOverrides = overrides.filter((override) => overrideApplies(override, period));
-    const plannedRevenueCategories = new Map(baseline.revenue);
+    const plannedRevenueCategories = plannedRevenueForMonth(period, baseline.revenue, clientRevenues, crmRevenues);
     const plannedCostCategories = new Map(baseline.costs);
-    let plannedCashFlow = baseline.cashFlow;
+    let plannedCashFlow = baseline.cashFlowWithoutRevenue + plannedClientCashFlowForMonth(period, clientRevenues) + plannedCrmRevenueForMonth(period, crmRevenues, clientRevenues);
 
     monthOverrides.forEach((override) => {
       const current = override.typ === "przychod" ? plannedRevenueCategories : plannedCostCategories;
@@ -505,16 +519,107 @@ function buildActualMonthMap(months: string[], revenueLines: CfoInvoiceLine[], c
     const period = transaction.data_ksiegowania.slice(0, 7);
     const current = map.get(period);
     if (!current) return;
-    current.cashFlow += Number(transaction.kwota || 0);
+    const amount = Number(transaction.kwota || 0);
+    current.cashFlow += amount;
+    if (transaction.typ === "faktura_sprzedazowa" && amount > 0) current.revenueCashFlow += amount;
   });
 
   return map;
+}
+
+function plannedRevenueForMonth(
+  period: string,
+  baselineRevenue: Map<string, number>,
+  clientRevenues: CfoBudgetClientRevenue[],
+  crmRevenues: CfoBudgetCrmRevenue[],
+) {
+  const planned = new Map<string, number>();
+  baselineRevenue.forEach((value, key) => {
+    if (key !== "abonamenty") planned.set(key, value);
+  });
+
+  const clientSubscription = sum(clientRevenues
+    .filter((client) => clientRevenueApplies(client, period))
+    .map((client) => Number(client.abonament || 0)));
+
+  const crmSubscription = plannedCrmRevenueForMonth(period, crmRevenues, clientRevenues);
+  planned.set("abonamenty", clientSubscription + crmSubscription);
+
+  return planned;
+}
+
+function clientRevenueApplies(client: CfoBudgetClientRevenue, period: string) {
+  if (Number(client.abonament || 0) <= 0) return false;
+  const firstPeriod = client.pierwszy_okres_rozliczeniowy?.slice(0, 7);
+  const lastPeriod = client.ostatni_okres_rozliczeniowy?.slice(0, 7);
+  if (firstPeriod && firstPeriod > period) return false;
+  if (lastPeriod && lastPeriod < period) return false;
+  return client.aktywny === true || String(client.status_klienta || "").toLowerCase() === "onboarding";
+}
+
+function plannedClientCashFlowForMonth(period: string, clientRevenues: CfoBudgetClientRevenue[]) {
+  const possibleServicePeriods = [period, shiftMonth(period, -1)];
+  return sum(clientRevenues.flatMap((client) => possibleServicePeriods
+    .filter((servicePeriod) => clientRevenueApplies(client, servicePeriod))
+    .filter((servicePeriod) => clientCashFlowMonth(client, servicePeriod) === period)
+    .map(() => Number(client.abonament || 0) * 1.23)));
+}
+
+function clientCashFlowMonth(client: CfoBudgetClientRevenue, servicePeriod: string) {
+  if (client.model_fakturowania === "z_gory") {
+    const firstPeriod = client.pierwszy_okres_rozliczeniowy?.slice(0, 7);
+    if (firstPeriod && firstPeriod === servicePeriod) return shiftMonth(servicePeriod, 1);
+    return servicePeriod;
+  }
+  return shiftMonth(servicePeriod, 1);
+}
+
+function plannedCrmRevenueForMonth(period: string, crmRevenues: CfoBudgetCrmRevenue[], clientRevenues: CfoBudgetClientRevenue[] = []) {
+  const clientNips = new Set(clientRevenues.map((client) => normalizeNip(client.nip)).filter(Boolean));
+  return sum(crmRevenues
+    .filter((lead) => !clientNips.has(normalizeNip(lead.nip)))
+    .filter((lead) => crmRevenueApplies(lead, period))
+    .map((lead) => Number(lead.szacowany_mrr || 0) * crmProbability(lead)));
+}
+
+function crmRevenueApplies(lead: CfoBudgetCrmRevenue, period: string) {
+  if (Number(lead.szacowany_mrr || 0) <= 0) return false;
+  if (lead.status === "przegrana") return false;
+  const startPeriod = crmForecastStartMonth(lead);
+  return startPeriod <= period;
+}
+
+function crmForecastStartMonth(lead: CfoBudgetCrmRevenue) {
+  if (lead.status === "wygrana") return shiftMonth(timestampToMonth(lead.etap_started_at || lead.created_at), 1);
+  if (lead.etap === "finalizacja_podpisanie_umowy") return shiftMonth(timestampToMonth(lead.etap_started_at || lead.data_wyslania_oferty || lead.created_at), 1);
+  if (lead.etap === "decyzja") return shiftMonth(timestampToMonth(lead.etap_started_at || lead.data_wyslania_oferty || lead.created_at), 2);
+  if (lead.etap === "propozycja_wspolpracy_wyslana") return shiftMonth(timestampToMonth(lead.data_wyslania_oferty || lead.etap_started_at || lead.created_at), 2);
+  if (lead.etap === "rozmowa_online") return shiftMonth(timestampToMonth(lead.etap_started_at || lead.created_at), 3);
+  return "9999-12";
+}
+
+function crmProbability(lead: CfoBudgetCrmRevenue) {
+  if (lead.status === "wygrana") return 1;
+  if (lead.etap === "finalizacja_podpisanie_umowy") return 0.8;
+  if (lead.etap === "decyzja") return 0.5;
+  if (lead.etap === "propozycja_wspolpracy_wyslana") return 0.3;
+  if (lead.etap === "rozmowa_online") return 0.15;
+  return 0;
+}
+
+function timestampToMonth(value: string | null | undefined) {
+  return value?.slice(0, 7) || currentMonthInput();
+}
+
+function normalizeNip(value: string | null | undefined) {
+  return String(value || "").replace(/\D/g, "");
 }
 
 function buildBaseline(historyMonths: string[], actualByMonth: Map<string, ReturnType<typeof emptyActual>>) {
   const revenue = new Map<string, number>();
   const costs = new Map<string, number>();
   let cashFlow = 0;
+  let revenueCashFlow = 0;
 
   historyMonths.forEach((month) => {
     const actual = actualByMonth.get(month) || emptyActual();
@@ -525,9 +630,10 @@ function buildBaseline(historyMonths: string[], actualByMonth: Map<string, Retur
       costs.set(option.value, (costs.get(option.value) || 0) + (actual.costByCategory.get(option.value) || 0) / historyMonths.length);
     });
     cashFlow += actual.cashFlow / historyMonths.length;
+    revenueCashFlow += actual.revenueCashFlow / historyMonths.length;
   });
 
-  return { revenue, costs, cashFlow };
+  return { revenue, costs, cashFlowWithoutRevenue: cashFlow - revenueCashFlow };
 }
 
 function emptyActual() {
@@ -535,6 +641,7 @@ function emptyActual() {
     revenue: 0,
     costs: 0,
     cashFlow: 0,
+    revenueCashFlow: 0,
     revenueByCategory: new Map<string, number>(),
     costByCategory: new Map<string, number>(),
   };
@@ -581,7 +688,7 @@ function revenueLineEffectivePeriod(line: CfoInvoiceLine) {
   if (settlement?.okres) return monthToDate(settlement.okres.slice(0, 7));
 
   const invoice = Array.isArray(line.faktury) ? line.faktury[0] : line.faktury;
-  return invoice?.okres || monthToDate(currentClosedMonthInput());
+  return invoice?.okres || monthToDate(currentMonthInput());
 }
 
 function categoryLabel(type: CfoBudgetOverrideType, value: string) {
@@ -602,8 +709,8 @@ function emptyDraft(period: string): BudgetDraft {
   };
 }
 
-function currentClosedMonthInput() {
-  return shiftMonth(currentMonthInput(), -1);
+function currentForecastStartInput() {
+  return shiftMonth(currentMonthInput(), 1);
 }
 
 function currentMonthInput() {

@@ -529,11 +529,22 @@ function buildActualMonthMap(months: string[], revenueLines: CfoInvoiceLine[], c
     const current = map.get(period);
     if (!current) return;
     const category: CfoCostCategory = employee.zespol === "ksiegowy" ? "koszty_zespolu" : "marketing_sprzedaz";
-    const subcategory = employee.zespol === "ksiegowy" ? "Wynagrodzenie podstawowe" : employee.zespol === "marketingowy" ? "Koszt zespołu marketingowego" : "Koszt zespołu sprzedażowego";
-    const amount = employeeCostTotal(employee);
-    current.costs += amount;
-    current.costByCategory.set(category, (current.costByCategory.get(category) || 0) + amount);
-    upsertSubcategoryAmount(current.costBySubcategory, category, subcategory, amount);
+    const rows = employee.zespol === "ksiegowy"
+      ? [
+        ["Wynagrodzenie podstawowe", Number(employee.podstawa || 0)],
+        ["ZUS pracodawcy", Number(employee.zus_pracodawcy || 0)],
+        ["Benefity", Number(employee.benefity || 0)],
+        ["Premie", Number(employee.premie || 0)],
+        ["Szkolenia", Number(employee.szkolenia || 0)],
+      ] as const
+      : [[employee.zespol === "marketingowy" ? "Koszt zespołu marketingowego" : "Koszt zespołu sprzedażowego", employeeCostTotal(employee)]] as const;
+
+    rows.forEach(([subcategory, amount]) => {
+      if (amount <= 0) return;
+      current.costs += amount;
+      current.costByCategory.set(category, (current.costByCategory.get(category) || 0) + amount);
+      upsertSubcategoryAmount(current.costBySubcategory, category, subcategory, amount);
+    });
   });
 
   bankTransactions.forEach((transaction) => {
@@ -653,7 +664,8 @@ function buildCrmRevenueGrowthForecast(historyMonths: string[], forecastMonths: 
 function buildBaseline(historyMonths: string[], actualByMonth: Map<string, ReturnType<typeof emptyActual>>) {
   const revenue = new Map<string, number>();
   const costs = new Map<string, number>();
-  const costSubcategories = new Map<string, Map<string, number>>();
+  const costSubcategoryTotals = new Map<string, Map<string, number>>();
+  const costSubcategoryCounts = new Map<string, Map<string, number>>();
   let cashFlow = 0;
   let revenueCashFlow = 0;
 
@@ -667,14 +679,21 @@ function buildBaseline(historyMonths: string[], actualByMonth: Map<string, Retur
     });
     actual.costBySubcategory.forEach((subcategories, category) => {
       subcategories.forEach((value, subcategory) => {
-        upsertSubcategoryAmount(costSubcategories, category as CfoCostCategory, subcategory, value / historyMonths.length);
+        if (value <= 0) return;
+        upsertSubcategoryAmount(costSubcategoryTotals, category as CfoCostCategory, subcategory, value);
+        upsertSubcategoryAmount(costSubcategoryCounts, category as CfoCostCategory, subcategory, 1);
       });
     });
     cashFlow += actual.cashFlow / historyMonths.length;
     revenueCashFlow += actual.revenueCashFlow / historyMonths.length;
   });
 
-  return { revenue, costs, costSubcategories, cashFlowWithoutRevenue: cashFlow - revenueCashFlow };
+  return {
+    revenue,
+    costs,
+    costSubcategories: averageNestedMap(costSubcategoryTotals, costSubcategoryCounts),
+    cashFlowWithoutRevenue: cashFlow - revenueCashFlow,
+  };
 }
 
 function emptyActual() {
@@ -743,6 +762,17 @@ function categoryTotalsFromSubcategories(source: Map<string, Map<string, number>
 
 function cloneNestedMap(source: Map<string, Map<string, number>>) {
   return new Map(Array.from(source.entries()).map(([key, value]) => [key, new Map(value)]));
+}
+
+function averageNestedMap(totals: Map<string, Map<string, number>>, counts: Map<string, Map<string, number>>) {
+  const average = new Map<string, Map<string, number>>();
+  totals.forEach((subcategories, category) => {
+    subcategories.forEach((total, subcategory) => {
+      const count = counts.get(category)?.get(subcategory) || 1;
+      setSubcategoryAmount(average, category as CfoCostCategory, subcategory, total / count);
+    });
+  });
+  return average;
 }
 
 function upsertSubcategoryAmount(source: Map<string, Map<string, number>>, category: CfoCostCategory | string, subcategory: string, amount: number) {

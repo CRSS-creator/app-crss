@@ -278,7 +278,7 @@ function BudgetContent() {
               <SummaryBox label="Plan kosztów" value={formatMoney(selected?.plannedCosts || 0)} tone="bad" />
               <SummaryBox label="Wykonanie kosztów" value={formatMoney(selected?.actualCosts || 0)} />
               <SummaryBox label="Różnica kosztów" value={`${selectedCostDiff > 0 ? "+" : ""}${formatMoney(selectedCostDiff)}`} tone={selectedCostDiff >= 0 ? "good" : "bad"} />
-              <SummaryBox label="Przyrost CRM" value={formatMoney(selected?.crmMonthlyRevenueGrowth || 0)} />
+              <SummaryBox label="CRM w planie" value={formatMoney(selected?.crmCumulativeRevenueGrowth || 0)} />
               <SummaryBox label="Cash flow" value={formatMoney(selected?.plannedCashFlow || 0)} tone={(selected?.plannedCashFlow || 0) >= 0 ? "good" : "bad"} />
             </div>
           </article>
@@ -655,7 +655,7 @@ function buildCrmRevenueGrowthForecast(historyMonths: string[], forecastMonths: 
 
   const cumulativeRevenueGrowthByMonth = new Map<string, number>();
   forecastMonths.forEach((month, index) => {
-    cumulativeRevenueGrowthByMonth.set(month, monthlyRevenueGrowth * (index + 1));
+    cumulativeRevenueGrowthByMonth.set(month, monthlyRevenueGrowth * index);
   });
 
   return { monthlyRevenueGrowth, cumulativeRevenueGrowthByMonth };

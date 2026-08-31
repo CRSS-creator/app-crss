@@ -1591,8 +1591,8 @@ function PayrollDetailsModal({
 
   return (
     <>
-      <div style={modalOverlayStyle} onClick={onClose}>
-        <section style={wideModalStyle} onClick={(event) => event.stopPropagation()}>
+      <div style={payrollDetailsOverlayStyle} onClick={onClose}>
+        <section style={payrollDetailsModalStyle} onClick={(event) => event.stopPropagation()}>
           <div style={modalHeaderStyle}>
             <div>
               <p style={eyebrowStyle}>Szczegóły kadrowe</p>
@@ -1615,16 +1615,16 @@ function PayrollDetailsModal({
             </div>
           </div>
 
-          <div style={modalBodyStyle}>
+          <div style={payrollDetailsBodyStyle}>
             {showNotificationHistory && (
               <PayrollNotificationHistoryPanel notifications={notificationHistory} loading={historyLoading} />
             )}
 
-          <section style={contractsSectionStyle}>
+          <section style={payrollContractsSectionStyle}>
             {activeContracts.length === 0 ? (
               <p style={emptyInlineStyle}>Brak dodanych umów kadrowych.</p>
             ) : (
-              <div style={contractsTableScrollStyle}>
+              <div style={payrollContractsTableScrollStyle}>
                 <table style={detailsTableStyle}>
                   <thead>
                     <tr>
@@ -1656,11 +1656,11 @@ function PayrollDetailsModal({
           </section>
 
           {showArchivedContracts && (
-            <section style={contractsSectionStyle}>
+            <section style={archivedPayrollContractsSectionStyle}>
               {archivedContracts.length === 0 ? (
                 <p style={emptyStyle}>Brak zarchiwizowanych umów.</p>
               ) : (
-                <div style={contractsTableScrollStyle}>
+                <div style={payrollContractsTableScrollStyle}>
                   <table style={detailsTableStyle}>
                     <thead>
                       <tr>
@@ -2320,6 +2320,8 @@ const emptySmallPlusAmountStyle: CSSProperties = { color: colors.muted, fontWeig
 const detailsButtonStyle: CSSProperties = { minHeight: "38px", padding: "0 14px", borderRadius: radius.button, border: `1px solid ${colors.border}`, background: colors.white, color: colors.navy, fontWeight: 850, cursor: "pointer" };
 const modalOverlayStyle: CSSProperties = { position: "fixed", inset: 0, zIndex: 60, background: "rgba(15, 23, 42, 0.38)", display: "flex", justifyContent: "center", alignItems: "flex-start", padding: "10px", overflowY: "auto" };
 const wideModalStyle: CSSProperties = { width: "calc(100vw - 20px)", maxHeight: "calc(100vh - 20px)", minHeight: "calc(100vh - 20px)", borderRadius: radius.card, background: colors.white, border: `1px solid ${colors.border}`, boxShadow: "0 32px 90px rgba(15, 23, 42, 0.28)", overflow: "hidden", display: "flex", flexDirection: "column" };
+const payrollDetailsOverlayStyle: CSSProperties = { ...modalOverlayStyle, padding: "20px 46px" };
+const payrollDetailsModalStyle: CSSProperties = { ...wideModalStyle, width: "min(1720px, calc(100vw - 92px))", minHeight: "calc(100vh - 40px)", maxHeight: "calc(100vh - 40px)" };
 const detailsModalStyle: CSSProperties = { width: "min(980px, calc(100vw - 56px))", maxHeight: "calc(100vh - 56px)", borderRadius: radius.card, background: colors.white, border: `1px solid ${colors.border}`, boxShadow: "0 32px 90px rgba(15, 23, 42, 0.28)", overflow: "hidden", display: "flex", flexDirection: "column" };
 const contractFormModalStyle: CSSProperties = { width: "min(1120px, calc(100vw - 20px))", maxHeight: "calc(100vh - 20px)", borderRadius: radius.card, background: colors.white, border: `1px solid ${colors.border}`, boxShadow: "0 32px 90px rgba(15, 23, 42, 0.32)", overflow: "hidden", display: "flex", flexDirection: "column" };
 const a1DetailsModalStyle: CSSProperties = { ...detailsModalStyle, height: "calc(100vh - 56px)" };
@@ -2329,6 +2331,7 @@ const modalTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize
 const modalSubtitleStyle: CSSProperties = { margin: "8px 0 0", color: colors.muted, fontSize: "13px", fontWeight: 750 };
 const modalActionsStyle: CSSProperties = { display: "flex", gap: "10px", alignItems: "center", justifyContent: "flex-end", flexWrap: "wrap" };
 const modalBodyStyle: CSSProperties = { padding: "22px 24px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "18px" };
+const payrollDetailsBodyStyle: CSSProperties = { ...modalBodyStyle, flex: "1 1 auto", minHeight: 0, overflow: "hidden" };
 const a1ModalBodyStyle: CSSProperties = { ...modalBodyStyle, flex: "1 1 auto", minHeight: 0, paddingBottom: "24px" };
 const stickyModalFooterStyle: CSSProperties = { flex: "0 0 auto", display: "flex", justifyContent: "flex-end", gap: "10px", padding: "16px 24px 22px", borderTop: `1px solid ${colors.border}`, background: colors.white, flexWrap: "wrap" };
 const iconButtonStyle: CSSProperties = { width: "42px", height: "42px", borderRadius: radius.button, border: `1px solid ${colors.border}`, background: colors.white, color: colors.navy, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer" };
@@ -2378,6 +2381,9 @@ const disabledInputStyle: CSSProperties = { ...inputStyle, background: "rgba(226
 const checkboxFieldStyle: CSSProperties = { minHeight: "42px", display: "flex", alignItems: "center", gap: "8px", color: colors.navy, fontSize: "14px", fontWeight: 850 };
 const checkboxInputStyle: CSSProperties = { width: "16px", height: "16px", margin: 0, accentColor: colors.navy };
 const contractsSectionStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.card, padding: "0", overflow: "hidden" };
+const payrollContractsSectionStyle: CSSProperties = { ...contractsSectionStyle, flex: "1 1 auto", minHeight: 0, display: "flex", flexDirection: "column" };
+const archivedPayrollContractsSectionStyle: CSSProperties = { ...contractsSectionStyle, flex: "0 1 42%", minHeight: "150px", display: "flex", flexDirection: "column" };
+const payrollContractsTableScrollStyle: CSSProperties = { ...contractsTableScrollStyle, flex: "1 1 auto", minHeight: 0, maxHeight: "none" };
 const rowActionsStyle: CSSProperties = { display: "inline-flex", gap: "8px", alignItems: "center", justifyContent: "center" };
 const historyPanelStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.inputBackground, padding: "18px" };
 const historyTableStyle: CSSProperties = { width: "100%", minWidth: "980px", borderCollapse: "collapse", background: colors.white };

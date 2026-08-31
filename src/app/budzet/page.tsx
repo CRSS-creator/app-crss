@@ -260,6 +260,17 @@ function BudgetContent() {
               <h2 style={panelTitleStyle}>Plan miesiąca</h2>
               <span style={badgeStyle}>{formatMonthField(selectedMonth)}</span>
             </div>
+            <div style={profitSummaryStyle}>
+              <div>
+                <span>Podsumowanie zysku</span>
+                <strong style={(selected?.plannedResult || 0) >= 0 ? successInlineStyle : dangerInlineStyle}>{formatMoney(selected?.plannedResult || 0)}</strong>
+              </div>
+              <div style={profitFormulaStyle}>
+                <span>{formatMoney(selected?.plannedRevenue || 0)} przychodów</span>
+                <span>-</span>
+                <span>{formatMoney(selected?.plannedCosts || 0)} kosztów</span>
+              </div>
+            </div>
             <div style={monthSummaryGridStyle}>
               <SummaryBox label="Plan przychodów" value={formatMoney(selected?.plannedRevenue || 0)} />
               <SummaryBox label="Wykonanie przychodów" value={formatMoney(selected?.actualRevenue || 0)} />
@@ -857,6 +868,8 @@ const metricStyle: CSSProperties = { background: colors.card, border: `1px solid
 const metricValueStyle: CSSProperties = { color: colors.navy, fontSize: "21px", lineHeight: 1.1 };
 const goodMetricValueStyle: CSSProperties = { ...metricValueStyle, color: colors.success };
 const badMetricValueStyle: CSSProperties = { ...metricValueStyle, color: colors.danger };
+const profitSummaryStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: "#e9eef7", padding: "16px", marginBottom: "12px", display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "center", flexWrap: "wrap" };
+const profitFormulaStyle: CSSProperties = { display: "flex", gap: "10px", alignItems: "center", color: colors.muted, fontWeight: 850, flexWrap: "wrap" };
 const monthSummaryGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "10px" };
 const summaryBoxStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "12px", display: "grid", gap: "6px", color: colors.muted, fontSize: "12px", fontWeight: 850 };
 const panelStyle: CSSProperties = { background: colors.card, border: `1px solid ${colors.border}`, borderRadius: radius.card, boxShadow: shadow.soft, padding: "20px", minWidth: 0 };

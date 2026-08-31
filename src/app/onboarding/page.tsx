@@ -1229,8 +1229,9 @@ function StageProcessRow({
   const checklistGroups = groupChecklist(stage.checklist || []);
   const hasChecklist = Boolean(stage.checklist?.length);
   const primaryAction = stage.key === "client_card" || stage.key === "powers" || stage.key === "wfirma_account" || stage.key === "documents_takeover";
-  const actionDisabled = saving || actionSending || Boolean(stage.actionDone);
-  const actionButtonLabel = stage.actionDone ? "Wys\u0142ano" : actionSending && primaryAction ? "Wysy\u0142anie..." : stage.actionLabel;
+  const actionDisabled = saving || actionSending;
+  const actionButtonLabel = actionSending && primaryAction ? "Wysyłanie..." : stage.actionLabel;
+  const resendButtonLabel = actionSending && primaryAction ? "Wysyłanie..." : "Wyślij ponownie";
 
   return (
     <>
@@ -1254,7 +1255,7 @@ function StageProcessRow({
                 {checklistExpanded ? "Ukryj zadania" : "Pokaż zadania"}
               </button>
             )}
-            {stage.actionLabel && (
+            {stage.actionLabel && !stage.actionDone && (
               <button
                 type="button"
                 style={primaryAction ? primaryActionButtonStyle : secondaryButtonStyle}
@@ -1275,6 +1276,16 @@ function StageProcessRow({
                 <button style={smallButtonStyle} disabled={saving} onClick={() => onStatusChange("w_toku")}>W toku</button>
                 <button style={smallButtonStyle} disabled={saving} onClick={() => onStatusChange("gotowe")}>Gotowe</button>
               </>
+            )}
+            {stage.actionLabel && stage.actionDone && (
+              <button
+                type="button"
+                style={secondaryButtonStyle}
+                disabled={actionDisabled}
+                onClick={onAction}
+              >
+                {resendButtonLabel}
+              </button>
             )}
           </div>
           {stage.actionInfo && <small style={stageActionInfoStyle}>{stage.actionInfo}</small>}

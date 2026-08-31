@@ -1,12 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { Banknote, CalendarDays, Plus, RefreshCw, Save, Trash2, TrendingUp, WalletCards } from "lucide-react";
+import { Banknote, CalendarDays, RefreshCw, Save, TrendingUp, WalletCards } from "lucide-react";
 
 import { colors, radius, shadow } from "@/app/design";
 import AccessGuard from "@/components/AccessGuard";
 import AppLayout from "@/components/AppLayout";
-import AppSelect from "@/components/AppSelect";
 import {
   fetchCfoBankTransactionsRange,
   fetchCfoCostsRange,
@@ -20,7 +19,6 @@ import {
   type CfoRevenueCategory,
 } from "@/lib/cfoService";
 import {
-  deleteCfoBudgetOverride,
   fetchCfoBudgetClientRevenues,
   fetchCfoBudgetCrmRevenues,
   fetchCfoBudgetOverrides,
@@ -28,20 +26,8 @@ import {
   type CfoBudgetClientRevenue,
   type CfoBudgetCrmRevenue,
   type CfoBudgetOverride,
-  type CfoBudgetOverrideRepeat,
   type CfoBudgetOverrideType,
 } from "@/lib/cfoBudgetService";
-
-type BudgetDraft = {
-  okres: string;
-  typ: CfoBudgetOverrideType;
-  kategoria: string;
-  podkategoria: string;
-  opis: string;
-  kwota_plan: string;
-  kwota_cashflow: string;
-  powtarzanie: CfoBudgetOverrideRepeat;
-};
 
 type BudgetMonth = {
   period: string;
@@ -105,16 +91,6 @@ const COST_OPTIONS: { value: CfoCostCategory; label: string }[] = [
   { value: "jednorazowe_nadzwyczajne", label: "Jednorazowe i nadzwyczajne" },
 ];
 
-const TYPE_OPTIONS: { value: CfoBudgetOverrideType; label: string }[] = [
-  { value: "koszt", label: "Koszt" },
-  { value: "przychod", label: "Przychód" },
-];
-
-const REPEAT_OPTIONS: { value: CfoBudgetOverrideRepeat; label: string }[] = [
-  { value: "od_miesiaca", label: "Od miesiąca" },
-  { value: "jednorazowo", label: "Jednorazowo" },
-];
-
 const MONTH_LABELS = ["styczeń", "luty", "marzec", "kwiecień", "maj", "czerwiec", "lipiec", "sierpień", "wrzesień", "październik", "listopad", "grudzień"];
 const DEFAULT_HORIZON = 12;
 const EMPTY_SUBCATEGORY = "Bez podkategorii";
@@ -143,7 +119,6 @@ function BudgetContent() {
   const [overrides, setOverrides] = useState<CfoBudgetOverride[]>([]);
   const [clientRevenues, setClientRevenues] = useState<CfoBudgetClientRevenue[]>([]);
   const [crmRevenues, setCrmRevenues] = useState<CfoBudgetCrmRevenue[]>([]);
-  const [draft, setDraft] = useState<BudgetDraft>(() => emptyDraft(currentForecastStartInput()));
   const [costEditDrafts, setCostEditDrafts] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -197,48 +172,12 @@ function BudgetContent() {
   function changeStartMonth(value: string) {
     setStartMonth(value);
     setSelectedMonth(value);
-    setDraft((current) => ({ ...current, okres: monthToDate(value) }));
-  }
-
-  async function saveOverride() {
-    if (!draft.opis.trim()) return alert("Podaj opis korekty.");
-    if (!draft.kategoria) return alert("Wybierz kategorię CFO.");
-
-    setSaving(true);
-    const result = await upsertCfoBudgetOverride({
-      okres: draft.okres,
-      typ: draft.typ,
-      kategoria: draft.kategoria as CfoRevenueCategory | CfoCostCategory,
-      podkategoria: draft.podkategoria.trim() || null,
-      opis: draft.opis.trim(),
-      kwota_plan: parsePolishNumber(draft.kwota_plan),
-      kwota_cashflow: parsePolishNumber(draft.kwota_cashflow || draft.kwota_plan),
-      powtarzanie: draft.powtarzanie,
-      aktywne: true,
-    });
-    setSaving(false);
-
-    if (result.error) {
-      console.error(result.error);
-      return alert("Nie udało się zapisać korekty budżetu.");
-    }
-
-    setDraft(emptyDraft(selectedMonth));
-    await loadData();
-  }
-
-  async function removeOverride(id: string) {
-    if (!window.confirm("Usunąć tę korektę budżetu?")) return;
-    setSaving(true);
-    const result = await deleteCfoBudgetOverride(id);
-    setSaving(false);
-    if (result.error) return alert("Nie udało się usunąć korekty.");
-    await loadData();
   }
 
   async function saveCostPlan(category: CfoCostCategory, subcategory: string, plannedValue: number) {
     const editKey = costEditKey(selectedMonth, category, subcategory);
     const nextValue = parsePolishNumber(costEditDrafts[editKey] ?? String(plannedValue));
+    setSaving(true);
     const result = await upsertCfoBudgetOverride({
       okres: monthToDate(selectedMonth),
       typ: "koszt",
@@ -250,6 +189,7 @@ function BudgetContent() {
       powtarzanie: "jednorazowo",
       aktywne: true,
     });
+    setSaving(false);
 
     if (result.error) {
       console.error(result.error);
@@ -332,7 +272,7 @@ function BudgetContent() {
             </div>
           </article>
 
-          <article style={panelStyle}>
+          <article style={widePanelStyle}>
             <div style={panelHeaderStyle}>
               <TrendingUp size={21} style={panelIconStyle} />
               <h2 style={panelTitleStyle}>Kategorie przychodów</h2>
@@ -352,61 +292,6 @@ function BudgetContent() {
               onDraftChange={(key, value) => setCostEditDrafts((current) => ({ ...current, [key]: value }))}
               onSave={saveCostPlan}
             />
-          </article>
-
-          <article style={widePanelStyle}>
-            <div style={panelHeaderStyle}>
-              <Plus size={21} style={panelIconStyle} />
-              <h2 style={panelTitleStyle}>Korekty planu</h2>
-              <span style={badgeStyle}>{formatMonthField(selectedMonth)}</span>
-            </div>
-            <div style={draftGridStyle}>
-              <Field label="Typ">
-                <AppSelect value={draft.typ} options={TYPE_OPTIONS} onChange={(value) => setDraft((current) => ({ ...current, typ: value as CfoBudgetOverrideType, kategoria: "" }))} style={selectStyle} />
-              </Field>
-              <Field label="Kategoria CFO">
-                <AppSelect value={draft.kategoria} options={[{ value: "", label: "Wybierz kategorię" }, ...(draft.typ === "przychod" ? REVENUE_OPTIONS : COST_OPTIONS)]} onChange={(value) => setDraft((current) => ({ ...current, kategoria: value }))} style={selectStyle} />
-              </Field>
-              <Field label="Podkategoria">
-                <input style={inputStyle} value={draft.podkategoria} onChange={(event) => setDraft((current) => ({ ...current, podkategoria: event.target.value }))} />
-              </Field>
-              <Field label="Od miesiąca">
-                <MonthField value={draft.okres.slice(0, 7)} onChange={(value) => setDraft((current) => ({ ...current, okres: monthToDate(value) }))} compact />
-              </Field>
-              <Field label="Kwota planu">
-                <input style={inputStyle} value={draft.kwota_plan} onChange={(event) => setDraft((current) => ({ ...current, kwota_plan: event.target.value }))} />
-              </Field>
-              <Field label="Kwota cash flow">
-                <input style={inputStyle} value={draft.kwota_cashflow} onChange={(event) => setDraft((current) => ({ ...current, kwota_cashflow: event.target.value }))} />
-              </Field>
-              <Field label="Powtarzanie">
-                <AppSelect value={draft.powtarzanie} options={REPEAT_OPTIONS} onChange={(value) => setDraft((current) => ({ ...current, powtarzanie: value as CfoBudgetOverrideRepeat }))} style={selectStyle} />
-              </Field>
-              <Field label="Opis">
-                <input style={inputStyle} value={draft.opis} onChange={(event) => setDraft((current) => ({ ...current, opis: event.target.value }))} placeholder="np. obniżka kosztu od listopada" />
-              </Field>
-              <button type="button" style={primaryButtonStyle} onClick={saveOverride} disabled={saving}>
-                <Save size={17} />
-                Zapisz korektę
-              </button>
-            </div>
-
-            <div style={overrideListStyle}>
-              {(selected?.overrides || []).length === 0 ? <div style={emptyStyle}>Brak korekt dla wybranego miesiąca.</div> : selected?.overrides.map((override) => (
-                <div key={override.id} style={overrideRowStyle}>
-                  <div>
-                    <strong>{override.opis}</strong>
-                    <small style={smallStyle}>
-                      {override.typ === "przychod" ? "Przychód" : "Koszt"} · {categoryLabel(override.typ, override.kategoria)} · {override.powtarzanie === "od_miesiaca" ? "od miesiąca" : "jednorazowo"}
-                    </small>
-                  </div>
-                  <strong>{formatMoney(override.kwota_plan)}</strong>
-                  <button type="button" style={iconDangerButtonStyle} onClick={() => void removeOverride(override.id)} aria-label="Usuń korektę">
-                    <Trash2 size={17} />
-                  </button>
-                </div>
-              ))}
-            </div>
           </article>
         </section>
       ) : null}
@@ -435,8 +320,15 @@ function SummaryBox({ label, value, tone }: { label: string; value: string; tone
 function CategoryTable({ rows, reverseDiff = false }: { rows: BudgetCategoryRow[]; reverseDiff?: boolean }) {
   return (
     <div style={tableWrapperStyle}>
-      <table style={tableStyle}>
-        <thead><tr><Th>Kategoria</Th><Th align="right">Plan</Th><Th align="right">Wykonanie</Th><Th align="right">Różnica</Th></tr></thead>
+      <table style={categoryTableStyle}>
+        <thead>
+          <tr>
+            <Th>Kategoria</Th>
+            <Th align="right">Plan</Th>
+            <Th align="right">Wykonanie</Th>
+            <Th align="right">Różnica</Th>
+          </tr>
+        </thead>
         <tbody>
           {rows.length === 0 ? <tr><td style={tdStyle} colSpan={4}>Brak danych.</td></tr> : rows.map((row) => (
             <tr key={row.key}>
@@ -473,6 +365,13 @@ function CostCategoryEditor({
             <strong>{group.label}</strong>
             <span>{formatMoney(group.planned)}</span>
           </div>
+          <div style={costSubcategoryHeaderStyle}>
+            <span>Podkategoria</span>
+            <span>Plan</span>
+            <span>Wykonanie</span>
+            <span>Różnica</span>
+            <span>Akcja</span>
+          </div>
           {group.children.map((row) => {
             const editKey = costEditKey(selectedMonth, group.key, row.key);
             const value = drafts[editKey] ?? formatPlainNumber(row.planned);
@@ -498,10 +397,6 @@ function CostCategoryEditor({
 function Diff({ value, plain = false }: { value: number; plain?: boolean }) {
   const style = value < -0.01 ? dangerInlineStyle : value > 0.01 ? successInlineStyle : undefined;
   return <strong style={plain ? style : style}>{value > 0 ? "+" : ""}{formatMoney(value)}</strong>;
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <label style={fieldStyle}><span>{label}</span>{children}</label>;
 }
 
 function Th({ children, align = "left" }: { children: React.ReactNode; align?: "left" | "right" }) {
@@ -887,19 +782,6 @@ function categoryLabel(type: CfoBudgetOverrideType, value: string) {
   return options.find((option) => option.value === value)?.label || value;
 }
 
-function emptyDraft(period: string): BudgetDraft {
-  return {
-    okres: monthToDate(period),
-    typ: "koszt",
-    kategoria: "",
-    podkategoria: "",
-    opis: "",
-    kwota_plan: "0",
-    kwota_cashflow: "0",
-    powtarzanie: "od_miesiaca",
-  };
-}
-
 function currentForecastStartInput() {
   return shiftMonth(currentMonthInput(), 1);
 }
@@ -988,30 +870,24 @@ const panelHeaderStyle: CSSProperties = { display: "flex", alignItems: "center",
 const panelIconStyle: CSSProperties = { color: colors.red, display: "inline-flex" };
 const panelTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "21px" };
 const tableWrapperStyle: CSSProperties = { overflowX: "auto" };
-const tableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse", minWidth: "980px" };
+const categoryTableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse", minWidth: "620px" };
 const thStyle: CSSProperties = { color: colors.muted, borderBottom: `1px solid ${colors.border}`, padding: "11px 9px", fontSize: "12px", textTransform: "uppercase", letterSpacing: 0, whiteSpace: "nowrap" };
 const tdStyle: CSSProperties = { color: colors.text, borderBottom: `1px solid ${colors.border}`, padding: "10px 9px", verticalAlign: "middle" };
 const fieldStyle: CSSProperties = { display: "grid", gap: "6px", color: colors.muted, fontSize: "12px", fontWeight: 850 };
 const inputStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, minHeight: "42px", padding: "9px 12px", fontWeight: 750, width: "100%", boxSizing: "border-box" };
 const smallInputStyle: CSSProperties = { ...inputStyle, minHeight: "36px", maxWidth: "150px" };
-const selectStyle: CSSProperties = { minHeight: "42px", background: colors.white };
 const monthFieldStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, minHeight: "42px", width: "235px", display: "grid", gridTemplateColumns: "36px minmax(0, 1fr)", alignItems: "center", overflow: "hidden" };
 const compactMonthFieldStyle: CSSProperties = { ...monthFieldStyle, width: "100%" };
 const monthIconStyle: CSSProperties = { color: colors.navy, justifySelf: "center" };
 const monthInputStyle: CSSProperties = { border: 0, outline: "none", background: "transparent", color: colors.text, minHeight: "40px", padding: "9px 10px 9px 0", fontWeight: 850, width: "100%", boxSizing: "border-box", fontSize: "15px" };
-const draftGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(4, minmax(160px, 1fr)) auto", gap: "10px", alignItems: "end" };
-const primaryButtonStyle: CSSProperties = { border: `1px solid ${colors.red}`, borderRadius: radius.input, background: colors.red, color: colors.white, minHeight: "42px", padding: "9px 14px", fontWeight: 850, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "8px", cursor: "pointer", whiteSpace: "nowrap" };
 const secondaryButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.navy, minHeight: "42px", padding: "9px 14px", fontWeight: 850, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "8px", cursor: "pointer" };
 const smallButtonStyle: CSSProperties = { ...secondaryButtonStyle, minHeight: "36px", padding: "7px 10px" };
 const badgeStyle: CSSProperties = { display: "inline-flex", borderRadius: radius.badge, background: "rgba(23, 59, 115, 0.10)", color: colors.navy, padding: "7px 10px", fontSize: "12px", fontWeight: 900, marginLeft: "auto" };
 const costGroupListStyle: CSSProperties = { display: "grid", gap: "12px" };
 const costGroupStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, overflow: "hidden", background: colors.white };
 const costGroupHeaderStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", background: "#e9eef7", color: colors.navy, padding: "12px 14px", fontWeight: 900 };
+const costSubcategoryHeaderStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(220px, 1fr) 150px 130px 130px auto", gap: "10px", alignItems: "center", padding: "9px 14px", borderTop: `1px solid ${colors.border}`, color: colors.muted, fontSize: "12px", fontWeight: 900, textTransform: "uppercase", letterSpacing: 0 };
 const costSubcategoryRowStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(220px, 1fr) 150px 130px 130px auto", gap: "10px", alignItems: "center", padding: "10px 14px", borderTop: `1px solid ${colors.border}` };
-const overrideListStyle: CSSProperties = { display: "grid", gap: "8px", marginTop: "16px" };
-const overrideRowStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto auto", gap: "12px", alignItems: "center", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "10px 12px" };
-const smallStyle: CSSProperties = { display: "block", color: colors.muted, marginTop: "4px", fontSize: "12px", fontWeight: 650 };
 const emptyStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, color: colors.muted, padding: "12px", fontWeight: 800 };
-const iconDangerButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: "12px", background: colors.white, color: colors.red, width: "38px", minWidth: "38px", height: "38px", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer" };
 const dangerInlineStyle: CSSProperties = { color: colors.danger, fontWeight: 900 };
 const successInlineStyle: CSSProperties = { color: colors.success, fontWeight: 900 };

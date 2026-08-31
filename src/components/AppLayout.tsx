@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { colors, radius } from "@/app/design";
@@ -21,6 +21,7 @@ import {
   Rocket,
   FolderCheck,
   Wallet,
+  WalletCards,
   ShieldCheck,
   LockKeyhole,
   UserCog,
@@ -66,6 +67,7 @@ const menu = [
       { href: "/faktury", label: "Faktury", icon: FileText, page: "faktury" },
       { href: "/cso", label: "CSO", icon: Megaphone, page: "cso" },
       { href: "/cfo", label: "CFO", icon: Wallet, page: "cfo" },
+      { href: "/budzet", label: "Budżet", icon: WalletCards, page: "budzet" },
       { href: "/aml", label: "AML", icon: ShieldCheck, page: "aml" },
       { href: "/rodo", label: "RODO", icon: LockKeyhole, page: "rodo" },
     ],
@@ -83,51 +85,7 @@ export default function AppLayout({ children, activePage }: AppLayoutProps) {
   const knownNotificationIdsRef = useRef<Set<string>>(new Set());
   const notificationsPrimedRef = useRef(false);
 
-  useEffect(() => {
-    if (roleLoading || !role || !canAccessModule(role, "powiadomienia")) return;
-
-    requestBrowserNotificationPermissionOnce();
-    loadUnreadCount();
-
-    const intervalId = window.setInterval(loadUnreadCount, 5 * 60 * 1000);
-
-    function refreshWhenVisible() {
-      if (document.visibilityState === "visible") {
-        loadUnreadCount();
-      }
-    }
-
-    window.addEventListener("focus", loadUnreadCount);
-    document.addEventListener("visibilitychange", refreshWhenVisible);
-
-    return () => {
-      window.clearInterval(intervalId);
-      window.removeEventListener("focus", loadUnreadCount);
-      document.removeEventListener("visibilitychange", refreshWhenVisible);
-    };
-  }, [roleLoading, role]);
-
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      const mustChangePassword = Boolean(
-        data.user?.app_metadata?.must_change_password ||
-        data.user?.user_metadata?.must_change_password
-      );
-
-      if (mustChangePassword && pathname !== "/zmiana-hasla") {
-        window.location.href = "/zmiana-hasla";
-      }
-    });
-  }, [pathname]);
-
-  async function loadUnreadCount() {
-    await createDueNotifications();
-    const { count } = await fetchUnreadNotificationsCount();
-    setUnreadCount(count || 0);
-    await showNewBrowserNotifications();
-  }
-
-  async function showNewBrowserNotifications() {
+  const showNewBrowserNotifications = useCallback(async () => {
     const { data, error } = await fetchUnreadNotifications(10);
     if (error) {
       console.error("Błąd pobierania nieprzeczytanych powiadomień:", error);
@@ -162,7 +120,52 @@ export default function AppLayout({ children, activePage }: AppLayoutProps) {
         window.location.href = "/powiadomienia";
       };
     });
-  }
+  }, []);
+
+  const loadUnreadCount = useCallback(async () => {
+    await createDueNotifications();
+    const { count } = await fetchUnreadNotificationsCount();
+    setUnreadCount(count || 0);
+    await showNewBrowserNotifications();
+  }, [showNewBrowserNotifications]);
+
+  useEffect(() => {
+    if (roleLoading || !role || !canAccessModule(role, "powiadomienia")) return;
+
+    requestBrowserNotificationPermissionOnce();
+    const initialLoadId = window.setTimeout(loadUnreadCount, 0);
+
+    const intervalId = window.setInterval(loadUnreadCount, 5 * 60 * 1000);
+
+    function refreshWhenVisible() {
+      if (document.visibilityState === "visible") {
+        loadUnreadCount();
+      }
+    }
+
+    window.addEventListener("focus", loadUnreadCount);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+
+    return () => {
+      window.clearTimeout(initialLoadId);
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", loadUnreadCount);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [loadUnreadCount, roleLoading, role]);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      const mustChangePassword = Boolean(
+        data.user?.app_metadata?.must_change_password ||
+        data.user?.user_metadata?.must_change_password
+      );
+
+      if (mustChangePassword && pathname !== "/zmiana-hasla") {
+        window.location.href = "/zmiana-hasla";
+      }
+    });
+  }, [pathname]);
 
   const visibleMenu = menu
     .map((section) => ({

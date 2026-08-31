@@ -16,6 +16,7 @@ export type AppModule =
   | "faktury"
   | "cso"
   | "cfo"
+  | "budzet"
   | "aml"
   | "rodo"
   | "uzytkownicy";
@@ -40,6 +41,7 @@ const moduleAccess: Record<AppModule, string[]> = {
   faktury: ["owner", "admin"],
   cso: ["owner", "admin", ...salesRoles],
   cfo: ["owner"],
+  budzet: ["owner"],
   aml: ["owner", "manager", "admin"],
   rodo: ["owner", "manager", "admin"],
   uzytkownicy: ["owner", "manager", "admin", ...accountingRoles],

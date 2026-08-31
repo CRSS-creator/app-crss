@@ -378,10 +378,10 @@ function CostCategoryEditor({
           </div>
           <div style={costSubcategoryHeaderStyle}>
             <span>Podkategoria</span>
-            <span>Plan</span>
-            <span>Wykonanie</span>
-            <span>Różnica</span>
-            <span>Akcja</span>
+            <span style={rightAlignedStyle}>Plan</span>
+            <span style={rightAlignedStyle}>Wykonanie</span>
+            <span style={rightAlignedStyle}>Różnica</span>
+            <span style={rightAlignedStyle}>Akcja</span>
           </div>
           {group.children.map((row) => {
             const editKey = costEditKey(selectedMonth, group.key, row.key);
@@ -390,7 +390,7 @@ function CostCategoryEditor({
               <div key={row.key} style={costSubcategoryRowStyle}>
                 <span>{row.label}</span>
                 <input style={smallInputStyle} value={value} onChange={(event) => onDraftChange(editKey, event.target.value)} />
-                <span>{formatMoney(row.actual)}</span>
+                <span style={rightAlignedStyle}>{formatMoney(row.actual)}</span>
                 <Diff value={row.planned - row.actual} />
                 <button type="button" style={smallButtonStyle} onClick={() => void onSave(group.key, row.key, row.planned)}>
                   <Save size={15} />
@@ -918,19 +918,21 @@ const thStyle: CSSProperties = { color: colors.muted, borderBottom: `1px solid $
 const tdStyle: CSSProperties = { color: colors.text, borderBottom: `1px solid ${colors.border}`, padding: "10px 9px", verticalAlign: "middle" };
 const fieldStyle: CSSProperties = { display: "grid", gap: "6px", color: colors.muted, fontSize: "12px", fontWeight: 850 };
 const inputStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, minHeight: "42px", padding: "9px 12px", fontWeight: 750, width: "100%", boxSizing: "border-box" };
-const smallInputStyle: CSSProperties = { ...inputStyle, minHeight: "36px", maxWidth: "150px" };
+const smallInputStyle: CSSProperties = { ...inputStyle, minHeight: "36px", maxWidth: "150px", textAlign: "right" };
 const monthFieldStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, minHeight: "42px", width: "235px", display: "grid", gridTemplateColumns: "36px minmax(0, 1fr)", alignItems: "center", overflow: "hidden" };
 const compactMonthFieldStyle: CSSProperties = { ...monthFieldStyle, width: "100%" };
 const monthIconStyle: CSSProperties = { color: colors.navy, justifySelf: "center" };
 const monthInputStyle: CSSProperties = { border: 0, outline: "none", background: "transparent", color: colors.text, minHeight: "40px", padding: "9px 10px 9px 0", fontWeight: 850, width: "100%", boxSizing: "border-box", fontSize: "15px" };
 const secondaryButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.navy, minHeight: "42px", padding: "9px 14px", fontWeight: 850, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "8px", cursor: "pointer" };
-const smallButtonStyle: CSSProperties = { ...secondaryButtonStyle, minHeight: "36px", padding: "7px 10px" };
+const smallButtonStyle: CSSProperties = { ...secondaryButtonStyle, minHeight: "36px", padding: "7px 10px", width: "100%" };
 const badgeStyle: CSSProperties = { display: "inline-flex", borderRadius: radius.badge, background: "rgba(23, 59, 115, 0.10)", color: colors.navy, padding: "7px 10px", fontSize: "12px", fontWeight: 900, marginLeft: "auto" };
 const costGroupListStyle: CSSProperties = { display: "grid", gap: "12px" };
 const costGroupStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, overflow: "hidden", background: colors.white };
 const costGroupHeaderStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", background: "#e9eef7", color: colors.navy, padding: "12px 14px", fontWeight: 900 };
-const costSubcategoryHeaderStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(220px, 1fr) 150px 130px 130px auto", gap: "10px", alignItems: "center", padding: "9px 14px", borderTop: `1px solid ${colors.border}`, color: colors.muted, fontSize: "12px", fontWeight: 900, textTransform: "uppercase", letterSpacing: 0 };
-const costSubcategoryRowStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(220px, 1fr) 150px 130px 130px auto", gap: "10px", alignItems: "center", padding: "10px 14px", borderTop: `1px solid ${colors.border}` };
+const costColumns = "minmax(260px, 1fr) minmax(150px, 150px) minmax(130px, 130px) minmax(130px, 130px) minmax(110px, 110px)";
+const costSubcategoryHeaderStyle: CSSProperties = { display: "grid", gridTemplateColumns: costColumns, gap: "12px", alignItems: "center", padding: "9px 14px", borderTop: `1px solid ${colors.border}`, color: colors.muted, fontSize: "12px", fontWeight: 900, textTransform: "uppercase", letterSpacing: 0 };
+const costSubcategoryRowStyle: CSSProperties = { display: "grid", gridTemplateColumns: costColumns, gap: "12px", alignItems: "center", padding: "10px 14px", borderTop: `1px solid ${colors.border}` };
 const emptyStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, color: colors.muted, padding: "12px", fontWeight: 800 };
 const dangerInlineStyle: CSSProperties = { color: colors.danger, fontWeight: 900 };
 const successInlineStyle: CSSProperties = { color: colors.success, fontWeight: 900 };
+const rightAlignedStyle: CSSProperties = { textAlign: "right" };

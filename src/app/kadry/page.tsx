@@ -1,15 +1,18 @@
 "use client";
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { CalendarDays, Check, ChevronLeft, ChevronRight, History as HistoryIcon, Plus, Save, Send, X } from "lucide-react";
+import { Archive, CalendarDays, Check, ChevronLeft, ChevronRight, History as HistoryIcon, Pencil, Plus, Save, Send, X } from "lucide-react";
 import AccessGuard from "@/components/AccessGuard";
 import AppLayout from "@/components/AppLayout";
 import AppSelect from "@/components/AppSelect";
 import { colors, radius, shadow } from "@/app/design";
 import { fetchClients, updateClient } from "@/lib/clientService";
 import {
+  archivePayrollContract,
+  autoArchiveEndedPayrollContracts,
   createPayrollContract,
   fetchPayrollContracts,
+  updatePayrollContract,
   type PayrollContract,
   type PayrollContractPayload,
   type PayrollContractType,
@@ -155,6 +158,11 @@ function PayrollContent() {
   useEffect(() => {
     async function loadData() {
       setLoading(true);
+      const archiveResult = await autoArchiveEndedPayrollContracts();
+      if (archiveResult.error) {
+        console.error("Błąd automatycznej archiwizacji zakończonych umów kadrowych:", archiveResult.error);
+      }
+
       const [clientsResult, contractsResult, a1Result, a1MonthlyResult, zusNotificationHistoryResult] = await Promise.all([
         fetchClients(),
         fetchPayrollContracts(),
@@ -232,8 +240,14 @@ function PayrollContent() {
   const selectedContracts = selectedClient ? contractsByClient[selectedClient.id] || [] : [];
   const tab = PAYROLL_TABS.find((item) => item.value === activeTab) || PAYROLL_TABS[0];
 
-  function handleContractCreated(contract: PayrollContract) {
-    setContracts((current) => [...current, contract].sort(sortContracts));
+  function handleContractSaved(contract: PayrollContract) {
+    setContracts((current) => {
+      const exists = current.some((item) => item.id === contract.id);
+      return (exists
+        ? current.map((item) => item.id === contract.id ? contract : item)
+        : [...current, contract]
+      ).sort(sortContracts);
+    });
   }
 
   async function handleAddA1Client() {
@@ -528,7 +542,7 @@ function PayrollContent() {
           client={selectedClient}
           contracts={selectedContracts}
           onClose={() => setSelectedClient(null)}
-          onContractCreated={handleContractCreated}
+          onContractSaved={handleContractSaved}
         />
       )}
 
@@ -593,9 +607,9 @@ function PayrollClientsTable({
                   <span style={clientMetaStyle}>{client.nip || "Brak NIP"}</span>
                 </Td>
                 <Td>{caregiverLabel(client)}</Td>
-                <Td align="center"><YesNoBadge value={hasContractType(clientContracts, "umowa_o_prace")} /></Td>
-                <Td align="center"><YesNoBadge value={hasContractType(clientContracts, "umowa_cywilnoprawna")} /></Td>
-                <Td align="center"><YesNoBadge value={hasContractType(clientContracts, "student")} /></Td>
+                <Td align="center"><YesNoBadge value={hasActiveContractType(clientContracts, "umowa_o_prace")} /></Td>
+                <Td align="center"><YesNoBadge value={hasActiveContractType(clientContracts, "umowa_cywilnoprawna")} /></Td>
+                <Td align="center"><YesNoBadge value={hasActiveContractType(clientContracts, "student")} /></Td>
                 <Td align="center">
                   <button type="button" style={detailsButtonStyle} onClick={() => onDetails(client)}>
                     Szczegóły
@@ -1459,19 +1473,24 @@ function PayrollDetailsModal({
   client,
   contracts,
   onClose,
-  onContractCreated,
+  onContractSaved,
 }: {
   client: PayrollClient;
   contracts: PayrollContract[];
   onClose: () => void;
-  onContractCreated: (contract: PayrollContract) => void;
+  onContractSaved: (contract: PayrollContract) => void;
 }) {
   const [showForm, setShowForm] = useState(false);
+  const [showArchivedContracts, setShowArchivedContracts] = useState(false);
+  const [editingContractId, setEditingContractId] = useState<string | null>(null);
   const [showNotificationHistory, setShowNotificationHistory] = useState(false);
   const [notificationHistory, setNotificationHistory] = useState<AppNotification[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [draft, setDraft] = useState<ContractDraft>(createEmptyDraft());
   const [saving, setSaving] = useState(false);
+  const activeContracts = contracts.filter((contract) => !isContractArchived(contract));
+  const archivedContracts = contracts.filter(isContractArchived);
+  const editingContract = editingContractId ? contracts.find((contract) => contract.id === editingContractId) || null : null;
 
   function updateDraft<K extends keyof ContractDraft>(key: K, value: ContractDraft[K]) {
     setDraft((current) => ({
@@ -1479,6 +1498,24 @@ function PayrollDetailsModal({
       [key]: value,
       ...(key === "umowa_na_czas_nieokreslony" && value === true ? { data_konca: "" } : {}),
     }));
+  }
+
+  function openNewContractForm() {
+    setEditingContractId(null);
+    setDraft(createEmptyDraft());
+    setShowForm((value) => !value || editingContractId !== null);
+  }
+
+  function startEditingContract(contract: PayrollContract) {
+    setEditingContractId(contract.id);
+    setDraft(createDraftFromContract(contract));
+    setShowForm(true);
+  }
+
+  function closeContractForm() {
+    setEditingContractId(null);
+    setDraft(createEmptyDraft());
+    setShowForm(false);
   }
 
   async function saveContract() {
@@ -1502,17 +1539,35 @@ function PayrollDetailsModal({
       legitymacja_studencka_wazna_do: draft.typ_umowy === "student" ? emptyToNull(draft.legitymacja_studencka_wazna_do) : null,
     };
 
-    const result = await createPayrollContract(payload);
+    const result = editingContract
+      ? await updatePayrollContract(editingContract.id, payload)
+      : await createPayrollContract(payload);
     if (result.error) {
-      console.error("Błąd dodawania umowy kadrowej:", result.error);
-      alert("Nie udało się dodać umowy.");
+      console.error("Błąd zapisu umowy kadrowej:", result.error);
+      alert("Nie udało się zapisać umowy.");
       setSaving(false);
       return;
     }
 
-    onContractCreated(result.data as PayrollContract);
-    setDraft(createEmptyDraft());
-    setShowForm(false);
+    onContractSaved(result.data as PayrollContract);
+    closeContractForm();
+    setSaving(false);
+  }
+
+  async function archiveContract(contract: PayrollContract) {
+    if (!confirm(`Zarchiwizować umowę ${contract.numer_umowy || `${contract.imie} ${contract.nazwisko}`}?`)) return;
+
+    setSaving(true);
+    const result = await archivePayrollContract(contract.id);
+    if (result.error) {
+      console.error("Błąd archiwizacji umowy kadrowej:", result.error);
+      alert("Nie udało się zarchiwizować umowy.");
+      setSaving(false);
+      return;
+    }
+
+    onContractSaved(result.data as PayrollContract);
+    setShowArchivedContracts(true);
     setSaving(false);
   }
 
@@ -1541,13 +1596,13 @@ function PayrollDetailsModal({
           <div>
             <p style={eyebrowStyle}>Szczegóły kadrowe</p>
             <h2 style={modalTitleStyle}>{client.nazwa || "Klient bez nazwy"}</h2>
-            <p style={modalSubtitleStyle}>NIP: {client.nip || "Brak"} · {contracts.length} {contracts.length === 1 ? "umowa" : "umów"}</p>
+            <p style={modalSubtitleStyle}>NIP: {client.nip || "Brak"} · {activeContracts.length} aktywnych · {archivedContracts.length} w archiwum</p>
           </div>
           <div style={modalActionsStyle}>
             <button type="button" style={secondaryButtonStyle} onClick={() => void toggleNotificationHistory()}>
               Historia powiadomień
             </button>
-            <button type="button" style={primaryButtonStyle} onClick={() => setShowForm((value) => !value)}>
+            <button type="button" style={primaryButtonStyle} onClick={openNewContractForm}>
               <Plus size={18} /> Dodaj umowę
             </button>
             <button type="button" style={iconButtonStyle} onClick={onClose} aria-label="Zamknij">
@@ -1564,8 +1619,8 @@ function PayrollDetailsModal({
           {showForm && (
             <section style={formBoxStyle}>
               <div style={formHeaderStyle}>
-                <h3 style={formTitleStyle}>Nowa umowa</h3>
-                <button type="button" style={secondaryButtonStyle} onClick={() => setShowForm(false)}>Anuluj</button>
+                <h3 style={formTitleStyle}>{editingContract ? "Edycja umowy" : "Nowa umowa"}</h3>
+                <button type="button" style={secondaryButtonStyle} onClick={closeContractForm}>Anuluj</button>
               </div>
               <div style={formGridStyle}>
                 <Field label="Imię"><input style={inputStyle} value={draft.imie} onChange={(event) => updateDraft("imie", event.target.value)} /></Field>
@@ -1605,17 +1660,17 @@ function PayrollDetailsModal({
               </div>
               <div style={formActionsStyle}>
                 <button type="button" style={primaryButtonStyle} onClick={saveContract} disabled={saving}>
-                  {saving ? "Zapisywanie..." : "Zapisz umowę"}
+                  {saving ? "Zapisywanie..." : editingContract ? "Zapisz zmiany" : "Zapisz umowę"}
                 </button>
               </div>
             </section>
           )}
 
           <section style={contractsSectionStyle}>
-            {contracts.length === 0 ? (
+            {activeContracts.length === 0 ? (
               <p style={emptyInlineStyle}>Brak dodanych umów kadrowych.</p>
             ) : (
-              <div style={tableWrapStyle}>
+              <div style={contractsTableScrollStyle}>
                 <table style={detailsTableStyle}>
                   <thead>
                     <tr>
@@ -1628,30 +1683,87 @@ function PayrollDetailsModal({
                       <Th>Badania lekarskie</Th>
                       <Th>Szkolenie BHP</Th>
                       <Th>Legitymacja studencka</Th>
+                      <Th align="center">Akcje</Th>
                     </tr>
                   </thead>
                   <tbody>
-                    {contracts.map((contract) => (
-                      <tr key={contract.id}>
-                        <Td>{contract.imie}</Td>
-                        <Td>{contract.nazwisko}</Td>
-                        <Td>{contractTypeLabel(contract.typ_umowy)}</Td>
-                        <Td>{contract.numer_umowy || "-"}</Td>
-                        <Td>{formatDate(contract.data_poczatku)}</Td>
-                        <Td>{contract.typ_umowy === "umowa_o_prace" && contract.umowa_na_czas_nieokreslony ? "czas nieokreślony" : formatDate(contract.data_konca)}</Td>
-                        <Td>{contract.typ_umowy === "umowa_o_prace" ? formatDate(contract.badania_lekarskie_wazne_do) : "-"}</Td>
-                        <Td>{contract.typ_umowy === "umowa_o_prace" ? formatDate(contract.szkolenie_bhp_wazne_do) : "-"}</Td>
-                        <Td>{contract.typ_umowy === "student" ? formatDate(contract.legitymacja_studencka_wazna_do) : "-"}</Td>
-                      </tr>
+                    {activeContracts.map((contract) => (
+                      <ContractRow
+                        key={contract.id}
+                        contract={contract}
+                        onEdit={startEditingContract}
+                        onArchive={(item) => void archiveContract(item)}
+                      />
                     ))}
                   </tbody>
                 </table>
               </div>
             )}
           </section>
+
+          {archivedContracts.length > 0 && (
+            <section style={contractsSectionStyle}>
+              <button type="button" style={archiveToggleStyle} onClick={() => setShowArchivedContracts((value) => !value)}>
+                <Archive size={18} /> Archiwum umów ({archivedContracts.length})
+              </button>
+              {showArchivedContracts && (
+                <div style={contractsTableScrollStyle}>
+                  <table style={detailsTableStyle}>
+                    <thead>
+                      <tr>
+                        <Th>Imię</Th>
+                        <Th>Nazwisko</Th>
+                        <Th>Typ umowy</Th>
+                        <Th>Numer umowy</Th>
+                        <Th>Data początku</Th>
+                        <Th>Data końca</Th>
+                        <Th>Badania lekarskie</Th>
+                        <Th>Szkolenie BHP</Th>
+                        <Th>Legitymacja studencka</Th>
+                        <Th align="center">Akcje</Th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {archivedContracts.map((contract) => (
+                        <ContractRow key={contract.id} contract={contract} onEdit={startEditingContract} />
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          )}
         </div>
       </section>
     </div>
+  );
+}
+
+function ContractRow({ contract, onEdit, onArchive }: { contract: PayrollContract; onEdit: (contract: PayrollContract) => void; onArchive?: (contract: PayrollContract) => void }) {
+  return (
+    <tr>
+      <Td>{contract.imie}</Td>
+      <Td>{contract.nazwisko}</Td>
+      <Td>{contractTypeLabel(contract.typ_umowy)}</Td>
+      <Td>{contract.numer_umowy || "-"}</Td>
+      <Td>{formatDate(contract.data_poczatku)}</Td>
+      <Td>{contract.typ_umowy === "umowa_o_prace" && contract.umowa_na_czas_nieokreslony ? "czas nieokreślony" : formatDate(contract.data_konca)}</Td>
+      <Td>{contract.typ_umowy === "umowa_o_prace" ? formatDate(contract.badania_lekarskie_wazne_do) : "-"}</Td>
+      <Td>{contract.typ_umowy === "umowa_o_prace" ? formatDate(contract.szkolenie_bhp_wazne_do) : "-"}</Td>
+      <Td>{contract.typ_umowy === "student" ? formatDate(contract.legitymacja_studencka_wazna_do) : "-"}</Td>
+      <Td align="center">
+        <div style={rowActionsStyle}>
+          <button type="button" style={iconActionButtonStyle} onClick={() => onEdit(contract)} aria-label="Edytuj umowę">
+            <Pencil size={16} />
+          </button>
+          {onArchive && (
+            <button type="button" style={iconActionButtonStyle} onClick={() => onArchive(contract)} aria-label="Archiwizuj umowę">
+              <Archive size={16} />
+            </button>
+          )}
+        </div>
+      </Td>
+    </tr>
   );
 }
 
@@ -1775,6 +1887,21 @@ function createEmptyDraft(): ContractDraft {
   };
 }
 
+function createDraftFromContract(contract: PayrollContract): ContractDraft {
+  return {
+    imie: contract.imie || "",
+    nazwisko: contract.nazwisko || "",
+    typ_umowy: contract.typ_umowy,
+    numer_umowy: contract.numer_umowy || "",
+    data_poczatku: contract.data_poczatku || "",
+    data_konca: contract.data_konca || "",
+    umowa_na_czas_nieokreslony: Boolean(contract.umowa_na_czas_nieokreslony),
+    badania_lekarskie_wazne_do: contract.badania_lekarskie_wazne_do || "",
+    szkolenie_bhp_wazne_do: contract.szkolenie_bhp_wazne_do || "",
+    legitymacja_studencka_wazna_do: contract.legitymacja_studencka_wazna_do || "",
+  };
+}
+
 function createA1Draft(record: PayrollA1Record): A1Draft {
   return {
     data_uzyskania_a1: record.data_uzyskania_a1 || "",
@@ -1795,8 +1922,12 @@ function sortContracts(first: PayrollContract, second: PayrollContract) {
   return first.imie.localeCompare(second.imie, "pl", { sensitivity: "base" });
 }
 
-function hasContractType(contracts: PayrollContract[], type: PayrollContractType) {
-  return contracts.some((contract) => contract.typ_umowy === type);
+function hasActiveContractType(contracts: PayrollContract[], type: PayrollContractType) {
+  return contracts.some((contract) => contract.typ_umowy === type && !isContractArchived(contract));
+}
+
+function isContractArchived(contract: PayrollContract) {
+  return Boolean(contract.archived_at);
 }
 
 function filterClients(clients: PayrollClient[], searchTerm: string) {
@@ -2117,14 +2248,14 @@ const clientPickerListStyle: CSSProperties = { display: "grid", gap: "6px", maxH
 const clientPickerEmptyStyle: CSSProperties = { border: `1px dashed ${colors.border}`, borderRadius: radius.button, color: colors.muted, padding: "12px", fontWeight: 750 };
 const clientOptionStyle: CSSProperties = { width: "100%", border: `1px solid ${colors.border}`, borderRadius: radius.button, background: colors.white, color: colors.text, padding: "10px 12px", display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", textAlign: "left", cursor: "pointer" };
 const activeClientOptionStyle: CSSProperties = { ...clientOptionStyle, borderColor: colors.navy, background: "rgba(23, 59, 115, 0.08)" };
-const emptyStateStyle: CSSProperties = { minHeight: "220px", padding: "28px 24px", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", gap: "8px", color: colors.muted, fontWeight: 750, textAlign: "center" };
 const emptyStyle: CSSProperties = { margin: 0, padding: "28px 24px", color: colors.muted, fontWeight: 750 };
 const emptyInlineStyle: CSSProperties = { margin: 0, color: colors.muted, fontWeight: 750 };
 const tableWrapStyle: CSSProperties = { width: "100%", overflowX: "auto" };
+const contractsTableScrollStyle: CSSProperties = { width: "100%", maxHeight: "min(52vh, 560px)", overflow: "auto" };
 const tableStyle: CSSProperties = { width: "100%", minWidth: "980px", borderCollapse: "collapse" };
 const a1RegisterTableStyle: CSSProperties = { ...tableStyle, minWidth: "1120px" };
 const zusEntrepreneursTableStyle: CSSProperties = { ...tableStyle, minWidth: "1360px" };
-const detailsTableStyle: CSSProperties = { width: "100%", minWidth: "1240px", borderCollapse: "collapse" };
+const detailsTableStyle: CSSProperties = { width: "100%", minWidth: "1360px", borderCollapse: "collapse" };
 const a1MonthlyTableStyle: CSSProperties = { width: "100%", minWidth: "760px", borderCollapse: "collapse" };
 const a1MonthlyScrollStyle: CSSProperties = { width: "100%", maxHeight: "min(48vh, 520px)", overflow: "auto" };
 const thStyle: CSSProperties = { padding: "14px 18px", textAlign: "left", fontSize: "12px", color: colors.text, textTransform: "uppercase", letterSpacing: "0.08em", borderBottom: `1px solid ${colors.border}`, whiteSpace: "nowrap" };
@@ -2158,6 +2289,7 @@ const modalBodyStyle: CSSProperties = { padding: "22px 24px", overflowY: "auto",
 const a1ModalBodyStyle: CSSProperties = { ...modalBodyStyle, flex: "1 1 auto", minHeight: 0, paddingBottom: "24px" };
 const stickyModalFooterStyle: CSSProperties = { flex: "0 0 auto", display: "flex", justifyContent: "flex-end", gap: "10px", padding: "16px 24px 22px", borderTop: `1px solid ${colors.border}`, background: colors.white, flexWrap: "wrap" };
 const iconButtonStyle: CSSProperties = { width: "42px", height: "42px", borderRadius: radius.button, border: `1px solid ${colors.border}`, background: colors.white, color: colors.navy, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer" };
+const iconActionButtonStyle: CSSProperties = { width: "34px", height: "34px", borderRadius: radius.button, border: `1px solid ${colors.border}`, background: colors.white, color: colors.navy, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer" };
 const primaryButtonStyle: CSSProperties = { minHeight: "42px", padding: "0 16px", border: "none", borderRadius: radius.button, background: colors.red, color: colors.white, fontWeight: 850, display: "inline-flex", alignItems: "center", gap: "8px", cursor: "pointer" };
 const smallPrimaryButtonStyle: CSSProperties = { ...primaryButtonStyle, minHeight: "44px", alignSelf: "start" };
 const secondaryButtonStyle: CSSProperties = { minHeight: "42px", padding: "0 14px", borderRadius: radius.button, border: `1px solid ${colors.border}`, background: colors.white, color: colors.navy, fontWeight: 850, display: "inline-flex", alignItems: "center", gap: "8px", cursor: "pointer" };
@@ -2203,5 +2335,7 @@ const disabledInputStyle: CSSProperties = { ...inputStyle, background: "rgba(226
 const checkboxFieldStyle: CSSProperties = { minHeight: "42px", display: "flex", alignItems: "center", gap: "8px", color: colors.navy, fontSize: "14px", fontWeight: 850 };
 const checkboxInputStyle: CSSProperties = { width: "16px", height: "16px", margin: 0, accentColor: colors.navy };
 const contractsSectionStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.card, padding: "0", overflow: "hidden" };
+const archiveToggleStyle: CSSProperties = { width: "100%", minHeight: "52px", padding: "0 18px", border: "none", borderBottom: `1px solid ${colors.border}`, background: colors.inputBackground, color: colors.navy, fontWeight: 900, display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", textAlign: "left" };
+const rowActionsStyle: CSSProperties = { display: "inline-flex", gap: "8px", alignItems: "center", justifyContent: "center" };
 const historyPanelStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.inputBackground, padding: "18px" };
 const historyTableStyle: CSSProperties = { width: "100%", minWidth: "980px", borderCollapse: "collapse", background: colors.white };

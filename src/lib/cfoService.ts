@@ -241,6 +241,7 @@ const INVOICE_LINE_SELECT = `
     numer,
     okres,
     typ,
+    kategoria,
     status,
     data_wystawienia,
     klient_id,
@@ -302,6 +303,7 @@ export async function fetchCfoRevenueLines(period: string) {
     .eq("faktury.okres", period)
     .eq("faktury.typ", "sprzedaz")
     .neq("faktury.status", "anulowana")
+    .neq("faktury.kategoria", "korekta")
     .order("nazwa", { ascending: true });
 }
 
@@ -313,6 +315,7 @@ export async function fetchCfoRevenueLinesRange(from: string, to: string) {
     .lte("faktury.okres", to)
     .eq("faktury.typ", "sprzedaz")
     .neq("faktury.status", "anulowana")
+    .neq("faktury.kategoria", "korekta")
     .order("nazwa", { ascending: true });
 }
 
@@ -337,6 +340,7 @@ export async function fetchCfoCashflowInvoices(period: string) {
       numer,
       okres,
       status,
+      kategoria,
       data_wystawienia,
       kontrahent_nazwa,
       kwota_brutto,
@@ -364,6 +368,7 @@ export async function fetchCfoCashflowInvoices(period: string) {
     `)
     .eq("typ", "sprzedaz")
     .neq("status", "anulowana")
+    .neq("kategoria", "korekta")
     .gte("data_wystawienia", from)
     .lte("data_wystawienia", to)
     .order("data_wystawienia", { ascending: false, nullsFirst: false })

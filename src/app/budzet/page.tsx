@@ -59,9 +59,27 @@ type BudgetMonth = {
   overrides: CfoBudgetOverride[];
   revenueCategories: BudgetCategoryRow[];
   costCategories: BudgetCategoryRow[];
+  costSubcategories: BudgetCostGroup[];
 };
 
 type BudgetCategoryRow = {
+  key: string;
+  label: string;
+  planned: number;
+  actual: number;
+  diff: number;
+};
+
+type BudgetCostGroup = {
+  key: CfoCostCategory;
+  label: string;
+  planned: number;
+  actual: number;
+  diff: number;
+  children: BudgetCostSubcategoryRow[];
+};
+
+type BudgetCostSubcategoryRow = {
   key: string;
   label: string;
   planned: number;
@@ -99,6 +117,7 @@ const REPEAT_OPTIONS: { value: CfoBudgetOverrideRepeat; label: string }[] = [
 
 const MONTH_LABELS = ["styczeń", "luty", "marzec", "kwiecień", "maj", "czerwiec", "lipiec", "sierpień", "wrzesień", "październik", "listopad", "grudzień"];
 const DEFAULT_HORIZON = 12;
+const EMPTY_SUBCATEGORY = "Bez podkategorii";
 
 export default function BudgetPage() {
   return (
@@ -125,6 +144,7 @@ function BudgetContent() {
   const [clientRevenues, setClientRevenues] = useState<CfoBudgetClientRevenue[]>([]);
   const [crmRevenues, setCrmRevenues] = useState<CfoBudgetCrmRevenue[]>([]);
   const [draft, setDraft] = useState<BudgetDraft>(() => emptyDraft(currentForecastStartInput()));
+  const [costEditDrafts, setCostEditDrafts] = useState<Record<string, string>>({});
 
   useEffect(() => {
     void loadData();
@@ -138,6 +158,8 @@ function BudgetContent() {
 
   const selected = budget.find((month) => month.period === selectedMonth) || budget[0];
   const firstShortfall = budget.find((month) => month.closingCash < parsePolishNumber(safetyThreshold));
+  const selectedRevenueDiff = selected ? selected.actualRevenue - selected.plannedRevenue : 0;
+  const selectedCostDiff = selected ? selected.plannedCosts - selected.actualCosts : 0;
 
   async function loadData() {
     setLoading(true);
@@ -168,6 +190,7 @@ function BudgetContent() {
     setOverrides((overridesResult.data || []) as CfoBudgetOverride[]);
     setClientRevenues((clientRevenueResult.data || []) as CfoBudgetClientRevenue[]);
     setCrmRevenues((crmRevenueResult.data || []) as CfoBudgetCrmRevenue[]);
+    setCostEditDrafts({});
     setLoading(false);
   }
 
@@ -213,6 +236,29 @@ function BudgetContent() {
     await loadData();
   }
 
+  async function saveCostPlan(category: CfoCostCategory, subcategory: string, plannedValue: number) {
+    const editKey = costEditKey(selectedMonth, category, subcategory);
+    const nextValue = parsePolishNumber(costEditDrafts[editKey] ?? String(plannedValue));
+    const result = await upsertCfoBudgetOverride({
+      okres: monthToDate(selectedMonth),
+      typ: "koszt",
+      kategoria: category,
+      podkategoria: subcategory === EMPTY_SUBCATEGORY ? null : subcategory,
+      opis: `Korekta budżetu: ${categoryLabel("koszt", category)} / ${subcategory}`,
+      kwota_plan: nextValue - plannedValue,
+      kwota_cashflow: nextValue - plannedValue,
+      powtarzanie: "jednorazowo",
+      aktywne: true,
+    });
+
+    if (result.error) {
+      console.error(result.error);
+      return alert("Nie udało się zapisać planu kosztu.");
+    }
+
+    await loadData();
+  }
+
   return (
     <main style={contentStyle}>
       <header style={headerStyle}>
@@ -230,10 +276,11 @@ function BudgetContent() {
       </header>
 
       <section style={metricGridStyle}>
-        <Metric label="Planowany wynik" value={formatMoney(sum(budget.map((month) => month.plannedResult)))} tone={sum(budget.map((month) => month.plannedResult)) >= 0 ? "good" : "bad"} />
-        <Metric label="Planowany cash flow" value={formatMoney(sum(budget.map((month) => month.plannedCashFlow)))} tone={sum(budget.map((month) => month.plannedCashFlow)) >= 0 ? "good" : "bad"} />
-        <Metric label="Trend CRM / mies." value={formatMoney(budget[0]?.crmMonthlyRevenueGrowth || 0)} />
-        <Metric label="Najniższy stan gotówki" value={formatMoney(Math.min(...budget.map((month) => month.closingCash), parsePolishNumber(openingCash)))} tone={firstShortfall ? "bad" : "good"} />
+        <Metric label={`Wynik plan ${formatMonthField(selectedMonth)}`} value={formatMoney(selected?.plannedResult || 0)} tone={(selected?.plannedResult || 0) >= 0 ? "good" : "bad"} />
+        <Metric label="Przychody plan" value={formatMoney(selected?.plannedRevenue || 0)} />
+        <Metric label="Koszty plan" value={formatMoney(selected?.plannedCosts || 0)} tone="bad" />
+        <Metric label="Cash flow plan" value={formatMoney(selected?.plannedCashFlow || 0)} tone={(selected?.plannedCashFlow || 0) >= 0 ? "good" : "bad"} />
+        <Metric label="Gotówka po miesiącu" value={formatMoney(selected?.closingCash || 0)} tone={(selected?.closingCash || 0) < parsePolishNumber(safetyThreshold) ? "bad" : "good"} />
         <Metric label="Pierwszy alarm" value={firstShortfall ? formatMonthField(firstShortfall.period) : "Brak"} tone={firstShortfall ? "bad" : "good"} />
       </section>
 
@@ -255,52 +302,34 @@ function BudgetContent() {
           <article style={widePanelStyle}>
             <div style={panelHeaderStyle}>
               <WalletCards size={21} style={panelIconStyle} />
-              <h2 style={panelTitleStyle}>Plan kontra wykonanie</h2>
+              <h2 style={panelTitleStyle}>Miesiące</h2>
             </div>
-            <div style={tableWrapperStyle}>
-              <table style={tableStyle}>
-                <thead>
-                  <tr>
-                    <Th>Miesiąc</Th>
-                    <Th align="right">Plan przych.</Th>
-                    <Th align="right">Przyrost CRM</Th>
-                    <Th align="right">Wykonanie</Th>
-                    <Th align="right">Różnica</Th>
-                    <Th align="right">Plan kosztów</Th>
-                    <Th align="right">Wykonanie</Th>
-                    <Th align="right">Różnica</Th>
-                    <Th align="right">Wynik plan</Th>
-                    <Th align="right">Cash flow</Th>
-                    <Th align="right">Gotówka</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {budget.map((month) => (
-                    <tr key={month.period} style={selectedMonth === month.period ? selectedRowStyle : undefined} onClick={() => setSelectedMonth(month.period)}>
-                      <Td><strong>{formatMonthField(month.period)}</strong></Td>
-                      <Td align="right">{formatMoney(month.plannedRevenue)}</Td>
-                      <Td align="right">{formatMoney(month.crmMonthlyRevenueGrowth)}</Td>
-                      <Td align="right">{formatMoney(month.actualRevenue)}</Td>
-                      <Td align="right"><Diff value={month.actualRevenue - month.plannedRevenue} /></Td>
-                      <Td align="right">{formatMoney(month.plannedCosts)}</Td>
-                      <Td align="right">{formatMoney(month.actualCosts)}</Td>
-                      <Td align="right"><Diff value={month.plannedCosts - month.actualCosts} /></Td>
-                      <Td align="right"><strong>{formatMoney(month.plannedResult)}</strong></Td>
-                      <Td align="right"><Diff value={month.plannedCashFlow} plain /></Td>
-                      <Td align="right"><strong style={month.closingCash < parsePolishNumber(safetyThreshold) ? dangerInlineStyle : undefined}>{formatMoney(month.closingCash)}</strong></Td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div style={monthTabsStyle}>
+              {budget.map((month) => (
+                <button key={month.period} type="button" style={selectedMonth === month.period ? activeMonthTabStyle : monthTabStyle} onClick={() => setSelectedMonth(month.period)}>
+                  <strong>{formatMonthField(month.period)}</strong>
+                  <span>{formatMoney(month.plannedResult)}</span>
+                </button>
+              ))}
             </div>
           </article>
 
           <article style={widePanelStyle}>
             <div style={panelHeaderStyle}>
-              <Banknote size={21} style={panelIconStyle} />
-              <h2 style={panelTitleStyle}>Koszty wg kategorii</h2>
+              <WalletCards size={21} style={panelIconStyle} />
+              <h2 style={panelTitleStyle}>Plan miesiąca</h2>
+              <span style={badgeStyle}>{formatMonthField(selectedMonth)}</span>
             </div>
-            <CostBreakdownTable budget={budget} />
+            <div style={monthSummaryGridStyle}>
+              <SummaryBox label="Plan przychodów" value={formatMoney(selected?.plannedRevenue || 0)} />
+              <SummaryBox label="Wykonanie przychodów" value={formatMoney(selected?.actualRevenue || 0)} />
+              <SummaryBox label="Różnica przychodów" value={`${selectedRevenueDiff > 0 ? "+" : ""}${formatMoney(selectedRevenueDiff)}`} tone={selectedRevenueDiff >= 0 ? "good" : "bad"} />
+              <SummaryBox label="Plan kosztów" value={formatMoney(selected?.plannedCosts || 0)} tone="bad" />
+              <SummaryBox label="Wykonanie kosztów" value={formatMoney(selected?.actualCosts || 0)} />
+              <SummaryBox label="Różnica kosztów" value={`${selectedCostDiff > 0 ? "+" : ""}${formatMoney(selectedCostDiff)}`} tone={selectedCostDiff >= 0 ? "good" : "bad"} />
+              <SummaryBox label="Przyrost CRM" value={formatMoney(selected?.crmMonthlyRevenueGrowth || 0)} />
+              <SummaryBox label="Cash flow" value={formatMoney(selected?.plannedCashFlow || 0)} tone={(selected?.plannedCashFlow || 0) >= 0 ? "good" : "bad"} />
+            </div>
           </article>
 
           <article style={panelStyle}>
@@ -311,12 +340,18 @@ function BudgetContent() {
             <CategoryTable rows={selected?.revenueCategories || []} />
           </article>
 
-          <article style={panelStyle}>
+          <article style={widePanelStyle}>
             <div style={panelHeaderStyle}>
               <Banknote size={21} style={panelIconStyle} />
               <h2 style={panelTitleStyle}>Kategorie kosztów</h2>
             </div>
-            <CategoryTable rows={selected?.costCategories || []} reverseDiff />
+            <CostCategoryEditor
+              groups={selected?.costSubcategories || []}
+              selectedMonth={selectedMonth}
+              drafts={costEditDrafts}
+              onDraftChange={(key, value) => setCostEditDrafts((current) => ({ ...current, [key]: value }))}
+              onSave={saveCostPlan}
+            />
           </article>
 
           <article style={widePanelStyle}>
@@ -388,6 +423,15 @@ function Metric({ label, value, tone }: { label: string; value: string; tone?: "
   );
 }
 
+function SummaryBox({ label, value, tone }: { label: string; value: string; tone?: "good" | "bad" }) {
+  return (
+    <div style={summaryBoxStyle}>
+      <span>{label}</span>
+      <strong style={tone === "bad" ? dangerInlineStyle : tone === "good" ? successInlineStyle : undefined}>{value}</strong>
+    </div>
+  );
+}
+
 function CategoryTable({ rows, reverseDiff = false }: { rows: BudgetCategoryRow[]; reverseDiff?: boolean }) {
   return (
     <div style={tableWrapperStyle}>
@@ -408,29 +452,45 @@ function CategoryTable({ rows, reverseDiff = false }: { rows: BudgetCategoryRow[
   );
 }
 
-function CostBreakdownTable({ budget }: { budget: BudgetMonth[] }) {
+function CostCategoryEditor({
+  groups,
+  selectedMonth,
+  drafts,
+  onDraftChange,
+  onSave,
+}: {
+  groups: BudgetCostGroup[];
+  selectedMonth: string;
+  drafts: Record<string, string>;
+  onDraftChange: (key: string, value: string) => void;
+  onSave: (category: CfoCostCategory, subcategory: string, plannedValue: number) => void | Promise<void>;
+}) {
   return (
-    <div style={tableWrapperStyle}>
-      <table style={wideTableStyle}>
-        <thead>
-          <tr>
-            <Th>Miesiąc</Th>
-            {COST_OPTIONS.map((category) => <Th key={category.value} align="right">{category.label}</Th>)}
-            <Th align="right">Razem</Th>
-          </tr>
-        </thead>
-        <tbody>
-          {budget.map((month) => (
-            <tr key={month.period}>
-              <Td><strong>{formatMonthField(month.period)}</strong></Td>
-              {COST_OPTIONS.map((category) => (
-                <Td key={category.value} align="right">{formatMoney(costCategoryValue(month, category.value))}</Td>
-              ))}
-              <Td align="right"><strong>{formatMoney(month.plannedCosts)}</strong></Td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div style={costGroupListStyle}>
+      {groups.length === 0 ? <div style={emptyStyle}>Brak kosztów w wybranym miesiącu.</div> : groups.map((group) => (
+        <div key={group.key} style={costGroupStyle}>
+          <div style={costGroupHeaderStyle}>
+            <strong>{group.label}</strong>
+            <span>{formatMoney(group.planned)}</span>
+          </div>
+          {group.children.map((row) => {
+            const editKey = costEditKey(selectedMonth, group.key, row.key);
+            const value = drafts[editKey] ?? formatPlainNumber(row.planned);
+            return (
+              <div key={row.key} style={costSubcategoryRowStyle}>
+                <span>{row.label}</span>
+                <input style={smallInputStyle} value={value} onChange={(event) => onDraftChange(editKey, event.target.value)} />
+                <span>{formatMoney(row.actual)}</span>
+                <Diff value={row.planned - row.actual} />
+                <button type="button" style={smallButtonStyle} onClick={() => void onSave(group.key, row.key, row.planned)}>
+                  <Save size={15} />
+                  Zapisz
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      ))}
     </div>
   );
 }
@@ -489,16 +549,24 @@ function buildBudgetMonths(
     const actual = actualByMonth.get(period) || emptyActual();
     const monthOverrides = overrides.filter((override) => overrideApplies(override, period));
     const plannedRevenueCategories = plannedRevenueForMonth(period, baseline.revenue, clientRevenues, crmForecast);
-    const plannedCostCategories = plannedCostCategoriesForMonth(baseline.costs, actual.costByCategory);
+    const plannedCostSubcategories = plannedCostSubcategoriesForMonth(baseline.costSubcategories, actual.costBySubcategory);
     const crmCumulativeRevenueGrowth = crmForecast.cumulativeRevenueGrowthByMonth.get(period) || 0;
-    let plannedCashFlow = baseline.cashFlowWithoutRevenue + plannedClientCashFlowForMonth(period, clientRevenues) + (crmCumulativeRevenueGrowth * 1.23);
+    const plannedCustomerCashFlow = actual.revenueCashFlow > 0
+      ? actual.revenueCashFlow
+      : plannedClientCashFlowForMonth(period, clientRevenues) + (crmCumulativeRevenueGrowth * 1.23);
+    let plannedCashFlow = baseline.cashFlowWithoutRevenue + plannedCustomerCashFlow;
 
     monthOverrides.forEach((override) => {
-      const current = override.typ === "przychod" ? plannedRevenueCategories : plannedCostCategories;
-      current.set(override.kategoria, (current.get(override.kategoria) || 0) + Number(override.kwota_plan || 0));
-      plannedCashFlow += override.typ === "przychod" ? Number(override.kwota_cashflow || 0) : -Math.abs(Number(override.kwota_cashflow || 0));
+      if (override.typ === "przychod") {
+        plannedRevenueCategories.set(override.kategoria, (plannedRevenueCategories.get(override.kategoria) || 0) + Number(override.kwota_plan || 0));
+      } else {
+        const subcategory = override.podkategoria || EMPTY_SUBCATEGORY;
+        upsertSubcategoryAmount(plannedCostSubcategories, override.kategoria as CfoCostCategory, subcategory, Number(override.kwota_plan || 0));
+      }
+      plannedCashFlow += override.typ === "przychod" ? Number(override.kwota_cashflow || 0) : -Number(override.kwota_cashflow || 0);
     });
 
+    const plannedCostCategories = categoryTotalsFromSubcategories(plannedCostSubcategories);
     const plannedRevenue = sum(Array.from(plannedRevenueCategories.values()));
     const plannedCosts = sum(Array.from(plannedCostCategories.values()));
     const plannedResult = plannedRevenue - plannedCosts;
@@ -520,6 +588,7 @@ function buildBudgetMonths(
       overrides: monthOverrides,
       revenueCategories: categoryRows("przychod", plannedRevenueCategories, actual.revenueByCategory),
       costCategories: categoryRows("koszt", plannedCostCategories, actual.costByCategory),
+      costSubcategories: costGroupRows(plannedCostSubcategories, actual.costBySubcategory),
     };
   });
 }
@@ -545,6 +614,7 @@ function buildActualMonthMap(months: string[], revenueLines: CfoInvoiceLine[], c
       if (amount <= 0) return;
       current.costs += amount;
       current.costByCategory.set(cost.kategoria, (current.costByCategory.get(cost.kategoria) || 0) + amount);
+      upsertSubcategoryAmount(current.costBySubcategory, cost.kategoria, cost.podkategoria || EMPTY_SUBCATEGORY, amount);
     });
   });
 
@@ -553,9 +623,11 @@ function buildActualMonthMap(months: string[], revenueLines: CfoInvoiceLine[], c
     const current = map.get(period);
     if (!current) return;
     const category: CfoCostCategory = employee.zespol === "ksiegowy" ? "koszty_zespolu" : "marketing_sprzedaz";
+    const subcategory = employee.zespol === "ksiegowy" ? "Wynagrodzenie podstawowe" : employee.zespol === "marketingowy" ? "Koszt zespołu marketingowego" : "Koszt zespołu sprzedażowego";
     const amount = employeeCostTotal(employee);
     current.costs += amount;
     current.costByCategory.set(category, (current.costByCategory.get(category) || 0) + amount);
+    upsertSubcategoryAmount(current.costBySubcategory, category, subcategory, amount);
   });
 
   bankTransactions.forEach((transaction) => {
@@ -565,10 +637,21 @@ function buildActualMonthMap(months: string[], revenueLines: CfoInvoiceLine[], c
     if (!current) return;
     const amount = Number(transaction.kwota || 0);
     current.cashFlow += amount;
-    if (transaction.typ === "faktura_sprzedazowa" && amount > 0) current.revenueCashFlow += amount;
+    current.revenueCashFlow += revenueCashFlowAmount(transaction);
   });
 
   return map;
+}
+
+function revenueCashFlowAmount(transaction: CfoBankTransaction) {
+  const splits = transaction.cfo_rozbicia_platnosci || [];
+  if (splits.length > 0) {
+    return sum(splits
+      .filter((split) => !split.poza_kosztem_cfo && split.typ === "faktura_sprzedazowa" && split.faktura_id)
+      .map((split) => Math.max(0, Number(split.kwota || 0))));
+  }
+  const amount = Number(transaction.kwota || 0);
+  return transaction.typ === "faktura_sprzedazowa" && amount > 0 ? amount : 0;
 }
 
 function plannedRevenueForMonth(
@@ -592,10 +675,13 @@ function plannedRevenueForMonth(
   return planned;
 }
 
-function plannedCostCategoriesForMonth(baselineCosts: Map<string, number>, knownCosts: Map<string, number>) {
-  const planned = new Map(baselineCosts);
-  knownCosts.forEach((value, key) => {
-    planned.set(key, Math.max(planned.get(key) || 0, value));
+function plannedCostSubcategoriesForMonth(baselineCosts: Map<string, Map<string, number>>, knownCosts: Map<string, Map<string, number>>) {
+  const planned = cloneNestedMap(baselineCosts);
+  knownCosts.forEach((subcategories, category) => {
+    subcategories.forEach((value, subcategory) => {
+      const current = planned.get(category)?.get(subcategory) || 0;
+      setSubcategoryAmount(planned, category as CfoCostCategory, subcategory, Math.max(current, value));
+    });
   });
   return planned;
 }
@@ -661,6 +747,7 @@ function buildCrmRevenueGrowthForecast(historyMonths: string[], forecastMonths: 
 function buildBaseline(historyMonths: string[], actualByMonth: Map<string, ReturnType<typeof emptyActual>>) {
   const revenue = new Map<string, number>();
   const costs = new Map<string, number>();
+  const costSubcategories = new Map<string, Map<string, number>>();
   let cashFlow = 0;
   let revenueCashFlow = 0;
 
@@ -672,11 +759,16 @@ function buildBaseline(historyMonths: string[], actualByMonth: Map<string, Retur
     COST_OPTIONS.forEach((option) => {
       costs.set(option.value, (costs.get(option.value) || 0) + (actual.costByCategory.get(option.value) || 0) / historyMonths.length);
     });
+    actual.costBySubcategory.forEach((subcategories, category) => {
+      subcategories.forEach((value, subcategory) => {
+        upsertSubcategoryAmount(costSubcategories, category as CfoCostCategory, subcategory, value / historyMonths.length);
+      });
+    });
     cashFlow += actual.cashFlow / historyMonths.length;
     revenueCashFlow += actual.revenueCashFlow / historyMonths.length;
   });
 
-  return { revenue, costs, cashFlowWithoutRevenue: cashFlow - revenueCashFlow };
+  return { revenue, costs, costSubcategories, cashFlowWithoutRevenue: cashFlow - revenueCashFlow };
 }
 
 function emptyActual() {
@@ -687,6 +779,7 @@ function emptyActual() {
     revenueCashFlow: 0,
     revenueByCategory: new Map<string, number>(),
     costByCategory: new Map<string, number>(),
+    costBySubcategory: new Map<string, Map<string, number>>(),
   };
 }
 
@@ -705,8 +798,59 @@ function categoryRows(type: CfoBudgetOverrideType, planned: Map<string, number>,
   }).filter((row) => row.planned > 0 || row.actual > 0 || Math.abs(row.diff) > 0.01);
 }
 
-function costCategoryValue(month: BudgetMonth, category: CfoCostCategory) {
-  return month.costCategories.find((row) => row.key === category)?.planned || 0;
+function costGroupRows(planned: Map<string, Map<string, number>>, actual: Map<string, Map<string, number>>): BudgetCostGroup[] {
+  return COST_OPTIONS.map((category) => {
+    const plannedChildren = planned.get(category.value) || new Map<string, number>();
+    const actualChildren = actual.get(category.value) || new Map<string, number>();
+    const childKeys = Array.from(new Set([...plannedChildren.keys(), ...actualChildren.keys()]));
+    const children = childKeys.map((key) => {
+      const plannedValue = plannedChildren.get(key) || 0;
+      const actualValue = actualChildren.get(key) || 0;
+      return {
+        key,
+        label: key,
+        planned: plannedValue,
+        actual: actualValue,
+        diff: actualValue - plannedValue,
+      };
+    }).filter((row) => row.planned > 0 || row.actual > 0 || Math.abs(row.diff) > 0.01);
+    const plannedValue = sum(children.map((row) => row.planned));
+    const actualValue = sum(children.map((row) => row.actual));
+    return {
+      key: category.value,
+      label: category.label,
+      planned: plannedValue,
+      actual: actualValue,
+      diff: actualValue - plannedValue,
+      children,
+    };
+  }).filter((group) => group.children.length > 0 || group.planned > 0 || group.actual > 0);
+}
+
+function categoryTotalsFromSubcategories(source: Map<string, Map<string, number>>) {
+  const totals = new Map<string, number>();
+  source.forEach((subcategories, category) => {
+    totals.set(category, sum(Array.from(subcategories.values())));
+  });
+  return totals;
+}
+
+function cloneNestedMap(source: Map<string, Map<string, number>>) {
+  return new Map(Array.from(source.entries()).map(([key, value]) => [key, new Map(value)]));
+}
+
+function upsertSubcategoryAmount(source: Map<string, Map<string, number>>, category: CfoCostCategory | string, subcategory: string, amount: number) {
+  setSubcategoryAmount(source, category, subcategory, (source.get(category)?.get(subcategory) || 0) + amount);
+}
+
+function setSubcategoryAmount(source: Map<string, Map<string, number>>, category: CfoCostCategory | string, subcategory: string, amount: number) {
+  const current = source.get(category) || new Map<string, number>();
+  current.set(subcategory, amount);
+  source.set(category, current);
+}
+
+function costEditKey(month: string, category: CfoCostCategory, subcategory: string) {
+  return `${month}:${category}:${subcategory}`;
 }
 
 function overrideApplies(override: CfoBudgetOverride, period: string) {
@@ -799,6 +943,10 @@ function formatMoney(value: number | string | null | undefined) {
   return `${formatPlNumber(Number(value || 0), { minimumFractionDigits: 2, maximumFractionDigits: 2 })} zł`;
 }
 
+function formatPlainNumber(value: number | string | null | undefined) {
+  return formatPlNumber(Number(value || 0), { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 function formatPlNumber(value: number, options: Intl.NumberFormatOptions) {
   const normalized = value.toLocaleString("pl-PL", { useGrouping: false, ...options }).replace(/[\u00a0\u202f]/g, " ");
   const [integer, decimal] = normalized.split(",");
@@ -827,21 +975,25 @@ const metricStyle: CSSProperties = { background: colors.card, border: `1px solid
 const metricValueStyle: CSSProperties = { color: colors.navy, fontSize: "21px", lineHeight: 1.1 };
 const goodMetricValueStyle: CSSProperties = { ...metricValueStyle, color: colors.success };
 const badMetricValueStyle: CSSProperties = { ...metricValueStyle, color: colors.danger };
+const monthSummaryGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "10px" };
+const summaryBoxStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "12px", display: "grid", gap: "6px", color: colors.muted, fontSize: "12px", fontWeight: 850 };
 const panelStyle: CSSProperties = { background: colors.card, border: `1px solid ${colors.border}`, borderRadius: radius.card, boxShadow: shadow.soft, padding: "20px", minWidth: 0 };
 const widePanelStyle: CSSProperties = { ...panelStyle, gridColumn: "1 / -1" };
 const controlsPanelStyle: CSSProperties = { ...panelStyle, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 320px))", gap: "12px", alignItems: "end" };
 const sectionGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: "18px", alignItems: "start" };
+const monthTabsStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: "8px" };
+const monthTabStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, padding: "11px 12px", minHeight: "58px", display: "grid", gap: "5px", textAlign: "left", cursor: "pointer", fontWeight: 800 };
+const activeMonthTabStyle: CSSProperties = { ...monthTabStyle, background: "#e9eef7", borderColor: colors.navy };
 const panelHeaderStyle: CSSProperties = { display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px", flexWrap: "wrap" };
 const panelIconStyle: CSSProperties = { color: colors.red, display: "inline-flex" };
 const panelTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "21px" };
 const tableWrapperStyle: CSSProperties = { overflowX: "auto" };
 const tableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse", minWidth: "980px" };
-const wideTableStyle: CSSProperties = { ...tableStyle, minWidth: "1320px" };
 const thStyle: CSSProperties = { color: colors.muted, borderBottom: `1px solid ${colors.border}`, padding: "11px 9px", fontSize: "12px", textTransform: "uppercase", letterSpacing: 0, whiteSpace: "nowrap" };
 const tdStyle: CSSProperties = { color: colors.text, borderBottom: `1px solid ${colors.border}`, padding: "10px 9px", verticalAlign: "middle" };
-const selectedRowStyle: CSSProperties = { background: "#e9eef7", cursor: "pointer" };
 const fieldStyle: CSSProperties = { display: "grid", gap: "6px", color: colors.muted, fontSize: "12px", fontWeight: 850 };
 const inputStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, minHeight: "42px", padding: "9px 12px", fontWeight: 750, width: "100%", boxSizing: "border-box" };
+const smallInputStyle: CSSProperties = { ...inputStyle, minHeight: "36px", maxWidth: "150px" };
 const selectStyle: CSSProperties = { minHeight: "42px", background: colors.white };
 const monthFieldStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, minHeight: "42px", width: "235px", display: "grid", gridTemplateColumns: "36px minmax(0, 1fr)", alignItems: "center", overflow: "hidden" };
 const compactMonthFieldStyle: CSSProperties = { ...monthFieldStyle, width: "100%" };
@@ -850,7 +1002,12 @@ const monthInputStyle: CSSProperties = { border: 0, outline: "none", background:
 const draftGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(4, minmax(160px, 1fr)) auto", gap: "10px", alignItems: "end" };
 const primaryButtonStyle: CSSProperties = { border: `1px solid ${colors.red}`, borderRadius: radius.input, background: colors.red, color: colors.white, minHeight: "42px", padding: "9px 14px", fontWeight: 850, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "8px", cursor: "pointer", whiteSpace: "nowrap" };
 const secondaryButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.navy, minHeight: "42px", padding: "9px 14px", fontWeight: 850, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "8px", cursor: "pointer" };
+const smallButtonStyle: CSSProperties = { ...secondaryButtonStyle, minHeight: "36px", padding: "7px 10px" };
 const badgeStyle: CSSProperties = { display: "inline-flex", borderRadius: radius.badge, background: "rgba(23, 59, 115, 0.10)", color: colors.navy, padding: "7px 10px", fontSize: "12px", fontWeight: 900, marginLeft: "auto" };
+const costGroupListStyle: CSSProperties = { display: "grid", gap: "12px" };
+const costGroupStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, overflow: "hidden", background: colors.white };
+const costGroupHeaderStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", background: "#e9eef7", color: colors.navy, padding: "12px 14px", fontWeight: 900 };
+const costSubcategoryRowStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(220px, 1fr) 150px 130px 130px auto", gap: "10px", alignItems: "center", padding: "10px 14px", borderTop: `1px solid ${colors.border}` };
 const overrideListStyle: CSSProperties = { display: "grid", gap: "8px", marginTop: "16px" };
 const overrideRowStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto auto", gap: "12px", alignItems: "center", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "10px 12px" };
 const smallStyle: CSSProperties = { display: "block", color: colors.muted, marginTop: "4px", fontSize: "12px", fontWeight: 650 };

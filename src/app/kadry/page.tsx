@@ -1503,7 +1503,7 @@ function PayrollDetailsModal({
   function openNewContractForm() {
     setEditingContractId(null);
     setDraft(createEmptyDraft());
-    setShowForm((value) => !value || editingContractId !== null);
+    setShowForm(true);
   }
 
   function startEditingContract(contract: PayrollContract) {
@@ -1590,84 +1590,35 @@ function PayrollDetailsModal({
   }
 
   return (
-    <div style={modalOverlayStyle} onClick={onClose}>
-      <section style={wideModalStyle} onClick={(event) => event.stopPropagation()}>
-        <div style={modalHeaderStyle}>
-          <div>
-            <p style={eyebrowStyle}>Szczegóły kadrowe</p>
-            <h2 style={modalTitleStyle}>{client.nazwa || "Klient bez nazwy"}</h2>
-            <p style={modalSubtitleStyle}>NIP: {client.nip || "Brak"} · {activeContracts.length} aktywnych · {archivedContracts.length} w archiwum</p>
+    <>
+      <div style={modalOverlayStyle} onClick={onClose}>
+        <section style={wideModalStyle} onClick={(event) => event.stopPropagation()}>
+          <div style={modalHeaderStyle}>
+            <div>
+              <p style={eyebrowStyle}>Szczegóły kadrowe</p>
+              <h2 style={modalTitleStyle}>{client.nazwa || "Klient bez nazwy"}</h2>
+              <p style={modalSubtitleStyle}>NIP: {client.nip || "Brak"} · {activeContracts.length} aktywnych · {archivedContracts.length} w archiwum</p>
+            </div>
+            <div style={modalActionsStyle}>
+              <button type="button" style={secondaryButtonStyle} onClick={() => void toggleNotificationHistory()}>
+                Historia powiadomień
+              </button>
+              <button type="button" style={secondaryButtonStyle} onClick={() => setShowArchivedContracts((value) => !value)}>
+                <Archive size={18} /> Archiwum umów ({archivedContracts.length})
+              </button>
+              <button type="button" style={primaryButtonStyle} onClick={openNewContractForm}>
+                <Plus size={18} /> Dodaj umowę
+              </button>
+              <button type="button" style={iconButtonStyle} onClick={onClose} aria-label="Zamknij">
+                <X size={20} />
+              </button>
+            </div>
           </div>
-          <div style={modalActionsStyle}>
-            <button type="button" style={secondaryButtonStyle} onClick={() => void toggleNotificationHistory()}>
-              Historia powiadomień
-            </button>
-            <button type="button" style={secondaryButtonStyle} onClick={() => setShowArchivedContracts((value) => !value)}>
-              <Archive size={18} /> Archiwum umów ({archivedContracts.length})
-            </button>
-            <button type="button" style={primaryButtonStyle} onClick={openNewContractForm}>
-              <Plus size={18} /> Dodaj umowę
-            </button>
-            <button type="button" style={iconButtonStyle} onClick={onClose} aria-label="Zamknij">
-              <X size={20} />
-            </button>
-          </div>
-        </div>
 
-        <div style={modalBodyStyle}>
-          {showNotificationHistory && (
-            <PayrollNotificationHistoryPanel notifications={notificationHistory} loading={historyLoading} />
-          )}
-
-          {showForm && (
-            <section style={formBoxStyle}>
-              <div style={formHeaderStyle}>
-                <h3 style={formTitleStyle}>{editingContract ? "Edycja umowy" : "Nowa umowa"}</h3>
-                <button type="button" style={secondaryButtonStyle} onClick={closeContractForm}>Anuluj</button>
-              </div>
-              <div style={formGridStyle}>
-                <Field label="Imię"><input style={inputStyle} value={draft.imie} onChange={(event) => updateDraft("imie", event.target.value)} /></Field>
-                <Field label="Nazwisko"><input style={inputStyle} value={draft.nazwisko} onChange={(event) => updateDraft("nazwisko", event.target.value)} /></Field>
-                <Field label="Typ umowy">
-                  <AppSelect style={inputStyle} value={draft.typ_umowy} options={CONTRACT_TYPE_OPTIONS} onChange={(value) => updateDraft("typ_umowy", value as PayrollContractType)} />
-                </Field>
-                <Field label="Numer umowy"><input style={inputStyle} value={draft.numer_umowy} onChange={(event) => updateDraft("numer_umowy", event.target.value)} /></Field>
-                <Field label="Data początku"><input type="date" style={inputStyle} value={draft.data_poczatku} onChange={(event) => updateDraft("data_poczatku", event.target.value)} /></Field>
-                <Field label="Data końca">
-                  <input
-                    type="date"
-                    style={draft.typ_umowy === "umowa_o_prace" && draft.umowa_na_czas_nieokreslony ? disabledInputStyle : inputStyle}
-                    value={draft.data_konca}
-                    disabled={draft.typ_umowy === "umowa_o_prace" && draft.umowa_na_czas_nieokreslony}
-                    onChange={(event) => updateDraft("data_konca", event.target.value)}
-                  />
-                </Field>
-                {draft.typ_umowy === "umowa_o_prace" && (
-                  <>
-                    <label style={checkboxFieldStyle}>
-                      <input
-                        type="checkbox"
-                        checked={draft.umowa_na_czas_nieokreslony}
-                        onChange={(event) => updateDraft("umowa_na_czas_nieokreslony", event.target.checked)}
-                        style={checkboxInputStyle}
-                      />
-                      Umowa na czas nieokreślony
-                    </label>
-                    <Field label="Badania lekarskie ważne do"><input type="date" style={inputStyle} value={draft.badania_lekarskie_wazne_do} onChange={(event) => updateDraft("badania_lekarskie_wazne_do", event.target.value)} /></Field>
-                    <Field label="Szkolenie BHP ważne do"><input type="date" style={inputStyle} value={draft.szkolenie_bhp_wazne_do} onChange={(event) => updateDraft("szkolenie_bhp_wazne_do", event.target.value)} /></Field>
-                  </>
-                )}
-                {draft.typ_umowy === "student" && (
-                  <Field label="Legitymacja studencka ważna do"><input type="date" style={inputStyle} value={draft.legitymacja_studencka_wazna_do} onChange={(event) => updateDraft("legitymacja_studencka_wazna_do", event.target.value)} /></Field>
-                )}
-              </div>
-              <div style={formActionsStyle}>
-                <button type="button" style={primaryButtonStyle} onClick={saveContract} disabled={saving}>
-                  {saving ? "Zapisywanie..." : editingContract ? "Zapisz zmiany" : "Zapisz umowę"}
-                </button>
-              </div>
-            </section>
-          )}
+          <div style={modalBodyStyle}>
+            {showNotificationHistory && (
+              <PayrollNotificationHistoryPanel notifications={notificationHistory} loading={historyLoading} />
+            )}
 
           <section style={contractsSectionStyle}>
             {activeContracts.length === 0 ? (
@@ -1735,6 +1686,95 @@ function PayrollDetailsModal({
               )}
             </section>
           )}
+          </div>
+        </section>
+      </div>
+      {showForm && (
+        <PayrollContractFormModal
+          draft={draft}
+          editingContract={editingContract}
+          saving={saving}
+          onClose={closeContractForm}
+          onDraftChange={updateDraft}
+          onSave={() => void saveContract()}
+        />
+      )}
+    </>
+  );
+}
+
+function PayrollContractFormModal({
+  draft,
+  editingContract,
+  saving,
+  onClose,
+  onDraftChange,
+  onSave,
+}: {
+  draft: ContractDraft;
+  editingContract: PayrollContract | null;
+  saving: boolean;
+  onClose: () => void;
+  onDraftChange: <K extends keyof ContractDraft>(key: K, value: ContractDraft[K]) => void;
+  onSave: () => void;
+}) {
+  return (
+    <div style={modalOverlayStyle} onClick={onClose}>
+      <section style={contractFormModalStyle} onClick={(event) => event.stopPropagation()}>
+        <div style={modalHeaderStyle}>
+          <div>
+            <p style={eyebrowStyle}>Umowa kadrowa</p>
+            <h2 style={modalTitleStyle}>{editingContract ? "Edycja umowy" : "Nowa umowa"}</h2>
+          </div>
+          <button type="button" style={iconButtonStyle} onClick={onClose} aria-label="Zamknij">
+            <X size={20} />
+          </button>
+        </div>
+        <div style={modalBodyStyle}>
+          <section style={formBoxStyle}>
+            <div style={formGridStyle}>
+              <Field label="Imię"><input style={inputStyle} value={draft.imie} onChange={(event) => onDraftChange("imie", event.target.value)} /></Field>
+              <Field label="Nazwisko"><input style={inputStyle} value={draft.nazwisko} onChange={(event) => onDraftChange("nazwisko", event.target.value)} /></Field>
+              <Field label="Typ umowy">
+                <AppSelect style={inputStyle} value={draft.typ_umowy} options={CONTRACT_TYPE_OPTIONS} onChange={(value) => onDraftChange("typ_umowy", value as PayrollContractType)} />
+              </Field>
+              <Field label="Numer umowy"><input style={inputStyle} value={draft.numer_umowy} onChange={(event) => onDraftChange("numer_umowy", event.target.value)} /></Field>
+              <Field label="Data początku"><input type="date" style={inputStyle} value={draft.data_poczatku} onChange={(event) => onDraftChange("data_poczatku", event.target.value)} /></Field>
+              <Field label="Data końca">
+                <input
+                  type="date"
+                  style={draft.typ_umowy === "umowa_o_prace" && draft.umowa_na_czas_nieokreslony ? disabledInputStyle : inputStyle}
+                  value={draft.data_konca}
+                  disabled={draft.typ_umowy === "umowa_o_prace" && draft.umowa_na_czas_nieokreslony}
+                  onChange={(event) => onDraftChange("data_konca", event.target.value)}
+                />
+              </Field>
+              {draft.typ_umowy === "umowa_o_prace" && (
+                <>
+                  <label style={checkboxFieldStyle}>
+                    <input
+                      type="checkbox"
+                      checked={draft.umowa_na_czas_nieokreslony}
+                      onChange={(event) => onDraftChange("umowa_na_czas_nieokreslony", event.target.checked)}
+                      style={checkboxInputStyle}
+                    />
+                    Umowa na czas nieokreślony
+                  </label>
+                  <Field label="Badania lekarskie ważne do"><input type="date" style={inputStyle} value={draft.badania_lekarskie_wazne_do} onChange={(event) => onDraftChange("badania_lekarskie_wazne_do", event.target.value)} /></Field>
+                  <Field label="Szkolenie BHP ważne do"><input type="date" style={inputStyle} value={draft.szkolenie_bhp_wazne_do} onChange={(event) => onDraftChange("szkolenie_bhp_wazne_do", event.target.value)} /></Field>
+                </>
+              )}
+              {draft.typ_umowy === "student" && (
+                <Field label="Legitymacja studencka ważna do"><input type="date" style={inputStyle} value={draft.legitymacja_studencka_wazna_do} onChange={(event) => onDraftChange("legitymacja_studencka_wazna_do", event.target.value)} /></Field>
+              )}
+            </div>
+          </section>
+        </div>
+        <div style={stickyModalFooterStyle}>
+          <button type="button" style={secondaryButtonStyle} onClick={onClose}>Anuluj</button>
+          <button type="button" style={primaryButtonStyle} onClick={onSave} disabled={saving}>
+            {saving ? "Zapisywanie..." : editingContract ? "Zapisz zmiany" : "Zapisz umowę"}
+          </button>
         </div>
       </section>
     </div>
@@ -2281,6 +2321,7 @@ const detailsButtonStyle: CSSProperties = { minHeight: "38px", padding: "0 14px"
 const modalOverlayStyle: CSSProperties = { position: "fixed", inset: 0, zIndex: 60, background: "rgba(15, 23, 42, 0.38)", display: "flex", justifyContent: "center", alignItems: "flex-start", padding: "10px", overflowY: "auto" };
 const wideModalStyle: CSSProperties = { width: "calc(100vw - 20px)", maxHeight: "calc(100vh - 20px)", minHeight: "calc(100vh - 20px)", borderRadius: radius.card, background: colors.white, border: `1px solid ${colors.border}`, boxShadow: "0 32px 90px rgba(15, 23, 42, 0.28)", overflow: "hidden", display: "flex", flexDirection: "column" };
 const detailsModalStyle: CSSProperties = { width: "min(980px, calc(100vw - 56px))", maxHeight: "calc(100vh - 56px)", borderRadius: radius.card, background: colors.white, border: `1px solid ${colors.border}`, boxShadow: "0 32px 90px rgba(15, 23, 42, 0.28)", overflow: "hidden", display: "flex", flexDirection: "column" };
+const contractFormModalStyle: CSSProperties = { width: "min(1120px, calc(100vw - 20px))", maxHeight: "calc(100vh - 20px)", borderRadius: radius.card, background: colors.white, border: `1px solid ${colors.border}`, boxShadow: "0 32px 90px rgba(15, 23, 42, 0.32)", overflow: "hidden", display: "flex", flexDirection: "column" };
 const a1DetailsModalStyle: CSSProperties = { ...detailsModalStyle, height: "calc(100vh - 56px)" };
 const zusContributionsModalStyle: CSSProperties = { ...detailsModalStyle, width: "min(920px, calc(100vw - 56px))" };
 const modalHeaderStyle: CSSProperties = { padding: "22px 24px", borderBottom: `1px solid ${colors.border}`, display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "flex-start" };

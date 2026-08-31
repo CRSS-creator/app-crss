@@ -263,7 +263,7 @@ function BudgetContent() {
                   <tr>
                     <Th>Miesiąc</Th>
                     <Th align="right">Plan przych.</Th>
-                    <Th align="right">Trend CRM</Th>
+                    <Th align="right">Przyrost CRM</Th>
                     <Th align="right">Wykonanie</Th>
                     <Th align="right">Różnica</Th>
                     <Th align="right">Plan kosztów</Th>
@@ -279,7 +279,7 @@ function BudgetContent() {
                     <tr key={month.period} style={selectedMonth === month.period ? selectedRowStyle : undefined} onClick={() => setSelectedMonth(month.period)}>
                       <Td><strong>{formatMonthField(month.period)}</strong></Td>
                       <Td align="right">{formatMoney(month.plannedRevenue)}</Td>
-                      <Td align="right">{formatMoney(month.crmCumulativeRevenueGrowth)}</Td>
+                      <Td align="right">{formatMoney(month.crmMonthlyRevenueGrowth)}</Td>
                       <Td align="right">{formatMoney(month.actualRevenue)}</Td>
                       <Td align="right"><Diff value={month.actualRevenue - month.plannedRevenue} /></Td>
                       <Td align="right">{formatMoney(month.plannedCosts)}</Td>

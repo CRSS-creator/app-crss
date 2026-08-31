@@ -54,6 +54,8 @@ type BudgetMonth = {
   plannedCashFlow: number;
   actualCashFlow: number;
   closingCash: number;
+  crmMonthlyRevenueGrowth: number;
+  crmCumulativeRevenueGrowth: number;
   overrides: CfoBudgetOverride[];
   revenueCategories: BudgetCategoryRow[];
   costCategories: BudgetCategoryRow[];
@@ -230,6 +232,7 @@ function BudgetContent() {
       <section style={metricGridStyle}>
         <Metric label="Planowany wynik" value={formatMoney(sum(budget.map((month) => month.plannedResult)))} tone={sum(budget.map((month) => month.plannedResult)) >= 0 ? "good" : "bad"} />
         <Metric label="Planowany cash flow" value={formatMoney(sum(budget.map((month) => month.plannedCashFlow)))} tone={sum(budget.map((month) => month.plannedCashFlow)) >= 0 ? "good" : "bad"} />
+        <Metric label="Trend CRM / mies." value={formatMoney(budget[0]?.crmMonthlyRevenueGrowth || 0)} />
         <Metric label="Najniższy stan gotówki" value={formatMoney(Math.min(...budget.map((month) => month.closingCash), parsePolishNumber(openingCash)))} tone={firstShortfall ? "bad" : "good"} />
         <Metric label="Pierwszy alarm" value={firstShortfall ? formatMonthField(firstShortfall.period) : "Brak"} tone={firstShortfall ? "bad" : "good"} />
       </section>
@@ -260,6 +263,7 @@ function BudgetContent() {
                   <tr>
                     <Th>Miesiąc</Th>
                     <Th align="right">Plan przych.</Th>
+                    <Th align="right">Trend CRM</Th>
                     <Th align="right">Wykonanie</Th>
                     <Th align="right">Różnica</Th>
                     <Th align="right">Plan kosztów</Th>
@@ -275,6 +279,7 @@ function BudgetContent() {
                     <tr key={month.period} style={selectedMonth === month.period ? selectedRowStyle : undefined} onClick={() => setSelectedMonth(month.period)}>
                       <Td><strong>{formatMonthField(month.period)}</strong></Td>
                       <Td align="right">{formatMoney(month.plannedRevenue)}</Td>
+                      <Td align="right">{formatMoney(month.crmCumulativeRevenueGrowth)}</Td>
                       <Td align="right">{formatMoney(month.actualRevenue)}</Td>
                       <Td align="right"><Diff value={month.actualRevenue - month.plannedRevenue} /></Td>
                       <Td align="right">{formatMoney(month.plannedCosts)}</Td>
@@ -442,14 +447,16 @@ function buildBudgetMonths(
   const historyMonths = monthsForRange(shiftMonth(startMonth, -3), 3);
   const actualByMonth = buildActualMonthMap([...historyMonths, ...months], revenueLines, costs, employees, bankTransactions);
   const baseline = buildBaseline(historyMonths, actualByMonth);
+  const crmForecast = buildCrmRevenueGrowthForecast(historyMonths, months, crmRevenues);
   let cash = openingCash;
 
   return months.map((period) => {
     const actual = actualByMonth.get(period) || emptyActual();
     const monthOverrides = overrides.filter((override) => overrideApplies(override, period));
-    const plannedRevenueCategories = plannedRevenueForMonth(period, baseline.revenue, clientRevenues, crmRevenues);
+    const plannedRevenueCategories = plannedRevenueForMonth(period, baseline.revenue, clientRevenues, crmForecast);
     const plannedCostCategories = new Map(baseline.costs);
-    let plannedCashFlow = baseline.cashFlowWithoutRevenue + plannedClientCashFlowForMonth(period, clientRevenues) + plannedCrmRevenueForMonth(period, crmRevenues, clientRevenues);
+    const crmCumulativeRevenueGrowth = crmForecast.cumulativeRevenueGrowthByMonth.get(period) || 0;
+    let plannedCashFlow = baseline.cashFlowWithoutRevenue + plannedClientCashFlowForMonth(period, clientRevenues) + (crmCumulativeRevenueGrowth * 1.23);
 
     monthOverrides.forEach((override) => {
       const current = override.typ === "przychod" ? plannedRevenueCategories : plannedCostCategories;
@@ -473,6 +480,8 @@ function buildBudgetMonths(
       plannedCashFlow,
       actualCashFlow: actual.cashFlow,
       closingCash: cash,
+      crmMonthlyRevenueGrowth: crmForecast.monthlyRevenueGrowth,
+      crmCumulativeRevenueGrowth,
       overrides: monthOverrides,
       revenueCategories: categoryRows("przychod", plannedRevenueCategories, actual.revenueByCategory),
       costCategories: categoryRows("koszt", plannedCostCategories, actual.costByCategory),
@@ -531,7 +540,7 @@ function plannedRevenueForMonth(
   period: string,
   baselineRevenue: Map<string, number>,
   clientRevenues: CfoBudgetClientRevenue[],
-  crmRevenues: CfoBudgetCrmRevenue[],
+  crmForecast: CrmRevenueGrowthForecast,
 ) {
   const planned = new Map<string, number>();
   baselineRevenue.forEach((value, key) => {
@@ -542,7 +551,7 @@ function plannedRevenueForMonth(
     .filter((client) => clientRevenueApplies(client, period))
     .map((client) => Number(client.abonament || 0)));
 
-  const crmSubscription = plannedCrmRevenueForMonth(period, crmRevenues, clientRevenues);
+  const crmSubscription = crmForecast.cumulativeRevenueGrowthByMonth.get(period) || 0;
   planned.set("abonamenty", clientSubscription + crmSubscription);
 
   return planned;
@@ -574,45 +583,36 @@ function clientCashFlowMonth(client: CfoBudgetClientRevenue, servicePeriod: stri
   return shiftMonth(servicePeriod, 1);
 }
 
-function plannedCrmRevenueForMonth(period: string, crmRevenues: CfoBudgetCrmRevenue[], clientRevenues: CfoBudgetClientRevenue[] = []) {
-  const clientNips = new Set(clientRevenues.map((client) => normalizeNip(client.nip)).filter(Boolean));
-  return sum(crmRevenues
-    .filter((lead) => !clientNips.has(normalizeNip(lead.nip)))
-    .filter((lead) => crmRevenueApplies(lead, period))
-    .map((lead) => Number(lead.szacowany_mrr || 0) * crmProbability(lead)));
-}
-
-function crmRevenueApplies(lead: CfoBudgetCrmRevenue, period: string) {
-  if (Number(lead.szacowany_mrr || 0) <= 0) return false;
-  if (lead.status === "przegrana") return false;
-  const startPeriod = crmForecastStartMonth(lead);
-  return startPeriod <= period;
-}
-
-function crmForecastStartMonth(lead: CfoBudgetCrmRevenue) {
-  if (lead.status === "wygrana") return shiftMonth(timestampToMonth(lead.etap_started_at || lead.created_at), 1);
-  if (lead.etap === "finalizacja_podpisanie_umowy") return shiftMonth(timestampToMonth(lead.etap_started_at || lead.data_wyslania_oferty || lead.created_at), 1);
-  if (lead.etap === "decyzja") return shiftMonth(timestampToMonth(lead.etap_started_at || lead.data_wyslania_oferty || lead.created_at), 2);
-  if (lead.etap === "propozycja_wspolpracy_wyslana") return shiftMonth(timestampToMonth(lead.data_wyslania_oferty || lead.etap_started_at || lead.created_at), 2);
-  if (lead.etap === "rozmowa_online") return shiftMonth(timestampToMonth(lead.etap_started_at || lead.created_at), 3);
-  return "9999-12";
-}
-
-function crmProbability(lead: CfoBudgetCrmRevenue) {
-  if (lead.status === "wygrana") return 1;
-  if (lead.etap === "finalizacja_podpisanie_umowy") return 0.8;
-  if (lead.etap === "decyzja") return 0.5;
-  if (lead.etap === "propozycja_wspolpracy_wyslana") return 0.3;
-  if (lead.etap === "rozmowa_online") return 0.15;
-  return 0;
-}
-
 function timestampToMonth(value: string | null | undefined) {
   return value?.slice(0, 7) || currentMonthInput();
 }
 
-function normalizeNip(value: string | null | undefined) {
-  return String(value || "").replace(/\D/g, "");
+type CrmRevenueGrowthForecast = {
+  monthlyRevenueGrowth: number;
+  cumulativeRevenueGrowthByMonth: Map<string, number>;
+};
+
+function buildCrmRevenueGrowthForecast(historyMonths: string[], forecastMonths: string[], crmRevenues: CfoBudgetCrmRevenue[]): CrmRevenueGrowthForecast {
+  const wonRevenueByMonth = new Map(historyMonths.map((month) => [month, 0]));
+
+  crmRevenues
+    .filter((lead) => lead.status === "wygrana")
+    .forEach((lead) => {
+      const wonMonth = timestampToMonth(lead.etap_started_at || lead.updated_at || lead.created_at);
+      if (!wonRevenueByMonth.has(wonMonth)) return;
+      wonRevenueByMonth.set(wonMonth, (wonRevenueByMonth.get(wonMonth) || 0) + Number(lead.szacowany_mrr || 0));
+    });
+
+  const monthlyRevenueGrowth = historyMonths.length > 0
+    ? sum(Array.from(wonRevenueByMonth.values())) / historyMonths.length
+    : 0;
+
+  const cumulativeRevenueGrowthByMonth = new Map<string, number>();
+  forecastMonths.forEach((month, index) => {
+    cumulativeRevenueGrowthByMonth.set(month, monthlyRevenueGrowth * (index + 1));
+  });
+
+  return { monthlyRevenueGrowth, cumulativeRevenueGrowthByMonth };
 }
 
 function buildBaseline(historyMonths: string[], actualByMonth: Map<string, ReturnType<typeof emptyActual>>) {

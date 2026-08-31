@@ -1602,6 +1602,9 @@ function PayrollDetailsModal({
             <button type="button" style={secondaryButtonStyle} onClick={() => void toggleNotificationHistory()}>
               Historia powiadomień
             </button>
+            <button type="button" style={secondaryButtonStyle} onClick={() => setShowArchivedContracts((value) => !value)}>
+              <Archive size={18} /> Archiwum umów ({archivedContracts.length})
+            </button>
             <button type="button" style={primaryButtonStyle} onClick={openNewContractForm}>
               <Plus size={18} /> Dodaj umowę
             </button>
@@ -1701,12 +1704,11 @@ function PayrollDetailsModal({
             )}
           </section>
 
-          {archivedContracts.length > 0 && (
+          {showArchivedContracts && (
             <section style={contractsSectionStyle}>
-              <button type="button" style={archiveToggleStyle} onClick={() => setShowArchivedContracts((value) => !value)}>
-                <Archive size={18} /> Archiwum umów ({archivedContracts.length})
-              </button>
-              {showArchivedContracts && (
+              {archivedContracts.length === 0 ? (
+                <p style={emptyStyle}>Brak zarchiwizowanych umów.</p>
+              ) : (
                 <div style={contractsTableScrollStyle}>
                   <table style={detailsTableStyle}>
                     <thead>
@@ -2251,15 +2253,15 @@ const activeClientOptionStyle: CSSProperties = { ...clientOptionStyle, borderCol
 const emptyStyle: CSSProperties = { margin: 0, padding: "28px 24px", color: colors.muted, fontWeight: 750 };
 const emptyInlineStyle: CSSProperties = { margin: 0, color: colors.muted, fontWeight: 750 };
 const tableWrapStyle: CSSProperties = { width: "100%", overflowX: "auto" };
-const contractsTableScrollStyle: CSSProperties = { width: "100%", maxHeight: "min(52vh, 560px)", overflow: "auto" };
+const contractsTableScrollStyle: CSSProperties = { width: "100%", maxHeight: "min(58vh, 660px)", overflowY: "auto", overflowX: "hidden" };
 const tableStyle: CSSProperties = { width: "100%", minWidth: "980px", borderCollapse: "collapse" };
 const a1RegisterTableStyle: CSSProperties = { ...tableStyle, minWidth: "1120px" };
 const zusEntrepreneursTableStyle: CSSProperties = { ...tableStyle, minWidth: "1360px" };
-const detailsTableStyle: CSSProperties = { width: "100%", minWidth: "1360px", borderCollapse: "collapse" };
+const detailsTableStyle: CSSProperties = { width: "100%", minWidth: "0", borderCollapse: "collapse", tableLayout: "fixed" };
 const a1MonthlyTableStyle: CSSProperties = { width: "100%", minWidth: "760px", borderCollapse: "collapse" };
 const a1MonthlyScrollStyle: CSSProperties = { width: "100%", maxHeight: "min(48vh, 520px)", overflow: "auto" };
-const thStyle: CSSProperties = { padding: "14px 18px", textAlign: "left", fontSize: "12px", color: colors.text, textTransform: "uppercase", letterSpacing: "0.08em", borderBottom: `1px solid ${colors.border}`, whiteSpace: "nowrap" };
-const tdStyle: CSSProperties = { padding: "16px 18px", borderBottom: `1px solid ${colors.border}`, color: colors.text, verticalAlign: "middle", fontSize: "14px" };
+const thStyle: CSSProperties = { padding: "14px 12px", textAlign: "left", fontSize: "12px", color: colors.text, textTransform: "uppercase", letterSpacing: "0.08em", borderBottom: `1px solid ${colors.border}`, whiteSpace: "normal", lineHeight: 1.25 };
+const tdStyle: CSSProperties = { padding: "16px 12px", borderBottom: `1px solid ${colors.border}`, color: colors.text, verticalAlign: "middle", fontSize: "14px", wordBreak: "break-word" };
 const centeredThStyle: CSSProperties = { ...thStyle, textAlign: "center" };
 const centeredTdStyle: CSSProperties = { ...tdStyle, textAlign: "center" };
 const clientNameStyle: CSSProperties = { display: "block", color: colors.navy, fontSize: "15px", lineHeight: 1.35 };
@@ -2276,15 +2278,15 @@ const checkboxStyle: CSSProperties = { width: "18px", height: "18px", accentColo
 const wrappedHeaderTextStyle: CSSProperties = { display: "inline-block", maxWidth: "150px", whiteSpace: "normal", lineHeight: 1.25 };
 const emptySmallPlusAmountStyle: CSSProperties = { color: colors.muted, fontWeight: 850 };
 const detailsButtonStyle: CSSProperties = { minHeight: "38px", padding: "0 14px", borderRadius: radius.button, border: `1px solid ${colors.border}`, background: colors.white, color: colors.navy, fontWeight: 850, cursor: "pointer" };
-const modalOverlayStyle: CSSProperties = { position: "fixed", inset: 0, zIndex: 60, background: "rgba(15, 23, 42, 0.38)", display: "flex", justifyContent: "center", alignItems: "flex-start", padding: "28px", overflowY: "auto" };
-const wideModalStyle: CSSProperties = { width: "min(1380px, calc(100vw - 56px))", maxHeight: "calc(100vh - 56px)", borderRadius: radius.card, background: colors.white, border: `1px solid ${colors.border}`, boxShadow: "0 32px 90px rgba(15, 23, 42, 0.28)", overflow: "hidden", display: "flex", flexDirection: "column" };
+const modalOverlayStyle: CSSProperties = { position: "fixed", inset: 0, zIndex: 60, background: "rgba(15, 23, 42, 0.38)", display: "flex", justifyContent: "center", alignItems: "flex-start", padding: "10px", overflowY: "auto" };
+const wideModalStyle: CSSProperties = { width: "calc(100vw - 20px)", maxHeight: "calc(100vh - 20px)", minHeight: "calc(100vh - 20px)", borderRadius: radius.card, background: colors.white, border: `1px solid ${colors.border}`, boxShadow: "0 32px 90px rgba(15, 23, 42, 0.28)", overflow: "hidden", display: "flex", flexDirection: "column" };
 const detailsModalStyle: CSSProperties = { width: "min(980px, calc(100vw - 56px))", maxHeight: "calc(100vh - 56px)", borderRadius: radius.card, background: colors.white, border: `1px solid ${colors.border}`, boxShadow: "0 32px 90px rgba(15, 23, 42, 0.28)", overflow: "hidden", display: "flex", flexDirection: "column" };
 const a1DetailsModalStyle: CSSProperties = { ...detailsModalStyle, height: "calc(100vh - 56px)" };
 const zusContributionsModalStyle: CSSProperties = { ...detailsModalStyle, width: "min(920px, calc(100vw - 56px))" };
 const modalHeaderStyle: CSSProperties = { padding: "22px 24px", borderBottom: `1px solid ${colors.border}`, display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "flex-start" };
 const modalTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "26px", lineHeight: 1.2 };
 const modalSubtitleStyle: CSSProperties = { margin: "8px 0 0", color: colors.muted, fontSize: "13px", fontWeight: 750 };
-const modalActionsStyle: CSSProperties = { display: "flex", gap: "10px", alignItems: "center" };
+const modalActionsStyle: CSSProperties = { display: "flex", gap: "10px", alignItems: "center", justifyContent: "flex-end", flexWrap: "wrap" };
 const modalBodyStyle: CSSProperties = { padding: "22px 24px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "18px" };
 const a1ModalBodyStyle: CSSProperties = { ...modalBodyStyle, flex: "1 1 auto", minHeight: 0, paddingBottom: "24px" };
 const stickyModalFooterStyle: CSSProperties = { flex: "0 0 auto", display: "flex", justifyContent: "flex-end", gap: "10px", padding: "16px 24px 22px", borderTop: `1px solid ${colors.border}`, background: colors.white, flexWrap: "wrap" };
@@ -2335,7 +2337,6 @@ const disabledInputStyle: CSSProperties = { ...inputStyle, background: "rgba(226
 const checkboxFieldStyle: CSSProperties = { minHeight: "42px", display: "flex", alignItems: "center", gap: "8px", color: colors.navy, fontSize: "14px", fontWeight: 850 };
 const checkboxInputStyle: CSSProperties = { width: "16px", height: "16px", margin: 0, accentColor: colors.navy };
 const contractsSectionStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.card, padding: "0", overflow: "hidden" };
-const archiveToggleStyle: CSSProperties = { width: "100%", minHeight: "52px", padding: "0 18px", border: "none", borderBottom: `1px solid ${colors.border}`, background: colors.inputBackground, color: colors.navy, fontWeight: 900, display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", textAlign: "left" };
 const rowActionsStyle: CSSProperties = { display: "inline-flex", gap: "8px", alignItems: "center", justifyContent: "center" };
 const historyPanelStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.inputBackground, padding: "18px" };
 const historyTableStyle: CSSProperties = { width: "100%", minWidth: "980px", borderCollapse: "collapse", background: colors.white };

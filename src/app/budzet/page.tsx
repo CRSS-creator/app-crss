@@ -490,6 +490,7 @@ function buildBudgetMonths(
   const invoicePaymentProfile = buildInvoicePaymentProfile(budgetInvoices);
   const budgetCostPayments = buildBudgetCostPayments(costs);
   const costPaymentProfile = buildCostPaymentProfile(budgetCostPayments);
+  const employeeCashFlowBaseline = buildEmployeeCashFlowBaseline(historyMonths, employees);
   let cash = openingCash;
 
   return months.map((period) => {
@@ -519,7 +520,11 @@ function buildBudgetMonths(
     const plannedCosts = sum(Array.from(plannedCostCategories.values()));
     const plannedResult = plannedRevenue - plannedCosts;
     const costCashFlow = plannedCostCashFlowForMonth(period, budgetCostPayments, costPaymentProfile);
-    const plannedCostCashFlow = costCashFlow.hasCostSignal ? Math.max(costCashFlow.amount, plannedCosts) : plannedCosts;
+    const plannedEmployeeCashFlow = employeeCashFlowForMonth(period, employees) || employeeCashFlowBaseline;
+    const plannedOtherCostCashFlow = costCashFlow.hasCostSignal
+      ? costCashFlow.amount
+      : Math.max(0, plannedCosts - plannedEmployeeCashFlow);
+    const plannedCostCashFlow = plannedEmployeeCashFlow + plannedOtherCostCashFlow;
     const plannedCashFlow = plannedCustomerCashFlow + manualRevenueCashFlow - plannedCostCashFlow;
     cash += plannedCashFlow;
 
@@ -548,7 +553,7 @@ function buildActualMonthMap(months: string[], revenueLines: CfoInvoiceLine[], c
   const map = new Map(months.map((month) => [month, emptyActual()]));
 
   revenueLines.forEach((line) => {
-    const period = revenueLineEffectivePeriod(line).slice(0, 7);
+    const period = revenueLineIssuePeriod(line);
     const current = map.get(period);
     if (!current) return;
     const category = line.cfo_przychod_kategoria || "pozostale";
@@ -776,6 +781,17 @@ function plannedCostCashFlowForMonth(period: string, costs: BudgetCostPayment[],
   });
 
   return { amount, hasCostSignal };
+}
+
+function buildEmployeeCashFlowBaseline(historyMonths: string[], employees: CfoEmployeeCost[]) {
+  const totals = historyMonths.map((period) => employeeCashFlowForMonth(period, employees)).filter((value) => value > 0);
+  return totals.length > 0 ? sum(totals) / totals.length : 0;
+}
+
+function employeeCashFlowForMonth(period: string, employees: CfoEmployeeCost[]) {
+  return sum(employees
+    .filter((employee) => employee.okres.slice(0, 7) === period)
+    .map(employeeCostTotal));
 }
 
 type PaymentProfile = {
@@ -1070,6 +1086,11 @@ function revenueLineEffectivePeriod(line: CfoInvoiceLine) {
 
   const invoice = Array.isArray(line.faktury) ? line.faktury[0] : line.faktury;
   return invoice?.okres || monthToDate(currentMonthInput());
+}
+
+function revenueLineIssuePeriod(line: CfoInvoiceLine) {
+  const invoice = firstRelation(line.faktury);
+  return (invoice?.data_wystawienia || revenueLineEffectivePeriod(line)).slice(0, 7);
 }
 
 function categoryLabel(type: CfoBudgetOverrideType, value: string) {

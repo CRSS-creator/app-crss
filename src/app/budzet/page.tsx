@@ -95,6 +95,12 @@ type BudgetCostPayment = {
   paymentDate: string | null;
 };
 
+type BudgetRevenuePlanEntry = {
+  payerKey: string;
+  category: CfoRevenueCategory;
+  amountNet: number;
+};
+
 const REVENUE_OPTIONS: { value: CfoRevenueCategory; label: string }[] = [
   { value: "abonamenty", label: "Abonamenty / MRR" },
   { value: "kadry_place", label: "Kadry i płace" },
@@ -497,12 +503,13 @@ function buildBudgetMonths(
   return months.map((period) => {
     const actual = actualByMonth.get(period) || emptyActual();
     const monthOverrides = overrides.filter((override) => overrideApplies(override, period));
-    const plannedRevenueCategories = plannedRevenueForMonth(period, baseline.revenue, clientRevenues, crmForecast);
+    const plannedRevenueEntries = plannedRevenueEntriesForMonth(period, baseline, clientRevenues, crmForecast);
+    const plannedRevenueCategories = plannedRevenueForMonth(plannedRevenueEntries);
     const plannedCostSubcategories = plannedCostSubcategoriesForMonth(baseline.costSubcategories, actual.costBySubcategory);
     const crmCumulativeRevenueGrowth = crmForecast.revenueGrowthByMonth.get(period) || 0;
     const invoiceCashFlow = plannedInvoiceCustomerCashFlowForMonth(period, budgetInvoices, invoicePaymentProfile);
     const plannedCustomerCashFlow = invoiceCashFlow.amount
-      + plannedUnissuedRevenueCashFlowForMonth(period, months, baseline.revenue, clientRevenues, crmForecast, actualByMonth, invoicePaymentProfile);
+      + plannedUnissuedRevenueCashFlowForMonth(period, months, baseline, clientRevenues, crmForecast, actualByMonth, invoicePaymentProfile);
     let manualRevenueCashFlow = 0;
 
     monthOverrides.forEach((override) => {
@@ -556,8 +563,11 @@ function buildActualMonthMap(months: string[], revenueLines: CfoInvoiceLine[], c
     if (!current) return;
     const category = line.cfo_przychod_kategoria || "pozostale";
     const amount = Number(line.kwota_netto || 0);
+    const invoice = firstRelation(line.faktury);
+    const payerKey = counterpartyKey(invoice?.klient_id || invoice?.kontrahent_nazwa || "bez-kontrahenta");
     current.revenue += amount;
     current.revenueByCategory.set(category, (current.revenueByCategory.get(category) || 0) + amount);
+    upsertSubcategoryAmount(current.revenueByClientCategory, payerKey, category, amount);
   });
 
   costs.filter((cost) => !cost.ignoruj).forEach((cost) => {
@@ -717,20 +727,23 @@ function plannedInvoiceCustomerCashFlowForMonth(period: string, invoices: Budget
 function plannedUnissuedRevenueCashFlowForMonth(
   cashFlowPeriod: string,
   forecastMonths: string[],
-  baselineRevenue: Map<string, number>,
+  baseline: ReturnType<typeof buildBaseline>,
   clientRevenues: CfoBudgetClientRevenue[],
   crmForecast: CrmRevenueGrowthForecast,
   actualByMonth: Map<string, ReturnType<typeof emptyActual>>,
   profile: PaymentProfile,
 ) {
   return sum(forecastMonths.map((issuePeriod) => {
-    const planned = plannedRevenueForMonth(issuePeriod, baselineRevenue, clientRevenues, crmForecast);
+    const planned = plannedRevenueEntriesForMonth(issuePeriod, baseline, clientRevenues, crmForecast);
     const actual = actualByMonth.get(issuePeriod) || emptyActual();
-    const missingNet = sum(REVENUE_OPTIONS.map((option) => Math.max(0, (planned.get(option.value) || 0) - (actual.revenueByCategory.get(option.value) || 0))));
-    if (missingNet <= 0.01) return 0;
+    return sum(planned.map((entry) => {
+      const issuedNet = actual.revenueByClientCategory.get(entry.payerKey)?.get(entry.category) || 0;
+      const missingNet = Math.max(0, entry.amountNet - issuedNet);
+      if (missingNet <= 0.01) return 0;
 
-    const expectedMonth = addDays(monthToDate(issuePeriod), profile.globalAverageDays).slice(0, 7);
-    return expectedMonth === cashFlowPeriod ? missingNet * 1.23 : 0;
+      const expectedMonth = addDays(monthToDate(issuePeriod), averageDaysFor(profile, entry.payerKey)).slice(0, 7);
+      return expectedMonth === cashFlowPeriod ? missingNet * 1.23 : 0;
+    }));
   }));
 }
 
@@ -859,23 +872,43 @@ function averageDaysFor(profile: PaymentProfile, counterpartyKeyValue: string) {
   return profile.averageDaysByCounterparty.get(counterpartyKeyValue) ?? profile.globalAverageDays;
 }
 
-function plannedRevenueForMonth(
+function plannedRevenueEntriesForMonth(
   period: string,
-  baselineRevenue: Map<string, number>,
+  baseline: ReturnType<typeof buildBaseline>,
   clientRevenues: CfoBudgetClientRevenue[],
   crmForecast: CrmRevenueGrowthForecast,
-) {
-  const planned = new Map<string, number>();
-  baselineRevenue.forEach((value, key) => {
-    if (key !== "abonamenty") planned.set(key, value);
-  });
+): BudgetRevenuePlanEntry[] {
+  const entries: BudgetRevenuePlanEntry[] = [];
 
-  const clientSubscription = sum(clientRevenues
+  clientRevenues
     .filter((client) => clientRevenueApplies(client, period))
-    .map((client) => Number(client.abonament || 0)));
+    .forEach((client) => {
+      const payerKey = counterpartyKey(client.id);
+      const abonament = Number(client.abonament || 0);
+      const payroll = baseline.clientRevenueAverages.get(payerKey)?.get("kadry_place") || 0;
+
+      if (abonament > 0) entries.push({ payerKey, category: "abonamenty", amountNet: abonament });
+      if (payroll > 0) entries.push({ payerKey, category: "kadry_place", amountNet: payroll });
+    });
+
+  const servicesAdditional = baseline.revenue.get("uslugi_dodatkowe") || 0;
+  if (servicesAdditional > 0) {
+    entries.push({ payerKey: "__uslugi_dodatkowe__", category: "uslugi_dodatkowe", amountNet: servicesAdditional });
+  }
 
   const crmSubscription = crmForecast.revenueGrowthByMonth.get(period) || 0;
-  planned.set("abonamenty", clientSubscription + crmSubscription);
+  if (crmSubscription > 0) {
+    entries.push({ payerKey: "__crm__", category: "abonamenty", amountNet: crmSubscription });
+  }
+
+  return entries;
+}
+
+function plannedRevenueForMonth(entries: BudgetRevenuePlanEntry[]) {
+  const planned = new Map<string, number>();
+  entries.forEach((entry) => {
+    planned.set(entry.category, (planned.get(entry.category) || 0) + entry.amountNet);
+  });
 
   return planned;
 }
@@ -948,6 +981,7 @@ function buildBaseline(revenueHistoryMonths: string[], costHistoryMonths: string
   revenue.set("uslugi_dodatkowe", averageRevenueCategory(revenueHistoryMonths, actualByMonth, "uslugi_dodatkowe"));
   revenue.set("pozostale", 0);
   revenue.set("wdrozenia", 0);
+  const clientRevenueAverages = averageClientRevenueCategory(revenueHistoryMonths.slice(-3), actualByMonth, "kadry_place");
 
   costHistoryMonths.forEach((month) => {
     const actual = actualByMonth.get(month) || emptyActual();
@@ -969,6 +1003,7 @@ function buildBaseline(revenueHistoryMonths: string[], costHistoryMonths: string
     revenue,
     costs,
     costSubcategories: averageNestedMap(costSubcategoryTotals, costSubcategoryCounts),
+    clientRevenueAverages,
     cashFlowWithoutRevenue: cashFlow - revenueCashFlow,
   };
 }
@@ -978,6 +1013,22 @@ function averageRevenueCategory(months: string[], actualByMonth: Map<string, Ret
   return sum(months.map((month) => actualByMonth.get(month)?.revenueByCategory.get(category) || 0)) / months.length;
 }
 
+function averageClientRevenueCategory(months: string[], actualByMonth: Map<string, ReturnType<typeof emptyActual>>, category: CfoRevenueCategory) {
+  const clientKeys = new Set<string>();
+  months.forEach((month) => {
+    actualByMonth.get(month)?.revenueByClientCategory.forEach((categories, clientKey) => {
+      if ((categories.get(category) || 0) > 0) clientKeys.add(clientKey);
+    });
+  });
+
+  const averages = new Map<string, Map<string, number>>();
+  clientKeys.forEach((clientKey) => {
+    setSubcategoryAmount(averages, clientKey, category, sum(months.map((month) => actualByMonth.get(month)?.revenueByClientCategory.get(clientKey)?.get(category) || 0)) / months.length);
+  });
+
+  return averages;
+}
+
 function emptyActual() {
   return {
     revenue: 0,
@@ -985,6 +1036,7 @@ function emptyActual() {
     cashFlow: 0,
     revenueCashFlow: 0,
     revenueByCategory: new Map<string, number>(),
+    revenueByClientCategory: new Map<string, Map<string, number>>(),
     costByCategory: new Map<string, number>(),
     costBySubcategory: new Map<string, Map<string, number>>(),
   };

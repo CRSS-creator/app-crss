@@ -521,9 +521,7 @@ function buildBudgetMonths(
     const plannedResult = plannedRevenue - plannedCosts;
     const costCashFlow = plannedCostCashFlowForMonth(period, budgetCostPayments, costPaymentProfile);
     const plannedEmployeeCashFlow = employeeCashFlowForMonth(period, employees) || employeeCashFlowBaseline;
-    const plannedOtherCostCashFlow = costCashFlow.hasCostSignal
-      ? costCashFlow.amount
-      : Math.max(0, plannedCosts - plannedEmployeeCashFlow);
+    const plannedOtherCostCashFlow = costCashFlow.amount;
     const plannedCostCashFlow = plannedEmployeeCashFlow + plannedOtherCostCashFlow;
     const plannedCashFlow = plannedCustomerCashFlow + manualRevenueCashFlow - plannedCostCashFlow;
     cash += plannedCashFlow;

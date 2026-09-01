@@ -131,6 +131,8 @@ const COST_OPTIONS: { value: CfoCostCategory; label: string }[] = [
 const MONTH_LABELS = ["styczeń", "luty", "marzec", "kwiecień", "maj", "czerwiec", "lipiec", "sierpień", "wrzesień", "październik", "listopad", "grudzień"];
 const DEFAULT_HORIZON = 12;
 const EMPTY_SUBCATEGORY = "Bez podkategorii";
+const OPENING_CASH_STORAGE_KEY = "crss_budget_opening_cash";
+const SAFETY_THRESHOLD_STORAGE_KEY = "crss_budget_safety_threshold";
 
 export default function BudgetPage() {
   return (
@@ -145,8 +147,8 @@ export default function BudgetPage() {
 function BudgetContent() {
   const [startMonth, setStartMonth] = useState(currentForecastStartInput());
   const [selectedMonth, setSelectedMonth] = useState(currentForecastStartInput());
-  const [openingCash, setOpeningCash] = useState("0");
-  const [safetyThreshold, setSafetyThreshold] = useState("0");
+  const [openingCash, setOpeningCash] = useState(() => readStoredBudgetSetting(OPENING_CASH_STORAGE_KEY));
+  const [safetyThreshold, setSafetyThreshold] = useState(() => readStoredBudgetSetting(SAFETY_THRESHOLD_STORAGE_KEY));
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [revenueLines, setRevenueLines] = useState<CfoInvoiceLine[]>([]);
@@ -211,6 +213,16 @@ function BudgetContent() {
     setSelectedMonth(value);
   }
 
+  function changeOpeningCash(value: string) {
+    setOpeningCash(value);
+    writeStoredBudgetSetting(OPENING_CASH_STORAGE_KEY, value);
+  }
+
+  function changeSafetyThreshold(value: string) {
+    setSafetyThreshold(value);
+    writeStoredBudgetSetting(SAFETY_THRESHOLD_STORAGE_KEY, value);
+  }
+
   async function saveCostPlan(category: CfoCostCategory, subcategory: string, plannedValue: number) {
     const editKey = costEditKey(selectedMonth, category, subcategory);
     const nextValue = parsePolishNumber(costEditDrafts[editKey] ?? String(plannedValue));
@@ -264,11 +276,11 @@ function BudgetContent() {
       <section style={controlsPanelStyle}>
         <label style={fieldStyle}>
           <span>Gotówka na start</span>
-          <input style={inputStyle} value={openingCash} onChange={(event) => setOpeningCash(event.target.value)} />
+          <input style={inputStyle} value={openingCash} onChange={(event) => changeOpeningCash(event.target.value)} />
         </label>
         <label style={fieldStyle}>
           <span>Próg bezpieczeństwa</span>
-          <input style={inputStyle} value={safetyThreshold} onChange={(event) => setSafetyThreshold(event.target.value)} />
+          <input style={inputStyle} value={safetyThreshold} onChange={(event) => changeSafetyThreshold(event.target.value)} />
         </label>
       </section>
 
@@ -1306,6 +1318,16 @@ function currentForecastStartInput() {
 function currentMonthInput() {
   const date = new Date();
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function readStoredBudgetSetting(key: string) {
+  if (typeof window === "undefined") return "0";
+  return window.localStorage.getItem(key) || "0";
+}
+
+function writeStoredBudgetSetting(key: string, value: string) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(key, value);
 }
 
 function monthsForRange(startMonth: string, count: number) {

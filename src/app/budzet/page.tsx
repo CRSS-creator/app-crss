@@ -8,9 +8,9 @@ import AccessGuard from "@/components/AccessGuard";
 import AppLayout from "@/components/AppLayout";
 import {
   fetchCfoBankTransactionsRange,
+  fetchCfoBudgetRevenueLinesRange,
   fetchCfoCostsRange,
   fetchCfoEmployeeCostsRange,
-  fetchCfoRevenueLinesRange,
   type CfoBankTransaction,
   type CfoCostCategory,
   type CfoCostItem,
@@ -76,11 +76,21 @@ type BudgetCostSubcategoryRow = {
 
 type BudgetInvoice = {
   id: string;
-  category: CfoRevenueCategory;
+  payerKey: string;
   servicePeriod: string;
   issueDate: string | null;
   dueDate: string | null;
   gross: number;
+  paidAmount: number;
+  paymentDate: string | null;
+};
+
+type BudgetCostPayment = {
+  id: string;
+  vendorKey: string;
+  documentDate: string | null;
+  servicePeriod: string;
+  amount: number;
   paidAmount: number;
   paymentDate: string | null;
 };
@@ -153,7 +163,7 @@ function BudgetContent() {
     const historyStart = shiftMonth(startMonth, -3);
     const forecastEnd = shiftMonth(startMonth, DEFAULT_HORIZON - 1);
     const [revenueResult, costsResult, employeeResult, bankResult, overridesResult, clientRevenueResult, crmRevenueResult] = await Promise.all([
-      fetchCfoRevenueLinesRange(monthToDate(historyStart), monthEndDate(forecastEnd)),
+      fetchCfoBudgetRevenueLinesRange(monthToDate(historyStart), monthEndDate(forecastEnd)),
       fetchCfoCostsRange(monthToDate(historyStart), monthEndDate(forecastEnd)),
       fetchCfoEmployeeCostsRange(monthToDate(historyStart), monthEndDate(forecastEnd)),
       fetchCfoBankTransactionsRange(monthToDate(historyStart), monthEndDate(forecastEnd)),
@@ -477,7 +487,9 @@ function buildBudgetMonths(
   const baseline = buildBaseline(historyMonths, actualByMonth);
   const crmForecast = buildCrmRevenueGrowthForecast(historyMonths, months, crmRevenues);
   const budgetInvoices = buildBudgetInvoices(revenueLines);
-  const paymentDelayDays = averageInvoicePaymentDelayDays(budgetInvoices);
+  const invoicePaymentProfile = buildInvoicePaymentProfile(budgetInvoices);
+  const budgetCostPayments = buildBudgetCostPayments(costs);
+  const costPaymentProfile = buildCostPaymentProfile(budgetCostPayments);
   let cash = openingCash;
 
   return months.map((period) => {
@@ -486,7 +498,7 @@ function buildBudgetMonths(
     const plannedRevenueCategories = plannedRevenueForMonth(period, baseline.revenue, clientRevenues, crmForecast);
     const plannedCostSubcategories = plannedCostSubcategoriesForMonth(baseline.costSubcategories, actual.costBySubcategory);
     const crmCumulativeRevenueGrowth = crmForecast.cumulativeRevenueGrowthByMonth.get(period) || 0;
-    const invoiceCashFlow = plannedInvoiceCustomerCashFlowForMonth(period, budgetInvoices, paymentDelayDays);
+    const invoiceCashFlow = plannedInvoiceCustomerCashFlowForMonth(period, budgetInvoices, invoicePaymentProfile);
     const plannedCustomerCashFlow = invoiceCashFlow.hasInvoiceSignal
       ? invoiceCashFlow.amount
       : plannedClientCashFlowForMonth(period, clientRevenues) + (crmCumulativeRevenueGrowth * 1.23);
@@ -506,7 +518,9 @@ function buildBudgetMonths(
     const plannedRevenue = sum(Array.from(plannedRevenueCategories.values()));
     const plannedCosts = sum(Array.from(plannedCostCategories.values()));
     const plannedResult = plannedRevenue - plannedCosts;
-    const plannedCashFlow = plannedCustomerCashFlow + manualRevenueCashFlow - plannedCosts;
+    const costCashFlow = plannedCostCashFlowForMonth(period, budgetCostPayments, costPaymentProfile);
+    const plannedCostCashFlow = costCashFlow.hasCostSignal ? Math.max(costCashFlow.amount, plannedCosts) : plannedCosts;
+    const plannedCashFlow = plannedCustomerCashFlow + manualRevenueCashFlow - plannedCostCashFlow;
     cash += plannedCashFlow;
 
     return {
@@ -623,7 +637,7 @@ function buildBudgetInvoices(revenueLines: CfoInvoiceLine[]): BudgetInvoice[] {
 
     invoices.set(invoice.id, {
       id: invoice.id,
-      category: line.cfo_przychod_kategoria || "pozostale",
+      payerKey: counterpartyKey(invoice.klient_id || invoice.kontrahent_nazwa || invoice.id),
       servicePeriod: revenueLineEffectivePeriod(line).slice(0, 7),
       issueDate: invoice.data_wystawienia,
       dueDate: invoice.termin_platnosci,
@@ -658,13 +672,21 @@ function invoicePaymentInfo(invoice: CfoInvoiceParent) {
   ].filter(Boolean) as string[];
 
   dates.sort();
+  const paidAmount = directAmount + splitAmount;
+  if (paidAmount <= 0.01 && invoice.status === "oplacona") {
+    return {
+      paidAmount: Number(invoice.kwota_brutto || 0),
+      paymentDate: invoice.termin_platnosci || invoice.data_wystawienia,
+    };
+  }
+
   return {
-    paidAmount: directAmount + splitAmount,
+    paidAmount,
     paymentDate: dates.length > 0 ? dates[dates.length - 1] : null,
   };
 }
 
-function plannedInvoiceCustomerCashFlowForMonth(period: string, invoices: BudgetInvoice[], averageDelayDays: number) {
+function plannedInvoiceCustomerCashFlowForMonth(period: string, invoices: BudgetInvoice[], profile: PaymentProfile) {
   let amount = 0;
   let hasInvoiceSignal = false;
 
@@ -678,8 +700,8 @@ function plannedInvoiceCustomerCashFlowForMonth(period: string, invoices: Budget
     const unpaidAmount = Math.max(0, invoice.gross - invoice.paidAmount);
     if (unpaidAmount <= 0.01) return;
 
-    const baseDate = invoice.dueDate || invoice.issueDate || monthEndDate(invoice.servicePeriod);
-    const expectedMonth = addDays(baseDate, averageDelayDays).slice(0, 7);
+    const baseDate = invoice.issueDate || invoice.dueDate || monthEndDate(invoice.servicePeriod);
+    const expectedMonth = addDays(baseDate, averageDaysFor(profile, invoice.payerKey)).slice(0, 7);
     if (expectedMonth !== period) return;
 
     amount += unpaidAmount;
@@ -689,14 +711,118 @@ function plannedInvoiceCustomerCashFlowForMonth(period: string, invoices: Budget
   return { amount, hasInvoiceSignal };
 }
 
-function averageInvoicePaymentDelayDays(invoices: BudgetInvoice[]) {
-  const delays = invoices
-    .filter((invoice) => invoice.paymentDate && invoice.dueDate && invoice.paidAmount >= invoice.gross * 0.8)
-    .map((invoice) => daysBetween(invoice.dueDate as string, invoice.paymentDate as string))
-    .filter((days) => Number.isFinite(days));
+function buildBudgetCostPayments(costs: CfoCostItem[]): BudgetCostPayment[] {
+  return costs
+    .filter((cost) => !cost.ignoruj)
+    .map((cost) => {
+      const payment = costPaymentInfo(cost);
+      return {
+        id: cost.id,
+        vendorKey: counterpartyKey(cost.kontrahent || cost.id),
+        documentDate: cost.data_dokumentu,
+        servicePeriod: cost.okres_start.slice(0, 7),
+        amount: Number(cost.kwota_brutto ?? cost.kwota_netto_cfo ?? 0),
+        paidAmount: payment.paidAmount,
+        paymentDate: payment.paymentDate,
+      };
+    })
+    .filter((cost) => cost.amount > 0);
+}
 
-  if (delays.length === 0) return 0;
-  return clamp(Math.round(sum(delays) / delays.length), -10, 45);
+function costPaymentInfo(cost: CfoCostItem) {
+  const directPayments = (cost.cfo_transakcje_bankowe || [])
+    .filter((transaction) => !transaction.ignoruj && Number(transaction.kwota || 0) < 0);
+  const splitPayments = (cost.cfo_rozbicia_platnosci || [])
+    .filter((split) => !split.poza_kosztem_cfo && split.typ !== "faktura_sprzedazowa")
+    .filter((split) => {
+      const transaction = firstRelation(split.cfo_transakcje_bankowe);
+      return !transaction || !transaction.ignoruj;
+    });
+
+  const directAmount = sum(directPayments.map((transaction) => Math.abs(Number(transaction.kwota || 0))));
+  const splitAmount = sum(splitPayments.map((split) => Math.abs(Number(split.kwota || 0))));
+  const dates = [
+    ...directPayments.map((transaction) => transaction.data_ksiegowania),
+    ...splitPayments.map((split) => firstRelation(split.cfo_transakcje_bankowe)?.data_ksiegowania),
+  ].filter(Boolean) as string[];
+
+  dates.sort();
+  return {
+    paidAmount: directAmount + splitAmount,
+    paymentDate: dates.length > 0 ? dates[dates.length - 1] : null,
+  };
+}
+
+function plannedCostCashFlowForMonth(period: string, costs: BudgetCostPayment[], profile: PaymentProfile) {
+  let amount = 0;
+  let hasCostSignal = false;
+
+  costs.forEach((cost) => {
+    const paidThisMonth = cost.paymentDate?.slice(0, 7) === period;
+    if (paidThisMonth) {
+      amount += cost.paidAmount;
+      hasCostSignal = true;
+    }
+
+    const unpaidAmount = Math.max(0, cost.amount - cost.paidAmount);
+    if (unpaidAmount <= 0.01) return;
+
+    const baseDate = cost.documentDate || monthEndDate(cost.servicePeriod);
+    const expectedMonth = addDays(baseDate, averageDaysFor(profile, cost.vendorKey)).slice(0, 7);
+    if (expectedMonth !== period) return;
+
+    amount += unpaidAmount;
+    hasCostSignal = true;
+  });
+
+  return { amount, hasCostSignal };
+}
+
+type PaymentProfile = {
+  globalAverageDays: number;
+  averageDaysByCounterparty: Map<string, number>;
+};
+
+function buildInvoicePaymentProfile(invoices: BudgetInvoice[]): PaymentProfile {
+  return buildPaymentProfile(invoices
+    .filter((invoice) => invoice.paymentDate && invoice.issueDate && invoice.paidAmount >= invoice.gross * 0.8)
+    .map((invoice) => ({
+      key: invoice.payerKey,
+      days: daysBetween(invoice.issueDate as string, invoice.paymentDate as string),
+    })));
+}
+
+function buildCostPaymentProfile(costs: BudgetCostPayment[]): PaymentProfile {
+  return buildPaymentProfile(costs
+    .filter((cost) => cost.paymentDate && cost.documentDate && cost.paidAmount >= cost.amount * 0.8)
+    .map((cost) => ({
+      key: cost.vendorKey,
+      days: daysBetween(cost.documentDate as string, cost.paymentDate as string),
+    })));
+}
+
+function buildPaymentProfile(samples: { key: string; days: number }[]): PaymentProfile {
+  const validSamples = samples.filter((sample) => Number.isFinite(sample.days));
+  const globalAverageDays = validSamples.length > 0
+    ? clamp(Math.round(sum(validSamples.map((sample) => sample.days)) / validSamples.length), 0, 60)
+    : 14;
+  const grouped = new Map<string, number[]>();
+
+  validSamples.forEach((sample) => {
+    grouped.set(sample.key, [...(grouped.get(sample.key) || []), sample.days]);
+  });
+
+  return {
+    globalAverageDays,
+    averageDaysByCounterparty: new Map(Array.from(grouped.entries()).map(([key, values]) => [
+      key,
+      clamp(Math.round(sum(values) / values.length), 0, 60),
+    ])),
+  };
+}
+
+function averageDaysFor(profile: PaymentProfile, counterpartyKeyValue: string) {
+  return profile.averageDaysByCounterparty.get(counterpartyKeyValue) ?? profile.globalAverageDays;
 }
 
 function plannedRevenueForMonth(
@@ -1015,6 +1141,10 @@ function parsePolishNumber(value: string) {
 function firstRelation<T>(value: T | T[] | null | undefined): T | null {
   if (Array.isArray(value)) return value[0] || null;
   return value || null;
+}
+
+function counterpartyKey(value: string) {
+  return value.trim().toLowerCase();
 }
 
 function addDays(value: string, days: number) {

@@ -105,6 +105,7 @@ export type CfoCostItem = {
     kwota: number;
     typ: CfoBankTransactionType;
     ignoruj: boolean;
+    data_ksiegowania?: string | null;
   }[] | null;
   cfo_rozbicia_platnosci?: CfoPaymentSplit[] | null;
 };
@@ -314,10 +315,11 @@ const BANK_TRANSACTION_SELECT = `
 const COST_SELECT = `
   *,
   cfo_transakcje_bankowe:cfo_transakcje_bankowe_koszt_id_fkey (
-    id,
-    kwota,
-    typ,
-    ignoruj
+      id,
+      kwota,
+      typ,
+      ignoruj,
+      data_ksiegowania
   ),
   cfo_rozbicia_platnosci:cfo_rozbicia_platnosci_koszt_id_fkey (
     id,
@@ -327,11 +329,12 @@ const COST_SELECT = `
     opis,
     kwota,
     poza_kosztem_cfo,
-    cfo_transakcje_bankowe:cfo_rozbicia_platnosci_transakcja_id_fkey (
-      id,
-      typ,
-      ignoruj
-    )
+      cfo_transakcje_bankowe:cfo_rozbicia_platnosci_transakcja_id_fkey (
+        id,
+        typ,
+        ignoruj,
+        data_ksiegowania
+      )
   )
 `;
 
@@ -352,6 +355,18 @@ export async function fetchCfoRevenueLinesRange(from: string, to: string) {
     .select(INVOICE_LINE_SELECT)
     .gte("faktury.okres", from)
     .lte("faktury.okres", to)
+    .eq("faktury.typ", "sprzedaz")
+    .neq("faktury.status", "anulowana")
+    .neq("faktury.kategoria", "korekta")
+    .order("nazwa", { ascending: true });
+}
+
+export async function fetchCfoBudgetRevenueLinesRange(from: string, to: string) {
+  return supabase
+    .from("faktury_pozycje")
+    .select(INVOICE_LINE_SELECT)
+    .gte("faktury.data_wystawienia", from)
+    .lte("faktury.data_wystawienia", to)
     .eq("faktury.typ", "sprzedaz")
     .neq("faktury.status", "anulowana")
     .neq("faktury.kategoria", "korekta")

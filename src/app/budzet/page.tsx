@@ -920,16 +920,20 @@ function buildCrmRevenueGrowthForecast(historyMonths: string[], forecastMonths: 
       wonRevenueByMonth.set(wonMonth, (wonRevenueByMonth.get(wonMonth) || 0) + Number(lead.szacowany_mrr || 0));
     });
 
-  const monthlyRevenueGrowth = historyMonths.length > 0
-    ? sum(Array.from(wonRevenueByMonth.values())) / historyMonths.length
-    : 0;
-
   const revenueGrowthByMonth = new Map<string, number>();
   forecastMonths.forEach((month, index) => {
-    revenueGrowthByMonth.set(month, index === 0 ? 0 : monthlyRevenueGrowth);
+    const projectedGrowth = index === 0 ? 0 : rollingAveragePreviousMonths(month, wonRevenueByMonth, 3);
+    revenueGrowthByMonth.set(month, projectedGrowth);
+    wonRevenueByMonth.set(month, projectedGrowth);
   });
 
+  const monthlyRevenueGrowth = revenueGrowthByMonth.get(forecastMonths[1]) || rollingAveragePreviousMonths(forecastMonths[0] || currentMonthInput(), wonRevenueByMonth, 3);
   return { monthlyRevenueGrowth, revenueGrowthByMonth };
+}
+
+function rollingAveragePreviousMonths(month: string, valuesByMonth: Map<string, number>, windowSize: number) {
+  const months = Array.from({ length: windowSize }, (_, index) => shiftMonth(month, index - windowSize));
+  return sum(months.map((period) => valuesByMonth.get(period) || 0)) / windowSize;
 }
 
 function buildBaseline(revenueHistoryMonths: string[], costHistoryMonths: string[], actualByMonth: Map<string, ReturnType<typeof emptyActual>>) {

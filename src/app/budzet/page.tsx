@@ -886,15 +886,12 @@ function plannedRevenueEntriesForMonth(
       const payerKey = counterpartyKey(client.id);
       const abonament = Number(client.abonament || 0);
       const payroll = baseline.clientRevenueAverages.get(payerKey)?.get("kadry_place") || 0;
+      const additionalServices = baseline.clientRevenueAverages.get(payerKey)?.get("uslugi_dodatkowe") || 0;
 
       if (abonament > 0) entries.push({ payerKey, category: "abonamenty", amountNet: abonament });
       if (payroll > 0) entries.push({ payerKey, category: "kadry_place", amountNet: payroll });
+      if (additionalServices > 0) entries.push({ payerKey, category: "uslugi_dodatkowe", amountNet: additionalServices });
     });
-
-  const servicesAdditional = baseline.revenue.get("uslugi_dodatkowe") || 0;
-  if (servicesAdditional > 0) {
-    entries.push({ payerKey: "__uslugi_dodatkowe__", category: "uslugi_dodatkowe", amountNet: servicesAdditional });
-  }
 
   const crmSubscription = crmForecast.revenueGrowthByMonth.get(period) || 0;
   if (crmSubscription > 0) {
@@ -977,11 +974,14 @@ function buildBaseline(revenueHistoryMonths: string[], costHistoryMonths: string
   let cashFlow = 0;
   let revenueCashFlow = 0;
 
-  revenue.set("kadry_place", averageRevenueCategory(revenueHistoryMonths.slice(-3), actualByMonth, "kadry_place"));
-  revenue.set("uslugi_dodatkowe", averageRevenueCategory(revenueHistoryMonths, actualByMonth, "uslugi_dodatkowe"));
+  revenue.set("kadry_place", 0);
+  revenue.set("uslugi_dodatkowe", 0);
   revenue.set("pozostale", 0);
   revenue.set("wdrozenia", 0);
-  const clientRevenueAverages = averageClientRevenueCategory(revenueHistoryMonths.slice(-3), actualByMonth, "kadry_place");
+  const clientRevenueAverages = averageClientRevenueCategories([
+    { category: "kadry_place", months: revenueHistoryMonths.slice(-3) },
+    { category: "uslugi_dodatkowe", months: revenueHistoryMonths },
+  ], actualByMonth);
 
   costHistoryMonths.forEach((month) => {
     const actual = actualByMonth.get(month) || emptyActual();
@@ -1008,22 +1008,21 @@ function buildBaseline(revenueHistoryMonths: string[], costHistoryMonths: string
   };
 }
 
-function averageRevenueCategory(months: string[], actualByMonth: Map<string, ReturnType<typeof emptyActual>>, category: CfoRevenueCategory) {
-  if (months.length === 0) return 0;
-  return sum(months.map((month) => actualByMonth.get(month)?.revenueByCategory.get(category) || 0)) / months.length;
-}
-
-function averageClientRevenueCategory(months: string[], actualByMonth: Map<string, ReturnType<typeof emptyActual>>, category: CfoRevenueCategory) {
-  const clientKeys = new Set<string>();
-  months.forEach((month) => {
-    actualByMonth.get(month)?.revenueByClientCategory.forEach((categories, clientKey) => {
-      if ((categories.get(category) || 0) > 0) clientKeys.add(clientKey);
-    });
-  });
-
+function averageClientRevenueCategories(configs: { category: CfoRevenueCategory; months: string[] }[], actualByMonth: Map<string, ReturnType<typeof emptyActual>>) {
   const averages = new Map<string, Map<string, number>>();
-  clientKeys.forEach((clientKey) => {
-    setSubcategoryAmount(averages, clientKey, category, sum(months.map((month) => actualByMonth.get(month)?.revenueByClientCategory.get(clientKey)?.get(category) || 0)) / months.length);
+
+  configs.forEach(({ category, months }) => {
+    if (months.length === 0) return;
+    const clientKeys = new Set<string>();
+    months.forEach((month) => {
+      actualByMonth.get(month)?.revenueByClientCategory.forEach((categories, clientKey) => {
+        if ((categories.get(category) || 0) > 0) clientKeys.add(clientKey);
+      });
+    });
+
+    clientKeys.forEach((clientKey) => {
+      setSubcategoryAmount(averages, clientKey, category, sum(months.map((month) => actualByMonth.get(month)?.revenueByClientCategory.get(clientKey)?.get(category) || 0)) / months.length);
+    });
   });
 
   return averages;

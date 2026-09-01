@@ -160,7 +160,7 @@ function BudgetContent() {
 
   async function loadData() {
     setLoading(true);
-    const historyStart = shiftMonth(startMonth, -3);
+    const historyStart = shiftMonth(startMonth, -6);
     const forecastEnd = shiftMonth(startMonth, DEFAULT_HORIZON - 1);
     const [revenueResult, costsResult, employeeResult, bankResult, overridesResult, clientRevenueResult, crmRevenueResult] = await Promise.all([
       fetchCfoBudgetRevenueLinesRange(monthToDate(historyStart), monthEndDate(forecastEnd)),
@@ -482,15 +482,16 @@ function buildBudgetMonths(
   openingCash: number,
 ): BudgetMonth[] {
   const months = monthsForRange(startMonth, horizon);
-  const historyMonths = monthsForRange(shiftMonth(startMonth, -3), 3);
-  const actualByMonth = buildActualMonthMap([...historyMonths, ...months], revenueLines, costs, employees, bankTransactions);
-  const baseline = buildBaseline(historyMonths, actualByMonth);
-  const crmForecast = buildCrmRevenueGrowthForecast(historyMonths, months, crmRevenues);
+  const costHistoryMonths = monthsForRange(shiftMonth(startMonth, -3), 3);
+  const revenueHistoryMonths = monthsForRange(shiftMonth(startMonth, -6), 6);
+  const actualByMonth = buildActualMonthMap([...revenueHistoryMonths, ...months], revenueLines, costs, employees, bankTransactions);
+  const baseline = buildBaseline(revenueHistoryMonths, costHistoryMonths, actualByMonth);
+  const crmForecast = buildCrmRevenueGrowthForecast(costHistoryMonths, months, crmRevenues);
   const budgetInvoices = buildBudgetInvoices(revenueLines);
   const invoicePaymentProfile = buildInvoicePaymentProfile(budgetInvoices);
   const budgetCostPayments = buildBudgetCostPayments(costs);
   const costPaymentProfile = buildCostPaymentProfile(budgetCostPayments);
-  const employeeCashFlowBaseline = buildEmployeeCashFlowBaseline(historyMonths, employees);
+  const employeeCashFlowBaseline = buildEmployeeCashFlowBaseline(costHistoryMonths, employees);
   let cash = openingCash;
 
   return months.map((period) => {
@@ -500,9 +501,8 @@ function buildBudgetMonths(
     const plannedCostSubcategories = plannedCostSubcategoriesForMonth(baseline.costSubcategories, actual.costBySubcategory);
     const crmCumulativeRevenueGrowth = crmForecast.cumulativeRevenueGrowthByMonth.get(period) || 0;
     const invoiceCashFlow = plannedInvoiceCustomerCashFlowForMonth(period, budgetInvoices, invoicePaymentProfile);
-    const plannedCustomerCashFlow = invoiceCashFlow.hasInvoiceSignal
-      ? invoiceCashFlow.amount
-      : plannedClientCashFlowForMonth(period, clientRevenues) + (crmCumulativeRevenueGrowth * 1.23);
+    const plannedCustomerCashFlow = invoiceCashFlow.amount
+      + plannedUnissuedRevenueCashFlowForMonth(period, months, baseline.revenue, clientRevenues, crmForecast, actualByMonth, invoicePaymentProfile);
     let manualRevenueCashFlow = 0;
 
     monthOverrides.forEach((override) => {
@@ -714,6 +714,26 @@ function plannedInvoiceCustomerCashFlowForMonth(period: string, invoices: Budget
   return { amount, hasInvoiceSignal };
 }
 
+function plannedUnissuedRevenueCashFlowForMonth(
+  cashFlowPeriod: string,
+  forecastMonths: string[],
+  baselineRevenue: Map<string, number>,
+  clientRevenues: CfoBudgetClientRevenue[],
+  crmForecast: CrmRevenueGrowthForecast,
+  actualByMonth: Map<string, ReturnType<typeof emptyActual>>,
+  profile: PaymentProfile,
+) {
+  return sum(forecastMonths.map((issuePeriod) => {
+    const planned = plannedRevenueForMonth(issuePeriod, baselineRevenue, clientRevenues, crmForecast);
+    const actual = actualByMonth.get(issuePeriod) || emptyActual();
+    const missingNet = sum(REVENUE_OPTIONS.map((option) => Math.max(0, (planned.get(option.value) || 0) - (actual.revenueByCategory.get(option.value) || 0))));
+    if (missingNet <= 0.01) return 0;
+
+    const expectedMonth = addDays(monthToDate(issuePeriod), profile.globalAverageDays).slice(0, 7);
+    return expectedMonth === cashFlowPeriod ? missingNet * 1.23 : 0;
+  }));
+}
+
 function buildBudgetCostPayments(costs: CfoCostItem[]): BudgetCostPayment[] {
   return costs
     .filter((cost) => !cost.ignoruj)
@@ -880,23 +900,6 @@ function clientRevenueApplies(client: CfoBudgetClientRevenue, period: string) {
   return client.aktywny === true || String(client.status_klienta || "").toLowerCase() === "onboarding";
 }
 
-function plannedClientCashFlowForMonth(period: string, clientRevenues: CfoBudgetClientRevenue[]) {
-  const possibleServicePeriods = [period, shiftMonth(period, -1)];
-  return sum(clientRevenues.flatMap((client) => possibleServicePeriods
-    .filter((servicePeriod) => clientRevenueApplies(client, servicePeriod))
-    .filter((servicePeriod) => clientCashFlowMonth(client, servicePeriod) === period)
-    .map(() => Number(client.abonament || 0) * 1.23)));
-}
-
-function clientCashFlowMonth(client: CfoBudgetClientRevenue, servicePeriod: string) {
-  if (client.model_fakturowania === "z_gory") {
-    const firstPeriod = client.pierwszy_okres_rozliczeniowy?.slice(0, 7);
-    if (firstPeriod && firstPeriod === servicePeriod) return shiftMonth(servicePeriod, 1);
-    return servicePeriod;
-  }
-  return shiftMonth(servicePeriod, 1);
-}
-
 function timestampToMonth(value: string | null | undefined) {
   return value?.slice(0, 7) || currentMonthInput();
 }
@@ -929,7 +932,7 @@ function buildCrmRevenueGrowthForecast(historyMonths: string[], forecastMonths: 
   return { monthlyRevenueGrowth, cumulativeRevenueGrowthByMonth };
 }
 
-function buildBaseline(historyMonths: string[], actualByMonth: Map<string, ReturnType<typeof emptyActual>>) {
+function buildBaseline(revenueHistoryMonths: string[], costHistoryMonths: string[], actualByMonth: Map<string, ReturnType<typeof emptyActual>>) {
   const revenue = new Map<string, number>();
   const costs = new Map<string, number>();
   const costSubcategoryTotals = new Map<string, Map<string, number>>();
@@ -937,13 +940,15 @@ function buildBaseline(historyMonths: string[], actualByMonth: Map<string, Retur
   let cashFlow = 0;
   let revenueCashFlow = 0;
 
-  historyMonths.forEach((month) => {
+  revenue.set("kadry_place", averageRevenueCategory(revenueHistoryMonths.slice(-3), actualByMonth, "kadry_place"));
+  revenue.set("uslugi_dodatkowe", averageRevenueCategory(revenueHistoryMonths, actualByMonth, "uslugi_dodatkowe"));
+  revenue.set("pozostale", 0);
+  revenue.set("wdrozenia", 0);
+
+  costHistoryMonths.forEach((month) => {
     const actual = actualByMonth.get(month) || emptyActual();
-    REVENUE_OPTIONS.forEach((option) => {
-      revenue.set(option.value, (revenue.get(option.value) || 0) + (actual.revenueByCategory.get(option.value) || 0) / historyMonths.length);
-    });
     COST_OPTIONS.forEach((option) => {
-      costs.set(option.value, (costs.get(option.value) || 0) + (actual.costByCategory.get(option.value) || 0) / historyMonths.length);
+      costs.set(option.value, (costs.get(option.value) || 0) + (actual.costByCategory.get(option.value) || 0) / costHistoryMonths.length);
     });
     actual.costBySubcategory.forEach((subcategories, category) => {
       subcategories.forEach((value, subcategory) => {
@@ -952,8 +957,8 @@ function buildBaseline(historyMonths: string[], actualByMonth: Map<string, Retur
         upsertSubcategoryAmount(costSubcategoryCounts, category as CfoCostCategory, subcategory, 1);
       });
     });
-    cashFlow += actual.cashFlow / historyMonths.length;
-    revenueCashFlow += actual.revenueCashFlow / historyMonths.length;
+    cashFlow += actual.cashFlow / costHistoryMonths.length;
+    revenueCashFlow += actual.revenueCashFlow / costHistoryMonths.length;
   });
 
   return {
@@ -962,6 +967,11 @@ function buildBaseline(historyMonths: string[], actualByMonth: Map<string, Retur
     costSubcategories: averageNestedMap(costSubcategoryTotals, costSubcategoryCounts),
     cashFlowWithoutRevenue: cashFlow - revenueCashFlow,
   };
+}
+
+function averageRevenueCategory(months: string[], actualByMonth: Map<string, ReturnType<typeof emptyActual>>, category: CfoRevenueCategory) {
+  if (months.length === 0) return 0;
+  return sum(months.map((month) => actualByMonth.get(month)?.revenueByCategory.get(category) || 0)) / months.length;
 }
 
 function emptyActual() {

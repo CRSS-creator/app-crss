@@ -88,6 +88,8 @@ type BudgetInvoice = {
 type BudgetCostPayment = {
   id: string;
   vendorKey: string;
+  category: CfoCostCategory;
+  subcategory: string;
   documentDate: string | null;
   servicePeriod: string;
   amount: number;
@@ -99,6 +101,13 @@ type BudgetRevenuePlanEntry = {
   payerKey: string;
   category: CfoRevenueCategory;
   amountNet: number;
+};
+
+type BudgetCostPlanEntry = {
+  vendorKey: string;
+  category: CfoCostCategory;
+  subcategory: string;
+  amount: number;
 };
 
 const REVENUE_OPTIONS: { value: CfoRevenueCategory; label: string }[] = [
@@ -511,6 +520,7 @@ function buildBudgetMonths(
     const plannedCustomerCashFlow = invoiceCashFlow.amount
       + plannedUnissuedRevenueCashFlowForMonth(period, months, baseline, clientRevenues, crmForecast, actualByMonth, invoicePaymentProfile);
     let manualRevenueCashFlow = 0;
+    let manualCostCashFlow = 0;
 
     monthOverrides.forEach((override) => {
       if (override.typ === "przychod") {
@@ -519,6 +529,7 @@ function buildBudgetMonths(
       } else {
         const subcategory = override.podkategoria || EMPTY_SUBCATEGORY;
         upsertSubcategoryAmount(plannedCostSubcategories, override.kategoria as CfoCostCategory, subcategory, Number(override.kwota_plan || 0));
+        manualCostCashFlow += Number(override.kwota_cashflow || 0);
       }
     });
 
@@ -528,8 +539,9 @@ function buildBudgetMonths(
     const plannedResult = plannedRevenue - plannedCosts;
     const costCashFlow = plannedCostCashFlowForMonth(period, budgetCostPayments, costPaymentProfile);
     const plannedEmployeeCashFlow = employeeCashFlowForMonth(period, employees) || employeeCashFlowBaseline;
-    const plannedOtherCostCashFlow = costCashFlow.amount;
-    const plannedCostCashFlow = plannedEmployeeCashFlow + plannedOtherCostCashFlow;
+    const plannedOtherCostCashFlow = costCashFlow.amount
+      + plannedUnrecordedCostCashFlowForMonth(period, months, baseline.costPlanEntries, actualByMonth, costPaymentProfile);
+    const plannedCostCashFlow = plannedEmployeeCashFlow + plannedOtherCostCashFlow + manualCostCashFlow;
     const plannedCashFlow = plannedCustomerCashFlow + manualRevenueCashFlow - plannedCostCashFlow;
     cash += plannedCashFlow;
 
@@ -579,6 +591,10 @@ function buildActualMonthMap(months: string[], revenueLines: CfoInvoiceLine[], c
       current.costs += amount;
       current.costByCategory.set(cost.kategoria, (current.costByCategory.get(cost.kategoria) || 0) + amount);
       upsertSubcategoryAmount(current.costBySubcategory, cost.kategoria, cost.podkategoria || EMPTY_SUBCATEGORY, amount);
+      if (isCostCashFlowForecastable(cost)) {
+        const entryKey = costEntryKey(counterpartyKey(cost.kontrahent || cost.id), cost.kategoria, cost.podkategoria || EMPTY_SUBCATEGORY);
+        current.costByVendorSubcategory.set(entryKey, (current.costByVendorSubcategory.get(entryKey) || 0) + amount);
+      }
     });
   });
 
@@ -755,6 +771,8 @@ function buildBudgetCostPayments(costs: CfoCostItem[]): BudgetCostPayment[] {
       return {
         id: cost.id,
         vendorKey: counterpartyKey(cost.kontrahent || cost.id),
+        category: cost.kategoria,
+        subcategory: cost.podkategoria || EMPTY_SUBCATEGORY,
         documentDate: cost.data_dokumentu,
         servicePeriod: cost.okres_start.slice(0, 7),
         amount: Number(cost.kwota_brutto ?? cost.kwota_netto_cfo ?? 0),
@@ -812,6 +830,26 @@ function plannedCostCashFlowForMonth(period: string, costs: BudgetCostPayment[],
   });
 
   return { amount, hasCostSignal };
+}
+
+function plannedUnrecordedCostCashFlowForMonth(
+  cashFlowPeriod: string,
+  forecastMonths: string[],
+  baselineEntries: BudgetCostPlanEntry[],
+  actualByMonth: Map<string, ReturnType<typeof emptyActual>>,
+  profile: PaymentProfile,
+) {
+  return sum(forecastMonths.map((costPeriod) => {
+    const actual = actualByMonth.get(costPeriod) || emptyActual();
+    return sum(baselineEntries.map((entry) => {
+      const issuedAmount = actual.costByVendorSubcategory.get(costEntryKey(entry.vendorKey, entry.category, entry.subcategory)) || 0;
+      const missingAmount = Math.max(0, entry.amount - issuedAmount);
+      if (missingAmount <= 0.01) return 0;
+
+      const expectedMonth = addDays(monthToDate(costPeriod), averageDaysFor(profile, entry.vendorKey)).slice(0, 7);
+      return expectedMonth === cashFlowPeriod ? missingAmount : 0;
+    }));
+  }));
 }
 
 function buildEmployeeCashFlowBaseline(historyMonths: string[], employees: CfoEmployeeCost[]) {
@@ -971,6 +1009,8 @@ function buildBaseline(revenueHistoryMonths: string[], costHistoryMonths: string
   const costs = new Map<string, number>();
   const costSubcategoryTotals = new Map<string, Map<string, number>>();
   const costSubcategoryCounts = new Map<string, Map<string, number>>();
+  const costPlanEntryTotals = new Map<string, number>();
+  const costPlanEntryCounts = new Map<string, number>();
   let cashFlow = 0;
   let revenueCashFlow = 0;
 
@@ -995,14 +1035,31 @@ function buildBaseline(revenueHistoryMonths: string[], costHistoryMonths: string
         upsertSubcategoryAmount(costSubcategoryCounts, category as CfoCostCategory, subcategory, 1);
       });
     });
+    actual.costByVendorSubcategory.forEach((value, key) => {
+      if (value <= 0) return;
+      costPlanEntryTotals.set(key, (costPlanEntryTotals.get(key) || 0) + value);
+      costPlanEntryCounts.set(key, (costPlanEntryCounts.get(key) || 0) + 1);
+    });
     cashFlow += actual.cashFlow / costHistoryMonths.length;
     revenueCashFlow += actual.revenueCashFlow / costHistoryMonths.length;
   });
+
+  const costPlanEntries = Array.from(costPlanEntryTotals.entries())
+    .filter(([key]) => (costPlanEntryCounts.get(key) || 0) >= Math.min(2, costHistoryMonths.length))
+    .map(([key, total]) => {
+      const parsed = parseCostEntryKey(key);
+      return {
+        ...parsed,
+        amount: total / (costPlanEntryCounts.get(key) || 1),
+      };
+    })
+    .filter((entry): entry is BudgetCostPlanEntry => Boolean(entry.vendorKey && entry.category && entry.subcategory && entry.amount > 0));
 
   return {
     revenue,
     costs,
     costSubcategories: averageNestedMap(costSubcategoryTotals, costSubcategoryCounts),
+    costPlanEntries,
     clientRevenueAverages,
     cashFlowWithoutRevenue: cashFlow - revenueCashFlow,
   };
@@ -1038,6 +1095,7 @@ function emptyActual() {
     revenueByClientCategory: new Map<string, Map<string, number>>(),
     costByCategory: new Map<string, number>(),
     costBySubcategory: new Map<string, Map<string, number>>(),
+    costByVendorSubcategory: new Map<string, number>(),
   };
 }
 
@@ -1122,6 +1180,19 @@ function costEditKey(month: string, category: CfoCostCategory, subcategory: stri
   return `${month}:${category}:${subcategory}`;
 }
 
+function costEntryKey(vendorKey: string, category: CfoCostCategory, subcategory: string) {
+  return `${vendorKey}\u0001${category}\u0001${subcategory}`;
+}
+
+function parseCostEntryKey(key: string) {
+  const [vendorKey, category, subcategory] = key.split("\u0001");
+  return {
+    vendorKey,
+    category: category as CfoCostCategory,
+    subcategory,
+  };
+}
+
 function overrideApplies(override: CfoBudgetOverride, period: string) {
   const overrideMonth = override.okres.slice(0, 7);
   if (override.powtarzanie === "od_miesiaca") return overrideMonth <= period;
@@ -1140,6 +1211,10 @@ function costShareForMonth(cost: CfoCostItem, period: string) {
   const totalMonths = Math.max(1, monthsBetween(cost.okres_start, cost.okres_end));
   if (totalMonths === 1 && cost.ujecie_zarzadcze !== "rozliczenie_w_czasie") return amount;
   return amount / totalMonths;
+}
+
+function isCostCashFlowForecastable(cost: CfoCostItem) {
+  return cost.kategoria !== "jednorazowe_nadzwyczajne" && cost.ujecie_zarzadcze !== "rozliczenie_w_czasie";
 }
 
 function revenueLineEffectivePeriod(line: CfoInvoiceLine) {

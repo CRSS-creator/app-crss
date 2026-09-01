@@ -1099,7 +1099,7 @@ function categoryLabel(type: CfoBudgetOverrideType, value: string) {
 }
 
 function currentForecastStartInput() {
-  return shiftMonth(currentMonthInput(), 1);
+  return currentMonthInput();
 }
 
 function currentMonthInput() {

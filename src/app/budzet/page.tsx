@@ -15,6 +15,7 @@ import {
   type CfoCostCategory,
   type CfoCostItem,
   type CfoEmployeeCost,
+  type CfoInvoiceParent,
   type CfoInvoiceLine,
   type CfoRevenueCategory,
 } from "@/lib/cfoService";
@@ -71,6 +72,17 @@ type BudgetCostSubcategoryRow = {
   planned: number;
   actual: number;
   diff: number;
+};
+
+type BudgetInvoice = {
+  id: string;
+  category: CfoRevenueCategory;
+  servicePeriod: string;
+  issueDate: string | null;
+  dueDate: string | null;
+  gross: number;
+  paidAmount: number;
+  paymentDate: string | null;
 };
 
 const REVENUE_OPTIONS: { value: CfoRevenueCategory; label: string }[] = [
@@ -248,6 +260,7 @@ function BudgetContent() {
               {budget.map((month) => (
                 <button key={month.period} type="button" style={selectedMonth === month.period ? activeMonthTabStyle : monthTabStyle} onClick={() => setSelectedMonth(month.period)}>
                   <strong>{formatMonthField(month.period)}</strong>
+                  <small style={monthTabCaptionStyle}>Zysk / strata plan</small>
                   <span>{formatMoney(month.plannedResult)}</span>
                 </button>
               ))}
@@ -261,7 +274,7 @@ function BudgetContent() {
               <span style={badgeStyle}>{formatMonthField(selectedMonth)}</span>
             </div>
             <div style={profitSummaryStyle}>
-              <div>
+              <div style={profitResultBlockStyle}>
                 <span>Podsumowanie zysku</span>
                 <strong style={(selected?.plannedResult || 0) >= 0 ? successInlineStyle : dangerInlineStyle}>{formatMoney(selected?.plannedResult || 0)}</strong>
               </div>
@@ -288,7 +301,7 @@ function BudgetContent() {
               <TrendingUp size={21} style={panelIconStyle} />
               <h2 style={panelTitleStyle}>Kategorie przychodów</h2>
             </div>
-            <CategoryTable rows={selected?.revenueCategories || []} />
+            <CategoryTable rows={selected?.revenueCategories || []} totalLabel="Suma przychodów" />
           </article>
 
           <article style={widePanelStyle}>
@@ -328,7 +341,13 @@ function SummaryBox({ label, value, tone }: { label: string; value: string; tone
   );
 }
 
-function CategoryTable({ rows, reverseDiff = false }: { rows: BudgetCategoryRow[]; reverseDiff?: boolean }) {
+function CategoryTable({ rows, reverseDiff = false, totalLabel }: { rows: BudgetCategoryRow[]; reverseDiff?: boolean; totalLabel?: string }) {
+  const total = {
+    planned: sum(rows.map((row) => row.planned)),
+    actual: sum(rows.map((row) => row.actual)),
+  };
+  const totalDiff = reverseDiff ? total.planned - total.actual : total.actual - total.planned;
+
   return (
     <div style={tableWrapperStyle}>
       <table style={categoryTableStyle}>
@@ -349,6 +368,14 @@ function CategoryTable({ rows, reverseDiff = false }: { rows: BudgetCategoryRow[
               <Td align="right"><Diff value={reverseDiff ? row.planned - row.actual : row.actual - row.planned} /></Td>
             </tr>
           ))}
+          {rows.length > 0 ? (
+            <tr style={totalRowStyle}>
+              <Td>{totalLabel || "Suma"}</Td>
+              <Td align="right">{formatMoney(total.planned)}</Td>
+              <Td align="right">{formatMoney(total.actual)}</Td>
+              <Td align="right"><Diff value={totalDiff} /></Td>
+            </tr>
+          ) : null}
         </tbody>
       </table>
     </div>
@@ -449,6 +476,8 @@ function buildBudgetMonths(
   const actualByMonth = buildActualMonthMap([...historyMonths, ...months], revenueLines, costs, employees, bankTransactions);
   const baseline = buildBaseline(historyMonths, actualByMonth);
   const crmForecast = buildCrmRevenueGrowthForecast(historyMonths, months, crmRevenues);
+  const budgetInvoices = buildBudgetInvoices(revenueLines);
+  const paymentDelayDays = averageInvoicePaymentDelayDays(budgetInvoices);
   let cash = openingCash;
 
   return months.map((period) => {
@@ -457,25 +486,27 @@ function buildBudgetMonths(
     const plannedRevenueCategories = plannedRevenueForMonth(period, baseline.revenue, clientRevenues, crmForecast);
     const plannedCostSubcategories = plannedCostSubcategoriesForMonth(baseline.costSubcategories, actual.costBySubcategory);
     const crmCumulativeRevenueGrowth = crmForecast.cumulativeRevenueGrowthByMonth.get(period) || 0;
-    const plannedCustomerCashFlow = actual.revenueCashFlow > 0
-      ? actual.revenueCashFlow
+    const invoiceCashFlow = plannedInvoiceCustomerCashFlowForMonth(period, budgetInvoices, paymentDelayDays);
+    const plannedCustomerCashFlow = invoiceCashFlow.hasInvoiceSignal
+      ? invoiceCashFlow.amount
       : plannedClientCashFlowForMonth(period, clientRevenues) + (crmCumulativeRevenueGrowth * 1.23);
-    let plannedCashFlow = baseline.cashFlowWithoutRevenue + plannedCustomerCashFlow;
+    let manualRevenueCashFlow = 0;
 
     monthOverrides.forEach((override) => {
       if (override.typ === "przychod") {
         plannedRevenueCategories.set(override.kategoria, (plannedRevenueCategories.get(override.kategoria) || 0) + Number(override.kwota_plan || 0));
+        manualRevenueCashFlow += Number(override.kwota_cashflow || 0);
       } else {
         const subcategory = override.podkategoria || EMPTY_SUBCATEGORY;
         upsertSubcategoryAmount(plannedCostSubcategories, override.kategoria as CfoCostCategory, subcategory, Number(override.kwota_plan || 0));
       }
-      plannedCashFlow += override.typ === "przychod" ? Number(override.kwota_cashflow || 0) : -Number(override.kwota_cashflow || 0);
     });
 
     const plannedCostCategories = categoryTotalsFromSubcategories(plannedCostSubcategories);
     const plannedRevenue = sum(Array.from(plannedRevenueCategories.values()));
     const plannedCosts = sum(Array.from(plannedCostCategories.values()));
     const plannedResult = plannedRevenue - plannedCosts;
+    const plannedCashFlow = plannedCustomerCashFlow + manualRevenueCashFlow - plannedCosts;
     cash += plannedCashFlow;
 
     return {
@@ -569,6 +600,103 @@ function revenueCashFlowAmount(transaction: CfoBankTransaction) {
   }
   const amount = Number(transaction.kwota || 0);
   return transaction.typ === "faktura_sprzedazowa" && amount > 0 ? amount : 0;
+}
+
+function buildBudgetInvoices(revenueLines: CfoInvoiceLine[]): BudgetInvoice[] {
+  const invoices = new Map<string, BudgetInvoice & { fallbackGross: number }>();
+
+  revenueLines.forEach((line) => {
+    const invoice = firstRelation(line.faktury);
+    if (!invoice || invoice.typ !== "sprzedaz" || invoice.status === "anulowana" || invoice.kategoria === "korekta") return;
+
+    const payment = invoicePaymentInfo(invoice);
+    const fallbackGross = Number(line.kwota_netto || 0) * 1.23;
+    const current = invoices.get(invoice.id);
+
+    if (current) {
+      current.fallbackGross += fallbackGross;
+      current.gross = Number(invoice.kwota_brutto || 0) > 0 ? Number(invoice.kwota_brutto || 0) : current.fallbackGross;
+      current.paidAmount = payment.paidAmount;
+      current.paymentDate = payment.paymentDate;
+      return;
+    }
+
+    invoices.set(invoice.id, {
+      id: invoice.id,
+      category: line.cfo_przychod_kategoria || "pozostale",
+      servicePeriod: revenueLineEffectivePeriod(line).slice(0, 7),
+      issueDate: invoice.data_wystawienia,
+      dueDate: invoice.termin_platnosci,
+      gross: Number(invoice.kwota_brutto || 0) > 0 ? Number(invoice.kwota_brutto || 0) : fallbackGross,
+      fallbackGross,
+      paidAmount: payment.paidAmount,
+      paymentDate: payment.paymentDate,
+    });
+  });
+
+  return Array.from(invoices.values()).map(({ fallbackGross, ...invoice }) => ({
+    ...invoice,
+    gross: invoice.gross > 0 ? invoice.gross : fallbackGross,
+  }));
+}
+
+function invoicePaymentInfo(invoice: CfoInvoiceParent) {
+  const directPayments = (invoice.cfo_transakcje_bankowe || [])
+    .filter((transaction) => !transaction.ignoruj && transaction.typ === "faktura_sprzedazowa" && Number(transaction.kwota || 0) > 0);
+  const splitPayments = (invoice.cfo_rozbicia_platnosci || [])
+    .filter((split) => !split.poza_kosztem_cfo && split.typ === "faktura_sprzedazowa")
+    .filter((split) => {
+      const transaction = firstRelation(split.cfo_transakcje_bankowe);
+      return !transaction || !transaction.ignoruj;
+    });
+
+  const directAmount = sum(directPayments.map((transaction) => Math.max(0, Number(transaction.kwota || 0))));
+  const splitAmount = sum(splitPayments.map((split) => Math.max(0, Number(split.kwota || 0))));
+  const dates = [
+    ...directPayments.map((transaction) => transaction.data_ksiegowania),
+    ...splitPayments.map((split) => firstRelation(split.cfo_transakcje_bankowe)?.data_ksiegowania),
+  ].filter(Boolean) as string[];
+
+  dates.sort();
+  return {
+    paidAmount: directAmount + splitAmount,
+    paymentDate: dates.length > 0 ? dates[dates.length - 1] : null,
+  };
+}
+
+function plannedInvoiceCustomerCashFlowForMonth(period: string, invoices: BudgetInvoice[], averageDelayDays: number) {
+  let amount = 0;
+  let hasInvoiceSignal = false;
+
+  invoices.forEach((invoice) => {
+    const paidThisMonth = invoice.paymentDate?.slice(0, 7) === period;
+    if (paidThisMonth) {
+      amount += invoice.paidAmount;
+      hasInvoiceSignal = true;
+    }
+
+    const unpaidAmount = Math.max(0, invoice.gross - invoice.paidAmount);
+    if (unpaidAmount <= 0.01) return;
+
+    const baseDate = invoice.dueDate || invoice.issueDate || monthEndDate(invoice.servicePeriod);
+    const expectedMonth = addDays(baseDate, averageDelayDays).slice(0, 7);
+    if (expectedMonth !== period) return;
+
+    amount += unpaidAmount;
+    hasInvoiceSignal = true;
+  });
+
+  return { amount, hasInvoiceSignal };
+}
+
+function averageInvoicePaymentDelayDays(invoices: BudgetInvoice[]) {
+  const delays = invoices
+    .filter((invoice) => invoice.paymentDate && invoice.dueDate && invoice.paidAmount >= invoice.gross * 0.8)
+    .map((invoice) => daysBetween(invoice.dueDate as string, invoice.paymentDate as string))
+    .filter((days) => Number.isFinite(days));
+
+  if (delays.length === 0) return 0;
+  return clamp(Math.round(sum(delays) / delays.length), -10, 45);
 }
 
 function plannedRevenueForMonth(
@@ -884,6 +1012,32 @@ function parsePolishNumber(value: string) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function firstRelation<T>(value: T | T[] | null | undefined): T | null {
+  if (Array.isArray(value)) return value[0] || null;
+  return value || null;
+}
+
+function addDays(value: string, days: number) {
+  const [year, month, day] = value.slice(0, 10).split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day + days));
+  return date.toISOString().slice(0, 10);
+}
+
+function daysBetween(from: string, to: string) {
+  const fromDate = dateOnlyUtc(from);
+  const toDate = dateOnlyUtc(to);
+  return Math.round((toDate - fromDate) / 86400000);
+}
+
+function dateOnlyUtc(value: string) {
+  const [year, month, day] = value.slice(0, 10).split("-").map(Number);
+  return Date.UTC(year, month - 1, day);
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
 function sum(values: number[]) {
   return values.reduce((total, value) => total + value, 0);
 }
@@ -899,6 +1053,7 @@ const metricValueStyle: CSSProperties = { color: colors.navy, fontSize: "21px", 
 const goodMetricValueStyle: CSSProperties = { ...metricValueStyle, color: colors.success };
 const badMetricValueStyle: CSSProperties = { ...metricValueStyle, color: colors.danger };
 const profitSummaryStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: "#e9eef7", padding: "16px", marginBottom: "12px", display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "center", flexWrap: "wrap" };
+const profitResultBlockStyle: CSSProperties = { display: "inline-flex", gap: "8px", alignItems: "baseline", flexWrap: "wrap" };
 const profitFormulaStyle: CSSProperties = { display: "flex", gap: "10px", alignItems: "center", color: colors.muted, fontWeight: 850, flexWrap: "wrap" };
 const monthSummaryGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "10px" };
 const summaryBoxStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "12px", display: "grid", gap: "6px", color: colors.muted, fontSize: "12px", fontWeight: 850 };
@@ -907,8 +1062,9 @@ const widePanelStyle: CSSProperties = { ...panelStyle, gridColumn: "1 / -1" };
 const controlsPanelStyle: CSSProperties = { ...panelStyle, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 320px))", gap: "12px", alignItems: "end" };
 const sectionGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: "18px", alignItems: "start" };
 const monthTabsStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: "8px" };
-const monthTabStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, padding: "11px 12px", minHeight: "58px", display: "grid", gap: "5px", textAlign: "left", cursor: "pointer", fontWeight: 800 };
+const monthTabStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, padding: "11px 12px", minHeight: "74px", display: "grid", gap: "4px", textAlign: "left", cursor: "pointer", fontWeight: 800 };
 const activeMonthTabStyle: CSSProperties = { ...monthTabStyle, background: "#e9eef7", borderColor: colors.navy };
+const monthTabCaptionStyle: CSSProperties = { color: colors.muted, fontSize: "11px", fontWeight: 850 };
 const panelHeaderStyle: CSSProperties = { display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px", flexWrap: "wrap" };
 const panelIconStyle: CSSProperties = { color: colors.red, display: "inline-flex" };
 const panelTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "21px" };
@@ -916,6 +1072,7 @@ const tableWrapperStyle: CSSProperties = { overflowX: "auto" };
 const categoryTableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse", minWidth: "620px" };
 const thStyle: CSSProperties = { color: colors.muted, borderBottom: `1px solid ${colors.border}`, padding: "11px 9px", fontSize: "12px", textTransform: "uppercase", letterSpacing: 0, whiteSpace: "nowrap" };
 const tdStyle: CSSProperties = { color: colors.text, borderBottom: `1px solid ${colors.border}`, padding: "10px 9px", verticalAlign: "middle" };
+const totalRowStyle: CSSProperties = { background: "#f4f7fb", fontWeight: 900 };
 const fieldStyle: CSSProperties = { display: "grid", gap: "6px", color: colors.muted, fontSize: "12px", fontWeight: 850 };
 const inputStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, minHeight: "42px", padding: "9px 12px", fontWeight: 750, width: "100%", boxSizing: "border-box" };
 const smallInputStyle: CSSProperties = { ...inputStyle, minHeight: "36px", maxWidth: "150px", textAlign: "right" };

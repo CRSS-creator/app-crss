@@ -45,11 +45,22 @@ export type CfoInvoiceParent = {
     numer: string | null;
     okres: string | null;
     typ: string;
+    kategoria: string | null;
     status: string;
     data_wystawienia: string | null;
+    termin_platnosci: string | null;
     klient_id: string | null;
     kontrahent_nazwa: string | null;
+    kwota_brutto: number | null;
     klienci?: { nazwa: string | null } | { nazwa: string | null }[] | null;
+    cfo_transakcje_bankowe?: {
+      id: string;
+      kwota: number;
+      typ: CfoBankTransactionType;
+      ignoruj: boolean;
+      data_ksiegowania: string | null;
+    }[] | null;
+    cfo_rozbicia_platnosci?: CfoPaymentSplit[] | null;
 };
 
 export type CfoCashflowInvoice = {
@@ -65,6 +76,7 @@ export type CfoCashflowInvoice = {
     kwota: number;
     typ: CfoBankTransactionType;
     ignoruj: boolean;
+    data_ksiegowania?: string | null;
   }[] | null;
   cfo_rozbicia_platnosci?: CfoPaymentSplit[] | null;
 };
@@ -172,10 +184,12 @@ export type CfoPaymentSplit = {
     id: string;
     typ: CfoBankTransactionType;
     ignoruj: boolean;
+    data_ksiegowania?: string | null;
   } | {
     id: string;
     typ: CfoBankTransactionType;
     ignoruj: boolean;
+    data_ksiegowania?: string | null;
   }[] | null;
 };
 
@@ -244,8 +258,33 @@ const INVOICE_LINE_SELECT = `
     kategoria,
     status,
     data_wystawienia,
+    termin_platnosci,
     klient_id,
     kontrahent_nazwa,
+    kwota_brutto,
+    cfo_transakcje_bankowe:cfo_transakcje_bankowe_faktura_id_fkey (
+      id,
+      kwota,
+      typ,
+      ignoruj,
+      data_ksiegowania
+    ),
+    cfo_rozbicia_platnosci:cfo_rozbicia_platnosci_faktura_id_fkey (
+      id,
+      transakcja_id,
+      koszt_id,
+      faktura_id,
+      typ,
+      opis,
+      kwota,
+      poza_kosztem_cfo,
+      cfo_transakcje_bankowe:cfo_rozbicia_platnosci_transakcja_id_fkey (
+        id,
+        typ,
+        ignoruj,
+        data_ksiegowania
+      )
+    ),
     klienci (
       nazwa
     )

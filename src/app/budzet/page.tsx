@@ -499,7 +499,7 @@ function buildBudgetMonths(
     const monthOverrides = overrides.filter((override) => overrideApplies(override, period));
     const plannedRevenueCategories = plannedRevenueForMonth(period, baseline.revenue, clientRevenues, crmForecast);
     const plannedCostSubcategories = plannedCostSubcategoriesForMonth(baseline.costSubcategories, actual.costBySubcategory);
-    const crmCumulativeRevenueGrowth = crmForecast.cumulativeRevenueGrowthByMonth.get(period) || 0;
+    const crmCumulativeRevenueGrowth = crmForecast.revenueGrowthByMonth.get(period) || 0;
     const invoiceCashFlow = plannedInvoiceCustomerCashFlowForMonth(period, budgetInvoices, invoicePaymentProfile);
     const plannedCustomerCashFlow = invoiceCashFlow.amount
       + plannedUnissuedRevenueCashFlowForMonth(period, months, baseline.revenue, clientRevenues, crmForecast, actualByMonth, invoicePaymentProfile);
@@ -874,7 +874,7 @@ function plannedRevenueForMonth(
     .filter((client) => clientRevenueApplies(client, period))
     .map((client) => Number(client.abonament || 0)));
 
-  const crmSubscription = crmForecast.cumulativeRevenueGrowthByMonth.get(period) || 0;
+  const crmSubscription = crmForecast.revenueGrowthByMonth.get(period) || 0;
   planned.set("abonamenty", clientSubscription + crmSubscription);
 
   return planned;
@@ -906,7 +906,7 @@ function timestampToMonth(value: string | null | undefined) {
 
 type CrmRevenueGrowthForecast = {
   monthlyRevenueGrowth: number;
-  cumulativeRevenueGrowthByMonth: Map<string, number>;
+  revenueGrowthByMonth: Map<string, number>;
 };
 
 function buildCrmRevenueGrowthForecast(historyMonths: string[], forecastMonths: string[], crmRevenues: CfoBudgetCrmRevenue[]): CrmRevenueGrowthForecast {
@@ -924,12 +924,12 @@ function buildCrmRevenueGrowthForecast(historyMonths: string[], forecastMonths: 
     ? sum(Array.from(wonRevenueByMonth.values())) / historyMonths.length
     : 0;
 
-  const cumulativeRevenueGrowthByMonth = new Map<string, number>();
+  const revenueGrowthByMonth = new Map<string, number>();
   forecastMonths.forEach((month, index) => {
-    cumulativeRevenueGrowthByMonth.set(month, monthlyRevenueGrowth * index);
+    revenueGrowthByMonth.set(month, index === 0 ? 0 : monthlyRevenueGrowth);
   });
 
-  return { monthlyRevenueGrowth, cumulativeRevenueGrowthByMonth };
+  return { monthlyRevenueGrowth, revenueGrowthByMonth };
 }
 
 function buildBaseline(revenueHistoryMonths: string[], costHistoryMonths: string[], actualByMonth: Map<string, ReturnType<typeof emptyActual>>) {

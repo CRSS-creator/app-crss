@@ -503,6 +503,7 @@ function buildBudgetMonths(
   const baseline = buildBaseline(revenueHistoryMonths, costHistoryMonths, actualByMonth);
   const crmForecast = buildCrmRevenueGrowthForecast(costHistoryMonths, months, crmRevenues);
   const budgetInvoices = buildBudgetInvoices(revenueLines);
+  const invoiceIssueProfile = buildInvoiceIssueProfile(revenueLines);
   const invoicePaymentProfile = buildInvoicePaymentProfile(budgetInvoices);
   const budgetCostPayments = buildBudgetCostPayments(costs);
   const costPaymentProfile = buildCostPaymentProfile(budgetCostPayments);
@@ -518,7 +519,7 @@ function buildBudgetMonths(
     const crmCumulativeRevenueGrowth = crmForecast.revenueGrowthByMonth.get(period) || 0;
     const invoiceCashFlow = plannedInvoiceCustomerCashFlowForMonth(period, budgetInvoices, invoicePaymentProfile);
     const plannedCustomerCashFlow = invoiceCashFlow.amount
-      + plannedUnissuedRevenueCashFlowForMonth(period, months, baseline, clientRevenues, crmForecast, actualByMonth, invoicePaymentProfile);
+      + plannedUnissuedRevenueCashFlowForMonth(period, months, baseline, clientRevenues, crmForecast, actualByMonth, invoiceIssueProfile, invoicePaymentProfile);
     let manualRevenueCashFlow = 0;
     let manualCostCashFlow = 0;
 
@@ -747,6 +748,7 @@ function plannedUnissuedRevenueCashFlowForMonth(
   clientRevenues: CfoBudgetClientRevenue[],
   crmForecast: CrmRevenueGrowthForecast,
   actualByMonth: Map<string, ReturnType<typeof emptyActual>>,
+  issueProfile: IssueDateProfile,
   profile: PaymentProfile,
 ) {
   return sum(forecastMonths.map((issuePeriod) => {
@@ -757,7 +759,8 @@ function plannedUnissuedRevenueCashFlowForMonth(
       const missingNet = Math.max(0, entry.amountNet - issuedNet);
       if (missingNet <= 0.01) return 0;
 
-      const expectedMonth = addDays(monthToDate(issuePeriod), averageDaysFor(profile, entry.payerKey)).slice(0, 7);
+      const issueDate = issueDateForRevenueEntry(issuePeriod, entry, issueProfile);
+      const expectedMonth = addDays(issueDate, averageDaysFor(profile, entry.payerKey)).slice(0, 7);
       return expectedMonth === cashFlowPeriod ? missingNet * 1.23 : 0;
     }));
   }));
@@ -868,6 +871,48 @@ type PaymentProfile = {
   averageDaysByCounterparty: Map<string, number>;
 };
 
+type IssueDateProfile = {
+  globalIssueDay: number;
+  issueDayByCounterparty: Map<string, number>;
+  issueDayByCategory: Map<string, number>;
+  issueDayByCounterpartyCategory: Map<string, number>;
+};
+
+function buildInvoiceIssueProfile(revenueLines: CfoInvoiceLine[]): IssueDateProfile {
+  const samples = revenueLines
+    .map((line) => {
+      const invoice = firstRelation(line.faktury);
+      if (!invoice?.data_wystawienia || invoice.typ !== "sprzedaz" || invoice.status === "anulowana" || invoice.kategoria === "korekta") return null;
+      return {
+        payerKey: counterpartyKey(invoice.klient_id || invoice.kontrahent_nazwa || invoice.id),
+        category: line.cfo_przychod_kategoria || "pozostale",
+        day: Number(invoice.data_wystawienia.slice(8, 10)),
+      };
+    })
+    .filter((sample): sample is { payerKey: string; category: CfoRevenueCategory; day: number } => Boolean(sample && Number.isFinite(sample.day)));
+
+  const globalIssueDay = samples.length > 0 ? clamp(Math.round(sum(samples.map((sample) => sample.day)) / samples.length), 1, 28) : 10;
+
+  return {
+    globalIssueDay,
+    issueDayByCounterparty: averageIssueDayMap(samples.map((sample) => ({ key: sample.payerKey, day: sample.day }))),
+    issueDayByCategory: averageIssueDayMap(samples.map((sample) => ({ key: sample.category, day: sample.day }))),
+    issueDayByCounterpartyCategory: averageIssueDayMap(samples.map((sample) => ({ key: revenueIssueKey(sample.payerKey, sample.category), day: sample.day }))),
+  };
+}
+
+function averageIssueDayMap(samples: { key: string; day: number }[]) {
+  const grouped = new Map<string, number[]>();
+  samples.forEach((sample) => {
+    grouped.set(sample.key, [...(grouped.get(sample.key) || []), sample.day]);
+  });
+
+  return new Map(Array.from(grouped.entries()).map(([key, values]) => [
+    key,
+    clamp(Math.round(sum(values) / values.length), 1, 28),
+  ]));
+}
+
 function buildInvoicePaymentProfile(invoices: BudgetInvoice[]): PaymentProfile {
   return buildPaymentProfile(invoices
     .filter((invoice) => invoice.paymentDate && invoice.issueDate && invoice.paidAmount >= invoice.gross * 0.8)
@@ -908,6 +953,14 @@ function buildPaymentProfile(samples: { key: string; days: number }[]): PaymentP
 
 function averageDaysFor(profile: PaymentProfile, counterpartyKeyValue: string) {
   return profile.averageDaysByCounterparty.get(counterpartyKeyValue) ?? profile.globalAverageDays;
+}
+
+function issueDateForRevenueEntry(period: string, entry: BudgetRevenuePlanEntry, profile: IssueDateProfile) {
+  const day = profile.issueDayByCounterpartyCategory.get(revenueIssueKey(entry.payerKey, entry.category))
+    ?? profile.issueDayByCounterparty.get(entry.payerKey)
+    ?? profile.issueDayByCategory.get(entry.category)
+    ?? profile.globalIssueDay;
+  return dateInMonth(period, day);
 }
 
 function plannedRevenueEntriesForMonth(
@@ -1184,6 +1237,10 @@ function costEntryKey(vendorKey: string, category: CfoCostCategory, subcategory:
   return `${vendorKey}\u0001${category}\u0001${subcategory}`;
 }
 
+function revenueIssueKey(payerKey: string, category: CfoRevenueCategory) {
+  return `${payerKey}\u0001${category}`;
+}
+
 function parseCostEntryKey(key: string) {
   const [vendorKey, category, subcategory] = key.split("\u0001");
   return {
@@ -1257,6 +1314,11 @@ function monthsBetween(start: string, end: string) {
 
 function monthToDate(value: string) {
   return `${value}-01`;
+}
+
+function dateInMonth(period: string, day: number) {
+  const safeDay = clamp(Math.round(day), 1, Number(monthEndDate(period).slice(8, 10)));
+  return `${period}-${String(safeDay).padStart(2, "0")}`;
 }
 
 function monthEndDate(value: string) {

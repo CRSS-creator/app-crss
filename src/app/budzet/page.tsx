@@ -516,7 +516,7 @@ function buildBudgetMonths(
     const plannedRevenueEntries = plannedRevenueEntriesForMonth(period, baseline, clientRevenues, crmForecast);
     const plannedRevenueCategories = plannedRevenueForMonth(plannedRevenueEntries);
     const plannedCostSubcategories = plannedCostSubcategoriesForMonth(baseline.costSubcategories, actual.costBySubcategory);
-    const crmCumulativeRevenueGrowth = crmForecast.revenueGrowthByMonth.get(period) || 0;
+    const crmCumulativeRevenueGrowth = crmForecast.cumulativeRevenueGrowthByMonth.get(period) || 0;
     const invoiceCashFlow = plannedInvoiceCustomerCashFlowForMonth(period, budgetInvoices, invoicePaymentProfile);
     const plannedCustomerCashFlow = invoiceCashFlow.amount
       + plannedUnissuedRevenueCashFlowForMonth(period, months, baseline, clientRevenues, crmForecast, actualByMonth, invoiceIssueProfile, invoicePaymentProfile);
@@ -984,7 +984,7 @@ function plannedRevenueEntriesForMonth(
       if (additionalServices > 0) entries.push({ payerKey, category: "uslugi_dodatkowe", amountNet: additionalServices });
     });
 
-  const crmSubscription = crmForecast.revenueGrowthByMonth.get(period) || 0;
+  const crmSubscription = crmForecast.cumulativeRevenueGrowthByMonth.get(period) || 0;
   if (crmSubscription > 0) {
     entries.push({ payerKey: "__crm__", category: "abonamenty", amountNet: crmSubscription });
   }
@@ -1027,7 +1027,8 @@ function timestampToMonth(value: string | null | undefined) {
 
 type CrmRevenueGrowthForecast = {
   monthlyRevenueGrowth: number;
-  revenueGrowthByMonth: Map<string, number>;
+  monthlyRevenueGrowthByMonth: Map<string, number>;
+  cumulativeRevenueGrowthByMonth: Map<string, number>;
 };
 
 function buildCrmRevenueGrowthForecast(historyMonths: string[], forecastMonths: string[], crmRevenues: CfoBudgetCrmRevenue[]): CrmRevenueGrowthForecast {
@@ -1041,15 +1042,20 @@ function buildCrmRevenueGrowthForecast(historyMonths: string[], forecastMonths: 
       wonRevenueByMonth.set(wonMonth, (wonRevenueByMonth.get(wonMonth) || 0) + Number(lead.szacowany_mrr || 0));
     });
 
-  const revenueGrowthByMonth = new Map<string, number>();
+  const monthlyRevenueGrowthByMonth = new Map<string, number>();
+  const cumulativeRevenueGrowthByMonth = new Map<string, number>();
+  let cumulativeGrowth = 0;
+
   forecastMonths.forEach((month, index) => {
     const projectedGrowth = index === 0 ? 0 : rollingAveragePreviousMonths(month, wonRevenueByMonth, 3);
-    revenueGrowthByMonth.set(month, projectedGrowth);
+    cumulativeGrowth += projectedGrowth;
+    monthlyRevenueGrowthByMonth.set(month, projectedGrowth);
+    cumulativeRevenueGrowthByMonth.set(month, cumulativeGrowth);
     wonRevenueByMonth.set(month, projectedGrowth);
   });
 
-  const monthlyRevenueGrowth = revenueGrowthByMonth.get(forecastMonths[1]) || rollingAveragePreviousMonths(forecastMonths[0] || currentMonthInput(), wonRevenueByMonth, 3);
-  return { monthlyRevenueGrowth, revenueGrowthByMonth };
+  const monthlyRevenueGrowth = monthlyRevenueGrowthByMonth.get(forecastMonths[1]) || rollingAveragePreviousMonths(forecastMonths[0] || currentMonthInput(), wonRevenueByMonth, 3);
+  return { monthlyRevenueGrowth, monthlyRevenueGrowthByMonth, cumulativeRevenueGrowthByMonth };
 }
 
 function rollingAveragePreviousMonths(month: string, valuesByMonth: Map<string, number>, windowSize: number) {

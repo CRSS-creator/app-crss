@@ -4,18 +4,6 @@ drop function if exists public.record_crm_offer_decision(uuid, text, text, text)
 drop function if exists public.reset_crm_offer_after_pdf_removal(uuid);
 drop function if exists public.schedule_crm_offer_followup(uuid);
 
-update public.crm_szanse_sprzedazy
-set
-  etap = 'decyzja',
-  updated_at = now()
-where etap = 'propozycja_wspolpracy_wyslana';
-
-update public.crm_zadania
-set
-  etap = 'decyzja',
-  updated_at = now()
-where etap = 'propozycja_wspolpracy_wyslana';
-
 create or replace function public.crm_default_sales_tasks_for_stage(p_stage text)
 returns table(etap text, tytul text)
 language sql
@@ -28,6 +16,8 @@ as $$
     ('rozmowa_online', 'Zapisz powód kontaktu, dlaczego teraz / co nie działa u obecnego biura'),
     ('rozmowa_online', 'Zbierz minimum danych do wyceny'),
     ('rozmowa_online', 'Ustal kolejny krok i termin albo zamknij jako przegrana z powodem'),
+    ('propozycja_wspolpracy_wyslana', 'Zapisz datę wysłania propozycji i zakres co obejmuje'),
+    ('propozycja_wspolpracy_wyslana', 'Zadzwoń do klienta jak wyślesz ofertę'),
     ('decyzja', 'Zadzwoń/napisz i domknij oraz przejdź do finalizacji'),
     ('decyzja', 'Jeśli przegrana, zapisz powód'),
     ('finalizacja_podpisanie_umowy', 'Wyślij umowę'),
@@ -74,6 +64,7 @@ alter table public.crm_szanse_sprzedazy
         'nowy_lead'::text,
         'kontakt_proba_kontaktu'::text,
         'rozmowa_online'::text,
+        'propozycja_wspolpracy_wyslana'::text,
         'decyzja'::text,
         'finalizacja_podpisanie_umowy'::text,
         'zamknieta'::text
@@ -92,6 +83,7 @@ alter table public.crm_zadania
         'nowy_lead'::text,
         'kontakt_proba_kontaktu'::text,
         'rozmowa_online'::text,
+        'propozycja_wspolpracy_wyslana'::text,
         'decyzja'::text,
         'finalizacja_podpisanie_umowy'::text
       ]
@@ -100,6 +92,3 @@ alter table public.crm_zadania
 
 drop table if exists public.crm_oferta_events cascade;
 drop table if exists public.crm_oferty cascade;
-
-alter table public.crm_szanse_sprzedazy
-  drop column if exists data_wyslania_oferty;

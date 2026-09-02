@@ -42,6 +42,7 @@ type Lead = {
   szacowany_mrr: number | null;
   data_telefonu: string | null;
   data_spotkania_online: string | null;
+  data_wyslania_oferty: string | null;
   data_follow_up: string | null;
   powod_kontaktu: string | null;
   przegrana_do_ponownego_kontaktu: boolean | null;
@@ -68,6 +69,7 @@ type LeadDraft = {
   szacowany_mrr: string;
   data_telefonu: string;
   data_spotkania_online: string;
+  data_wyslania_oferty: string;
   data_follow_up: string;
   powod_kontaktu: string;
   przegrana_do_ponownego_kontaktu: boolean;
@@ -100,11 +102,12 @@ type StageTimingRow = {
 };
 
 const EMPTY_FILTER = "Wszystkie";
-const PIPELINE_STAGES = ["nowy_lead", "rozmowa_online", "decyzja", "finalizacja_podpisanie_umowy"];
+const PIPELINE_STAGES = ["nowy_lead", "rozmowa_online", "propozycja_wspolpracy_wyslana", "decyzja", "finalizacja_podpisanie_umowy"];
 const PIPELINE_LABELS: Record<string, string> = {
   nowy_lead: "Nowy lead (kwalifikowany)",
   rozmowa_online: "Rozmowa online",
-  decyzja: "Decyzja",
+  propozycja_wspolpracy_wyslana: "Propozycja współpracy",
+  decyzja: "Decyzja / klient zaakceptował ofertę",
   finalizacja_podpisanie_umowy: "Finalizacja / podpisanie umowy",
   kontakt_proba_kontaktu: "Nowy lead (kwalifikowany)",
 };
@@ -265,7 +268,7 @@ function CrmContent() {
     const matchesSearch = !normalizedSearch || searchableText.includes(normalizedSearch);
     return matchesSearch && matchesStage && matchesStatus && matchesKadry;
   });
-  const currentMonthStats = buildCrmStats(leads, "month", currentMonthValue());
+  const summaryStats = buildCrmStats(leads, "all", currentMonthValue());
   const crmStats = buildCrmStats(leads, statsPeriod, statsMonth);
 
   return (
@@ -281,10 +284,10 @@ function CrmContent() {
       </section>
 
       <section style={summaryGridStyle}>
-        <SummaryCard label="Aktywne szanse" value={currentMonthStats.activeCount} />
-        <SummaryCard label="Szacowany MRR" value={`${currentMonthStats.activeMrr.toLocaleString("pl-PL")} zł`} />
-        <SummaryCard label="Wygrane" value={currentMonthStats.wonCount} />
-        <SummaryCard label="Przegrane" value={currentMonthStats.lostCount} />
+        <SummaryCard label="Aktywne szanse" value={summaryStats.activeCount} />
+        <SummaryCard label="Szacowany MRR" value={`${summaryStats.activeMrr.toLocaleString("pl-PL")} zł`} />
+        <SummaryCard label="Wygrane" value={summaryStats.wonCount} />
+        <SummaryCard label="Przegrane" value={summaryStats.lostCount} />
       </section>
 
       <section style={cardStyle}>
@@ -674,6 +677,7 @@ function LeadDrawer({ mode, lead, tasks, onClose, onCreated, onSaved, onDeleted,
             <div style={datesColumnStyle}>
               <EditableInput label="Data telefonu" type="date" value={draft.data_telefonu} onChange={(value) => updateDraft("data_telefonu", value)} />
               <EditableInput label="Data spotkania" type="date" value={draft.data_spotkania_online} onChange={(value) => updateDraft("data_spotkania_online", value)} />
+              <EditableInput label="Data wysłania propozycji" type="date" value={draft.data_wyslania_oferty} onChange={(value) => updateDraft("data_wyslania_oferty", value)} />
               <EditableInput label="Data follow-up" type="date" value={draft.data_follow_up} onChange={(value) => updateDraft("data_follow_up", value)} />
             </div>
           </TermsAndNotesSection>
@@ -684,16 +688,16 @@ function LeadDrawer({ mode, lead, tasks, onClose, onCreated, onSaved, onDeleted,
 }
 
 function createEmptyDraft(): LeadDraft {
-  return { nazwa: "", osoba_kontaktowa: "", telefon: "", email: "", nip: "", forma_prawna: "", etap: "nowy_lead", status: "otwarta", zrodlo_leada: "", szacowany_mrr: "", data_telefonu: "", data_spotkania_online: "", data_follow_up: "", powod_kontaktu: "", przegrana_do_ponownego_kontaktu: false, przegrana_ponowny_kontakt_at: "", liczba_dokumentow: "", liczba_transakcji: "", czy_kadry: false, liczba_pracownikow: "", liczba_zleceniobiorcow: "", powod_przegranej: "", notatki: "" };
+  return { nazwa: "", osoba_kontaktowa: "", telefon: "", email: "", nip: "", forma_prawna: "", etap: "nowy_lead", status: "otwarta", zrodlo_leada: "", szacowany_mrr: "", data_telefonu: "", data_spotkania_online: "", data_wyslania_oferty: "", data_follow_up: "", powod_kontaktu: "", przegrana_do_ponownego_kontaktu: false, przegrana_ponowny_kontakt_at: "", liczba_dokumentow: "", liczba_transakcji: "", czy_kadry: false, liczba_pracownikow: "", liczba_zleceniobiorcow: "", powod_przegranej: "", notatki: "" };
 }
 
 function createDraft(lead: Lead): LeadDraft {
-  return { nazwa: lead.nazwa || "", osoba_kontaktowa: lead.osoba_kontaktowa || "", telefon: lead.telefon || "", email: lead.email || "", nip: lead.nip || "", forma_prawna: lead.forma_prawna || "", etap: lead.etap || "nowy_lead", status: lead.status || "otwarta", zrodlo_leada: lead.zrodlo_leada || "", szacowany_mrr: lead.szacowany_mrr !== null && lead.szacowany_mrr !== undefined ? String(lead.szacowany_mrr) : "", data_telefonu: formatDateForInput(lead.data_telefonu), data_spotkania_online: formatDateForInput(lead.data_spotkania_online), data_follow_up: formatDateForInput(lead.data_follow_up), powod_kontaktu: lead.powod_kontaktu || "", przegrana_do_ponownego_kontaktu: Boolean(lead.przegrana_do_ponownego_kontaktu), przegrana_ponowny_kontakt_at: formatDateForInput(lead.przegrana_ponowny_kontakt_at), liczba_dokumentow: lead.liczba_dokumentow !== null && lead.liczba_dokumentow !== undefined ? String(lead.liczba_dokumentow) : "", liczba_transakcji: lead.liczba_transakcji !== null && lead.liczba_transakcji !== undefined ? String(lead.liczba_transakcji) : "", czy_kadry: Boolean(lead.czy_kadry), liczba_pracownikow: lead.liczba_pracownikow !== null && lead.liczba_pracownikow !== undefined ? String(lead.liczba_pracownikow) : "", liczba_zleceniobiorcow: lead.liczba_zleceniobiorcow !== null && lead.liczba_zleceniobiorcow !== undefined ? String(lead.liczba_zleceniobiorcow) : "", powod_przegranej: lead.powod_przegranej || "", notatki: lead.notatki || "" };
+  return { nazwa: lead.nazwa || "", osoba_kontaktowa: lead.osoba_kontaktowa || "", telefon: lead.telefon || "", email: lead.email || "", nip: lead.nip || "", forma_prawna: lead.forma_prawna || "", etap: lead.etap || "nowy_lead", status: lead.status || "otwarta", zrodlo_leada: lead.zrodlo_leada || "", szacowany_mrr: lead.szacowany_mrr !== null && lead.szacowany_mrr !== undefined ? String(lead.szacowany_mrr) : "", data_telefonu: formatDateForInput(lead.data_telefonu), data_spotkania_online: formatDateForInput(lead.data_spotkania_online), data_wyslania_oferty: formatDateForInput(lead.data_wyslania_oferty), data_follow_up: formatDateForInput(lead.data_follow_up), powod_kontaktu: lead.powod_kontaktu || "", przegrana_do_ponownego_kontaktu: Boolean(lead.przegrana_do_ponownego_kontaktu), przegrana_ponowny_kontakt_at: formatDateForInput(lead.przegrana_ponowny_kontakt_at), liczba_dokumentow: lead.liczba_dokumentow !== null && lead.liczba_dokumentow !== undefined ? String(lead.liczba_dokumentow) : "", liczba_transakcji: lead.liczba_transakcji !== null && lead.liczba_transakcji !== undefined ? String(lead.liczba_transakcji) : "", czy_kadry: Boolean(lead.czy_kadry), liczba_pracownikow: lead.liczba_pracownikow !== null && lead.liczba_pracownikow !== undefined ? String(lead.liczba_pracownikow) : "", liczba_zleceniobiorcow: lead.liczba_zleceniobiorcow !== null && lead.liczba_zleceniobiorcow !== undefined ? String(lead.liczba_zleceniobiorcow) : "", powod_przegranej: lead.powod_przegranej || "", notatki: lead.notatki || "" };
 }
 
 function createLeadPayload(draft: LeadDraft) {
   const shouldRecontactLostLead = draft.status === "przegrana" && draft.przegrana_do_ponownego_kontaktu;
-  return { nazwa: draft.nazwa.trim(), osoba_kontaktowa: draft.osoba_kontaktowa.trim() || null, telefon: normalizeContactList(draft.telefon), email: normalizeContactList(draft.email), nip: draft.nip.trim() || null, forma_prawna: draft.forma_prawna.trim() || null, etap: draft.etap, status: draft.status, zrodlo_leada: draft.zrodlo_leada.trim() || null, szacowany_mrr: draft.szacowany_mrr ? Number(draft.szacowany_mrr) : null, data_telefonu: draft.data_telefonu || null, data_spotkania_online: draft.data_spotkania_online || null, data_follow_up: draft.data_follow_up || null, powod_kontaktu: draft.powod_kontaktu.trim() || null, przegrana_do_ponownego_kontaktu: shouldRecontactLostLead, przegrana_ponowny_kontakt_at: shouldRecontactLostLead ? draft.przegrana_ponowny_kontakt_at || null : null, liczba_dokumentow: draft.liczba_dokumentow ? Number(draft.liczba_dokumentow) : null, liczba_transakcji: draft.liczba_transakcji ? Number(draft.liczba_transakcji) : null, czy_kadry: draft.czy_kadry, liczba_pracownikow: draft.liczba_pracownikow ? Number(draft.liczba_pracownikow) : null, liczba_zleceniobiorcow: draft.liczba_zleceniobiorcow ? Number(draft.liczba_zleceniobiorcow) : null, powod_przegranej: draft.powod_przegranej.trim() || null, notatki: draft.notatki.trim() || null };
+  return { nazwa: draft.nazwa.trim(), osoba_kontaktowa: draft.osoba_kontaktowa.trim() || null, telefon: normalizeContactList(draft.telefon), email: normalizeContactList(draft.email), nip: draft.nip.trim() || null, forma_prawna: draft.forma_prawna.trim() || null, etap: draft.etap, status: draft.status, zrodlo_leada: draft.zrodlo_leada.trim() || null, szacowany_mrr: draft.szacowany_mrr ? Number(draft.szacowany_mrr) : null, data_telefonu: draft.data_telefonu || null, data_spotkania_online: draft.data_spotkania_online || null, data_wyslania_oferty: draft.data_wyslania_oferty || null, data_follow_up: draft.data_follow_up || null, powod_kontaktu: draft.powod_kontaktu.trim() || null, przegrana_do_ponownego_kontaktu: shouldRecontactLostLead, przegrana_ponowny_kontakt_at: shouldRecontactLostLead ? draft.przegrana_ponowny_kontakt_at || null : null, liczba_dokumentow: draft.liczba_dokumentow ? Number(draft.liczba_dokumentow) : null, liczba_transakcji: draft.liczba_transakcji ? Number(draft.liczba_transakcji) : null, czy_kadry: draft.czy_kadry, liczba_pracownikow: draft.liczba_pracownikow ? Number(draft.liczba_pracownikow) : null, liczba_zleceniobiorcow: draft.liczba_zleceniobiorcow ? Number(draft.liczba_zleceniobiorcow) : null, powod_przegranej: draft.powod_przegranej.trim() || null, notatki: draft.notatki.trim() || null };
 }
 
 function formatDateForInput(value: string | null) { return value ? value.slice(0, 10) : ""; }
@@ -851,14 +855,15 @@ function didReachStage(lead: Lead, stageIndex: number) {
   if (leadStageIndex >= stageIndex) return true;
 
   if (stageIndex === 1) {
-    return Boolean(lead.data_telefonu || lead.data_spotkania_online || lead.data_follow_up || isClosed);
+    return Boolean(lead.data_telefonu || lead.data_spotkania_online || lead.data_wyslania_oferty || lead.data_follow_up || isClosed);
   }
   if (stageIndex === 2) {
-    return Boolean(lead.data_follow_up || isClosed);
+    return Boolean(lead.data_wyslania_oferty || lead.data_follow_up || isClosed);
   }
   if (stageIndex === 3) {
-    return Boolean(isClosed);
+    return Boolean(lead.data_wyslania_oferty && isClosed);
   }
+  if (stageIndex === 4) return Boolean(isClosed);
 
   return false;
 }
@@ -913,12 +918,14 @@ function leadStageDates(lead: Lead) {
   const currentStageStartedAt = parseDate(lead.etap_started_at) || updatedAt;
   const phoneAt = pastDate(lead.data_telefonu, now);
   const meetingAt = pastDate(lead.data_spotkania_online, now);
+  const offerSentAt = pastDate(lead.data_wyslania_oferty, now);
 
   return [
     parseDate(lead.created_at),
     stageIndex === 1 ? currentStageStartedAt : meetingAt || phoneAt,
-    isClosed || stageIndex >= 2 ? updatedAt : null,
-    lead.status === "wygrana" || stageIndex >= 3 ? updatedAt : null,
+    stageIndex === 2 ? currentStageStartedAt : offerSentAt,
+    isClosed || stageIndex >= 3 ? updatedAt : null,
+    lead.status === "wygrana" || stageIndex >= 4 ? updatedAt : null,
   ];
 }
 
@@ -1031,7 +1038,7 @@ const funnelExplanationStyle: React.CSSProperties = { borderTop: `1px solid ${co
 const tableHeaderStyle: React.CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "18px" };
 const sectionTitleStyle: React.CSSProperties = { margin: 0, color: colors.navy, fontSize: "24px" };
 const counterStyle: React.CSSProperties = { color: colors.muted, fontWeight: 700 };
-const pipelineGridStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(4, minmax(220px, 1fr))", gap: "16px", overflowX: "auto" };
+const pipelineGridStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(5, minmax(220px, 1fr))", gap: "16px", overflowX: "auto" };
 const pipelineColumnStyle: React.CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.card, background: colors.inputBackground, padding: "16px", minHeight: "260px" };
 const pipelineTitleStyle: React.CSSProperties = { margin: 0, color: colors.navy, fontSize: "15px", fontWeight: 850 };
 const pipelineMetaStyle: React.CSSProperties = { margin: "6px 0 14px", color: colors.muted, fontSize: "13px", fontWeight: 700 };

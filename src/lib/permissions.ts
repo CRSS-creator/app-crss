@@ -23,7 +23,7 @@ export type AppModule =
 
 const accountingRoles = ["accountant", "opiekun_ksiegowy", "ksiegowy"];
 const salesRoles = ["handlowiec"];
-const fullClientEditorUserIds = ["282ae06c-5d1f-4fe6-a5e9-8495b478c247"];
+const ownClientEditorUserIds = ["282ae06c-5d1f-4fe6-a5e9-8495b478c247"];
 
 const moduleAccess: Record<AppModule, string[]> = {
   dashboard: ["owner", "manager", "admin", ...accountingRoles],
@@ -53,14 +53,18 @@ export function canAccessModule(role: UserRole | null, moduleName: AppModule) {
   return moduleAccess[moduleName]?.includes(role) ?? false;
 }
 
-export function hasFullClientAccess(userId?: string | null) {
-  return Boolean(userId && fullClientEditorUserIds.includes(userId));
+export function canEditOwnClients(userId?: string | null) {
+  return Boolean(userId && ownClientEditorUserIds.includes(userId));
 }
 
-export function canManageClients(role: UserRole | null, userId?: string | null) {
-  return role === "owner" || role === "manager" || role === "admin" || hasFullClientAccess(userId);
+export function canManageClients(role: UserRole | null) {
+  return role === "owner" || role === "manager" || role === "admin";
+}
+
+export function canCreateClients(role: UserRole | null, userId?: string | null) {
+  return canManageClients(role) || canEditOwnClients(userId);
 }
 
 export function canEditClientAdministrative(role: UserRole | null, userId?: string | null) {
-  return canManageClients(role, userId);
+  return canManageClients(role) || canEditOwnClients(userId);
 }

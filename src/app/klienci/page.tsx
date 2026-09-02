@@ -24,6 +24,7 @@ import { createCrmContractSignedUrl } from "@/lib/crmContractService";
 import { supabase } from "@/lib/supabaseClient";
 import { colors, radius, shadow } from "@/app/design";
 import {
+  canCreateClients,
   canEditClientAdministrative,
   canManageClients as canManageClientsPermission,
   type UserRole,
@@ -266,7 +267,7 @@ function ClientsContent({
   const [kadryFilter, setKadryFilter] = useState(EMPTY_FILTER);
   const [searchQuery, setSearchQuery] = useState("");
 
-  const canManageClients = canManageClientsPermission(currentRole, currentUserId);
+  const canCreateClient = canCreateClients(currentRole, currentUserId);
   const hasActiveFilters =
     searchQuery.trim() ||
     statusFilter !== EMPTY_FILTER ||
@@ -391,7 +392,7 @@ return (
           <h1 style={titleStyle}>Klienci</h1>
         </div>
 
-{canManageClients && (
+{canCreateClient && (
   <button
     style={primaryButtonStyle}
     onClick={() => setCreatingClient(true)}
@@ -536,6 +537,8 @@ return (
  
       {creatingClient && (
         <CreateClientDrawer
+          role={currentRole}
+          userId={currentUserId}
           opiekunowie={opiekunowie}
           onClose={() => setCreatingClient(false)}
           onCreated={handleClientCreated}
@@ -570,6 +573,7 @@ function ClientDrawer({
   const [draft, setDraft] = useState<ClientDraft>(() => createDraft(client));
 
   const canEditAdministrative = canEditClientAdministrative(role, userId);
+  const canAssignCaregiver = canManageClientsPermission(role);
   const isDraftJdg = isJdgLegalForm(draft.forma_prawna);
   const isClientJdg = isJdgLegalForm(client.forma_prawna || "");
   const amlDocuments = documents.filter(isAmlDocument);
@@ -768,7 +772,7 @@ function ClientDrawer({
           koszt_dodatkowego_dokumentu: draft.koszt_dodatkowego_dokumentu
             ? Number(draft.koszt_dodatkowego_dokumentu)
             : null,
-          opiekun_id: draft.opiekun_id || null,
+          ...(canAssignCaregiver ? { opiekun_id: draft.opiekun_id || null } : {}),
         }
       : {};
 
@@ -887,21 +891,28 @@ function ClientDrawer({
 
             {editing && canEditAdministrative ? (
               <>
-                <EditableSelect
-                  label="Opiekun"
-                  value={draft.opiekun_id}
-                  onChange={(value) => updateDraft("opiekun_id", value)}
-                  options={[
-                    { value: "", label: "Brak opiekuna" },
-                    ...opiekunowie.map((opiekun) => ({
-                      value: opiekun.id,
-                      label:
-                        opiekun.full_name ||
-                        opiekun.email ||
-                        "Użytkownik bez nazwy",
-                    })),
-                  ]}
-                />
+                {canAssignCaregiver ? (
+                  <EditableSelect
+                    label="Opiekun"
+                    value={draft.opiekun_id}
+                    onChange={(value) => updateDraft("opiekun_id", value)}
+                    options={[
+                      { value: "", label: "Brak opiekuna" },
+                      ...opiekunowie.map((opiekun) => ({
+                        value: opiekun.id,
+                        label:
+                          opiekun.full_name ||
+                          opiekun.email ||
+                          "Użytkownik bez nazwy",
+                      })),
+                    ]}
+                  />
+                ) : (
+                  <InfoRow
+                    label="Opiekun"
+                    value={getClientCaregiverName(client)}
+                  />
+                )}
                 <EditableSelect
                   label="Status"
                   value={draft.status_klienta}
@@ -1298,15 +1309,20 @@ function ClientDrawer({
 }
 
 function CreateClientDrawer({
+  role,
+  userId,
   opiekunowie,
   onClose,
   onCreated,
 }: {
+  role: UserRole | null;
+  userId: string | null;
   opiekunowie: Profile[];
   onClose: () => void;
   onCreated: (client: Client) => void;
 }) {
   const [saving, setSaving] = useState(false);
+  const canAssignCaregiver = canManageClientsPermission(role);
 
   const [draft, setDraft] = useState<ClientDraft>({
     nazwa: "",
@@ -1322,7 +1338,7 @@ function CreateClientDrawer({
     status_klienta: "Aktywny",
     abonament: "",
     model_fakturowania: "z_dolu",
-    opiekun_id: "",
+    opiekun_id: canAssignCaregiver ? "" : userId || "",
     czynny_vat: false,
     vat_okres_rozliczeniowy: "miesieczny",
     vat_ue: false,
@@ -1391,7 +1407,7 @@ function CreateClientDrawer({
       koszt_dodatkowego_dokumentu: draft.koszt_dodatkowego_dokumentu
         ? Number(draft.koszt_dodatkowego_dokumentu)
         : null,
-      opiekun_id: draft.opiekun_id || null,
+      opiekun_id: canAssignCaregiver ? draft.opiekun_id || null : userId,
       czynny_vat: draft.czynny_vat,
       vat_okres_rozliczeniowy: draft.czynny_vat ? draft.vat_okres_rozliczeniowy : "miesieczny",
       vat_ue: draft.vat_ue,
@@ -1503,18 +1519,20 @@ function CreateClientDrawer({
             />
           </InfoSection>
 <InfoSection title="Organizacja">
-  <EditableSelect
-    label="Opiekun"
-    value={draft.opiekun_id}
-    onChange={(v) => updateDraft("opiekun_id", v)}
-    options={[
-      { value: "", label: "Brak opiekuna" },
-      ...opiekunowie.map((opiekun) => ({
-        value: opiekun.id,
-        label: opiekun.full_name || opiekun.email || "Użytkownik",
-      })),
-    ]}
-  />
+  {canAssignCaregiver ? (
+    <EditableSelect
+      label="Opiekun"
+      value={draft.opiekun_id}
+      onChange={(v) => updateDraft("opiekun_id", v)}
+      options={[
+        { value: "", label: "Brak opiekuna" },
+        ...opiekunowie.map((opiekun) => ({
+          value: opiekun.id,
+          label: opiekun.full_name || opiekun.email || "Użytkownik",
+        })),
+      ]}
+    />
+  ) : null}
 
   <EditableInput
     label="Status"
@@ -2075,14 +2093,6 @@ const titleStyle: React.CSSProperties = {
   lineHeight: 1.05,
   margin: 0,
   color: colors.navy,
-};
-
-const subtitleStyle: React.CSSProperties = {
-  maxWidth: "760px",
-  fontSize: "17px",
-  lineHeight: 1.7,
-  color: colors.muted,
-  marginTop: "14px",
 };
 
 const primaryButtonStyle: React.CSSProperties = {

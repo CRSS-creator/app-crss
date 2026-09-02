@@ -3,7 +3,6 @@ import { getAuthorizedServerUser } from "@/lib/serverAuth";
 import { splitEmails } from "@/lib/contactFields";
 
 const ALLOWED_ROLES = new Set(["owner", "manager", "admin", "accountant"]);
-const FULL_CLIENT_ACCESS_USER_IDS = new Set(["282ae06c-5d1f-4fe6-a5e9-8495b478c247"]);
 const APP_URL = "https://app.crss.com.pl";
 
 type Payload = {
@@ -100,7 +99,7 @@ export async function POST(request: NextRequest) {
   const row = a1 as A1Row;
   const client = Array.isArray(row.klienci) ? row.klienci[0] : row.klienci;
   if (!client) return NextResponse.json({ error: "Wpis A1 nie ma powiązanego klienta." }, { status: 400 });
-  if (auth.role === "accountant" && client.opiekun_id !== auth.requesterId && !FULL_CLIENT_ACCESS_USER_IDS.has(auth.requesterId)) {
+  if (auth.role === "accountant" && client.opiekun_id !== auth.requesterId) {
     return NextResponse.json({ error: "Możesz wysyłać powiadomienia A1 tylko do swoich klientów." }, { status: 403 });
   }
 

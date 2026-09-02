@@ -10,6 +10,7 @@ import { colors, radius, shadow } from "@/app/design";
 import {
   ensureSubscriptionInvoices,
   deleteDraftInvoice,
+  deleteDraftInvoiceLine,
   fetchInvoices,
   getInvoicePdfUrl,
   importWfirmaInvoices,
@@ -83,6 +84,7 @@ function InvoicesContent() {
   const [deletingInvoiceId, setDeletingInvoiceId] = useState<string | null>(null);
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
   const [savingLineId, setSavingLineId] = useState<string | null>(null);
+  const [deletingLineId, setDeletingLineId] = useState<string | null>(null);
   const [lineDrafts, setLineDrafts] = useState<Record<string, DraftInvoiceLinePayload>>({});
 
   useEffect(() => {
@@ -488,6 +490,26 @@ function InvoicesContent() {
     if (result.error || !result.data?.invoice) {
       console.error("Blad zapisu pozycji faktury:", result.error);
       alert(`Nie udało się zapisać pozycji faktury.\n\n${result.error?.message || ""}`);
+      return;
+    }
+
+    const updatedInvoice = result.data.invoice;
+    setInvoices((current) => current.map((item) => (item.id === updatedInvoice.id ? updatedInvoice : item)));
+    setDetailsInvoice(updatedInvoice);
+    cancelLineEdit(line.id);
+  }
+
+  async function removeLine(invoice: Invoice, line: InvoiceLine) {
+    if (!canEditDraftInvoice(invoice)) return;
+    if (!window.confirm(`Usunąć pozycję "${line.nazwa}" z tej faktury?`)) return;
+
+    setDeletingLineId(line.id);
+    const result = await deleteDraftInvoiceLine(invoice.id, line.id);
+    setDeletingLineId(null);
+
+    if (result.error || !result.data?.invoice) {
+      console.error("Blad usuwania pozycji faktury:", result.error);
+      alert(`Nie udało się usunąć pozycji faktury.\n\n${result.error?.message || ""}`);
       return;
     }
 
@@ -1028,7 +1050,7 @@ function InvoicesContent() {
                                   <button
                                     type="button"
                                     style={iconButtonStyle}
-                                    disabled={savingLineId === line.id}
+                                    disabled={savingLineId === line.id || deletingLineId === line.id}
                                     onClick={() => saveLineEdit(detailsInvoice, line)}
                                     title="Zapisz pozycję"
                                     aria-label="Zapisz pozycję"
@@ -1038,24 +1060,47 @@ function InvoicesContent() {
                                   <button
                                     type="button"
                                     style={iconButtonStyle}
-                                    disabled={savingLineId === line.id}
+                                    disabled={savingLineId === line.id || deletingLineId === line.id}
                                     onClick={() => cancelLineEdit(line.id)}
                                     title="Anuluj edycję"
                                     aria-label="Anuluj edycję"
                                   >
                                     <X size={16} />
                                   </button>
+                                  <button
+                                    type="button"
+                                    style={dangerIconButtonStyle}
+                                    disabled={savingLineId === line.id || deletingLineId === line.id}
+                                    onClick={() => removeLine(detailsInvoice, line)}
+                                    title="Usuń pozycję"
+                                    aria-label="Usuń pozycję"
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
                                 </span>
                               ) : (
-                                <button
-                                  type="button"
-                                  style={iconButtonStyle}
-                                  onClick={() => startLineEdit(line)}
-                                  title="Edytuj pozycję"
-                                  aria-label="Edytuj pozycję"
-                                >
-                                  <Pencil size={16} />
-                                </button>
+                                <span style={lineActionGroupStyle}>
+                                  <button
+                                    type="button"
+                                    style={iconButtonStyle}
+                                    disabled={deletingLineId === line.id}
+                                    onClick={() => startLineEdit(line)}
+                                    title="Edytuj pozycję"
+                                    aria-label="Edytuj pozycję"
+                                  >
+                                    <Pencil size={16} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    style={dangerIconButtonStyle}
+                                    disabled={deletingLineId === line.id}
+                                    onClick={() => removeLine(detailsInvoice, line)}
+                                    title="Usuń pozycję"
+                                    aria-label="Usuń pozycję"
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                                </span>
                               )
                             ) : null}
                           </Td>
@@ -1514,6 +1559,7 @@ const lineMoneyInputStyle: CSSProperties = { ...lineNumberInputStyle, width: "11
 const lineVatInputStyle: CSSProperties = { ...lineNumberInputStyle, width: "78px", minWidth: "78px" };
 const lineActionGroupStyle: CSSProperties = { display: "inline-flex", gap: "6px", alignItems: "center" };
 const iconButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.navy, width: "34px", height: "34px", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer" };
+const dangerIconButtonStyle: CSSProperties = { ...iconButtonStyle, color: colors.red, borderColor: "#fecdd3", background: "#fff1f2" };
 const invoiceDescriptionStyle: CSSProperties = { marginTop: "18px", border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "14px", background: colors.card };
 const descriptionTitleStyle: CSSProperties = { margin: "0 0 8px", color: colors.navy, fontSize: "16px" };
 const descriptionTextStyle: CSSProperties = { margin: 0, color: colors.text, fontWeight: 500, lineHeight: 1.55, whiteSpace: "pre-line" };

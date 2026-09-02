@@ -192,6 +192,13 @@ export async function updateDraftInvoiceLine(invoiceId: string, lineId: string, 
   );
 }
 
+export async function deleteDraftInvoiceLine(invoiceId: string, lineId: string) {
+  return callInvoiceEndpoint<{ invoice: Invoice }>(
+    "/api/faktury/drafts",
+    { action: "deleteLine", invoiceId, lineId }
+  );
+}
+
 export async function deleteDraftInvoice(invoiceId: string) {
   return callInvoiceEndpoint<{ deleted: true }>(
     "/api/faktury/drafts",

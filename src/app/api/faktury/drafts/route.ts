@@ -6,7 +6,7 @@ const ALLOWED_ROLES = new Set(["owner", "admin"]);
 const INVOICE_PDF_BUCKET = "faktury-pdf";
 
 type DraftActionPayload = {
-  action?: "deleteInvoice" | "updateLine";
+  action?: "deleteInvoice" | "deleteLine" | "updateLine";
   invoiceId?: string;
   lineId?: string;
   line?: {
@@ -104,6 +104,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ invoice: result.data });
   }
 
+  if (payload.action === "deleteLine") {
+    if (!isEditableDraft(invoice.data)) {
+      return NextResponse.json({ error: "Mozna usuwac pozycje tylko ze szkicu przed wyslaniem do wFirmy." }, { status: 400 });
+    }
+    if (!payload.lineId) {
+      return NextResponse.json({ error: "Brak pozycji faktury do usuniecia." }, { status: 400 });
+    }
+
+    const result = await deleteLine(auth.admin, invoice.data.id, payload.lineId);
+    if (result.error) return result.error;
+    return NextResponse.json({ invoice: result.data });
+  }
+
   return NextResponse.json({ error: "Nieznana operacja na szkicu faktury." }, { status: 400 });
 }
 
@@ -180,6 +193,24 @@ async function updateLine(
     return { data: null, error: NextResponse.json({ error: `Nie udało się zapisać pozycji: ${update.error.message}` }, { status: 500 }) };
   }
 
+  return refreshInvoiceTotals(admin, invoiceId, "Pozycja zapisana, ale nie udało się odświeżyć faktury");
+}
+
+async function deleteLine(admin: SupabaseClient, invoiceId: string, lineId: string) {
+  const deleted = await admin
+    .from("faktury_pozycje")
+    .delete()
+    .eq("id", lineId)
+    .eq("faktura_id", invoiceId);
+
+  if (deleted.error) {
+    return { data: null, error: NextResponse.json({ error: `Nie udało się usunąć pozycji: ${deleted.error.message}` }, { status: 500 }) };
+  }
+
+  return refreshInvoiceTotals(admin, invoiceId, "Pozycja usunięta, ale nie udało się odświeżyć faktury");
+}
+
+async function refreshInvoiceTotals(admin: SupabaseClient, invoiceId: string, refreshErrorPrefix: string) {
   const totals = await admin
     .from("faktury_pozycje")
     .select("kwota_netto,kwota_vat,kwota_brutto")
@@ -209,7 +240,7 @@ async function updateLine(
     .single();
 
   if (error) {
-    return { data: null, error: NextResponse.json({ error: `Pozycja zapisana, ale nie udało się odświeżyć faktury: ${error.message}` }, { status: 500 }) };
+    return { data: null, error: NextResponse.json({ error: `${refreshErrorPrefix}: ${error.message}` }, { status: 500 }) };
   }
 
   return { data: invoice, error: null };

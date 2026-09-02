@@ -268,7 +268,7 @@ function CrmContent() {
     const matchesSearch = !normalizedSearch || searchableText.includes(normalizedSearch);
     return matchesSearch && matchesStage && matchesStatus && matchesKadry;
   });
-  const summaryStats = buildCrmStats(leads, "all", currentMonthValue());
+  const currentMonthStats = buildCrmStats(leads, "month", currentMonthValue());
   const crmStats = buildCrmStats(leads, statsPeriod, statsMonth);
 
   return (
@@ -284,10 +284,10 @@ function CrmContent() {
       </section>
 
       <section style={summaryGridStyle}>
-        <SummaryCard label="Aktywne szanse" value={summaryStats.activeCount} />
-        <SummaryCard label="Szacowany MRR" value={`${summaryStats.activeMrr.toLocaleString("pl-PL")} zł`} />
-        <SummaryCard label="Wygrane" value={summaryStats.wonCount} />
-        <SummaryCard label="Przegrane" value={summaryStats.lostCount} />
+        <SummaryCard label="Aktywne szanse" value={currentMonthStats.activeCount} />
+        <SummaryCard label="Szacowany MRR" value={`${currentMonthStats.activeMrr.toLocaleString("pl-PL")} zł`} />
+        <SummaryCard label="Wygrane" value={currentMonthStats.wonCount} />
+        <SummaryCard label="Przegrane" value={currentMonthStats.lostCount} />
       </section>
 
       <section style={cardStyle}>

@@ -266,7 +266,7 @@ function ClientsContent({
   const [kadryFilter, setKadryFilter] = useState(EMPTY_FILTER);
   const [searchQuery, setSearchQuery] = useState("");
 
-  const canManageClients = canManageClientsPermission(currentRole);
+  const canManageClients = canManageClientsPermission(currentRole, currentUserId);
   const hasActiveFilters =
     searchQuery.trim() ||
     statusFilter !== EMPTY_FILTER ||

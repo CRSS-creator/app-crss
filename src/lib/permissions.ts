@@ -53,10 +53,14 @@ export function canAccessModule(role: UserRole | null, moduleName: AppModule) {
   return moduleAccess[moduleName]?.includes(role) ?? false;
 }
 
-export function canManageClients(role: UserRole | null) {
-  return role === "owner" || role === "manager" || role === "admin";
+export function hasFullClientAccess(userId?: string | null) {
+  return Boolean(userId && fullClientEditorUserIds.includes(userId));
+}
+
+export function canManageClients(role: UserRole | null, userId?: string | null) {
+  return role === "owner" || role === "manager" || role === "admin" || hasFullClientAccess(userId);
 }
 
 export function canEditClientAdministrative(role: UserRole | null, userId?: string | null) {
-  return canManageClients(role) || Boolean(userId && fullClientEditorUserIds.includes(userId));
+  return canManageClients(role, userId);
 }

@@ -40,7 +40,6 @@ export type CfoBudgetCrmRevenue = {
   etap: string | null;
   status: string | null;
   szacowany_mrr: number | null;
-  data_wyslania_oferty: string | null;
   etap_started_at: string | null;
   created_at: string | null;
   updated_at: string | null;
@@ -86,7 +85,7 @@ export async function fetchCfoBudgetClientRevenues() {
 export async function fetchCfoBudgetCrmRevenues() {
   return supabase
     .from("crm_szanse_sprzedazy")
-    .select("id,nazwa,nip,etap,status,szacowany_mrr,data_wyslania_oferty,etap_started_at,created_at,updated_at")
+    .select("id,nazwa,nip,etap,status,szacowany_mrr,etap_started_at,created_at,updated_at")
     .gt("szacowany_mrr", 0)
     .eq("status", "wygrana")
     .order("updated_at", { ascending: false });

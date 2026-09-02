@@ -7,7 +7,7 @@ const LARGE_FIELD_ROWS: Record<string, string> = {
   "Notatki": "3",
 };
 
-const DATE_FIELDS = new Set(["Data telefonu", "Data spotkania online", "Data spotkania", "Data wysłania propozycji", "Data follow-up"]);
+const DATE_FIELDS = new Set(["Data telefonu", "Data spotkania online", "Data spotkania", "Data follow-up"]);
 
 export default function CrmLeadDrawerLayoutWidget() {
   useEffect(() => {

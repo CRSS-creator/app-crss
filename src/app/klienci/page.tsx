@@ -327,37 +327,37 @@ const filteredClients = [...clients].filter((client) => {
   );
 }).sort(sortClientsByName);
   
-useEffect(() => {
-    loadInitialData();
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      setLoading(true);
+      const [caregiversResult, clientsResult] = await Promise.all([
+        fetchClientCaregivers(),
+        fetchClients(),
+      ]);
+
+      if (cancelled) return;
+
+      if (caregiversResult.error) {
+        console.error("Błąd pobierania opiekunów:", caregiversResult.error);
+      } else {
+        setOpiekunowie(caregiversResult.data || []);
+      }
+
+      if (clientsResult.error) {
+        console.error("Błąd pobierania klientów:", clientsResult.error);
+      } else {
+        setClients(clientsResult.data || []);
+      }
+
+      setLoading(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
-
-  async function loadInitialData() {
-    setLoading(true);
-    await Promise.all([loadOpiekunowie(), loadClients()]);
-    setLoading(false);
-  }
-
-  async function loadOpiekunowie() {
-    const { data, error } = await fetchClientCaregivers();
-
-    if (error) {
-      console.error("Błąd pobierania opiekunów:", error);
-      return;
-    }
-
-    setOpiekunowie(data || []);
-  }
-
-  async function loadClients() {
-    const { data, error } = await fetchClients();
-
-    if (error) {
-      console.error("Błąd pobierania klientów:", error);
-      return;
-    }
-
-    setClients(data || []);
-  }
 
   function handleClientSaved(updatedClient: Client) {
     setClients((current) =>
@@ -582,11 +582,57 @@ function ClientDrawer({
         : documents;
 
   useEffect(() => {
-    setDraft(createDraft(client));
-    setEditing(false);
-    setDocumentsTab("all");
-    loadDocuments();
-  }, [client.id]);
+    let cancelled = false;
+
+    void (async () => {
+      const nextDraft = createDraft(client);
+      const [documentsResult, contractsResult] = await Promise.all([
+        fetchClientDocuments(client.id),
+        supabase
+          .from("crm_umowy")
+          .select(
+            "id, created_at, numer_umowy, typ_umowy, wygenerowany_pdf_path, wygenerowany_pdf_name, podpisany_pdf_path, podpisany_pdf_name"
+          )
+          .eq("klient_id", client.id)
+          .order("created_at", { ascending: false }),
+      ]);
+
+      if (cancelled) return;
+
+      setDraft(nextDraft);
+      setEditing(false);
+      setDocumentsTab("all");
+
+      if (documentsResult.error || contractsResult.error) {
+        console.error(
+          "Blad pobierania dokumentow klienta:",
+          documentsResult.error || contractsResult.error
+        );
+        setDocumentsLoading(false);
+        return;
+      }
+
+      const manualDocuments = ((documentsResult.data || []) as ClientDocument[]).map(
+        (document) => ({
+          ...document,
+          source: "client" as const,
+          canDelete: true,
+          opis: "Dokument klienta",
+        })
+      );
+      const contractDocuments = buildContractDocuments(
+        (contractsResult.data || []) as ClientContractDocumentRow[],
+        client.id
+      );
+
+      setDocuments([...contractDocuments, ...manualDocuments].sort(sortDocumentsByDate));
+      setDocumentsLoading(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [client]);
 
   function updateDraft<K extends keyof ClientDraft>(
     key: K,
@@ -596,46 +642,6 @@ function ClientDrawer({
       ...current,
       [key]: value,
     }));
-  }
-
-  async function loadDocuments() {
-    setDocumentsLoading(true);
-
-    const [documentsResult, contractsResult] = await Promise.all([
-      fetchClientDocuments(client.id),
-      supabase
-        .from("crm_umowy")
-        .select(
-          "id, created_at, numer_umowy, typ_umowy, wygenerowany_pdf_path, wygenerowany_pdf_name, podpisany_pdf_path, podpisany_pdf_name"
-        )
-        .eq("klient_id", client.id)
-        .order("created_at", { ascending: false }),
-    ]);
-
-    if (documentsResult.error || contractsResult.error) {
-      console.error(
-        "Blad pobierania dokumentow klienta:",
-        documentsResult.error || contractsResult.error
-      );
-      setDocumentsLoading(false);
-      return;
-    }
-
-    const manualDocuments = ((documentsResult.data || []) as ClientDocument[]).map(
-      (document) => ({
-        ...document,
-        source: "client" as const,
-        canDelete: true,
-        opis: "Dokument klienta",
-      })
-    );
-    const contractDocuments = buildContractDocuments(
-      (contractsResult.data || []) as ClientContractDocumentRow[],
-      client.id
-    );
-
-    setDocuments([...contractDocuments, ...manualDocuments].sort(sortDocumentsByDate));
-    setDocumentsLoading(false);
   }
 
   async function handleDocumentUpload(files: FileList | null) {

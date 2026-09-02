@@ -336,7 +336,6 @@ function DashboardContent({ role }: { role: UserRole }) {
           <Panel title="CRM sprzedaż" href="/crm">
             <div style={statusGridStyle}>
               <SmallStat label="Otwarte szanse" value={view.openCrmLeadsCount} />
-              <SmallStat label="Propozycje" value={view.crmProposalCount} />
               <SmallStat label="Decyzje" value={view.crmDecisionCount} />
               <SmallStat label="Follow-up dziś" value={view.crmFollowUpsToday} />
             </div>
@@ -441,7 +440,6 @@ function buildDashboardView(data: DashboardState, role: UserRole, now: Date) {
     taxSentEmail: visibleTaxObligations.filter((obligation) => obligation.status_email === "wyslane").length,
     taxSentSms: visibleTaxObligations.filter((obligation) => obligation.status_sms === "wyslane").length,
     openCrmLeadsCount: crmLeads.filter((lead) => !["wygrana", "przegrana"].includes(normalize(lead.etap))).length,
-    crmProposalCount: crmLeads.filter((lead) => normalize(lead.etap).includes("propozycja")).length,
     crmDecisionCount: crmLeads.filter((lead) => normalize(lead.etap).includes("decyzja")).length,
     crmFollowUpsToday: crmLeads.filter((lead) => isToday(lead.data_follow_up || null)).length,
   };

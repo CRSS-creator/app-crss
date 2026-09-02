@@ -141,7 +141,6 @@ function NotificationsContent() {
         ) : (
           <div style={listStyle}>
             {visibleNotifications.map((notification) => {
-              const publicToken = getPublicToken(notification);
               const isTaskNotification = notification.type === "task_assigned" || notification.type === "task_due_today";
               const isCrmFollowUpNotification = notification.type === "crm_follow_up_due";
               const isCrmLostRecontactNotification = notification.type === "crm_lost_recontact_due";
@@ -168,9 +167,6 @@ function NotificationsContent() {
                   </div>
                   {isPayrollContractNotification && detailsExpanded && <PayrollContractNotificationTable notification={notification} />}
                   <div style={itemActionsStyle}>
-                    {publicToken && (
-                      <a style={secondaryButtonStyle} href={`/oferta/${publicToken}`} target="_blank" rel="noreferrer">Otwórz propozycję</a>
-                    )}
                     {isTaskNotification && <a style={secondaryButtonStyle} href="/zadania">Otwórz zadania</a>}
                     {(isCrmFollowUpNotification || isCrmLostRecontactNotification) && <a style={secondaryButtonStyle} href={crmNotificationHref(notification)}>Pokaż szansę</a>}
                     {isRecurringTaskNotification && <a style={secondaryButtonStyle} href="/rozliczenia">Otwórz rozliczenia</a>}
@@ -309,11 +305,6 @@ function payrollDateKindLabel(value: string | null) {
 
 function formatDateOnly(value: string | null) {
   return value ? new Intl.DateTimeFormat("pl-PL").format(new Date(`${value}T12:00:00`)) : "-";
-}
-
-function getPublicToken(notification: AppNotification) {
-  const token = notification.metadata?.public_token;
-  return typeof token === "string" && token.length > 0 ? token : null;
 }
 
 function emptyMessage(filter: NotificationFilter) {

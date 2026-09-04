@@ -30,6 +30,7 @@ type Lead = {
   created_at: string | null;
   updated_at: string | null;
   etap_started_at: string | null;
+  zamknieta_at: string | null;
   nazwa: string | null;
   osoba_kontaktowa: string | null;
   telefon: string | null;
@@ -905,7 +906,7 @@ function stageTransitionDays(lead: Lead, fromIndex: number, toIndex: number) {
 function leadProcessDays(lead: Lead) {
   const start = parseDate(lead.created_at);
   const isOpen = lead.status === "otwarta" && lead.etap !== "zamknieta";
-  const finish = isOpen ? new Date() : parseDate(lead.updated_at);
+  const finish = isOpen ? new Date() : leadClosedAt(lead);
   if (!start || !finish || finish < start) return null;
   return daysBetween(start, finish);
 }
@@ -915,6 +916,7 @@ function leadStageDates(lead: Lead) {
   const isClosed = lead.status === "wygrana" || lead.status === "przegrana" || lead.etap === "zamknieta";
   const now = new Date();
   const updatedAt = parseDate(lead.updated_at);
+  const closedAt = leadClosedAt(lead);
   const currentStageStartedAt = parseDate(lead.etap_started_at) || updatedAt;
   const phoneAt = pastDate(lead.data_telefonu, now);
   const meetingAt = pastDate(lead.data_spotkania_online, now);
@@ -924,9 +926,15 @@ function leadStageDates(lead: Lead) {
     parseDate(lead.created_at),
     stageIndex === 1 ? currentStageStartedAt : meetingAt || phoneAt,
     stageIndex === 2 ? currentStageStartedAt : offerSentAt,
-    isClosed || stageIndex >= 3 ? updatedAt : null,
-    lead.status === "wygrana" || stageIndex >= 4 ? updatedAt : null,
+    isClosed || stageIndex >= 3 ? closedAt || updatedAt : null,
+    lead.status === "wygrana" || stageIndex >= 4 ? closedAt || updatedAt : null,
   ];
+}
+
+function leadClosedAt(lead: Lead) {
+  const isClosed = lead.status === "wygrana" || lead.status === "przegrana" || lead.etap === "zamknieta";
+  if (!isClosed) return null;
+  return parseDate(lead.zamknieta_at) || parseDate(lead.updated_at);
 }
 
 function formatLeadTimingShort(lead: Lead) {

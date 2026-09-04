@@ -184,7 +184,7 @@ function BudgetContent() {
       fetchCfoCostsRange(monthToDate(historyStart), monthEndDate(forecastEnd)),
       fetchCfoEmployeeCostsRange(monthToDate(historyStart), monthEndDate(forecastEnd)),
       fetchCfoBankTransactionsRange(monthToDate(historyStart), monthEndDate(forecastEnd)),
-      fetchCfoBudgetOverrides(monthToDate(startMonth), monthEndDate(forecastEnd)),
+      fetchCfoBudgetOverrides(monthToDate(historyStart), monthEndDate(forecastEnd)),
       fetchCfoBudgetClientRevenues(),
       fetchCfoBudgetCrmRevenues(),
     ]);
@@ -235,7 +235,7 @@ function BudgetContent() {
       opis: `Korekta budżetu: ${categoryLabel("koszt", category)} / ${subcategory}`,
       kwota_plan: nextValue - plannedValue,
       kwota_cashflow: nextValue - plannedValue,
-      powtarzanie: "jednorazowo",
+      powtarzanie: "od_miesiaca",
       aktywne: true,
     });
     setSaving(false);
@@ -512,7 +512,7 @@ function buildBudgetMonths(
   const costHistoryMonths = monthsForRange(shiftMonth(startMonth, -3), 3);
   const revenueHistoryMonths = monthsForRange(shiftMonth(startMonth, -6), 6);
   const actualByMonth = buildActualMonthMap([...revenueHistoryMonths, ...months], revenueLines, costs, employees, bankTransactions);
-  const baseline = buildBaseline(revenueHistoryMonths, costHistoryMonths, actualByMonth);
+  const baseline = buildBaseline(revenueHistoryMonths, costHistoryMonths, actualByMonth, overrides);
   const crmForecast = buildCrmRevenueGrowthForecast(costHistoryMonths, months, crmRevenues);
   const budgetInvoices = buildBudgetInvoices(revenueLines);
   const invoiceIssueProfile = buildInvoiceIssueProfile(revenueLines);
@@ -1075,7 +1075,12 @@ function rollingAveragePreviousMonths(month: string, valuesByMonth: Map<string, 
   return sum(months.map((period) => valuesByMonth.get(period) || 0)) / windowSize;
 }
 
-function buildBaseline(revenueHistoryMonths: string[], costHistoryMonths: string[], actualByMonth: Map<string, ReturnType<typeof emptyActual>>) {
+function buildBaseline(
+  revenueHistoryMonths: string[],
+  costHistoryMonths: string[],
+  actualByMonth: Map<string, ReturnType<typeof emptyActual>>,
+  overrides: CfoBudgetOverride[],
+) {
   const revenue = new Map<string, number>();
   const costs = new Map<string, number>();
   const costSubcategoryTotals = new Map<string, Map<string, number>>();
@@ -1096,10 +1101,23 @@ function buildBaseline(revenueHistoryMonths: string[], costHistoryMonths: string
 
   costHistoryMonths.forEach((month) => {
     const actual = actualByMonth.get(month) || emptyActual();
+    const adjustedCostByCategory = new Map(actual.costByCategory);
+    const adjustedCostBySubcategory = cloneNestedMap(actual.costBySubcategory);
+
+    overrides
+      .filter((override) => override.typ === "koszt" && overrideApplies(override, month))
+      .forEach((override) => {
+        const category = override.kategoria as CfoCostCategory;
+        const subcategory = override.podkategoria || EMPTY_SUBCATEGORY;
+        const amount = Number(override.kwota_plan || 0);
+        adjustedCostByCategory.set(category, (adjustedCostByCategory.get(category) || 0) + amount);
+        upsertSubcategoryAmount(adjustedCostBySubcategory, category, subcategory, amount);
+      });
+
     COST_OPTIONS.forEach((option) => {
-      costs.set(option.value, (costs.get(option.value) || 0) + (actual.costByCategory.get(option.value) || 0) / costHistoryMonths.length);
+      costs.set(option.value, (costs.get(option.value) || 0) + Math.max(0, adjustedCostByCategory.get(option.value) || 0) / costHistoryMonths.length);
     });
-    actual.costBySubcategory.forEach((subcategories, category) => {
+    adjustedCostBySubcategory.forEach((subcategories, category) => {
       subcategories.forEach((value, subcategory) => {
         if (value <= 0) return;
         upsertSubcategoryAmount(costSubcategoryTotals, category as CfoCostCategory, subcategory, value);

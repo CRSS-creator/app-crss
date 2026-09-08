@@ -1,3 +1,4 @@
+import { collectCurrentCeidgPkdCodes } from "@/lib/ceidgPkd";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { existsSync, readFileSync } from "node:fs";
@@ -823,7 +824,11 @@ function collectPkdCodes(...checks: Array<OfficialCheck | null | undefined>): Pk
   for (const check of checks) {
     if (!check) continue;
     const source = check.source.includes("KRS") ? "KRS" : check.source;
-    const extracted = source === "KRS" ? extractKrsPkdCodes(check.details) : extractPkdCodes(check.details, source);
+    const extracted = source === "KRS"
+      ? extractKrsPkdCodes(check.details)
+      : source === "CEIDG"
+        ? collectCurrentCeidgPkdCodes(check.details)
+        : extractPkdCodes(check.details, source);
     for (const item of extracted) {
       const key = `${item.zrodlo}:${item.kod}`;
       const existing = codes.get(key);

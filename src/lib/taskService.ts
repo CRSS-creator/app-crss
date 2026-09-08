@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabaseClient";
+import { correctionAsTimeEntry, saveTaskTotalTime } from "@/lib/taskTimeCorrections";
 
 export type TaskStatus = "do_zrobienia" | "w_trakcie" | "zrobione" | "anulowane";
 export type TaskPriority = "niski" | "normalny" | "wysoki" | "pilne";
@@ -36,6 +37,7 @@ export type Task = {
 };
 
 export type TimeEntry = {
+  is_time_correction?: boolean;
   id: string;
   zadanie_id: string | null;
   zadanie_cykliczne_id: string | null;
@@ -178,11 +180,16 @@ export async function deleteTask(taskId: string) {
 }
 
 export async function fetchTaskTimeEntries(taskId: string) {
-  return supabase
-    .from("czas_pracy")
-    .select(TIME_ENTRY_SELECT)
-    .eq("zadanie_id", taskId)
-    .order("started_at", { ascending: false });
+  const [entries, corrections] = await Promise.all([
+    supabase.from("czas_pracy").select(TIME_ENTRY_SELECT)
+      .eq("zadanie_id", taskId).order("started_at", { ascending: false }),
+    supabase.from("korekty_czasu_zadan").select("*").eq("zadanie_id", taskId),
+  ]);
+  if (entries.error || corrections.error) return { data: null, error: entries.error || corrections.error };
+  return {
+    data: [...(entries.data || []), ...(corrections.data || []).map(correctionAsTimeEntry)],
+    error: null,
+  };
 }
 
 export async function fetchUserTimeEntriesForDay(userId: string, dayStartIso: string, dayEndIso: string) {
@@ -222,54 +229,9 @@ export async function createManualTimeEntry(
     .single<TimeEntry>();
 }
 
-export async function setTaskManualTime(taskId: string, userId: string, totalSeconds: number) {
-  const taskResult = await supabase
-    .from("zadania")
-    .select("klient_id, czy_wewnetrzne")
-    .eq("id", taskId)
-    .single();
-
-  if (taskResult.error) {
-    return { data: null, error: taskResult.error };
-  }
-
-  const deleteResult = await supabase
-    .from("czas_pracy")
-    .delete()
-    .eq("zadanie_id", taskId)
-    .eq("osoba_id", userId)
-    .not("ended_at", "is", null);
-
-  if (deleteResult.error) {
-    return { data: null, error: deleteResult.error };
-  }
-
-  const normalizedSeconds = Math.max(0, Math.floor(totalSeconds));
-  if (normalizedSeconds > 0) {
-    const endedAt = new Date();
-    const startedAt = new Date(endedAt.getTime() - normalizedSeconds * 1000);
-    const isInternal = Boolean(taskResult.data?.czy_wewnetrzne);
-    const clientId = isInternal ? null : taskResult.data?.klient_id || null;
-
-    const insertResult = await supabase
-      .from("czas_pracy")
-      .insert({
-        zadanie_id: taskId,
-        klient_id: clientId,
-        czy_wewnetrzne: isInternal,
-        osoba_id: userId,
-        started_at: startedAt.toISOString(),
-        ended_at: endedAt.toISOString(),
-        opis: "Ręczna korekta czasu",
-      })
-      .select(TIME_ENTRY_SELECT)
-      .single();
-
-    if (insertResult.error) {
-      return { data: null, error: insertResult.error };
-    }
-  }
-
+export async function setTaskManualTime(taskId: string, _userId: string, totalSeconds: number) {
+  const result = await saveTaskTotalTime(taskId, totalSeconds);
+  if (result.error) return { data: null, error: result.error };
   return fetchTaskTimeEntries(taskId);
 }
 

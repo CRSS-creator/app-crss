@@ -748,6 +748,7 @@ function formatDuration(totalSeconds: number) {
   return `${hours}h ${String(minutes).padStart(2, "0")}m`;
 }
 function getTimeEntrySeconds(entry: TimeEntry) {
+  if (entry.is_time_correction) return Number(entry.duration_seconds || 0);
   if (entry.duration_seconds !== null && entry.duration_seconds !== undefined) return Math.max(0, entry.duration_seconds);
   if (!entry.ended_at) return 0;
   return Math.max(0, Math.round((new Date(entry.ended_at).getTime() - new Date(entry.started_at).getTime()) / 1000));

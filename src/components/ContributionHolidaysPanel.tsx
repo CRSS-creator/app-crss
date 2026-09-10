@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { MailCheck } from "lucide-react";
+import { supabase } from "@/lib/supabaseClient";
 import AppSelect from "@/components/AppSelect";
 import { colors, radius } from "@/app/design";
 import {
@@ -24,6 +25,9 @@ export default function ContributionHolidaysPanel({ clients, loading: clientsLoa
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
   const saveLock = useRef(false);
+  const sendLock = useRef(false);
+  const [sending, setSending] = useState(false);
+  const [sendResult, setSendResult] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -52,6 +56,36 @@ export default function ContributionHolidaysPanel({ clients, loading: clientsLoa
   const selectedVisible = visible.filter(client => selected.includes(client.id));
   const allSelected = visible.length > 0 && selectedVisible.length === visible.length;
 
+  async function send() {
+    if (sendLock.current || loading || clientsLoading) return;
+    if (!selectedVisible.length) { setSendResult("Zaznacz klientów, do których chcesz wysłać powiadomienie."); return; }
+    if (!window.confirm(`Wysłać powiadomienie o wakacjach składkowych za ${year} rok do ${selectedVisible.length} zaznaczonych klientów? Adresy będą ukryte w UDW.`)) return;
+    sendLock.current = true;
+    setSending(true);
+    setSendResult("");
+    try {
+      const { data } = await supabase.auth.getSession();
+      if (!data.session) throw new Error("Sesja wygasła. Zaloguj się ponownie.");
+      const response = await fetch("/api/komunikaty/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.session.access_token}` },
+        body: JSON.stringify({ kind: "contribution_holidays", year, clientIds: selectedVisible.map(client => client.id) }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Nie udało się potwierdzić wysyłki.");
+      setSelected([]);
+      setSendResult(result.warning || `Wysłano na ${result.sent} adresów e-mail. Pominięto klientów bez adresu: ${result.skipped}.`);
+      const history = await fetchContributionHolidayNotifications(year);
+      setNotifications(history.data || []);
+      setNotificationError(history.error ? "Nie udało się odświeżyć historii powiadomień." : "");
+    } catch (error) {
+      setSendResult(error instanceof Error ? error.message : "Nie udało się potwierdzić wysyłki. Sprawdź historię n8n przed ponowieniem.");
+    } finally {
+      sendLock.current = false;
+      setSending(false);
+    }
+  }
+
   async function save(clientId: string, field: "skorzystal" | "moze_skorzystac", value: string) {
     if (saveLock.current || loading || error) return;
     saveLock.current = true;
@@ -77,11 +111,13 @@ export default function ContributionHolidaysPanel({ clients, loading: clientsLoa
   }
 
   return (
-    <div>
+    <form id="contribution-holidays-send" onSubmit={event => { event.preventDefault(); void send(); }}>
+      {sending && <p role="status">Wysyłanie powiadomienia…</p>}
+      {sendResult && <p role="status" style={{ margin: "16px 24px" }}>{sendResult}</p>}
       <div style={controlsStyle}>
         <div style={{ ...labelStyle, width: "112px" }}>
           <span>Rok</span>
-          <AppSelect style={selectStyle} value={String(year)} disabled={saving !== null}
+          <AppSelect style={selectStyle} value={String(year)} disabled={sending || saving !== null}
             options={Array.from({ length: currentYear - 2024 + 2 }, (_, index) => ({ value: String(2024 + index), label: String(2024 + index) }))}
             onChange={value => { if (Number(value) === year) return; setLoading(true); setRecords([]); setNotifications([]); setSelected([]); setError(""); setNotificationError(""); setYear(Number(value)); }} />
         </div>
@@ -125,7 +161,7 @@ export default function ContributionHolidaysPanel({ clients, loading: clientsLoa
           {visible.length === 0 && <p style={{ color: colors.muted }}>Brak klientów spełniających wybrane kryteria.</p>}
         </div>
       )}
-    </div>
+    </form>
   );
 }
 

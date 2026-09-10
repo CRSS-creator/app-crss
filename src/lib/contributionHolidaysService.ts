@@ -13,6 +13,7 @@ export type ContributionHolidayClient = {
   nip: string | null;
   forma_prawna: string | null;
   schemat_zus: string | null;
+  profiles?: { full_name: string | null; email: string | null } | { full_name: string | null; email: string | null }[] | null;
 };
 
 export function isContributionHolidayClient(client: ContributionHolidayClient) {

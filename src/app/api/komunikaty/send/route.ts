@@ -11,6 +11,8 @@ type AuthorizedResult =
   | { admin: null; requesterId: null; requesterName?: null; role: null; error: NextResponse };
 
 type BulkNotificationPayload = {
+  kind?: "contribution_holidays";
+  year?: number;
   clientIds?: string[];
   subject?: string;
   message?: string;
@@ -247,8 +249,12 @@ export async function POST(request: NextRequest) {
   }
 
   const clientIds = Array.isArray(payload.clientIds) ? payload.clientIds.filter(Boolean) : [];
-  const subject = payload.subject?.trim() || "";
-  const message = payload.message?.trim() || "";
+  const isHoliday = payload.kind === "contribution_holidays";
+  if (isHoliday && (!Number.isInteger(payload.year) || payload.year! < 2000 || payload.year! > 2100)) {
+    return NextResponse.json({ error: "Wybierz prawidłowy rok." }, { status: 400 });
+  }
+  const subject = isHoliday ? `Wakacje składkowe ${payload.year} — zwolnienie z części składek ZUS` : payload.subject?.trim() || "";
+  const message = isHoliday ? "Dzień dobry,\n\nprzypominamy o możliwości skorzystania z **wakacji składkowych**, czyli zwolnienia z opłacania własnych składek na ubezpieczenia społeczne, w tym dobrowolne ubezpieczenie chorobowe, za **jeden wybrany miesiąc w roku**, po spełnieniu warunków uprawniających do ulgi.\n\n**Ważne: wakacje składkowe nie obejmują składki na ubezpieczenie zdrowotne — należy ją opłacić w pełnej wysokości.**\n\nAby skorzystać ze zwolnienia, należy złożyć elektroniczny wniosek do ZUS za pośrednictwem platformy eZUS/PUE ZUS. Wniosek można złożyć samodzielnie lub zlecić jego przygotowanie i złożenie naszemu biuru. **Koszt obsługi wynosi 150 zł netto za wniosek.**\n\nJeśli chcą Państwo skorzystać z wakacji składkowych, prosimy o kontakt ze swoim opiekunem." : payload.message?.trim() || "";
 
   if (clientIds.length === 0) return NextResponse.json({ error: "Wybierz co najmniej jednego klienta." }, { status: 400 });
   if (!subject) return NextResponse.json({ error: "Uzupełnij temat wiadomości." }, { status: 400 });
@@ -263,6 +269,7 @@ export async function POST(request: NextRequest) {
       email,
       telefon,
       forma_prawna,
+      schemat_zus,
       forma_opodatkowania,
       status_klienta,
       opiekun_id,
@@ -278,6 +285,13 @@ export async function POST(request: NextRequest) {
   }
 
   const allowedClients = (clients || []).filter((client) => auth.role !== "accountant" || client.opiekun_id === auth.requesterId);
+  if (isHoliday && (allowedClients.length !== new Set(clientIds).size || allowedClients.some(client => {
+    const form = (client.forma_prawna || "").trim().toLowerCase();
+    const scheme = (client.schemat_zus || "").trim().toLowerCase().replace(/\s+/g, " ");
+    return !(form === "jdg" || form.includes("jednoosob")) || scheme === "ulga na start" || scheme === "brak zus";
+  }))) {
+    return NextResponse.json({ error: "Lista zawiera niedostępnych klientów lub klientów spoza wakacji składkowych. Odśwież listę." }, { status: 403 });
+  }
   const skippedCount = allowedClients.filter((client) => splitEmails(client.email).length === 0).length;
   const recipients = uniqueRecipients(allowedClients.flatMap((client) =>
     splitEmails(client.email).map((email) => ({ client, email }))
@@ -350,7 +364,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  await auth.admin
+  const { error: bulkHistoryError } = await auth.admin
     .from("komunikaty_historia")
     .insert({
       sent_by: auth.requesterId,
@@ -361,10 +375,24 @@ export async function POST(request: NextRequest) {
       recipients: recipients.map(historyRecipient),
       skipped_count: skippedCount,
       failed_count: 0,
-      filter_snapshot: payload.filterSnapshot || {},
+      filter_snapshot: isHoliday ? { kind: "contribution_holidays", year: payload.year } : payload.filterSnapshot || {},
     });
 
+  let holidayHistoryError = false;
+  if (isHoliday) {
+    // Keep every client, including clients sharing one deduplicated BCC address.
+    const { error } = await auth.admin.from("kadry_wakacje_skladkowe_powiadomienia").insert(
+      allowedClients.filter(client => splitEmails(client.email).length > 0).map(client => ({
+        klient_id: client.id, rok: payload.year, sent_at: new Date().toISOString(),
+        sent_by: auth.requesterId, sent_by_name: auth.requesterName,
+      }))
+    );
+    holidayHistoryError = Boolean(error);
+  }
   return NextResponse.json({
+    warning: bulkHistoryError || holidayHistoryError
+      ? "Wiadomość wysłano, ale nie udało się zapisać pełnej historii. Nie ponawiaj wysyłki; zgłoś problem administratorowi."
+      : null,
     sent: recipients.length,
     skipped: skippedCount,
     diagnostics,

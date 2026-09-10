@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Archive, CalendarDays, Check, ChevronLeft, ChevronRight, History as HistoryIcon, Pencil, Plus, Save, Send, X } from "lucide-react";
 import AccessGuard from "@/components/AccessGuard";
+import ContributionHolidaysPanel from "@/components/ContributionHolidaysPanel";
 import AppLayout from "@/components/AppLayout";
 import AppSelect from "@/components/AppSelect";
 import { colors, radius, shadow } from "@/app/design";
@@ -41,7 +42,7 @@ import {
   type ZusContributionRate,
 } from "@/lib/zusContributionRatesService";
 
-type PayrollTab = "kadry" | "a1" | "zus_przedsiebiorcy";
+type PayrollTab = "kadry" | "a1" | "zus_przedsiebiorcy" | "wakacje_skladkowe";
 
 type PayrollTabDefinition = {
   value: PayrollTab;
@@ -105,6 +106,7 @@ const PAYROLL_TABS: PayrollTabDefinition[] = [
   { value: "kadry", label: "Kadry" },
   { value: "a1", label: "A1" },
   { value: "zus_przedsiebiorcy", label: "ZUS Przedsiębiorcy" },
+  { value: "wakacje_skladkowe", label: "Wakacje składkowe" },
 ];
 
 const CONTRACT_TYPE_OPTIONS: { value: PayrollContractType; label: string }[] = [
@@ -427,6 +429,11 @@ function PayrollContent() {
             <h2 style={sectionTitleStyle}>{tab.label}</h2>
             <p style={sectionHintStyle}>{tabHint(activeTab)}</p>
           </div>
+          {activeTab === "wakacje_skladkowe" && (
+            <button type="button" disabled style={{ ...primaryButtonStyle, opacity: 0.55, cursor: "not-allowed" }} title="Treść powiadomienia zostanie ustalona w kolejnym kroku">
+              <Send size={18} /> Wyślij powiadomienie
+            </button>
+          )}
           {activeTab === "a1" && (
             <button type="button" onClick={() => setShowA1AddForm((value) => !value)} style={primaryButtonStyle}>
               <Plus size={18} /> Dodaj klienta
@@ -509,7 +516,9 @@ function PayrollContent() {
           </div>
         )}
 
-        {activeTab === "kadry" ? (
+        {activeTab === "wakacje_skladkowe" ? (
+          <ContributionHolidaysPanel clients={clients} loading={loading} />
+        ) : activeTab === "kadry" ? (
           <PayrollClientsTable
             clients={filteredClients}
             contractsByClient={contractsByClient}
@@ -2262,6 +2271,7 @@ function buildA1Totals(krajowy: number, zagraniczny: number): A1Totals {
 }
 
 function tabHint(tab: PayrollTab) {
+  if (tab === "wakacje_skladkowe") return "Roczny rejestr JDG, z wyłączeniem schematów Ulga na start i Brak ZUS.";
   if (tab === "kadry") return "Klienci z zaznaczoną obsługą kadrową.";
   if (tab === "a1") return "Obsługa zaświadczeń A1.";
   return "JDG ze schematem ZUS przedsiębiorcy.";

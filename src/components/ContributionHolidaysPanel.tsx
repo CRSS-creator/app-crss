@@ -89,7 +89,7 @@ export default function ContributionHolidaysPanel({ clients, loading: clientsLoa
           value={search} onChange={event => setSearch(event.target.value)} />
         <span style={{ color: colors.muted, fontSize: "13px" }}>Zaznaczono: {selectedVisible.length}</span>
       </div>
-      <p style={{ color: colors.muted, fontSize: "13px", margin: "0 24px 18px" }}>Statusy uzupełniamy osobno dla każdego roku. Wysyłka powiadomień będzie dostępna po ustaleniu treści.</p>
+      <p style={{ color: colors.muted, fontSize: "13px", margin: "0 24px 18px" }}>Wybierz rok i uzupełnij status wakacji składkowych dla każdego klienta.</p>
       {error && <p role="alert" style={{ color: colors.danger }}>{error}</p>}
       {notificationError && <p role="alert" style={{ color: colors.danger }}>{notificationError}</p>}
       {loading || clientsLoading ? <p>Ładowanie klientów...</p> : (
@@ -112,10 +112,10 @@ export default function ContributionHolidaysPanel({ clients, loading: clientsLoa
                 </td>
                 <td style={cellStyle}>{client.schemat_zus || "Nie ustawiono"}</td>
                 {(["skorzystal", "moze_skorzystac"] as const).map(field => <td key={field} style={cellStyle}>
-                  <AppSelect style={selectStyle}
+                  <AppSelect style={{ ...selectStyle, ...(record?.[field] === true ? { background: "rgba(22, 163, 74, 0.12)", borderColor: "rgba(22, 163, 74, 0.24)" } : record?.[field] === false ? { background: "rgba(239, 68, 68, 0.12)", borderColor: "rgba(239, 68, 68, 0.24)" } : {}) }}
                     value={record?.[field] == null ? "" : String(record[field])} disabled={saving !== null || Boolean(error)}
                     onChange={value => void save(client.id, field, value)}
-                    options={[{ value: "", label: "Nie ustalono" }, { value: "true", label: "Tak" }, { value: "false", label: "Nie" }]} />
+                    options={[{ value: "", label: "Nie ustalono" }, { value: "true", label: "TAK", tone: "success" }, { value: "false", label: "NIE", tone: "danger" }]} />
                   {saving === client.id && <span style={{ fontSize: "12px", color: colors.muted }}>Zapisywanie...</span>}
                 </td>)}
                 <td style={{ ...cellStyle, textAlign: "center" }}><NotificationStatus notification={notifications.find(item => item.klient_id === client.id)} error={Boolean(notificationError)} /></td>

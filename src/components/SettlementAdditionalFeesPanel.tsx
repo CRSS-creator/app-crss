@@ -5,7 +5,7 @@ import { colors, radius } from "@/app/design";
 import {
   createSettlementAdditionalFee,
   deleteSettlementAdditionalFee,
-  fetchAdditionalFeeDefinitions,
+  fetchAvailableSettlementFeeDefinitions,
   fetchLateDocumentsFeeSettlement,
   fetchSettlementAdditionalFees,
   syncLateDocumentsAdditionalFee,
@@ -29,33 +29,37 @@ export default function SettlementAdditionalFeesPanel({ settlement, settlementId
   const effectiveSettlementId = (settlement?.id || settlementId) as string;
 
   useEffect(() => {
-    loadFees();
-  }, [effectiveSettlementId, settlement?.data_dostarczenia_dokumentow, settlement?.klienci]);
-
-  async function loadFees() {
-    setLoading(true);
-    let syncSettlement: LateDocumentsFeeSettlement | null = settlement || null;
-    if (!syncSettlement) {
-      const settlementResult = await fetchLateDocumentsFeeSettlement(effectiveSettlementId);
-      if (settlementResult.error) console.error("Blad pobierania rozliczenia do oplaty za nieterminowe dokumenty:", settlementResult.error);
-      syncSettlement = (settlementResult.data || null) as LateDocumentsFeeSettlement | null;
+    let cancelled = false;
+    async function loadFees() {
+      setLoading(true);
+      setDefinitions([]);
+      let syncSettlement: LateDocumentsFeeSettlement | null = settlement || null;
+      if (!syncSettlement) {
+        const settlementResult = await fetchLateDocumentsFeeSettlement(effectiveSettlementId);
+        if (settlementResult.error) console.error("Blad pobierania rozliczenia do oplaty za nieterminowe dokumenty:", settlementResult.error);
+        syncSettlement = (settlementResult.data || null) as LateDocumentsFeeSettlement | null;
+      }
+      const syncResult = syncSettlement ? await syncLateDocumentsAdditionalFee(syncSettlement) : { error: null };
+      if (syncResult.error) console.error("Błąd synchronizacji opłaty za nieterminowe dokumenty:", syncResult.error);
+      const [definitionsResult, feesResult] = await Promise.all([
+        fetchAvailableSettlementFeeDefinitions(effectiveSettlementId),
+        fetchSettlementAdditionalFees(effectiveSettlementId),
+      ]);
+      if (definitionsResult.error) console.error("Błąd pobierania słownika opłat:", definitionsResult.error);
+      if (feesResult.error) console.error("Błąd pobierania opłat rozliczenia:", feesResult.error);
+      if (cancelled) return;
+      const loadedFees = (feesResult.data || []) as SettlementAdditionalFee[];
+      setDefinitions((definitionsResult.data || []) as AdditionalFeeDefinition[]);
+      setFees(loadedFees);
+      setNotesDraft(Object.fromEntries(loadedFees.map((fee) => [fee.id, fee.uwagi || ""])));
+      setLoading(false);
     }
-    const syncResult = syncSettlement ? await syncLateDocumentsAdditionalFee(syncSettlement) : { error: null };
-    if (syncResult.error) console.error("Błąd synchronizacji opłaty za nieterminowe dokumenty:", syncResult.error);
-    const [definitionsResult, feesResult] = await Promise.all([
-      fetchAdditionalFeeDefinitions(false),
-      fetchSettlementAdditionalFees(effectiveSettlementId),
-    ]);
-    if (definitionsResult.error) console.error("Błąd pobierania słownika opłat:", definitionsResult.error);
-    if (feesResult.error) console.error("Błąd pobierania opłat rozliczenia:", feesResult.error);
-    const loadedFees = (feesResult.data || []) as SettlementAdditionalFee[];
-    setDefinitions((definitionsResult.data || []) as AdditionalFeeDefinition[]);
-    setFees(loadedFees);
-    setNotesDraft(Object.fromEntries(loadedFees.map((fee) => [fee.id, fee.uwagi || ""])));
-    setLoading(false);
-  }
+    void loadFees();
+    return () => { cancelled = true; };
+  }, [effectiveSettlementId, settlement]);
 
   async function addFee(definition: AdditionalFeeDefinition) {
+    if (loading || !definitions.some((item) => item.id === definition.id)) return;
     setSavingId(definition.id);
     const result = await createSettlementAdditionalFee({
       rozliczenie_id: effectiveSettlementId,
@@ -132,12 +136,12 @@ export default function SettlementAdditionalFeesPanel({ settlement, settlementId
 
       <div style={searchBoxStyle}>
         <input style={inputStyle} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Szukaj opłaty dodatkowej" />
-        {search && suggestions.length > 0 && (
+        {!loading && search && suggestions.length > 0 && (
           <div style={suggestionsStyle}>
             {suggestions.map((definition) => (
               <button key={definition.id} type="button" style={suggestionButtonStyle} disabled={savingId === definition.id} onClick={() => addFee(definition)}>
                 <span>{definition.nazwa}</span>
-                <strong>{formatMoney(definition.domyslna_kwota_netto)}</strong>
+                <span style={{ fontWeight: 500, whiteSpace: "nowrap" }}>{formatMoney(definition.domyslna_kwota_netto)}</span>
               </button>
             ))}
           </div>
@@ -188,7 +192,7 @@ const inputStyle: CSSProperties = { width: "100%", border: `1px solid ${colors.b
 const financialInputStyle: CSSProperties = { ...inputStyle, background: colors.white };
 const notesTextareaStyle: CSSProperties = { ...inputStyle, background: colors.white, minHeight: "52px", resize: "vertical", lineHeight: 1.45 };
 const suggestionsStyle: CSSProperties = { position: "absolute", zIndex: 4, inset: "calc(100% + 6px) 0 auto 0", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, boxShadow: "0 18px 44px rgba(23, 59, 115, 0.16)", padding: "8px", display: "grid", gap: "6px" };
-const suggestionButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, color: colors.text, padding: "9px 10px", textAlign: "left", cursor: "pointer", display: "flex", justifyContent: "space-between", gap: "10px", fontWeight: 800 };
+const suggestionButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, color: colors.text, padding: "9px 10px", textAlign: "left", cursor: "pointer", display: "flex", justifyContent: "space-between", gap: "10px", fontWeight: 400, fontSize: "14px", lineHeight: 1.4, alignItems: "flex-start" };
 const emptyStateStyle: CSSProperties = { padding: "16px", borderRadius: radius.input, background: colors.inputBackground, border: `1px dashed ${colors.border}`, color: colors.muted, textAlign: "center", fontWeight: 800 };
 const listStyle: CSSProperties = { display: "grid", gap: "10px" };
 const itemStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "12px", display: "grid", gap: "10px" };

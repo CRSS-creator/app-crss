@@ -48,7 +48,7 @@ export default function ContributionHolidaysPanel({ clients, loading: clientsLoa
 
   const query = search.trim().toLowerCase();
   const eligible = clients.filter(isContributionHolidayClient);
-  const visible = eligible.filter(client => [client.nazwa, client.nip, client.schemat_zus].join(" ").toLowerCase().includes(query));
+  const visible = eligible.filter(client => [client.nazwa, client.nip, client.schemat_zus, caregiverLabel(client)].join(" ").toLowerCase().includes(query));
   const selectedVisible = visible.filter(client => selected.includes(client.id));
   const allSelected = visible.length > 0 && selectedVisible.length === visible.length;
 
@@ -77,7 +77,7 @@ export default function ContributionHolidaysPanel({ clients, loading: clientsLoa
   }
 
   return (
-    <div style={{ padding: "22px 24px 24px" }}>
+    <div>
       <div style={controlsStyle}>
         <div style={{ ...labelStyle, width: "112px" }}>
           <span>Rok</span>
@@ -85,29 +85,31 @@ export default function ContributionHolidaysPanel({ clients, loading: clientsLoa
             options={Array.from({ length: currentYear - 2024 + 2 }, (_, index) => ({ value: String(2024 + index), label: String(2024 + index) }))}
             onChange={value => { if (Number(value) === year) return; setLoading(true); setRecords([]); setNotifications([]); setSelected([]); setError(""); setNotificationError(""); setYear(Number(value)); }} />
         </div>
-        <input type="search" aria-label="Szukaj klienta" placeholder="Szukaj klienta, NIP lub schematu ZUS" style={{ ...inputStyle, flex: 1, minWidth: "220px" }}
+        <input type="search" aria-label="Szukaj klienta" placeholder="Szukaj klienta, NIP, opiekuna" style={{ ...inputStyle, flex: 1, minWidth: "220px" }}
           value={search} onChange={event => setSearch(event.target.value)} />
         <span style={{ color: colors.muted, fontSize: "13px" }}>Zaznaczono: {selectedVisible.length}</span>
       </div>
-      <p style={{ color: colors.muted, fontSize: "13px", margin: "0 0 16px" }}>Statusy uzupełniamy osobno dla każdego roku. Wysyłka powiadomień będzie dostępna po ustaleniu treści.</p>
+      <p style={{ color: colors.muted, fontSize: "13px", margin: "0 24px 18px" }}>Statusy uzupełniamy osobno dla każdego roku. Wysyłka powiadomień będzie dostępna po ustaleniu treści.</p>
       {error && <p role="alert" style={{ color: colors.danger }}>{error}</p>}
       {notificationError && <p role="alert" style={{ color: colors.danger }}>{notificationError}</p>}
       {loading || clientsLoading ? <p>Ładowanie klientów...</p> : (
         <div style={{ overflowX: "auto" }}>
           <table style={tableStyle}>
-            <colgroup><col style={{ width: "42px" }} /><col /><col style={{ width: "120px" }} /><col style={{ width: "160px" }} /><col style={{ width: "165px" }} /><col style={{ width: "165px" }} /><col style={{ width: "220px" }} /></colgroup>
+            <colgroup><col style={{ width: "42px" }} /><col /><col style={{ width: "160px" }} /><col style={{ width: "165px" }} /><col style={{ width: "165px" }} /><col style={{ width: "220px" }} /></colgroup>
             <thead><tr>
-              <th style={headCellStyle}><input type="checkbox" aria-label="Zaznacz wszystkich widocznych klientów" checked={allSelected} disabled={visible.length === 0}
+              <th style={{ ...headCellStyle, textAlign: "center" }}><input style={checkboxStyle} type="checkbox" aria-label="Zaznacz wszystkich widocznych klientów" checked={allSelected} disabled={visible.length === 0}
                 onChange={event => setSelected(current => event.target.checked ? Array.from(new Set([...current, ...visible.map(c => c.id)])) : current.filter(id => !visible.some(c => c.id === id)))} /></th>
-              {["Klient", "NIP", "Schemat ZUS", "Czy już skorzystał", "Czy może skorzystać", "Powiadomienie"].map(label => <th key={label} style={headCellStyle}>{label}</th>)}
+              {["Klient", "Schemat ZUS", "Czy już skorzystał", "Czy może skorzystać", "Powiadomienie"].map(label => <th key={label} style={{ ...headCellStyle, textAlign: label === "Klient" || label === "Schemat ZUS" ? "left" : "center" }}>{label}</th>)}
             </tr></thead>
             <tbody>{visible.map(client => {
               const record = records.find(row => row.klient_id === client.id);
               return <tr key={client.id}>
-                <td style={cellStyle}><input type="checkbox" aria-label={`Zaznacz ${client.nazwa || "klienta"}`} checked={selected.includes(client.id)}
+                <td style={{ ...cellStyle, textAlign: "center" }}><input style={checkboxStyle} type="checkbox" aria-label={`Zaznacz ${client.nazwa || "klienta"}`} checked={selected.includes(client.id)}
                   onChange={event => setSelected(current => event.target.checked ? [...current, client.id] : current.filter(id => id !== client.id))} /></td>
-                <td style={{ ...cellStyle, fontWeight: 500, overflowWrap: "anywhere" }}>{client.nazwa || "Klient bez nazwy"}</td>
-                <td style={{ ...cellStyle, whiteSpace: "nowrap" }}>{client.nip || "—"}</td>
+                <td style={cellStyle}>
+                  <strong style={clientNameStyle}>{client.nazwa || "Klient bez nazwy"}</strong>
+                  <span style={clientMetaStyle}>{client.nip || "Brak NIP"} · {caregiverLabel(client)}</span>
+                </td>
                 <td style={cellStyle}>{client.schemat_zus || "Nie ustawiono"}</td>
                 {(["skorzystal", "moze_skorzystac"] as const).map(field => <td key={field} style={cellStyle}>
                   <AppSelect style={selectStyle}
@@ -116,7 +118,7 @@ export default function ContributionHolidaysPanel({ clients, loading: clientsLoa
                     options={[{ value: "", label: "Nie ustalono" }, { value: "true", label: "Tak" }, { value: "false", label: "Nie" }]} />
                   {saving === client.id && <span style={{ fontSize: "12px", color: colors.muted }}>Zapisywanie...</span>}
                 </td>)}
-                <td style={cellStyle}><NotificationStatus notification={notifications.find(item => item.klient_id === client.id)} error={Boolean(notificationError)} /></td>
+                <td style={{ ...cellStyle, textAlign: "center" }}><NotificationStatus notification={notifications.find(item => item.klient_id === client.id)} error={Boolean(notificationError)} /></td>
               </tr>;
             })}</tbody>
           </table>
@@ -129,9 +131,9 @@ export default function ContributionHolidaysPanel({ clients, loading: clientsLoa
 
 function NotificationStatus({ notification, error }: { notification?: ContributionHolidayNotification; error: boolean }) {
   if (error) return <span style={{ color: colors.muted, fontSize: "13px" }}>Brak danych</span>;
-  if (!notification) return <span style={{ color: colors.muted, fontSize: "13px" }}>Nie wysłano</span>;
+  if (!notification) return <span style={missingStyle}>Nie wysłano</span>;
   const date = new Intl.DateTimeFormat("pl-PL", { dateStyle: "short", timeStyle: "short", timeZone: "Europe/Warsaw" }).format(new Date(notification.sent_at));
-  return <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+  return <div style={{ display: "inline-flex", alignItems: "center", gap: "10px" }}>
     <span title="Powiadomienie wysłane" style={{ display: "inline-flex", padding: "8px", background: "#e9f7ef", borderRadius: "10px", color: colors.success, flexShrink: 0 }}>
       <MailCheck size={20} aria-label="Wysłano" />
     </span>
@@ -142,11 +144,19 @@ function NotificationStatus({ notification, error }: { notification?: Contributi
   </div>;
 }
 
-const controlsStyle: CSSProperties = { display: "flex", flexWrap: "wrap", alignItems: "end", gap: "14px", marginBottom: "14px" };
-const labelStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "6px", fontSize: "13px", color: colors.muted };
-const inputStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, padding: "9px 10px", minHeight: "40px", fontSize: "14px", fontWeight: 400 };
-const tableStyle: CSSProperties = { width: "100%", minWidth: "1200px", tableLayout: "fixed", borderCollapse: "collapse", fontSize: "14px", color: colors.text };
-const cellStyle: CSSProperties = { padding: "12px 10px", borderBottom: `1px solid ${colors.border}`, textAlign: "left", fontWeight: 400, verticalAlign: "middle" };
+function caregiverLabel(client: ContributionHolidayClient) {
+  const profile = Array.isArray(client.profiles) ? client.profiles[0] : client.profiles;
+  return profile?.full_name || profile?.email || "Brak opiekuna";
+}
 
-const selectStyle: CSSProperties = { minHeight: "40px", fontSize: "13px", fontWeight: 500, padding: "9px 11px" };
-const headCellStyle: CSSProperties = { ...cellStyle, background: colors.inputBackground, color: colors.muted, fontSize: "12px", fontWeight: 600, padding: "13px 10px" };
+const controlsStyle: CSSProperties = { display: "flex", flexWrap: "wrap", alignItems: "end", gap: "12px", padding: "18px 24px" };
+const labelStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: "6px", fontSize: "13px", color: colors.muted };
+const inputStyle: CSSProperties = { width: "100%", flex: "1 1 auto", minWidth: 0, border: `1px solid ${colors.border}`, borderRadius: radius.button, padding: "13px 16px", background: colors.inputBackground, color: colors.text, fontSize: "15px", fontWeight: 650, outline: "none" };
+const tableStyle: CSSProperties = { width: "100%", minWidth: "1100px", tableLayout: "fixed", borderCollapse: "collapse" };
+const cellStyle: CSSProperties = { padding: "16px 12px", borderBottom: `1px solid ${colors.border}`, color: colors.text, verticalAlign: "middle", fontSize: "14px", wordBreak: "break-word" };
+const headCellStyle: CSSProperties = { padding: "14px 12px", textAlign: "left", fontSize: "12px", color: colors.text, textTransform: "uppercase", letterSpacing: "0.08em", borderBottom: `1px solid ${colors.border}`, whiteSpace: "normal", lineHeight: 1.25 };
+const clientNameStyle: CSSProperties = { display: "block", color: colors.navy, fontSize: "15px", lineHeight: 1.35 };
+const clientMetaStyle: CSSProperties = { display: "block", marginTop: "4px", color: colors.muted, fontSize: "12px", fontWeight: 750 };
+const checkboxStyle: CSSProperties = { width: "18px", height: "18px", accentColor: colors.navy, cursor: "pointer" };
+const missingStyle: CSSProperties = { display: "inline-flex", alignItems: "center", minHeight: "30px", padding: "6px 10px", borderRadius: radius.badge, background: "rgba(100, 116, 139, 0.12)", color: colors.muted, fontSize: "12px", fontWeight: 850 };
+const selectStyle: CSSProperties = { minHeight: "38px", fontSize: "13px", fontWeight: 850, background: colors.white, padding: "9px 11px" };

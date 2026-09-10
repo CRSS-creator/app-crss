@@ -7,7 +7,7 @@ import { colors, radius, shadow } from "@/app/design";
 type SelectOption = {
   value: string;
   label: string;
-  tone?: "success" | "warning";
+  tone?: "success" | "warning" | "danger";
 };
 
 type MenuPosition = {
@@ -174,6 +174,7 @@ function optionSearchRank(option: SelectOption) {
 function optionToneStyle(tone: SelectOption["tone"]) {
   if (tone === "success") return successTextStyle;
   if (tone === "warning") return warningTextStyle;
+  if (tone === "danger") return { color: colors.red };
   return null;
 }
 

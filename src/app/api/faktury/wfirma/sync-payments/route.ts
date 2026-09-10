@@ -114,7 +114,7 @@ async function syncPayments(request: NextRequest) {
   let query = admin
     .from("faktury")
     .select("id,numer,data_wystawienia,termin_platnosci,okres,kontrahent_nip,kwota_netto,kwota_vat,kwota_brutto,wfirma_id,wfirma_pdf_path,wfirma_pdf_name,status")
-    .in("status", STATUSES_TO_CHECK)
+    .in("status", requestedMonth ? [...STATUSES_TO_CHECK, "oplacona"] : STATUSES_TO_CHECK)
     .neq("kategoria", "korekta")
     .not("wfirma_id", "is", null)
     .order("termin_platnosci", { ascending: true });
@@ -349,7 +349,7 @@ function findMatchingFinalWfirmaInvoice(invoice: InvoiceRow, candidates: WfirmaI
 
 function isDraftInvoiceNumber(invoice: WfirmaInvoice) {
   const number = stringify(invoice.fullnumber || invoice.number).toUpperCase();
-  return number.startsWith("WRF");
+  return normalizeText(invoice.type).includes("draft") || number.startsWith("WRF");
 }
 
 function isCorrectionInvoice(invoice: WfirmaInvoice) {
@@ -414,7 +414,7 @@ async function syncWfirmaInvoiceSnapshot(
   const updatedNumber = Boolean(invoiceNumber && invoiceNumber !== invoice.numer);
   let pdfResult: { path: string | null; name: string | null; error: string | null } | null = null;
 
-  if (nextWfirmaId && shouldRefreshPdf(invoice, invoiceNumber)) {
+  if (nextWfirmaId && !isDraftInvoiceNumber(wfirmaInvoice) && shouldRefreshPdf(invoice, invoiceNumber)) {
     pdfResult = await saveWfirmaInvoicePdf({
       admin,
       invoiceId: invoice.id,
@@ -481,7 +481,7 @@ function specialInvoicePaymentDate(invoice: InvoiceRow, syncedIssueDate?: string
 }
 
 function shouldRefreshPdf(invoice: InvoiceRow, invoiceNumber: string | null) {
-  if (!invoiceNumber) return !invoice.wfirma_pdf_path;
+  if (!invoiceNumber || invoiceNumber.trim().toUpperCase().startsWith("WRF")) return false;
   const expectedName = buildInvoicePdfName(invoiceNumber, stringify(invoice.wfirma_id));
   return !invoice.wfirma_pdf_path || invoice.wfirma_pdf_name !== expectedName;
 }

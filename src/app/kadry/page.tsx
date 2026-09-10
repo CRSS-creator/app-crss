@@ -430,7 +430,7 @@ function PayrollContent() {
             <p style={sectionHintStyle}>{tabHint(activeTab)}</p>
           </div>
           {activeTab === "wakacje_skladkowe" && (
-            <button type="button" disabled style={{ ...primaryButtonStyle, opacity: 0.55, cursor: "not-allowed" }} title="Treść powiadomienia zostanie ustalona w kolejnym kroku">
+            <button type="submit" form="contribution-holidays-send" style={primaryButtonStyle}>
               <Send size={18} /> Wyślij powiadomienie
             </button>
           )}

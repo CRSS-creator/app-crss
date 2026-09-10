@@ -35,7 +35,7 @@ const DEFAULT_ANNUAL_LIMITS: Record<LimitType, number> = {
 
 export async function fetchLimitRegisters() {
   return supabase
-    .from("limity_rejestry")
+    .from("limity_rejestry_aktywne")
     .select("*")
     .order("created_at", { ascending: false });
 }

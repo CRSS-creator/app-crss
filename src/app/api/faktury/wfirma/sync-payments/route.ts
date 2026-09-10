@@ -114,7 +114,7 @@ async function syncPayments(request: NextRequest) {
   let query = admin
     .from("faktury")
     .select("id,numer,data_wystawienia,termin_platnosci,okres,kontrahent_nip,kwota_netto,kwota_vat,kwota_brutto,wfirma_id,wfirma_pdf_path,wfirma_pdf_name,status")
-    .in("status", requestedMonth ? [...STATUSES_TO_CHECK, "oplacona"] : STATUSES_TO_CHECK)
+    .in("status", (requestedMonth || requestedInvoiceIds.length > 0) ? [...STATUSES_TO_CHECK, "oplacona"] : STATUSES_TO_CHECK)
     .neq("kategoria", "korekta")
     .not("wfirma_id", "is", null)
     .order("termin_platnosci", { ascending: true });
@@ -149,7 +149,7 @@ async function syncPayments(request: NextRequest) {
       const wfirmaInvoice = wfirmaInvoicesById.get(wfirmaId);
       if (!wfirmaInvoice) throw new Error("wFirma nie zwróciła danych tej faktury.");
 
-      if (requestedMonth) {
+      if (requestedMonth || requestedInvoiceIds.length > 0) {
         const syncResult = await syncWfirmaInvoiceSnapshot(admin, wfirma.config, invoice, wfirmaInvoice);
         if (syncResult.updatedNumber || syncResult.savedPdf) {
           refreshed.push({ invoiceId: invoice.id, number: syncResult.invoiceNumber, pdf: syncResult.savedPdf });

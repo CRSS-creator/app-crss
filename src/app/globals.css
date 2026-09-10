@@ -52,3 +52,15 @@ body > div [style*="position: fixed"][style*="zIndex: 50"] aside p {
 section[data-active-page="uzytkownicy"] span[style*="text-transform: lowercase"] {
   text-transform: none !important;
 }
+
+/* Numeric values are typed, without native increment/decrement controls. */
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}

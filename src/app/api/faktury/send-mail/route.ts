@@ -289,6 +289,7 @@ function buildInvoiceMailHtml(invoice: InvoiceMailRow) {
       </div>
       <p style="margin:0 0 16px 0;">Dzień dobry,</p>
       <p style="margin:0 0 16px 0;">w załączeniu przesyłamy fakturę <strong>${invoiceNumber}</strong> dla <strong>${clientName}</strong>.</p>
+      <p style="margin:0 0 16px 0;color:#c62828;font-weight:700;">Uwaga: zmienił się numer naszego rachunku bankowego. Prosimy o dokonanie płatności na numer rachunku wskazany na załączonej fakturze.</p>
       <div style="background:#eef3fb;border:1px solid #c9d6e8;border-radius:14px;padding:18px;margin:24px 0;">
         <p style="margin:0 0 8px 0;"><strong>Kwota brutto:</strong> ${amount}</p>
         <p style="margin:0;"><strong>Termin płatności:</strong> ${paymentDate}</p>

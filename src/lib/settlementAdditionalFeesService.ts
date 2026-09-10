@@ -65,6 +65,10 @@ export async function fetchAdditionalFeeDefinitions(includeInactive = false) {
   return query;
 }
 
+export async function fetchAvailableSettlementFeeDefinitions(settlementId: string) {
+  return supabase.rpc("available_settlement_fee_definitions", { public_settlement_id: settlementId });
+}
+
 export async function createAdditionalFeeDefinition(payload: AdditionalFeeDefinitionPayload) {
   return supabase
     .from("oplaty_dodatkowe")

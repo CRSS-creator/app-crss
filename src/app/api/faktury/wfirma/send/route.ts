@@ -3,7 +3,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAuthorizedServerUser } from "@/lib/serverAuth";
 import {
   addWfirmaInvoice,
-  downloadWfirmaInvoicePdf,
   extractWfirmaContractors,
   findWfirmaContractors,
   firstWfirmaInvoice,
@@ -11,7 +10,6 @@ import {
 } from "@/lib/wfirmaClient";
 
 const ALLOWED_ROLES = new Set(["owner", "admin"]);
-const INVOICE_PDF_BUCKET = "faktury-pdf";
 
 type SendPayload = {
   invoiceIds?: string[];
@@ -114,18 +112,7 @@ export async function POST(request: NextRequest) {
       createdWfirmaNumber = wfirmaNumber;
       createdWfirmaIssueDate = wfirmaIssueDate;
       createdPaymentDate = finalPaymentDate;
-      const pdfResult = wfirmaId
-        ? await saveWfirmaInvoicePdf({
-            admin: auth.admin,
-            invoiceId: invoice.id,
-            invoiceNumber: wfirmaNumber,
-            wfirmaId,
-            config: wfirma.config,
-          })
-        : null;
-      const pdfError = pdfResult?.error
-        ? `Faktura wysłana, ale nie udało się pobrać PDF z wFirmy: ${pdfResult.error}`
-        : null;
+      // Drafts are created here; the final PDF is downloaded during refresh.
 
       const updatePayload = {
         numer: wfirmaNumber,
@@ -136,12 +123,12 @@ export async function POST(request: NextRequest) {
         termin_platnosci: finalPaymentDate,
         wfirma_id: wfirmaId || null,
         wfirma_url: wfirmaInvoice?.hash ? `https://wfirma.pl/faktury/podglad/${wfirmaInvoice.hash}` : null,
-        wfirma_pdf_path: pdfResult?.path || null,
-        wfirma_pdf_name: pdfResult?.name || null,
-        wfirma_pdf_synced_at: pdfResult?.path ? new Date().toISOString() : null,
+        wfirma_pdf_path: null,
+        wfirma_pdf_name: null,
+        wfirma_pdf_synced_at: null,
         wfirma_synced_at: new Date().toISOString(),
         wfirma_sync_status: "wyslano",
-        wfirma_sync_error: pdfError,
+        wfirma_sync_error: null,
       };
       const updateResult = await auth.admin
         .from("faktury")
@@ -161,7 +148,7 @@ export async function POST(request: NextRequest) {
             wfirma_url: updatePayload.wfirma_url,
             wfirma_synced_at: updatePayload.wfirma_synced_at,
             wfirma_sync_status: updatePayload.wfirma_sync_status,
-            wfirma_sync_error: pdfError || "Faktura wysłana, ale na serwerze nie ma jeszcze migracji pól PDF.",
+            wfirma_sync_error: "Faktura wysłana, ale na serwerze nie ma jeszcze migracji pól PDF.",
           })
           .eq("id", invoice.id);
         if (fallbackResult.error) throw new Error(`Faktura została wysłana do wFirmy, ale nie udało się zapisać jej w aplikacji: ${fallbackResult.error.message}`);
@@ -249,29 +236,6 @@ async function claimInvoiceForWfirma(admin: SupabaseClient, invoiceId: string) {
 
   if (error) return { data: null, error: "Nie udalo sie zablokowac faktury do wysylki." };
   return { data: data as InvoiceRow | null, error: null };
-}
-
-async function saveWfirmaInvoicePdf(params: {
-  admin: SupabaseClient;
-  invoiceId: string;
-  invoiceNumber: string | null;
-  wfirmaId: string;
-  config: Parameters<typeof downloadWfirmaInvoicePdf>[0];
-}) {
-  try {
-    const pdf = await downloadWfirmaInvoicePdf(params.config, params.wfirmaId);
-    const name = buildInvoicePdfName(params.invoiceNumber, params.wfirmaId);
-    const path = `${params.invoiceId}/${name}`;
-    const upload = await params.admin.storage.from(INVOICE_PDF_BUCKET).upload(path, pdf, {
-      contentType: "application/pdf",
-      upsert: true,
-    });
-
-    if (upload.error) throw upload.error;
-    return { path, name, error: null as string | null };
-  } catch (error) {
-    return { path: null, name: null, error: error instanceof Error ? error.message : "Nieznany błąd pobierania PDF." };
-  }
 }
 
 async function assertNoDuplicateStandardInvoice(admin: SupabaseClient, invoice: InvoiceRow) {
@@ -513,19 +477,4 @@ function specialInvoicePaymentDate(invoice: InvoiceRow, issueDate: string) {
 
   const dueDate = new Date(Date.UTC(issueMonthDate.getUTCFullYear(), issueMonthDate.getUTCMonth() + 1, 14));
   return dueDate.toISOString().slice(0, 10);
-}
-
-function buildInvoicePdfName(invoiceNumber: string | null, wfirmaId: string) {
-  const base = sanitizeFileNamePart(invoiceNumber || `wfirma-${wfirmaId}`);
-  return `${base || "faktura"}.pdf`;
-}
-
-function sanitizeFileNamePart(value: string) {
-  return value
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-zA-Z0-9._-]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 80)
-    .toLowerCase();
 }

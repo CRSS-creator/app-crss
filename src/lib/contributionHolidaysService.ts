@@ -31,3 +31,17 @@ export async function saveContributionHoliday(record: ContributionHolidayRecord)
     .upsert(record, { onConflict: "klient_id,rok" })
     .select("*").single<ContributionHolidayRecord>();
 }
+
+export type ContributionHolidayNotification = {
+  id: string;
+  klient_id: string;
+  rok: number;
+  sent_at: string;
+  sent_by: string | null;
+  sent_by_name: string;
+};
+
+export async function fetchContributionHolidayNotifications(year: number) {
+  return supabase.from("kadry_wakacje_skladkowe_powiadomienia")
+    .select("*").eq("rok", year).order("sent_at", { ascending: false });
+}

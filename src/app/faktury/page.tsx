@@ -66,6 +66,7 @@ function InvoicesContent() {
   const [importingWfirma, setImportingWfirma] = useState(false);
   const [syncingPayments, setSyncingPayments] = useState(false);
   const [syncingSelectedMonth, setSyncingSelectedMonth] = useState(false);
+  const [refreshingSelected, setRefreshingSelected] = useState(false);
   const [queueing, setQueueing] = useState(false);
   const [sendingBulkMail, setSendingBulkMail] = useState(false);
   const [sourceFilter, setSourceFilter] = useState(EMPTY_FILTER);
@@ -173,6 +174,10 @@ function InvoicesContent() {
     [invoices, selectedInvoiceIds]
   );
 
+  const selectedRefreshIds = selectedInvoiceIds.filter((id) =>
+    invoices.some((invoice) => invoice.id === id && canRefreshInvoice(invoice))
+  );
+
   const allSelectableChecked =
     selectableInvoices.length > 0 && selectableInvoices.every((invoice) => selectedInvoiceIds.includes(invoice.id));
   const allOverdueSelectableChecked =
@@ -210,6 +215,29 @@ function InvoicesContent() {
     }
 
     await loadData();
+  }
+
+  async function refreshSelectedInvoices() {
+    const invoiceIds = [...selectedRefreshIds];
+    if (invoiceIds.length === 0 || refreshingSelected) return;
+    setRefreshingSelected(true);
+    const errors: string[] = [];
+    try {
+      for (let index = 0; index < invoiceIds.length; index += MONTH_REFRESH_BATCH_SIZE) {
+        const result = await syncWfirmaPayments(undefined, invoiceIds.slice(index, index + MONTH_REFRESH_BATCH_SIZE));
+        if (result.error) {
+          errors.push(result.error.message);
+          break;
+        }
+        for (const failed of result.data?.failed || []) {
+          errors.push(failed.error);
+        }
+      }
+      await loadData();
+      if (errors.length) alert("Nie udało się odświeżyć części zaznaczonych faktur:\n\n" + errors.join("\n"));
+    } finally {
+      setRefreshingSelected(false);
+    }
   }
 
   async function refreshSelectedMonthInvoices() {
@@ -617,7 +645,7 @@ function InvoicesContent() {
           <div>
             <h2 style={listTitleStyle}>Lista faktur</h2>
             <p style={bulkHelpStyle}>
-              Zaznacz faktury, które nie były jeszcze wysłane do wFirmy, a potem wyślij je zbiorczo.
+              Zaznacz faktury, aby je odświeżyć, wysłać do wFirmy lub wysłać mailem.
             </p>
           </div>
           <div style={bulkButtonGroupStyle}>
@@ -637,6 +665,16 @@ function InvoicesContent() {
             >
               <Mail size={18} />
               {sendingBulkMail ? "Wysyłanie..." : `Wyślij mailem (${selectedMailIds.length})`}
+            </button>
+            <button
+              type="button"
+              style={secondaryButtonStyle}
+              disabled={selectedRefreshIds.length === 0 || refreshingSelected || loading || syncingPayments || syncingSelectedMonth || queueing || sendingBulkMail}
+              onClick={refreshSelectedInvoices}
+              title="Odświeża dane i ostateczne PDF tylko zaznaczonych faktur z wFirmy"
+            >
+              <RotateCw size={18} />
+              {refreshingSelected ? "Odświeżanie..." : "Odśwież"}
             </button>
           </div>
         </div>
@@ -1339,13 +1377,16 @@ function canSendInvoiceMail(invoice: Invoice) {
   return Boolean(invoice.wfirma_pdf_path && hasInvoiceEmail(invoice) && invoice.status !== "anulowana");
 }
 
-function canRefreshSelectedMonthInvoice(invoice: Invoice, month: string) {
+function canRefreshInvoice(invoice: Invoice) {
   return Boolean(
-    invoiceListMonth(invoice) === month &&
-      invoice.wfirma_id &&
+    invoice.wfirma_id &&
       invoice.kategoria !== "korekta" &&
-      ["wystawiona", "wyslana", "przeterminowana"].includes(invoice.status)
+      ["wystawiona", "wyslana", "przeterminowana", "oplacona"].includes(invoice.status)
   );
+}
+
+function canRefreshSelectedMonthInvoice(invoice: Invoice, month: string) {
+  return invoiceListMonth(invoice) === month && canRefreshInvoice(invoice);
 }
 
 function canSendOverdueReminder(invoice: Invoice) {
@@ -1353,7 +1394,7 @@ function canSendOverdueReminder(invoice: Invoice) {
 }
 
 function canSelectInvoice(invoice: Invoice) {
-  return canQueueForWfirma(invoice) || canSendInvoiceMail(invoice);
+  return canQueueForWfirma(invoice) || canSendInvoiceMail(invoice) || canRefreshInvoice(invoice);
 }
 
 function hasInvoiceEmail(invoice: Invoice) {

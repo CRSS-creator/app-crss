@@ -24,6 +24,7 @@ type Client = {
   email: string | null;
   telefon: string | null;
   opiekun_id: string | null;
+  czynny_vat: boolean | null;
   profiles?: { full_name: string | null; email: string | null } | { full_name: string | null; email: string | null }[] | null;
 };
 
@@ -94,14 +95,16 @@ function LimitsContent() {
   const rows = useMemo(() => buildRows(activeType, clients, registers, monthlyRecords), [activeType, clients, registers, monthlyRecords]);
   const filteredRows = useMemo(() => filterRows(rows, searchTerm), [rows, searchTerm]);
   const detailsRow = rows.find((row) => row.register.id === detailsRegisterId) || null;
-  const availableClients = clients.filter((client) => !registers.some((register) => register.typ === activeType && register.klient_id === client.id));
+  const availableClients = clients.filter((client) =>
+    (activeType !== "vat" || client.czynny_vat !== true)
+    && !registers.some((register) => register.typ === activeType && register.klient_id === client.id)
+  );
   const filteredAvailableClients = filterClientsForPicker(availableClients, clientAddSearch);
   const selectedClientToAdd = availableClients.find((client) => client.id === clientToAdd) || null;
-  const isAutomaticRegister = activeType === "vat" || activeType === "wnt";
   const showExemptionStatus = hasExemptionStatus(activeType);
 
   async function handleAddClient() {
-    if (!clientToAdd) return;
+    if (!selectedClientToAdd) return;
     const result = await addClientToLimit(clientToAdd, activeType);
     if (result.error) {
       alert(result.error.message.includes("duplicate") ? "Ten klient jest już dodany do tego limitu." : result.error.message);
@@ -156,11 +159,9 @@ function LimitsContent() {
               <p style={sectionHintStyle}>{registerHint(activeType)}</p>
             </div>
             <div style={sectionActionsStyle}>
-              {!isAutomaticRegister && (
-                <button type="button" onClick={() => setShowAddForm((value) => !value)} style={primaryButtonStyle}>
-                  <Plus size={18} /> Dodaj klienta
-                </button>
-              )}
+              <button type="button" onClick={() => setShowAddForm((value) => !value)} style={primaryButtonStyle}>
+                <Plus size={18} /> Dodaj klienta
+              </button>
             </div>
           </div>
 
@@ -179,7 +180,7 @@ function LimitsContent() {
             )}
           </div>
 
-          {showAddForm && !isAutomaticRegister && (
+          {showAddForm && (
             <div style={addFormStyle}>
               <div style={clientPickerStyle}>
                 <input
@@ -218,7 +219,7 @@ function LimitsContent() {
                   )}
                 </div>
               </div>
-              <button type="button" onClick={() => void handleAddClient()} disabled={!clientToAdd} style={smallPrimaryButtonStyle}>Dodaj</button>
+              <button type="button" onClick={() => void handleAddClient()} disabled={!selectedClientToAdd} style={smallPrimaryButtonStyle}>Dodaj</button>
             </div>
           )}
 
@@ -700,15 +701,15 @@ function toggleExemptionStatus(current: string[], status: string, checked: boole
 }
 
 function registerHint(type: LimitType) {
-  if (type === "vat") return "Klienci zwolnieni z VAT są dodawani automatycznie. Szczegóły służą do uzupełnienia miesięcy.";
-  if (type === "wnt") return "Klienci bez VAT i z rejestracją VAT-UE są dodawani automatycznie. Szczegóły służą do uzupełnienia limitu i miesięcy.";
+  if (type === "vat") return "Klienci zwolnieni z VAT są dodawani automatycznie. Możesz też dodać brakującego klienta zwolnionego z VAT. Szczegóły służą do uzupełnienia miesięcy.";
+  if (type === "wnt") return "Klienci bez VAT i z rejestracją VAT-UE są dodawani automatycznie. Możesz też dodać klienta ręcznie. Szczegóły służą do uzupełnienia limitu i miesięcy.";
   if (type === "maly_podatnik_cit") return "Lista firm dodanych ręcznie do limitu małego podatnika CIT. Szczegóły służą do wpisania limitu rocznego i miesięcy.";
   return "Lista klientów dodanych do tego limitu. Szczegóły służą do uzupełnienia limitu rocznego i miesięcy.";
 }
 
 function emptyRegisterText(type: LimitType) {
   if (type === "vat") return "Brak klientów zwolnionych z VAT.";
-  if (type === "wnt") return "Brak klientów bez VAT z rejestracją VAT-UE.";
+  if (type === "wnt") return "Brak klientów w rejestrze WNT. Dodaj klienta przyciskiem powyżej.";
   if (type === "maly_podatnik_cit") return "Brak firm w limicie małego podatnika CIT. Dodaj pierwszą firmę przyciskiem powyżej.";
   return "Brak klientów w tym limicie. Dodaj pierwszego klienta przyciskiem powyżej.";
 }

@@ -1,3 +1,4 @@
+import { verifyRegon } from "@/lib/server/regon";
 import { collectCurrentCeidgPkdCodes } from "@/lib/ceidgPkd";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
@@ -128,7 +129,10 @@ export async function POST(request: NextRequest) {
   }
 
   const krsIdentity = getKrsIdentity(krsCheck);
-  const regonNumber = String(vatSubject?.regon || krsIdentity.regon || ceidgIdentity.regon || "").trim() || null;
+  const gusCheck = await verifyRegon(nip);
+  checks.push(gusCheck);
+  const savedIdentifiers = (register.dane_rejestrowe as { identyfikatory?: { regon?: string } } | null)?.identyfikatory;
+  const regonNumber = String(gusCheck.details.regon || vatSubject?.regon || krsIdentity.regon || ceidgIdentity.regon || register.numer_regon || savedIdentifiers?.regon || "").trim() || null;
   krsNumber = normalizeKrs(String(krsNumber || krsIdentity.krs || ""));
   checks.push(krsCheck);
   checks.push(crbrCheck);
@@ -148,6 +152,7 @@ export async function POST(request: NextRequest) {
   const visibleSourceChecks = checks.filter((check) => !(actualIndividualBusiness && check.source === "CRBR"));
   const registryDetails = buildRegistryDetails({
     nip,
+    regonNumber,
     vatSubject,
     krsCheck,
     ceidgCheck,
@@ -220,7 +225,7 @@ export async function POST(request: NextRequest) {
     dane_rejestrowe: registryDetails,
     numer_regon: regonNumber,
     numer_krs: krsNumber || null,
-    gus_status: "nie_uzyto",
+    gus_status: gusCheck.status,
     krs_status: statusForSource(checks, "KRS"),
     crbr_status: statusForSource(checks, "CRBR"),
     kody_pkd: pkdCodes,
@@ -920,6 +925,7 @@ function extractKrsPkdCodes(details: Record<string, unknown>): PkdCode[] {
 
 function buildRegistryDetails(input: {
   nip: string;
+  regonNumber?: string | null;
   vatSubject: Record<string, unknown> | null;
   krsCheck: OfficialCheck;
   ceidgCheck: OfficialCheck | null;
@@ -944,7 +950,7 @@ function buildRegistryDetails(input: {
     typPodmiotu: input.isIndividualBusiness ? "jdg" : "podmiot_krs",
     identyfikatory: {
       nip: input.nip,
-      regon: String(input.vatSubject?.regon || krsIdentity.regon || ceidgIdentity.regon || "") || null,
+      regon: input.regonNumber || String(input.vatSubject?.regon || krsIdentity.regon || ceidgIdentity.regon || "") || null,
       krs: registryKrs,
       rejestr: input.isIndividualBusiness ? null : krsDetails.register === "P" ? "Rejestr przedsiębiorców" : krsDetails.register || null,
       nazwa: input.isIndividualBusiness ? ceidgRegistry.nazwa : null,
@@ -952,6 +958,7 @@ function buildRegistryDetails(input: {
       forma: input.isIndividualBusiness ? ceidgRegistry.forma : null,
     },
     statusy: {
+      gus: statusForSource(input.checks, "GUS REGON"),
       vat: statusForAnySource(input.checks, ["Status VAT", "Biała Lista VAT"]),
       vies: statusForSource(input.checks, "VIES"),
       krs: statusForSource(input.checks, "KRS"),

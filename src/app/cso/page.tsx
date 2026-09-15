@@ -6,6 +6,7 @@ import AccessGuard from "@/components/AccessGuard";
 import AppSelect from "@/components/AppSelect";
 import { colors, radius, shadow } from "@/app/design";
 import { supabase } from "@/lib/supabaseClient";
+import linkedinTopics from "@/lib/csoLinkedinTopics.json";
 
 const categories = [
   "Ceny i koszty",
@@ -16,18 +17,20 @@ const categories = [
   "Inne",
 ] as const;
 
-const STORAGE_KEY = "crss-cso-content-plan";
+type ContentPlatform = "facebook" | "linkedin";
+const linkedinCategories = ["Ceny i koszty", "Problemy", "Zestawienia i porównania", "Recenzje", "Najlepsze w swojej klasie", "Inne i obawy"] as const;
+function storageKey(platform: ContentPlatform) {
+  return platform === "facebook" ? "crss-cso-content-plan" : "crss-cso-content-plan-linkedin";
+}
 
 type TopicStatus = "pomysl" | "w_planie" | "opublikowane";
-type TopicCategory = typeof categories[number];
+type TopicCategory = typeof categories[number] | typeof linkedinCategories[number];
 
 const statusOptions: { value: TopicStatus; label: string }[] = [
   { value: "pomysl", label: "Pomysł" },
   { value: "w_planie", label: "W planie" },
   { value: "opublikowane", label: "Opublikowane" },
 ];
-const categoryOptions = categories.map((category) => ({ value: category, label: category }));
-const categoryFilterOptions = [{ value: "Wszystkie", label: "Wszystkie" }, ...categoryOptions];
 const statusFilterOptions = [{ value: "Wszystkie", label: "Wszystkie statusy" }, ...statusOptions];
 
 type ContentTopic = {
@@ -46,6 +49,7 @@ type DraftTopic = {
 type StoredContentPlan = {
   topics?: ContentTopic[];
   facebookTopics?: Record<string, boolean>;
+  publishedTopics?: Record<string, boolean>;
   blogTopics?: Record<string, boolean>;
 };
 
@@ -56,6 +60,7 @@ type ContentTopicRow = {
   status: TopicStatus;
   note: string | null;
   facebook_published: boolean | null;
+  linkedin_published: boolean | null;
   blog_published: boolean | null;
 };
 
@@ -203,9 +208,10 @@ function topicGroup(category: TopicCategory, titles: string[]): RawTopic[] {
   return titles.map((title) => ({ category, title }));
 }
 
-function createInitialTopics(): ContentTopic[] {
-  return rawTopics.map((topic, index) => ({
-    id: `topic-${index + 1}`,
+function createInitialTopics(platform: ContentPlatform = "facebook"): ContentTopic[] {
+  const source = platform === "facebook" ? rawTopics : linkedinTopics as RawTopic[];
+  return source.map((topic, index) => ({
+    id: platform === "facebook" ? `topic-${index + 1}` : `linkedin-topic-${index + 1}`,
     category: topic.category,
     title: topic.title,
     status: "pomysl",
@@ -220,10 +226,10 @@ function createEmptyDraft(): DraftTopic {
   };
 }
 
-function readSavedPlan(): StoredContentPlan | null {
+function readSavedPlan(platform: ContentPlatform): StoredContentPlan | null {
   if (typeof window === "undefined") return null;
   try {
-    const savedPlan = window.localStorage.getItem(STORAGE_KEY);
+    const savedPlan = window.localStorage.getItem(storageKey(platform));
     return savedPlan ? JSON.parse(savedPlan) as StoredContentPlan : null;
   } catch {
     return null;
@@ -248,7 +254,7 @@ function rowToTopic(row: ContentTopicRow): ContentTopic {
   };
 }
 
-async function persistTopic(topic: ContentTopic, facebookPublished: boolean, blogPublished: boolean) {
+async function persistTopic(topic: ContentTopic, socialPublished: boolean, blogPublished: boolean, platform: ContentPlatform) {
   const { data: userData } = await supabase.auth.getUser();
   const userId = userData.user?.id || null;
   const result = await supabase
@@ -259,7 +265,8 @@ async function persistTopic(topic: ContentTopic, facebookPublished: boolean, blo
       title: topic.title,
       status: topic.status,
       note: topic.note,
-      facebook_published: facebookPublished,
+      platform,
+      [platform === "facebook" ? "facebook_published" : "linkedin_published"]: socialPublished,
       blog_published: blogPublished,
       updated_by: userId,
       created_by: userId,
@@ -271,19 +278,30 @@ async function persistTopic(topic: ContentTopic, facebookPublished: boolean, blo
 }
 
 export default function CsoPage() {
+  const [platform, setPlatform] = useState<ContentPlatform>("facebook");
   return (
     <AppLayout activePage="cso">
       <AccessGuard moduleName="cso">
-        <CsoContent />
+        <nav aria-label="Kanał planu contentowego" style={tabsStyle}>
+          {(["facebook", "linkedin"] as const).map((channel) => (
+            <button key={channel} type="button" aria-pressed={platform === channel} onClick={() => setPlatform(channel)} style={platform === channel ? activeTabStyle : tabStyle}>
+              {channel === "facebook" ? "Facebook" : "LinkedIn"}
+            </button>
+          ))}
+        </nav>
+        <CsoContent key={platform} platform={platform} />
       </AccessGuard>
     </AppLayout>
   );
 }
 
-function CsoContent() {
+function CsoContent({ platform }: { platform: ContentPlatform }) {
+  const categoryOptions = (platform === "facebook" ? categories : linkedinCategories).map((category) => ({ value: category, label: category }));
+  const categoryFilterOptions = [{ value: "Wszystkie", label: "Wszystkie" }, ...categoryOptions];
+  const channelLabel = platform === "facebook" ? "FB" : "LinkedIn";
   const [categoryFilter, setCategoryFilter] = useState<TopicCategory | "Wszystkie">("Wszystkie");
   const [statusFilter, setStatusFilter] = useState<TopicStatus | "Wszystkie">("Wszystkie");
-  const [topics, setTopics] = useState<ContentTopic[]>(createInitialTopics);
+  const [topics, setTopics] = useState<ContentTopic[]>(() => createInitialTopics(platform));
   const [facebookTopics, setFacebookTopics] = useState<Record<string, boolean>>({});
   const [blogTopics, setBlogTopics] = useState<Record<string, boolean>>({});
   const [draft, setDraft] = useState<DraftTopic>(() => createEmptyDraft());
@@ -292,19 +310,16 @@ function CsoContent() {
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    loadContentPlan();
-  }, []);
-
   async function loadContentPlan() {
-    const savedPlan = readSavedPlan();
-    const initialTopics = createInitialTopics();
+    const savedPlan = readSavedPlan(platform);
+    const initialTopics = createInitialTopics(platform);
     let localTopics = initialTopics;
     let localFacebookTopics: Record<string, boolean> = {};
     let localBlogTopics: Record<string, boolean> = {};
 
     if (savedPlan) {
       localTopics = mergeSavedTopics(initialTopics, savedPlan.topics || []);
-      localFacebookTopics = savedPlan.facebookTopics || {};
+      localFacebookTopics = savedPlan.publishedTopics || (platform === "facebook" ? savedPlan.facebookTopics || {} : {});
       localBlogTopics = savedPlan.blogTopics || {};
       setTopics(localTopics);
       setFacebookTopics(localFacebookTopics);
@@ -313,7 +328,8 @@ function CsoContent() {
 
     const result = await supabase
       .from("cso_content_topics")
-      .select("id, category, title, status, note, facebook_published, blog_published")
+      .select("id, category, title, status, note, facebook_published, linkedin_published, blog_published")
+      .eq("platform", platform)
       .order("created_at", { ascending: true });
 
     if (result.error) {
@@ -326,19 +342,21 @@ function CsoContent() {
     if (rows.length > 0) {
       const remoteTopics = rows.map(rowToTopic);
       setTopics(mergeSavedTopics(initialTopics, remoteTopics));
-      setFacebookTopics(rows.reduce<Record<string, boolean>>((acc, row) => ({ ...acc, [row.id]: Boolean(row.facebook_published) }), {}));
+      setFacebookTopics(rows.reduce<Record<string, boolean>>((acc, row) => ({ ...acc, [row.id]: Boolean(platform === "facebook" ? row.facebook_published : row.linkedin_published) }), {}));
       setBlogTopics(rows.reduce<Record<string, boolean>>((acc, row) => ({ ...acc, [row.id]: Boolean(row.blog_published) }), {}));
     } else if (savedPlan) {
-      await Promise.all(localTopics.map((topic) => persistTopic(topic, Boolean(localFacebookTopics[topic.id]), Boolean(localBlogTopics[topic.id]))));
+      await Promise.all(localTopics.map((topic) => persistTopic(topic, Boolean(localFacebookTopics[topic.id]), Boolean(localBlogTopics[topic.id]), platform)));
     }
 
     setIsReady(true);
   }
+    void loadContentPlan();
+  }, [platform]);
 
   useEffect(() => {
     if (!isReady) return;
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ topics, facebookTopics, blogTopics }));
-  }, [blogTopics, facebookTopics, isReady, topics]);
+    window.localStorage.setItem(storageKey(platform), JSON.stringify({ topics, publishedTopics: facebookTopics, ...(platform === "facebook" ? { facebookTopics } : {}), blogTopics }));
+  }, [blogTopics, facebookTopics, isReady, platform, topics]);
 
   const filteredTopics = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -357,7 +375,7 @@ function CsoContent() {
     if (!currentTopic) return;
     const nextTopic = { ...currentTopic, ...patch };
     setTopics((current) => current.map((topic) => topic.id === id ? nextTopic : topic));
-    persistTopic(nextTopic, Boolean(facebookTopics[id]), Boolean(blogTopics[id]));
+    persistTopic(nextTopic, Boolean(facebookTopics[id]), Boolean(blogTopics[id]), platform);
   }
 
   function toggleChecked(kind: "facebook" | "blog", id: string) {
@@ -367,7 +385,7 @@ function CsoContent() {
     setter((current) => ({ ...current, [id]: nextValue }));
     const topic = topics.find((item) => item.id === id);
     if (!topic) return;
-    persistTopic(topic, kind === "facebook" ? nextValue : Boolean(facebookTopics[id]), kind === "blog" ? nextValue : Boolean(blogTopics[id]));
+    persistTopic(topic, kind === "facebook" ? nextValue : Boolean(facebookTopics[id]), kind === "blog" ? nextValue : Boolean(blogTopics[id]), platform);
   }
 
   function addTopic() {
@@ -377,7 +395,7 @@ function CsoContent() {
       return;
     }
 
-    const id = `topic-${Date.now()}`;
+    const id = `${platform}-custom-${crypto.randomUUID()}`;
     const topic: ContentTopic = {
       id,
       category: draft.category,
@@ -386,7 +404,7 @@ function CsoContent() {
       note: "",
     };
     setTopics((current) => [topic, ...current]);
-    persistTopic(topic, false, false);
+    persistTopic(topic, false, false, platform);
     setNoteTopicId(id);
     setDraft(createEmptyDraft());
   }
@@ -407,8 +425,8 @@ function CsoContent() {
       <section style={panelStyle}>
         <div style={panelHeaderStyle}>
           <div>
-            <h2 style={sectionTitleStyle}>Plan contentowy</h2>
-            <p style={hintStyle}>Dodawaj tematy, oznaczaj publikację na FB i Blogu oraz zapisuj notatki robocze pod przyciskiem po prawej stronie.</p>
+            <h2 style={sectionTitleStyle}>Plan contentowy — {platform === "facebook" ? "Facebook" : "LinkedIn"}</h2>
+            <p style={hintStyle}>Dodawaj tematy, oznaczaj publikację na {channelLabel} i Blogu oraz zapisuj notatki robocze pod przyciskiem po prawej stronie.</p>
           </div>
           <div style={filtersRowStyle}>
             <AppSelect style={filterStyle} value={categoryFilter} options={categoryFilterOptions} onChange={(value) => setCategoryFilter(value as TopicCategory | "Wszystkie")} />
@@ -434,7 +452,7 @@ function CsoContent() {
             <thead>
               <tr>
                 <Th>Kategoria</Th>
-                <Th compact>FB</Th>
+                <Th compact>{channelLabel}</Th>
                 <Th compact>Blog</Th>
                 <Th>Temat</Th>
                 <Th>Status</Th>
@@ -446,7 +464,7 @@ function CsoContent() {
                 <tr key={topic.id} style={rowStyle}>
                   <Td><Badge>{topic.category}</Badge></Td>
                   <Td compact>
-                    <ChannelCheckbox checked={Boolean(facebookTopics[topic.id])} label="FB" onChange={() => toggleChecked("facebook", topic.id)} />
+                    <ChannelCheckbox checked={Boolean(facebookTopics[topic.id])} label={channelLabel} onChange={() => toggleChecked("facebook", topic.id)} />
                   </Td>
                   <Td compact>
                     <ChannelCheckbox checked={Boolean(blogTopics[topic.id])} label="Blog" onChange={() => toggleChecked("blog", topic.id)} />
@@ -557,3 +575,8 @@ const detailsTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSi
 const noteBoxStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "14px", marginTop: "14px" };
 const labelStyle: CSSProperties = { display: "block", color: colors.text, fontWeight: 850, marginBottom: "8px" };
 const textareaStyle: CSSProperties = { ...inputStyle, minHeight: "430px", resize: "vertical", lineHeight: 1.55, fontWeight: 650 };
+
+const tabsStyle: CSSProperties = { display: "flex", gap: "10px", marginBottom: "22px", flexWrap: "wrap" };
+const tabStyle: CSSProperties = { ...secondaryButtonStyle, minHeight: "44px", padding: "10px 22px" };
+const activeTabStyle: CSSProperties = { ...tabStyle, background: colors.navy, color: colors.white, borderColor: colors.navy };
+

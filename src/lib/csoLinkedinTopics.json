@@ -1,0 +1,722 @@
+[
+  {
+    "category": "Ceny i koszty",
+    "title": "[Sp. z o.o.] Ile naprawdę kosztuje miesięczna księgowość spółki z o.o. i skąd biorą się różnice między ofertami biur?"
+  },
+  {
+    "category": "Ceny i koszty",
+    "title": "[Sp. z o.o.] Od czego bardziej zależy cena pełnej księgowości: od liczby faktur czy od stopnia skomplikowania działalności?"
+  },
+  {
+    "category": "Ceny i koszty",
+    "title": "[Sp. z o.o.] Dlaczego dwie spółki mające po 100 dokumentów miesięcznie mogą płacić zupełnie inne kwoty za księgowość?"
+  },
+  {
+    "category": "Ceny i koszty",
+    "title": "[Sp. z o.o.] Jakie opłaty dodatkowe mogą pojawić się poza miesięcznym abonamentem biura rachunkowego?"
+  },
+  {
+    "category": "Ceny i koszty",
+    "title": "[Sp. z o.o.] Czy sporządzenie rocznego sprawozdania finansowego powinno być w cenie miesięcznej obsługi?"
+  },
+  {
+    "category": "Ceny i koszty",
+    "title": "[Sp. z o.o.] Czy obsługa KSeF powinna zwiększać cenę księgowości spółki?"
+  },
+  {
+    "category": "Ceny i koszty",
+    "title": "[Sp. z o.o.] O ile transakcje zagraniczne i rozliczenia walutowe mogą zwiększyć koszt księgowości?"
+  },
+  {
+    "category": "Ceny i koszty",
+    "title": "[Sp. z o.o.] Dlaczego księgowość e-commerce kosztuje często więcej niż księgowość spółki usługowej?"
+  },
+  {
+    "category": "Ceny i koszty",
+    "title": "[Sp. z o.o.] Ile kosztuje obsługa kadrowo-płacowa pracowników poza prowadzeniem pełnych ksiąg?"
+  },
+  {
+    "category": "Ceny i koszty",
+    "title": "[Sp. z o.o.] Czy miesięczne raporty dla zarządu powinny być częścią księgowości, czy osobno płatną usługą?"
+  },
+  {
+    "category": "Ceny i koszty",
+    "title": "[Sp. z o.o.] Ile może kosztować przejęcie księgowości spółki od poprzedniego biura?"
+  },
+  {
+    "category": "Ceny i koszty",
+    "title": "[Sp. z o.o.] Kto ponosi koszt poprawienia błędów pozostawionych przez poprzednie biuro rachunkowe?"
+  },
+  {
+    "category": "Ceny i koszty",
+    "title": "[Sp. z o.o.] Czy konsultacje podatkowe powinny być zawarte w abonamencie księgowym?"
+  },
+  {
+    "category": "Ceny i koszty",
+    "title": "[Sp. z o.o.] Jak zmienia się cena księgowości, kiedy firma szybko zwiększa liczbę dokumentów?"
+  },
+  {
+    "category": "Ceny i koszty",
+    "title": "[Sp. z o.o.] Kiedy bardziej opłaca się zatrudnić księgową na etat niż korzystać z zewnętrznego biura?"
+  },
+  {
+    "category": "Ceny i koszty",
+    "title": "[Sp. z o.o.] Ile naprawdę może kosztować firmę bardzo tania księgowość, jeżeli nie obejmuje kontroli, raportów i bieżącego kontaktu?"
+  },
+  {
+    "category": "Ceny i koszty",
+    "title": "[NGO] Ile kosztuje pełna księgowość fundacji albo stowarzyszenia?"
+  },
+  {
+    "category": "Ceny i koszty",
+    "title": "[NGO] Ile kosztuje prowadzenie UEPIK i kiedy jest rzeczywiście tańsze od pełnych ksiąg?"
+  },
+  {
+    "category": "Ceny i koszty",
+    "title": "[NGO] Czy rozliczanie dotacji i projektów powinno być dodatkowo płatne?"
+  },
+  {
+    "category": "Ceny i koszty",
+    "title": "[NGO] Ile kosztuje przygotowywanie dodatkowych zestawień wymaganych przez grantodawców?"
+  },
+  {
+    "category": "Ceny i koszty",
+    "title": "[Klub sportowy] Ile kosztuje księgowość większego klubu sportowego i co najbardziej wpływa na cenę?"
+  },
+  {
+    "category": "Ceny i koszty",
+    "title": "[Klub sportowy] Czy dotacje, sponsorzy, składki członkowskie i kilka źródeł finansowania podnoszą koszt obsługi księgowej?"
+  },
+  {
+    "category": "Ceny i koszty",
+    "title": "[NGO] Czy księgowość organizacji posiadającej status OPP musi kosztować więcej?"
+  },
+  {
+    "category": "Ceny i koszty",
+    "title": "[NGO] Czy fundacja albo stowarzyszenie powinno płacić pełną stawkę również w miesiącach, w których praktycznie nie ma dokumentów?"
+  },
+  {
+    "category": "Ceny i koszty",
+    "title": "[JDG] Ile powinna kosztować księgowość jednoosobowej działalności w 2026 roku?"
+  },
+  {
+    "category": "Ceny i koszty",
+    "title": "[JDG] Co jest tańsze w praktyce: biuro rachunkowe czy samodzielna księgowość online?"
+  },
+  {
+    "category": "Ceny i koszty",
+    "title": "[JDG] O ile VAT zwiększa koszt obsługi księgowej JDG?"
+  },
+  {
+    "category": "Ceny i koszty",
+    "title": "[JDG] Dlaczego faktury zagraniczne mogą zwiększyć cenę księgowości nawet w małej działalności?"
+  },
+  {
+    "category": "Ceny i koszty",
+    "title": "[Wspólne] Kiedy najtańszy pakiet księgowy przestaje być najtańszym rozwiązaniem?"
+  },
+  {
+    "category": "Ceny i koszty",
+    "title": "[Wspólne] Jak policzyć rzeczywisty roczny koszt księgowości, a nie tylko miesięczny abonament?"
+  },
+  {
+    "category": "Problemy",
+    "title": "[Sp. z o.o.] Po czym poznać, że problemem nie jest pojedynczy błąd księgowej, ale cały sposób współpracy z biurem?"
+  },
+  {
+    "category": "Problemy",
+    "title": "[Sp. z o.o.] Jak długo można czekać na odpowiedź księgowego, zanim stanie się to problemem dla firmy?"
+  },
+  {
+    "category": "Problemy",
+    "title": "[Sp. z o.o.] Dlaczego informacja o wysokości podatku przekazana tuż przed terminem płatności jest problemem zarządczym?"
+  },
+  {
+    "category": "Problemy",
+    "title": "[Sp. z o.o.] Co zrobić, jeżeli zarząd dostaje deklaracje podatkowe, ale nadal nie wie, co rzeczywiście dzieje się w finansach firmy?"
+  },
+  {
+    "category": "Problemy",
+    "title": "[Sp. z o.o.] Jak rozpoznać źle zorganizowany obieg dokumentów między spółką a biurem rachunkowym?"
+  },
+  {
+    "category": "Problemy",
+    "title": "[Sp. z o.o.] Co oznacza sytuacja, w której saldo banku, rozrachunki i księgi nie dają zarządowi spójnego obrazu?"
+  },
+  {
+    "category": "Problemy",
+    "title": "[Sp. z o.o.] Dlaczego nieuzgodnione należności i zobowiązania mogą być większym problemem niż sam podatek?"
+  },
+  {
+    "category": "Problemy",
+    "title": "[Sp. z o.o.] Co zrobić, jeżeli nowe biuro podczas przejęcia ksiąg znajduje błędy z poprzednich miesięcy?"
+  },
+  {
+    "category": "Problemy",
+    "title": "[Sp. z o.o.] Jak zarząd może sprawdzić, czy wszystkie deklaracje i obowiązki zostały wykonane na czas?"
+  },
+  {
+    "category": "Problemy",
+    "title": "[Sp. z o.o.] Po czym poznać, że spółka wyrosła z dotychczasowego sposobu prowadzenia księgowości?"
+  },
+  {
+    "category": "Problemy",
+    "title": "[Sp. z o.o.] Jakie problemy najczęściej pojawiają się, gdy spółka zaczyna sprzedawać lub kupować za granicą?"
+  },
+  {
+    "category": "Problemy",
+    "title": "[Sp. z o.o.] Dlaczego księgowość sklepu internetowego zaczyna się komplikować wraz ze wzrostem sprzedaży?"
+  },
+  {
+    "category": "Problemy",
+    "title": "[Sp. z o.o.] Co firma traci, gdy zamknięcie miesiąca trwa tak długo, że dane przestają być użyteczne?"
+  },
+  {
+    "category": "Problemy",
+    "title": "[Sp. z o.o.] Czy księgowość może pomóc ograniczyć sytuacje, w których właściciel jest zaskakiwany wysokością zobowiązań?"
+  },
+  {
+    "category": "Problemy",
+    "title": "[Sp. z o.o.] Co się dzieje, kiedy za obsługę klienta nie odpowiada jedna konkretna osoba?"
+  },
+  {
+    "category": "Problemy",
+    "title": "[Sp. z o.o.] Dlaczego standardowa księgowość nie zawsze dostarcza zarządowi danych potrzebnych do zarządzania?"
+  },
+  {
+    "category": "Problemy",
+    "title": "[NGO] Co może się stać, gdy księgowość nie rozdziela poprawnie działalności statutowej, odpłatnej i gospodarczej?"
+  },
+  {
+    "category": "Problemy",
+    "title": "[NGO] Dlaczego rozliczenie dotacji nie powinno zaczynać się dopiero przed terminem złożenia sprawozdania?"
+  },
+  {
+    "category": "Problemy",
+    "title": "[NGO] Jakie błędy księgowe mogą prowadzić do zakwestionowania części wydatków z dotacji?"
+  },
+  {
+    "category": "Problemy",
+    "title": "[NGO] Co zrobić, jeżeli organizacja zorientuje się po terminie, że nie złożyła wymaganego sprawozdania?"
+  },
+  {
+    "category": "Problemy",
+    "title": "[NGO] Po czym poznać, że UEPIK przestała odpowiadać skali i sposobowi działania organizacji?"
+  },
+  {
+    "category": "Problemy",
+    "title": "[Klub sportowy] Dlaczego pomylenie sponsoringu z darowizną może prowadzić do problemów podatkowych?"
+  },
+  {
+    "category": "Problemy",
+    "title": "[NGO] Jak prawidłowo uporządkować księgowość, gdy organizacja otrzymuje składki, darowizny, dotacje i wpływy z działalności odpłatnej?"
+  },
+  {
+    "category": "Problemy",
+    "title": "[Klub sportowy] Jak przygotować księgowość klubu do kontroli rozliczenia dotacji?"
+  },
+  {
+    "category": "Problemy",
+    "title": "[JDG] Jakie konsekwencje może mieć źle dobrana forma opodatkowania?"
+  },
+  {
+    "category": "Problemy",
+    "title": "[JDG] Jakie błędy najczęściej popełnia przedsiębiorca, który sam prowadzi księgowość?"
+  },
+  {
+    "category": "Problemy",
+    "title": "[JDG] Dlaczego wdrożenie KSeF nie rozwiązuje automatycznie problemu chaosu w dokumentach?"
+  },
+  {
+    "category": "Problemy",
+    "title": "[Wspólne] Co powinno się wydarzyć, kiedy księgowy prowadzący klienta idzie na urlop albo choruje?"
+  },
+  {
+    "category": "Problemy",
+    "title": "[Wspólne] Po czym poznać, że zakres umowy z biurem nie odpowiada już rzeczywistym potrzebom organizacji?"
+  },
+  {
+    "category": "Problemy",
+    "title": "[Wspólne] Dlaczego właściciel albo zarząd wciąż musi rozwiązywać problemy księgowe, skoro płaci za zewnętrzną obsługę?"
+  },
+  {
+    "category": "Zestawienia i porównania",
+    "title": "[Sp. z o.o.] Własna księgowa czy zewnętrzne biuro rachunkowe – kiedy które rozwiązanie ma więcej sensu?"
+  },
+  {
+    "category": "Zestawienia i porównania",
+    "title": "[Sp. z o.o.] Lokalne biuro rachunkowe czy księgowość całkowicie online – co naprawdę się różni?"
+  },
+  {
+    "category": "Zestawienia i porównania",
+    "title": "[Sp. z o.o.] Dedykowana księgowa czy obsługa przez cały zespół – który model jest bezpieczniejszy?"
+  },
+  {
+    "category": "Zestawienia i porównania",
+    "title": "[Sp. z o.o.] Tani pakiet księgowy czy szersza obsługa – za co właściwie płaci spółka?"
+  },
+  {
+    "category": "Zestawienia i porównania",
+    "title": "[Sp. z o.o.] Sama księgowość podatkowa czy księgowość z miesięcznym raportowaniem dla zarządu?"
+  },
+  {
+    "category": "Zestawienia i porównania",
+    "title": "[Sp. z o.o.] Biuro rachunkowe z dostępem do doradcy podatkowego czy zwykłe biuro księgowe?"
+  },
+  {
+    "category": "Zestawienia i porównania",
+    "title": "[Sp. z o.o.] Przejęcie ksiąg z audytem startowym czy rozpoczęcie obsługi bez sprawdzania historii?"
+  },
+  {
+    "category": "Zestawienia i porównania",
+    "title": "[Sp. z o.o.] Stały abonament czy rozliczenie zależne od liczby dokumentów – który model jest bardziej przewidywalny?"
+  },
+  {
+    "category": "Zestawienia i porównania",
+    "title": "[Sp. z o.o.] Biuro specjalizujące się w e-commerce czy zwykłe biuro rachunkowe – kiedy specjalizacja ma znaczenie?"
+  },
+  {
+    "category": "Zestawienia i porównania",
+    "title": "[Sp. z o.o.] Pełne zlecenie księgowości na zewnątrz czy pozostawienie części pracy administracyjnej wewnątrz firmy?"
+  },
+  {
+    "category": "Zestawienia i porównania",
+    "title": "[Sp. z o.o.] Małe wyspecjalizowane biuro czy duża sieć księgowa – jakie są realne różnice?"
+  },
+  {
+    "category": "Zestawienia i porównania",
+    "title": "[Sp. z o.o.] Dokumenty wysyłane mailem czy uporządkowany system obiegu dokumentów?"
+  },
+  {
+    "category": "Zestawienia i porównania",
+    "title": "[Sp. z o.o./JDG] Pełna księgowość spółki z o.o. a KPiR w JDG – co zmienia się z perspektywy właściciela?"
+  },
+  {
+    "category": "Zestawienia i porównania",
+    "title": "[Sp. z o.o.] Klasyczny CIT czy estoński CIT – co zmienia się w księgowości i sposobie wypłacania pieniędzy?"
+  },
+  {
+    "category": "Zestawienia i porównania",
+    "title": "[Sp. z o.o./JDG] Pozostać na JDG czy przejść na spółkę z o.o. – jak zmieni się księgowość i jej koszt?"
+  },
+  {
+    "category": "Zestawienia i porównania",
+    "title": "[Sp. z o.o.] Biuro, które tylko księguje, czy biuro, które również porządkuje informacje dla zarządu?"
+  },
+  {
+    "category": "Zestawienia i porównania",
+    "title": "[NGO] UEPIK czy pełna księgowość – jakie są praktyczne różnice dla organizacji?"
+  },
+  {
+    "category": "Zestawienia i porównania",
+    "title": "[NGO] Księgowość prowadzona przez wolontariusza czy wyspecjalizowane biuro NGO?"
+  },
+  {
+    "category": "Zestawienia i porównania",
+    "title": "[NGO] Zwykłe biuro rachunkowe czy biuro specjalizujące się w fundacjach i stowarzyszeniach?"
+  },
+  {
+    "category": "Zestawienia i porównania",
+    "title": "[NGO] Jedno biuro do księgowości i rozliczania dotacji czy dwóch oddzielnych specjalistów?"
+  },
+  {
+    "category": "Zestawienia i porównania",
+    "title": "[Klub sportowy] Klub sportowy jako stowarzyszenie a klub działający w innej formie prawnej – co zmienia się w księgowości?"
+  },
+  {
+    "category": "Zestawienia i porównania",
+    "title": "[Klub sportowy] Sponsoring czy darowizna – czym różnią się podatkowo i dokumentacyjnie?"
+  },
+  {
+    "category": "Zestawienia i porównania",
+    "title": "[NGO] Organizacja ze statusem OPP i bez statusu OPP – jakie dodatkowe obowiązki pojawiają się w księgowości i sprawozdawczości?"
+  },
+  {
+    "category": "Zestawienia i porównania",
+    "title": "[NGO] Rozliczanie projektów w arkuszach kalkulacyjnych czy w dobrze ustawionym systemie księgowym?"
+  },
+  {
+    "category": "Zestawienia i porównania",
+    "title": "[JDG] Biuro rachunkowe czy aplikacja do samodzielnego księgowania?"
+  },
+  {
+    "category": "Zestawienia i porównania",
+    "title": "[JDG] Księgowość lokalna czy całkowicie zdalna?"
+  },
+  {
+    "category": "Zestawienia i porównania",
+    "title": "[JDG] Stała księgowa czy kontakt z infolinią dużego operatora księgowego?"
+  },
+  {
+    "category": "Zestawienia i porównania",
+    "title": "[JDG] Samodzielna księgowość czy outsourcing – kiedy oszczędność przestaje mieć sens?"
+  },
+  {
+    "category": "Zestawienia i porównania",
+    "title": "[Wspólne] Najtańsza usługa czy dostęp do człowieka, który odpowiada na pytania – co jest więcej warte?"
+  },
+  {
+    "category": "Zestawienia i porównania",
+    "title": "[Wspólne] Czy po zmianie formy działalności warto zostać z tym samym biurem, czy poszukać specjalisty od nowego rodzaju księgowości?"
+  },
+  {
+    "category": "Recenzje",
+    "title": "[Sp. z o.o.] Czy opinie w Google naprawdę pomagają wybrać biuro rachunkowe dla spółki?"
+  },
+  {
+    "category": "Recenzje",
+    "title": "[Sp. z o.o.] Na jakie informacje w opiniach klientów warto zwracać uwagę, a które są mało znaczące?"
+  },
+  {
+    "category": "Recenzje",
+    "title": "[Sp. z o.o.] Czy opinia właściciela podobnej spółki jest więcej warta niż ogólne „polecam”?"
+  },
+  {
+    "category": "Recenzje",
+    "title": "[Sp. z o.o.] Co mówi o biurze opinia klienta współpracującego z nim od pięciu albo dziesięciu lat?"
+  },
+  {
+    "category": "Recenzje",
+    "title": "[Sp. z o.o.] Jak interpretować powtarzające się negatywne opinie dotyczące kontaktu z księgową?"
+  },
+  {
+    "category": "Recenzje",
+    "title": "[Sp. z o.o.] Czy szybkość odpowiedzi pojawiająca się w recenzjach jest dobrym wskaźnikiem jakości biura?"
+  },
+  {
+    "category": "Recenzje",
+    "title": "[Sp. z o.o.] Jak sprawdzić w opiniach, czy klient rzeczywiście ma przypisaną konkretną osobę?"
+  },
+  {
+    "category": "Recenzje",
+    "title": "[Sp. z o.o.] Dlaczego klienci tak często chwalą księgowych za jasne tłumaczenie przepisów?"
+  },
+  {
+    "category": "Recenzje",
+    "title": "[Sp. z o.o.] Czy terminowość rozliczeń powinna być przewagą biura, czy jedynie podstawowym standardem?"
+  },
+  {
+    "category": "Recenzje",
+    "title": "[Sp. z o.o.] Jak rozpoznać w opiniach, czy biuro działa proaktywnie, czy tylko reaguje na pytania?"
+  },
+  {
+    "category": "Recenzje",
+    "title": "[Sp. z o.o.] Jak oceniać opinię klienta opisującego błąd księgowy i sposób, w jaki biuro go naprawiło?"
+  },
+  {
+    "category": "Recenzje",
+    "title": "[Sp. z o.o.] Czy dobrą oznaką jest sytuacja, gdy księgowy przyznaje, że czegoś nie wie i kieruje klienta do właściwego specjalisty?"
+  },
+  {
+    "category": "Recenzje",
+    "title": "[Sp. z o.o.] Jakich opinii szukać, jeżeli najbardziej obawiamy się samego procesu zmiany biura?"
+  },
+  {
+    "category": "Recenzje",
+    "title": "[Sp. z o.o.] Czy warto szukać opinii klientów, którzy przeszli z biurem kontrolę urzędu?"
+  },
+  {
+    "category": "Recenzje",
+    "title": "[Sp. z o.o.] Co opinie mogą powiedzieć o dodatkowych i nieprzewidzianych opłatach?"
+  },
+  {
+    "category": "Recenzje",
+    "title": "[Sp. z o.o.] Czy klienci rzeczywiście doceniają dostęp online do dokumentów i informacji finansowych?"
+  },
+  {
+    "category": "Recenzje",
+    "title": "[NGO] Jakie opinie powinno sprawdzać NGO przed wyborem biura rachunkowego?"
+  },
+  {
+    "category": "Recenzje",
+    "title": "[NGO] Czy warto szukać referencji organizacji, które rozliczały z danym biurem dotacje?"
+  },
+  {
+    "category": "Recenzje",
+    "title": "[NGO] Jak sprawdzić, czy biuro ma rzeczywiste doświadczenie ze sprawozdawczością NGO, a nie tylko deklaruje specjalizację?"
+  },
+  {
+    "category": "Recenzje",
+    "title": "[NGO] Jakie opinie powinny interesować organizację, która obawia się kontroli grantodawcy?"
+  },
+  {
+    "category": "Recenzje",
+    "title": "[Klub sportowy] Czy referencja innego klubu sportowego jest istotniejsza niż opinia zwykłej firmy?"
+  },
+  {
+    "category": "Recenzje",
+    "title": "[Klub sportowy] Jak sprawdzić, czy biuro zna w praktyce rozliczanie sponsorów, dotacji i składek?"
+  },
+  {
+    "category": "Recenzje",
+    "title": "[NGO] Czy rekomendacja innej fundacji jest ważniejsza niż liczba gwiazdek w Google?"
+  },
+  {
+    "category": "Recenzje",
+    "title": "[NGO] Jak oceniać biuro, które przejmowało księgowość po księgowej-wolontariuszu albo poprzednim nierzetelnym dostawcy?"
+  },
+  {
+    "category": "Recenzje",
+    "title": "[JDG] Jak czytać opinie o dużych internetowych biurach rachunkowych?"
+  },
+  {
+    "category": "Recenzje",
+    "title": "[JDG] Czy informacja, że klient od kilku lat ma tę samą księgową, jest istotna?"
+  },
+  {
+    "category": "Recenzje",
+    "title": "[JDG] Jak dużo mówi opinia klienta opisującego pomoc przy niestandardowej fakturze zagranicznej?"
+  },
+  {
+    "category": "Recenzje",
+    "title": "[Wspólne] Czy same pięciogwiazdkowe opinie powinny wzbudzać większe zaufanie?"
+  },
+  {
+    "category": "Recenzje",
+    "title": "[Wspólne] Gdzie poza Google warto sprawdzać wiarygodność biura rachunkowego?"
+  },
+  {
+    "category": "Recenzje",
+    "title": "[Wspólne] Co jest ważniejsze przy wyborze biura: liczba opinii czy ich konkretność?"
+  },
+  {
+    "category": "Najlepsze w swojej klasie",
+    "title": "[Sp. z o.o.] Jak powinno wyglądać dobre biuro rachunkowe dla rozwijającej się spółki z o.o.?"
+  },
+  {
+    "category": "Najlepsze w swojej klasie",
+    "title": "[Sp. z o.o.] Jak wybrać najlepszą księgowość dla spółki prowadzącej e-commerce?"
+  },
+  {
+    "category": "Najlepsze w swojej klasie",
+    "title": "[Sp. z o.o.] Jakiego biura powinna szukać spółka mająca dużo transakcji zagranicznych?"
+  },
+  {
+    "category": "Najlepsze w swojej klasie",
+    "title": "[Sp. z o.o.] Jak powinna wyglądać księgowość firmy z wieloma rachunkami, rozrachunkami i dużą liczbą płatności?"
+  },
+  {
+    "category": "Najlepsze w swojej klasie",
+    "title": "[Sp. z o.o.] Jakiego biura powinna szukać spółka zatrudniająca coraz więcej pracowników?"
+  },
+  {
+    "category": "Najlepsze w swojej klasie",
+    "title": "[Sp. z o.o.] Jak wybrać biuro, jeżeli zarząd oczekuje miesięcznych raportów i aktualnych danych?"
+  },
+  {
+    "category": "Najlepsze w swojej klasie",
+    "title": "[Sp. z o.o.] Jakie biuro najlepiej poradzi sobie ze zmianą księgowości w trakcie roku?"
+  },
+  {
+    "category": "Najlepsze w swojej klasie",
+    "title": "[Sp. z o.o.] Jakiego biura szukać, jeżeli podejrzewamy, że w dotychczasowych księgach są błędy?"
+  },
+  {
+    "category": "Najlepsze w swojej klasie",
+    "title": "[Sp. z o.o.] Jak powinien wyglądać model obsługi, jeśli właściciel chce mieć jednego konkretnego opiekuna?"
+  },
+  {
+    "category": "Najlepsze w swojej klasie",
+    "title": "[Sp. z o.o.] Jak powinno działać dobre biuro rachunkowe obsługujące klientów całkowicie online?"
+  },
+  {
+    "category": "Najlepsze w swojej klasie",
+    "title": "[Sp. z o.o.] Kiedy najlepszym wyborem będzie biuro posiadające stały dostęp do doradcy podatkowego?"
+  },
+  {
+    "category": "Najlepsze w swojej klasie",
+    "title": "[Sp. z o.o.] Jak powinna wyglądać księgowość, która naprawdę ogranicza zaangażowanie właściciela?"
+  },
+  {
+    "category": "Najlepsze w swojej klasie",
+    "title": "[Sp. z o.o.] Jaki czas odpowiedzi powinien być standardem w dobrym biurze rachunkowym?"
+  },
+  {
+    "category": "Najlepsze w swojej klasie",
+    "title": "[Sp. z o.o.] Po jakich mierzalnych cechach można poznać dobrze zorganizowane biuro?"
+  },
+  {
+    "category": "Najlepsze w swojej klasie",
+    "title": "[Sp. z o.o.] Jakiego modelu księgowości powinien szukać właściciel, który nie zna się na finansach?"
+  },
+  {
+    "category": "Najlepsze w swojej klasie",
+    "title": "[NGO] Jak powinno wyglądać dobre biuro rachunkowe dla fundacji korzystającej z dotacji?"
+  },
+  {
+    "category": "Najlepsze w swojej klasie",
+    "title": "[NGO] Jakiego biura powinna szukać organizacja mająca status OPP?"
+  },
+  {
+    "category": "Najlepsze w swojej klasie",
+    "title": "[NGO] Jak powinna wyglądać księgowość organizacji realizującej równocześnie kilka projektów?"
+  },
+  {
+    "category": "Najlepsze w swojej klasie",
+    "title": "[NGO] Jak wybrać księgowość dla organizacji realizującej projekty finansowane ze środków publicznych lub europejskich?"
+  },
+  {
+    "category": "Najlepsze w swojej klasie",
+    "title": "[Klub sportowy] Jakiego biura rachunkowego powinien szukać duży klub korzystający z dotacji samorządowych?"
+  },
+  {
+    "category": "Najlepsze w swojej klasie",
+    "title": "[Klub sportowy] Jak powinna wyglądać księgowość klubu współpracującego z wieloma sponsorami?"
+  },
+  {
+    "category": "Najlepsze w swojej klasie",
+    "title": "[NGO] Jakiego biura powinna szukać organizacja, która przestaje być małą inicjatywą opartą na wolontariacie?"
+  },
+  {
+    "category": "Najlepsze w swojej klasie",
+    "title": "[NGO] Po czym poznać, że dla organizacji najlepsza będzie już pełna księgowość zamiast UEPIK?"
+  },
+  {
+    "category": "Najlepsze w swojej klasie",
+    "title": "[NGO] Jak powinien wyglądać dobry obieg dokumentów w fundacji albo stowarzyszeniu?"
+  },
+  {
+    "category": "Najlepsze w swojej klasie",
+    "title": "[JDG] Jakiego księgowego powinien szukać przedsiębiorca dopiero zakładający działalność?"
+  },
+  {
+    "category": "Najlepsze w swojej klasie",
+    "title": "[JDG] Jak powinna wyglądać dobra obsługa księgowa JDG będącej podatnikiem VAT?"
+  },
+  {
+    "category": "Najlepsze w swojej klasie",
+    "title": "[JDG] Jakiej księgowości potrzebuje JDG współpracująca głównie z klientami zagranicznymi?"
+  },
+  {
+    "category": "Najlepsze w swojej klasie",
+    "title": "[JDG] Kiedy najlepsza będzie aplikacja księgowa, a kiedy człowiek?"
+  },
+  {
+    "category": "Najlepsze w swojej klasie",
+    "title": "[Wspólne] Jakie informacje finansowe dobry księgowy powinien regularnie przekazywać właścicielowi albo zarządowi?"
+  },
+  {
+    "category": "Najlepsze w swojej klasie",
+    "title": "[Wspólne] Jakie pytania trzeba zadać biuru rachunkowemu przed podpisaniem umowy, żeby wybrać właściwe?"
+  },
+  {
+    "category": "Inne i obawy",
+    "title": "[Sp. z o.o.] Czy można bezpiecznie zmienić biuro rachunkowe w środku roku?"
+  },
+  {
+    "category": "Inne i obawy",
+    "title": "[Sp. z o.o.] Co zrobić, jeżeli poprzednie biuro nie chce sprawnie przekazać dokumentów?"
+  },
+  {
+    "category": "Inne i obawy",
+    "title": "[Sp. z o.o.] Kto odpowiada za błędy popełnione przez poprzednią księgowość?"
+  },
+  {
+    "category": "Inne i obawy",
+    "title": "[Sp. z o.o.] Czy nowe biuro powinno sprawdzić księgi przed rozpoczęciem normalnej obsługi?"
+  },
+  {
+    "category": "Inne i obawy",
+    "title": "[Sp. z o.o.] Czy lepiej zmieniać biuro od stycznia, czy termin nie ma aż takiego znaczenia?"
+  },
+  {
+    "category": "Inne i obawy",
+    "title": "[Sp. z o.o.] Ile czasu trwa bezpieczne przejęcie księgowości spółki?"
+  },
+  {
+    "category": "Inne i obawy",
+    "title": "[Sp. z o.o.] Czy nowe biuro może samo kontaktować się z dotychczasowym księgowym i przejąć większość procesu?"
+  },
+  {
+    "category": "Inne i obawy",
+    "title": "[Sp. z o.o.] Ile pracy po stronie zarządu wymaga zmiana biura rachunkowego?"
+  },
+  {
+    "category": "Inne i obawy",
+    "title": "[Sp. z o.o.] Czy księgowość całkowicie online jest bezpieczna dla dokumentów i danych finansowych spółki?"
+  },
+  {
+    "category": "Inne i obawy",
+    "title": "[Sp. z o.o.] Kto w biurze rachunkowym powinien mieć dostęp do danych naszej firmy?"
+  },
+  {
+    "category": "Inne i obawy",
+    "title": "[Sp. z o.o.] Co dzieje się z obsługą spółki, kiedy dedykowana księgowa jest na urlopie?"
+  },
+  {
+    "category": "Inne i obawy",
+    "title": "[Sp. z o.o.] Czy biuro rachunkowe może zagwarantować określony czas odpowiedzi?"
+  },
+  {
+    "category": "Inne i obawy",
+    "title": "[Sp. z o.o.] Skąd wiadomo, że biuro poradzi sobie, jeżeli firma w ciągu roku podwoi skalę działalności?"
+  },
+  {
+    "category": "Inne i obawy",
+    "title": "[Sp. z o.o.] Czy biuro rachunkowe reprezentuje klienta podczas kontroli urzędu?"
+  },
+  {
+    "category": "Inne i obawy",
+    "title": "[Sp. z o.o.] Za co odpowiada biuro rachunkowe, a za co nadal odpowiada zarząd spółki?"
+  },
+  {
+    "category": "Inne i obawy",
+    "title": "[Sp. z o.o.] Czy nowe biuro przyjmie spółkę, jeżeli księgi są nieuporządkowane?"
+  },
+  {
+    "category": "Inne i obawy",
+    "title": "[Sp. z o.o.] Co zrobić, gdy części dokumentów z poprzednich miesięcy po prostu brakuje?"
+  },
+  {
+    "category": "Inne i obawy",
+    "title": "[NGO] Czy można zmienić księgowość w trakcie realizacji dotowanego projektu?"
+  },
+  {
+    "category": "Inne i obawy",
+    "title": "[NGO] Skąd mieć pewność, że nowe biuro zrozumie wymagania konkretnego grantodawcy?"
+  },
+  {
+    "category": "Inne i obawy",
+    "title": "[NGO] Co zrobić, gdy po zmianie księgowości okazuje się, że wcześniejsze wydatki z dotacji zostały źle zaksięgowane?"
+  },
+  {
+    "category": "Inne i obawy",
+    "title": "[NGO] Czy można przejść z UEPIK na pełne księgi i kiedy najlepiej to zrobić?"
+  },
+  {
+    "category": "Inne i obawy",
+    "title": "[NGO] Co grozi organizacji, jeśli sprawozdanie albo deklaracja zostały złożone po terminie?"
+  },
+  {
+    "category": "Inne i obawy",
+    "title": "[Klub sportowy] Jak odróżnić i prawidłowo udokumentować wpływy od sponsorów, darowizny i dotacje?"
+  },
+  {
+    "category": "Inne i obawy",
+    "title": "[Klub sportowy] Jak przechowywać dokumentację projektu, żeby później nie mieć problemu przy kontroli dotacji?"
+  },
+  {
+    "category": "Inne i obawy",
+    "title": "[JDG] Czy mała działalność rzeczywiście potrzebuje księgowej?"
+  },
+  {
+    "category": "Inne i obawy",
+    "title": "[JDG] Czy w okresie zmian związanych z KSeF warto zmieniać księgowość?"
+  },
+  {
+    "category": "Inne i obawy",
+    "title": "[JDG] Czy przesyłanie wszystkich dokumentów przez internet jest bezpieczne?"
+  },
+  {
+    "category": "Inne i obawy",
+    "title": "[JDG] Dlaczego mam płacić kilkaset złotych za biuro, skoro program księgowy kosztuje kilkadziesiąt?"
+  },
+  {
+    "category": "Inne i obawy",
+    "title": "[Wspólne] Czy mogę zadzwonić do księgowego z pojedynczym pytaniem, czy każda dodatkowa konsultacja będzie płatna?"
+  },
+  {
+    "category": "Inne i obawy",
+    "title": "[Wspólne] Jak przed podpisaniem umowy sprawdzić, czy komunikacja z biurem rzeczywiście będzie wyglądała tak dobrze, jak obiecuje sprzedawca?"
+  }
+]

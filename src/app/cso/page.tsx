@@ -469,7 +469,7 @@ function CsoContent({ platform }: { platform: ContentPlatform }) {
                   <Td compact>
                     <ChannelCheckbox checked={Boolean(blogTopics[topic.id])} label="Blog" onChange={() => toggleChecked("blog", topic.id)} />
                   </Td>
-                  <Td strong>{topic.title}</Td>
+                  <Td topic>{topic.title}</Td>
                   <Td>
                     <AppSelect style={{ ...smallSelectStyle, ...statusStyle(topic.status) }} value={topic.status} options={statusOptions} onChange={(value) => updateTopic(topic.id, { status: value as TopicStatus })} />
                   </Td>
@@ -528,8 +528,8 @@ function Th({ children, compact }: { children: ReactNode; compact?: boolean }) {
   return <th style={{ ...thStyle, width: compact ? "72px" : undefined, textAlign: compact ? "center" : "left" }}>{children}</th>;
 }
 
-function Td({ children, strong, compact }: { children: ReactNode; strong?: boolean; compact?: boolean }) {
-  return <td style={{ ...tdStyle, width: compact ? "72px" : undefined, textAlign: compact ? "center" : "left", fontWeight: strong ? 800 : 600 }}>{children}</td>;
+function Td({ children, topic, compact }: { children: ReactNode; topic?: boolean; compact?: boolean }) {
+  return <td style={{ ...tdStyle, width: compact ? "72px" : undefined, textAlign: compact ? "center" : "left", fontWeight: topic ? 400 : 600 }}>{children}</td>;
 }
 
 function Badge({ children }: { children: ReactNode }) {

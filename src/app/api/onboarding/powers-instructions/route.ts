@@ -170,12 +170,12 @@ export async function POST(request: NextRequest) {
   const caregiver = caregiverFromClient(clientRecord);
   const attachments = [
     {
-      fileName: "CRSS-Instrukcja-wysłania-ZUS-PEL.pdf",
+      fileName: "CRSS-Instrukcja-ZUS-PEL.pdf",
       url: `${APP_URL}/CRSS-Instrukcja-wys%C5%82ania-ZUS-PEL.pdf`,
     },
     {
-      fileName: "CRSS-Instrukcja-wysłania -UPL-1.pdf",
-      url: `${APP_URL}/CRSS-Instrukcja-wys%C5%82ania%20-UPL-1.pdf`,
+      fileName: "CRSS-Instrukcja-UPL-1.pdf",
+      url: `${APP_URL}/CRSS-Instrukcja-wys%C5%82ania-UPL-1.pdf`,
     },
   ];
 

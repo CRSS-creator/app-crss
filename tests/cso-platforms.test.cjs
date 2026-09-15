@@ -77,11 +77,12 @@ test("Facebook database notes, statuses and flags survive hydration without writ
   assert.equal(ctx.states[3]["topic-1"], true); assert.equal(ctx.states[4]["topic-1"], true);
   assert.equal(ctx.writes.length, 0);
 });
-test("LinkedIn loads independently and renders LinkedIn plus Blog controls", async () => {
+test("LinkedIn loads independently without channel checkboxes", async () => {
   const ctx = load();
   const tree = ctx.exports.CsoContent({ platform: "linkedin" });
   const html = renderToStaticMarkup(tree);
-  assert.ok(html.includes("LinkedIn")); assert.ok(html.includes("Blog"));
+  assert.ok(html.includes("LinkedIn")); assert.ok(!html.includes("Blog"));
+  assert.ok(!html.includes('type="checkbox"'));
   assert.ok(!html.includes(">FB<"));
   assert.ok(html.includes("Dodaj temat")); assert.ok(html.includes("Notatka"));
   ctx.effects[0](); await new Promise(resolve => setImmediate(resolve));

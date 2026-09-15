@@ -426,7 +426,7 @@ function CsoContent({ platform }: { platform: ContentPlatform }) {
         <div style={panelHeaderStyle}>
           <div>
             <h2 style={sectionTitleStyle}>Plan contentowy — {platform === "facebook" ? "Facebook" : "LinkedIn"}</h2>
-            <p style={hintStyle}>Dodawaj tematy, oznaczaj publikację na {channelLabel} i Blogu oraz zapisuj notatki robocze pod przyciskiem po prawej stronie.</p>
+            <p style={hintStyle}>{platform === "facebook" ? "Dodawaj tematy, oznaczaj publikację na FB i Blogu oraz zapisuj notatki robocze pod przyciskiem po prawej stronie." : "Dodawaj tematy na LinkedIn, zmieniaj ich status i zapisuj notatki robocze pod przyciskiem po prawej stronie."}</p>
           </div>
           <div style={filtersRowStyle}>
             <AppSelect style={filterStyle} value={categoryFilter} options={categoryFilterOptions} onChange={(value) => setCategoryFilter(value as TopicCategory | "Wszystkie")} />
@@ -452,8 +452,7 @@ function CsoContent({ platform }: { platform: ContentPlatform }) {
             <thead>
               <tr>
                 <Th>Kategoria</Th>
-                <Th compact>{channelLabel}</Th>
-                <Th compact>Blog</Th>
+                {platform === "facebook" && <><Th compact>{channelLabel}</Th><Th compact>Blog</Th></>}
                 <Th>Temat</Th>
                 <Th>Status</Th>
                 <Th>Akcje</Th>
@@ -463,12 +462,13 @@ function CsoContent({ platform }: { platform: ContentPlatform }) {
               {filteredTopics.map((topic) => (
                 <tr key={topic.id} style={rowStyle}>
                   <Td><Badge>{topic.category}</Badge></Td>
-                  <Td compact>
+                  {platform === "facebook" && <><Td compact>
                     <ChannelCheckbox checked={Boolean(facebookTopics[topic.id])} label={channelLabel} onChange={() => toggleChecked("facebook", topic.id)} />
                   </Td>
                   <Td compact>
                     <ChannelCheckbox checked={Boolean(blogTopics[topic.id])} label="Blog" onChange={() => toggleChecked("blog", topic.id)} />
                   </Td>
+                  </>}
                   <Td topic>{topic.title}</Td>
                   <Td>
                     <AppSelect style={{ ...smallSelectStyle, ...statusStyle(topic.status) }} value={topic.status} options={statusOptions} onChange={(value) => updateTopic(topic.id, { status: value as TopicStatus })} />

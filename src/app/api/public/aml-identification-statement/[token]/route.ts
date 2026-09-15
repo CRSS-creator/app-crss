@@ -223,7 +223,6 @@ function buildDefaults(client: ClientRecord, register: Record<string, unknown> |
   const registry = asRecord(register?.dane_rejestrowe);
   const identifiers = asRecord(registry.identyfikatory);
   const owners = Array.isArray(register?.beneficjenci_rzeczywisci) ? register.beneficjenci_rzeczywisci as Array<Record<string, unknown>> : [];
-  const firstOwner = owners[0] || {};
   const sources = Array.isArray(verification?.zrodla) ? verification.zrodla as Array<Record<string, unknown>> : [];
   const sourceNames = sources
     .filter((source) => String(source.status || "") !== "skipped")
@@ -236,8 +235,10 @@ function buildDefaults(client: ClientRecord, register: Record<string, unknown> |
     clientIdentifier: identifierParts.join(", "),
     verificationDate: verification?.created_at ? String(verification.created_at).slice(0, 10) : new Date().toISOString().slice(0, 10),
     clientVerificationSources: sourceNames.join(", "),
-    beneficialOwnerName: String(firstOwner.label || [firstOwner.pierwszeImie, firstOwner.nazwisko].filter(Boolean).join(" ") || ""),
-    beneficialOwnerControlType: firstOwner.typ === "jdg" ? "przedsiębiorca" : String(firstOwner.rola || firstOwner.typ || ""),
+    beneficialOwners: owners.length ? owners.map((owner) => ({
+      fullName: String(owner.label || [owner.pierwszeImie, owner.kolejneImiona, owner.nazwisko].filter(Boolean).join(" ") || ""),
+      controlType: owner.typ === "jdg" ? "przedsiębiorca" : String(owner.rola || owner.typ || ""),
+    })) : [{ fullName: "", controlType: "" }],
   };
 }
 

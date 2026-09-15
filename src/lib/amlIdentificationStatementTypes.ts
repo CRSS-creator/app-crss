@@ -1,5 +1,10 @@
 export type YesNoValue = "" | "tak" | "nie";
 
+export type AmlIdentificationBeneficialOwner = {
+  fullName: string;
+  controlType: string;
+};
+
 export type AmlIdentificationStatementData = {
   clientName: string;
   clientIdentifier: string;
@@ -9,6 +14,8 @@ export type AmlIdentificationStatementData = {
   clientVerificationSources: string;
   clientVerificationResult: "pozytywny" | "wymaga_wyjasnien" | "negatywny" | "";
   clientNotes: string;
+  beneficialOwners?: AmlIdentificationBeneficialOwner[];
+  // Retained for reading statements saved before multiple owners were supported.
   beneficialOwnerName: string;
   beneficialOwnerControlType: string;
   beneficialOwnerSources: string[];
@@ -55,6 +62,7 @@ export function emptyAmlIdentificationStatementData(): AmlIdentificationStatemen
     clientVerificationSources: "",
     clientVerificationResult: "",
     clientNotes: "",
+    beneficialOwners: [{ fullName: "", controlType: "" }],
     beneficialOwnerName: "",
     beneficialOwnerControlType: "",
     beneficialOwnerSources: [],
@@ -82,8 +90,12 @@ export function validateAmlIdentificationStatementData(data: AmlIdentificationSt
   requireText(data.actionType, "Rodzaj czynności", missing);
   requireText(data.clientVerificationSources, "Źródła weryfikacji klienta", missing);
   requireText(data.clientVerificationResult, "Wynik weryfikacji klienta", missing);
-  requireText(data.beneficialOwnerName, "Imię i nazwisko beneficjenta rzeczywistego", missing);
-  requireText(data.beneficialOwnerControlType, "Rodzaj kontroli beneficjenta rzeczywistego", missing);
+  const owners = identificationBeneficialOwners(data);
+  if (!owners.length) missing.push("Co najmniej jeden beneficjent rzeczywisty");
+  owners.forEach((owner, index) => {
+    requireText(owner.fullName, `Beneficjent ${index + 1}: imię i nazwisko`, missing);
+    requireText(owner.controlType, `Beneficjent ${index + 1}: rodzaj kontroli`, missing);
+  });
   if (!data.beneficialOwnerSources?.length) missing.push("Źródła danych beneficjenta rzeczywistego");
   requireYesNo(data.ownershipStructureEstablished, "Czy struktura własności i kontroli została ustalona", missing);
   requireYesNo(data.beneficialOwnerDataConsistent, "Czy dane beneficjenta są spójne z rejestrami i dokumentami", missing);
@@ -109,4 +121,14 @@ function requireText(value: string | null | undefined, label: string, missing: s
 
 function requireYesNo(value: YesNoValue | undefined, label: string, missing: string[]) {
   if (value !== "tak" && value !== "nie") missing.push(label);
+}
+
+export function identificationBeneficialOwners(data: Partial<AmlIdentificationStatementData>): AmlIdentificationBeneficialOwner[] {
+  if (Array.isArray(data.beneficialOwners)) {
+    return data.beneficialOwners.map((owner) => ({
+      fullName: typeof owner?.fullName === "string" ? owner.fullName : "",
+      controlType: typeof owner?.controlType === "string" ? owner.controlType : "",
+    }));
+  }
+  return [{ fullName: data.beneficialOwnerName || "", controlType: data.beneficialOwnerControlType || "" }];
 }

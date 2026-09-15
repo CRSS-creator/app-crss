@@ -8,6 +8,7 @@ import {
   ACTION_TYPE_OPTIONS,
   BENEFICIAL_OWNER_SOURCE_OPTIONS,
   emptyAmlIdentificationStatementData,
+  identificationBeneficialOwners,
   validateAmlIdentificationStatementData,
   type AmlIdentificationStatementData,
   type PublicAmlIdentificationStatementResponse,
@@ -45,7 +46,7 @@ export default function AmlIdentificationStatementPage() {
       if (!active) return;
       setResponse(data);
       if (data.status === "active") {
-        setDraft((current) => ({ ...current, ...(data.defaults || {}) }));
+        setDraft((current) => ({ ...current, ...(data.defaults || {}), beneficialOwners: identificationBeneficialOwners(data.defaults || {}) }));
       }
       setLoading(false);
     }
@@ -132,10 +133,17 @@ export default function AmlIdentificationStatementPage() {
         <section style={sectionStyle}>
           <h2 style={sectionTitleStyle}>Identyfikacja beneficjenta rzeczywistego</h2>
           <Statement>Potwierdzam, że przeprowadzono identyfikację beneficjenta rzeczywistego oraz podjęto uzasadnione czynności w celu weryfikacji jego tożsamości.</Statement>
-          <div style={gridStyle}>
-            <Field label="Imię i nazwisko beneficjenta rzeczywistego" required><input style={inputStyle} value={draft.beneficialOwnerName} onChange={(event) => update("beneficialOwnerName", event.target.value)} /></Field>
-            <Field label="Rodzaj kontroli" required><input style={inputStyle} value={draft.beneficialOwnerControlType} onChange={(event) => update("beneficialOwnerControlType", event.target.value)} /></Field>
-          </div>
+          {identificationBeneficialOwners(draft).map((owner, index, owners) => (
+            <div key={index} style={sectionStyle}>
+              <h3 style={sectionTitleStyle}>Beneficjent {index + 1}</h3>
+              <div style={gridStyle}>
+                <Field label="Imię i nazwisko beneficjenta rzeczywistego" required><input style={inputStyle} value={owner.fullName} onChange={(event) => update("beneficialOwners", owners.map((item, itemIndex) => itemIndex === index ? { ...item, fullName: event.target.value } : item))} /></Field>
+                <Field label="Rodzaj kontroli" required><input style={inputStyle} value={owner.controlType} onChange={(event) => update("beneficialOwners", owners.map((item, itemIndex) => itemIndex === index ? { ...item, controlType: event.target.value } : item))} /></Field>
+              </div>
+              {owners.length > 1 && <button type="button" style={secondaryButtonStyle} onClick={() => update("beneficialOwners", owners.filter((_, itemIndex) => itemIndex !== index))}>Usuń beneficjenta {index + 1}</button>}
+            </div>
+          ))}
+          <button type="button" style={secondaryButtonStyle} onClick={() => update("beneficialOwners", [...identificationBeneficialOwners(draft), { fullName: "", controlType: "" }])}>Dodaj beneficjenta</button>
           <div style={checkboxGridStyle}>
             {BENEFICIAL_OWNER_SOURCE_OPTIONS.map((source) => (
               <label key={source} style={checkboxStyle}>
@@ -241,3 +249,4 @@ const segmentActiveStyle: CSSProperties = { ...segmentStyle, background: colors.
 const confirmationStyle: CSSProperties = { display: "flex", gap: "10px", alignItems: "flex-start", color: colors.text, fontWeight: 800, lineHeight: 1.45 };
 const primaryButtonStyle: CSSProperties = { border: 0, background: colors.red, color: "#fff", borderRadius: radius.button, padding: "14px 18px", fontWeight: 900, cursor: "pointer", alignSelf: "flex-start" };
 const disabledButtonStyle: CSSProperties = { ...primaryButtonStyle, opacity: 0.65, cursor: "not-allowed" };
+const secondaryButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, background: "#fff", color: colors.navy, borderRadius: radius.button, padding: "10px 14px", fontWeight: 800, cursor: "pointer", alignSelf: "flex-start" };

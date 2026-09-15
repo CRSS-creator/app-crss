@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { PDFDocument, PDFFont, PDFPage, rgb } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
-import { actionTypeLabel, type AmlIdentificationStatementData } from "@/lib/amlIdentificationStatementTypes";
+import { identificationBeneficialOwners, actionTypeLabel, type AmlIdentificationStatementData } from "@/lib/amlIdentificationStatementTypes";
 
 type PdfInput = {
   formToken: string;
@@ -54,8 +54,14 @@ export async function buildAmlIdentificationStatementPdf(input: PdfInput): Promi
 
   section(context, "Identyfikacja beneficjenta rzeczywistego");
   paragraph(context, "Potwierdzam, że przeprowadzono identyfikację beneficjenta rzeczywistego oraz podjęto uzasadnione czynności w celu weryfikacji jego tożsamości.", 9.3);
-  field(context, "Imię i nazwisko beneficjenta rzeczywistego", input.data.beneficialOwnerName);
-  field(context, "Rodzaj kontroli", input.data.beneficialOwnerControlType);
+  identificationBeneficialOwners(input.data).forEach((owner, index) => {
+    const nameLabel = `Beneficjent ${index + 1}: imię i nazwisko`;
+    const nameHeight = Math.max(wrapText(nameLabel + ":", LABEL_WIDTH, 8.2, context.font).length, wrapText(owner.fullName, VALUE_WIDTH, 9.3, context.font).length) * LINE_HEIGHT + FIELD_GAP;
+    const controlHeight = Math.max(wrapText("Rodzaj kontroli:", LABEL_WIDTH, 8.2, context.font).length, wrapText(owner.controlType, VALUE_WIDTH, 9.3, context.font).length) * LINE_HEIGHT + FIELD_GAP;
+    ensureSpace(context, nameHeight + controlHeight);
+    field(context, nameLabel, owner.fullName);
+    field(context, "Rodzaj kontroli", owner.controlType);
+  });
   field(context, "Źródła danych", input.data.beneficialOwnerSources.join(", "));
   field(context, "Struktura własności i kontroli została ustalona", yesNo(input.data.ownershipStructureEstablished));
   field(context, "Dane są spójne z rejestrami i dokumentami", yesNo(input.data.beneficialOwnerDataConsistent));
@@ -114,7 +120,7 @@ function drawText(context: PdfContext, text: string, x: number, size: number, co
 }
 
 function section(context: PdfContext, title: string) {
-  ensureSpace(context, 44);
+  ensureSpace(context, 85);
   context.y -= 10;
   drawText(context, title, MARGIN, 13, colors.navy);
   context.y -= 15;

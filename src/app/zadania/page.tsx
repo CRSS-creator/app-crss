@@ -86,7 +86,7 @@ function TasksContent({ currentRole }: { currentRole: UserRole | null }) {
   const [loading, setLoading] = useState(true);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [creatingTask, setCreatingTask] = useState(false);
-  const [statusFilter, setStatusFilter] = useState(EMPTY_FILTER);
+  const [statusFilter, setStatusFilter] = useState("do_zrobienia");
   const [assigneeFilter, setAssigneeFilter] = useState(EMPTY_FILTER);
   const [clientFilter, setClientFilter] = useState(EMPTY_FILTER);
   const [searchQuery, setSearchQuery] = useState("");

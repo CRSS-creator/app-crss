@@ -122,6 +122,7 @@ function TasksContent({ currentRole }: { currentRole: UserRole | null }) {
     const { data: userData } = await supabase.auth.getUser();
     const userId = userData.user?.id ?? null;
     setCurrentUserId(userId);
+    setAssigneeFilter(userId ?? EMPTY_FILTER);
 
     const [tasksResult, timersResult, assigneesResult, clientsResult] = await Promise.all([
       fetchTasks(),

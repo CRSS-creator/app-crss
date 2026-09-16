@@ -65,7 +65,8 @@ const PRIORITY_OPTIONS: { value: TaskPriority; label: string }[] = [
   { value: "wysoki", label: "Wysoki" },
   { value: "pilne", label: "Pilne" },
 ];
-const STATUS_FILTER_OPTIONS = [{ value: EMPTY_FILTER, label: "Status" }, ...STATUS_OPTIONS];
+const ACTIVE_STATUS_FILTER = "aktywne";
+const STATUS_FILTER_OPTIONS = [{ value: EMPTY_FILTER, label: "Status" }, { value: ACTIVE_STATUS_FILTER, label: "Do zrobienia i w trakcie" }, ...STATUS_OPTIONS];
 
 export default function TasksPage() {
   return (
@@ -86,7 +87,7 @@ function TasksContent({ currentRole }: { currentRole: UserRole | null }) {
   const [loading, setLoading] = useState(true);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [creatingTask, setCreatingTask] = useState(false);
-  const [statusFilter, setStatusFilter] = useState("do_zrobienia");
+  const [statusFilter, setStatusFilter] = useState(ACTIVE_STATUS_FILTER);
   const [assigneeFilter, setAssigneeFilter] = useState(EMPTY_FILTER);
   const [clientFilter, setClientFilter] = useState(EMPTY_FILTER);
   const [searchQuery, setSearchQuery] = useState("");
@@ -101,7 +102,7 @@ function TasksContent({ currentRole }: { currentRole: UserRole | null }) {
       const query = searchQuery.trim().toLowerCase();
 
       return (
-        (statusFilter === EMPTY_FILTER || task.status === statusFilter) &&
+        (statusFilter === EMPTY_FILTER || (statusFilter === ACTIVE_STATUS_FILTER ? task.status === "do_zrobienia" || task.status === "w_trakcie" : task.status === statusFilter)) &&
         (assigneeFilter === EMPTY_FILTER || task.osoba_id === assigneeFilter) &&
         (clientFilter === EMPTY_FILTER || (clientFilter === "internal" && task.czy_wewnetrzne) || task.klient_id === clientFilter) &&
         (!query || text.includes(query))

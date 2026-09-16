@@ -136,6 +136,7 @@ export type CfoTeamMember = {
 };
 
 export type CfoClientTimeEntry = {
+  profiles?: { client_work_hourly_rate: number | null } | { client_work_hourly_rate: number | null }[] | null;
   id: string;
   klient_id: string | null;
   osoba_id: string;
@@ -533,7 +534,7 @@ export async function fetchCfoClientTimeEntries(period: string) {
 
   return supabase
     .from("czas_pracy")
-    .select("id, klient_id, osoba_id, started_at, ended_at, duration_seconds, miesiac_rozliczeniowy")
+    .select("id, klient_id, osoba_id, started_at, ended_at, duration_seconds, miesiac_rozliczeniowy, profiles!czas_pracy_osoba_id_fkey(client_work_hourly_rate)")
     .not("ended_at", "is", null)
     .gte("started_at", from)
     .lt("started_at", to);
@@ -542,7 +543,7 @@ export async function fetchCfoClientTimeEntries(period: string) {
 export async function fetchCfoClientTimeEntriesRange(from: string, to: string) {
   return supabase
     .from("czas_pracy")
-    .select("id, klient_id, osoba_id, started_at, ended_at, duration_seconds, miesiac_rozliczeniowy")
+    .select("id, klient_id, osoba_id, started_at, ended_at, duration_seconds, miesiac_rozliczeniowy, profiles!czas_pracy_osoba_id_fkey(client_work_hourly_rate)")
     .not("ended_at", "is", null)
     .gte("started_at", from)
     .lt("started_at", startOfNextMonth(to));

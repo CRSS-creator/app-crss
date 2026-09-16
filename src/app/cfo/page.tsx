@@ -1544,7 +1544,8 @@ function buildClientProfitability(period: string, clients: CfoClientRow[], emplo
   timeEntries.forEach((entry) => {
     if (!entry.klient_id) return;
     const hours = Number(entry.duration_seconds || 0) / 3600;
-    const hourlyCost = hourlyCostByPerson.get(entry.osoba_id) || 0;
+    const profile = Array.isArray(entry.profiles) ? entry.profiles[0] : entry.profiles;
+    const hourlyCost = profile?.client_work_hourly_rate ?? hourlyCostByPerson.get(entry.osoba_id) ?? 0;
     clientHours.set(entry.klient_id, (clientHours.get(entry.klient_id) || 0) + hours);
     clientLaborCost.set(entry.klient_id, (clientLaborCost.get(entry.klient_id) || 0) + hours * hourlyCost);
   });

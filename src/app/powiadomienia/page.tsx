@@ -36,6 +36,33 @@ export default function NotificationsPage() {
   );
 }
 
+function RecurringNotificationDetails({ notification }: { notification: AppNotification }) {
+  const items = Array.isArray(notification.metadata.items)
+    ? notification.metadata.items.filter((item): item is Record<string, unknown> =>
+      typeof item === "object" && item !== null && !Array.isArray(item))
+    : [];
+  if (!items.length) return null;
+
+  return (
+    <details style={{ marginTop: 12 }}>
+      <summary style={{ cursor: "pointer", fontWeight: 700 }}>Pokaż zadania i klientów ({items.length})</summary>
+      <ul style={{ paddingLeft: 22, marginBottom: 0 }}>
+        {items.map((item, index) => {
+          const period = typeof item.period === "string" && /^\d{4}-\d{2}-\d{2}$/.test(item.period)
+            ? `${item.period.slice(5, 7)}.${item.period.slice(0, 4)}` : "nie podano";
+          return (
+            <li key={typeof item.realization_id === "string" ? item.realization_id : index} style={{ marginTop: 8 }}>
+              <strong>{typeof item.client_name === "string" ? item.client_name : "Klient bez nazwy"}</strong>
+              {" — "}{typeof item.task_title === "string" ? item.task_title : "Zadanie cykliczne"}
+              {" · okres: "}{period}
+            </li>
+          );
+        })}
+      </ul>
+    </details>
+  );
+}
+
 function NotificationsContent() {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [loading, setLoading] = useState(true);
@@ -174,6 +201,7 @@ function NotificationsContent() {
                     </div>
                   </div>
                   {isPayrollContractNotification && detailsExpanded && <PayrollContractNotificationTable notification={notification} />}
+                  {isRecurringTaskNotification && <RecurringNotificationDetails notification={notification} />}
                   <div style={itemActionsStyle}>
                     {isTaskNotification && <a style={secondaryButtonStyle} href="/zadania">Otwórz zadania</a>}
                     {(isCrmFollowUpNotification || isCrmLostRecontactNotification) && <a style={secondaryButtonStyle} href={crmNotificationHref(notification)}>Pokaż szansę</a>}

@@ -14,6 +14,13 @@ while the sidebar counted every unread row.
   link work with the already deployed application.
 - Only open tasks with active clients, templates and caregivers are included.
   The digest stores task IDs, client IDs/names, titles and periods in metadata.
+- Notifications in month M select actual realizations for settlement month M-1.
+  The initial fix mistakenly selected current-month tasks by their stored due
+  date; changing the label alone would still leave incorrect task IDs/statuses.
+  Notification deadlines stored in the settlement month are projected into
+  the following month; already next-month deadlines are preserved. Short months,
+  year rollover and explicitly rescheduled days are handled without modifying
+  task or settlement records. Empty corrected digests become read.
 - Polling updates the contents but never resets read state or creation time.
   An empty digest becomes read and remains as the idempotency record.
 - Task completion, deletion and rescheduling refresh existing digests. Client
@@ -46,3 +53,8 @@ passed (the layout has an existing unrelated image warning).
 
 Supabase migration version: `20260921085132`. Application deployment is manual;
 this change does not deploy to the application server.
+
+Calendar and source-period regression checks: run
+`tests/notifications-settlement-period.sql` after the migrations inside
+`BEGIN` / `ROLLBACK`, followed by `tests/notifications-digest.sql` for the
+completion, read-state and authorization checks.

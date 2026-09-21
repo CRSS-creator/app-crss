@@ -16,11 +16,20 @@ export type AppNotification = {
 };
 
 export async function fetchNotifications() {
-  return supabase
-    .from("powiadomienia")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(100);
+  // Fetch every page: the badge counts all unread rows, including older ones.
+  const notifications: AppNotification[] = [];
+  const pageSize = 100;
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await supabase
+      .from("powiadomienia")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(offset, offset + pageSize - 1);
+    if (error) return { data: null, error };
+    notifications.push(...((data || []) as AppNotification[]));
+    if (!data || data.length < pageSize) return { data: notifications, error: null };
+  }
 }
 
 export async function fetchPayrollNotificationsForClient(clientId: string) {
@@ -97,7 +106,19 @@ export async function createDueAmlNextVerificationNotifications() {
   return supabase.rpc("create_due_aml_next_verification_notifications");
 }
 
-export async function createDueNotifications() {
+let dueNotificationsInFlight: ReturnType<typeof generateDueNotifications> | null = null;
+
+export function createDueNotifications() {
+  // The layout, page and focus events can request generation at the same time.
+  if (!dueNotificationsInFlight) {
+    dueNotificationsInFlight = generateDueNotifications().finally(() => {
+      dueNotificationsInFlight = null;
+    });
+  }
+  return dueNotificationsInFlight;
+}
+
+async function generateDueNotifications() {
   const [taskResult, crmFollowUpResult, recurringTaskResult, clientCardResult, rodoReviewResult, onboardingCompletionResult, payrollContractResult, payrollA1Result, zusPreferentialRateResult, zusPreferenceExpiryResult, zusSmallPlusCheckResult, amlNextVerificationResult] = await Promise.all([
     createDueTaskNotifications(),
     createDueCrmFollowUpNotifications(),
@@ -145,17 +166,21 @@ export async function createDueNotifications() {
 }
 
 export async function markNotificationRead(notificationId: string) {
-  return supabase
+  const result = await supabase
     .from("powiadomienia")
     .update({ status: "read", read_at: new Date().toISOString() })
     .eq("id", notificationId);
+  if (!result.error && typeof window !== "undefined") window.dispatchEvent(new Event("notifications-changed"));
+  return result;
 }
 
 export async function markAllNotificationsRead() {
-  return supabase
+  const result = await supabase
     .from("powiadomienia")
     .update({ status: "read", read_at: new Date().toISOString() })
     .eq("status", "unread");
+  if (!result.error && typeof window !== "undefined") window.dispatchEvent(new Event("notifications-changed"));
+  return result;
 }
 
 export async function sendPayrollNotificationClientEmail(notificationId: string) {

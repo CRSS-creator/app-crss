@@ -144,12 +144,14 @@ export default function AppLayout({ children, activePage }: AppLayoutProps) {
     }
 
     window.addEventListener("focus", loadUnreadCount);
+    window.addEventListener("notifications-changed", loadUnreadCount);
     document.addEventListener("visibilitychange", refreshWhenVisible);
 
     return () => {
       window.clearTimeout(initialLoadId);
       window.clearInterval(intervalId);
       window.removeEventListener("focus", loadUnreadCount);
+      window.removeEventListener("notifications-changed", loadUnreadCount);
       document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
   }, [loadUnreadCount, roleLoading, role]);

@@ -59,12 +59,20 @@ function NotificationsContent() {
 
   async function markRead(notification: AppNotification) {
     if (notification.status === "read") return;
-    await markNotificationRead(notification.id);
+    const { error } = await markNotificationRead(notification.id);
+    if (error) {
+      window.alert("Nie udało się oznaczyć powiadomienia jako przeczytane. Spróbuj ponownie.");
+      return;
+    }
     setNotifications((current) => current.map((item) => item.id === notification.id ? { ...item, status: "read", read_at: new Date().toISOString() } : item));
   }
 
   async function markAllRead() {
-    await markAllNotificationsRead();
+    const { error } = await markAllNotificationsRead();
+    if (error) {
+      window.alert("Nie udało się oznaczyć powiadomień jako przeczytane. Spróbuj ponownie.");
+      return;
+    }
     setNotifications((current) => current.map((item) => ({ ...item, status: "read", read_at: item.read_at || new Date().toISOString() })));
   }
 

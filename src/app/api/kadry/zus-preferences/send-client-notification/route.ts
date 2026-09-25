@@ -246,7 +246,15 @@ function contributionForClient(rateMap: Map<string, RateRow>, client: ClientRow)
 }
 
 function baseContributionSchemeForClient(client: ClientRow) {
-  return isFullZusScheme(client.schemat_zus) ? FULL_ZUS_SCHEME : PREFERENTIAL_ZUS_SCHEME;
+  const currentScheme = normalizeScheme(client.schemat_zus || "");
+  // The notification describes contributions after the current preference ends.
+  if (
+    isFullZusScheme(client.schemat_zus) ||
+    currentScheme === normalizeScheme(PREFERENTIAL_ZUS_SCHEME)
+  ) {
+    return FULL_ZUS_SCHEME;
+  }
+  return PREFERENTIAL_ZUS_SCHEME;
 }
 
 function isFullZusScheme(value: string | null | undefined) {

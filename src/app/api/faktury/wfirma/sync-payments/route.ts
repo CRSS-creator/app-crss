@@ -514,9 +514,6 @@ async function replaceInvoiceLines(
   invoiceId: string,
   lines: WfirmaInvoiceLine[]
 ) {
-  await admin.from("faktury_pozycje").delete().eq("faktura_id", invoiceId);
-  if (lines.length === 0) return;
-
   const records = lines.map((line, index) => {
     const net = numberValue(line.netto ?? line.price);
     const tax = numberValue(line.tax);
@@ -536,8 +533,11 @@ async function replaceInvoiceLines(
     };
   });
 
-  const { error } = await admin.from("faktury_pozycje").insert(records);
-  if (error) throw new Error("Nie udało się zapisać pozycji faktury z wFirmy.");
+  const { error } = await admin.rpc("replace_wfirma_invoice_lines", {
+    public_invoice_id: invoiceId,
+    public_lines: records,
+  });
+  if (error) throw new Error(`Nie udało się uzgodnić pozycji faktury z wFirmy: ${error.message}`);
 }
 
 async function syncPayload(request: NextRequest) {

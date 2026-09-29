@@ -138,18 +138,12 @@ async function loadDraft(admin: SupabaseClient, invoiceId: string) {
 
 async function deleteDraft(admin: SupabaseClient, invoice: DraftInvoiceRow) {
   const invoiceId = invoice.id;
-  const lineDelete = await admin.from("faktury_pozycje").delete().eq("faktura_id", invoiceId);
-  if (lineDelete.error) {
-    return NextResponse.json({ error: `Nie udało się usunąć pozycji szkicu: ${lineDelete.error.message}` }, { status: 500 });
+  const invoiceDelete = await admin.rpc("delete_local_invoice_draft", { public_invoice_id: invoiceId });
+  if (invoiceDelete.error) {
+    return NextResponse.json({ error: invoiceDelete.error.message }, { status: 400 });
   }
-
   if (invoice.wfirma_pdf_path) {
     await admin.storage.from(INVOICE_PDF_BUCKET).remove([invoice.wfirma_pdf_path]);
-  }
-
-  const invoiceDelete = await admin.from("faktury").delete().eq("id", invoiceId);
-  if (invoiceDelete.error) {
-    return NextResponse.json({ error: `Nie udało się usunąć szkicu: ${invoiceDelete.error.message}` }, { status: 500 });
   }
   return null;
 }

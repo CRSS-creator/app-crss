@@ -11,6 +11,11 @@ export type AdditionalFeeDefinition = {
 };
 
 export type SettlementAdditionalFee = {
+  faktura_id: string | null;
+  fakturowane_at: string | null;
+  billing_period: string | null;
+  billing_hold_reason: string | null;
+  billing_origin: string;
   id: string;
   created_at: string;
   rozliczenie_id: string;
@@ -50,9 +55,6 @@ export type LateDocumentsFeeSettlement = {
   klienci?: LateDocumentsFeeClient | LateDocumentsFeeClient[] | null;
 };
 
-const LATE_DOCUMENTS_FEE_NAME = "Opłata za nieterminowe dostarczenie dokumentów";
-const LATE_DOCUMENTS_FEE_NOTE_PATTERN = "dokumenty za okres";
-const LATE_DOCUMENTS_GRACE_DAYS = 3;
 
 export async function fetchAdditionalFeeDefinitions(includeInactive = false) {
   let query = supabase
@@ -131,111 +133,4 @@ export async function deleteSettlementAdditionalFee(feeId: string) {
     .from("rozliczenia_oplaty_dodatkowe")
     .delete()
     .eq("id", feeId);
-}
-
-export async function syncLateDocumentsAdditionalFee(settlement: LateDocumentsFeeSettlement) {
-  const client = getLateDocumentsFeeClient(settlement.klienci);
-  const existingResult = await supabase
-    .from("rozliczenia_oplaty_dodatkowe")
-    .select("*")
-    .eq("rozliczenie_id", settlement.id)
-    .eq("nazwa", LATE_DOCUMENTS_FEE_NAME);
-
-  if (existingResult.error) return existingResult;
-
-  const existingFees = ((existingResult.data || []) as SettlementAdditionalFee[])
-    .filter((fee) => (fee.uwagi || "").toLowerCase().includes(LATE_DOCUMENTS_FEE_NOTE_PATTERN));
-  const mainFee = existingFees[0] || null;
-  const duplicateFees = existingFees.slice(1);
-
-  if (duplicateFees.length > 0) {
-    await Promise.all(duplicateFees.map((fee) => deleteSettlementAdditionalFee(fee.id)));
-  }
-
-  const shouldApply = shouldApplyLateDocumentsFee(settlement, client);
-  if (!shouldApply) {
-    if (mainFee) return deleteSettlementAdditionalFee(mainFee.id);
-    return { data: null, error: null };
-  }
-
-  const amount = calculateLateDocumentsFeeAmount(client?.abonament);
-  const payload = {
-    rozliczenie_id: settlement.id,
-    oplata_id: null,
-    nazwa: LATE_DOCUMENTS_FEE_NAME,
-    kwota_netto: amount,
-    ilosc: 1,
-    uwagi: buildLateDocumentsFeeNote(settlement),
-  };
-
-  if (mainFee) {
-    return updateSettlementAdditionalFee(mainFee.id, payload);
-  }
-
-  return createSettlementAdditionalFee(payload);
-}
-
-function shouldApplyLateDocumentsFee(settlement: LateDocumentsFeeSettlement, client: LateDocumentsFeeClient | null) {
-  if (!client || client.model_fakturowania !== "z_gory") return false;
-  if (isLateDocumentsFeeExcludedClient(client.nazwa)) return false;
-  const deliveredAt = toDate(settlement.data_dostarczenia_dokumentow);
-  const dueAt = documentsDueDate(settlement.okres);
-  if (!deliveredAt || !dueAt) return false;
-  return deliveredAt.getTime() >= addDays(dueAt, LATE_DOCUMENTS_GRACE_DAYS).getTime();
-}
-
-function calculateLateDocumentsFeeAmount(subscription: number | string | null | undefined) {
-  const subscriptionValue = Number(subscription || 0);
-  return Math.max(150, Math.round(subscriptionValue * 0.1 * 100) / 100);
-}
-
-function buildLateDocumentsFeeNote(settlement: LateDocumentsFeeSettlement) {
-  const deliveredAt = toDate(settlement.data_dostarczenia_dokumentow);
-  const dueAt = documentsDueDate(settlement.okres);
-  const periodLabel = formatSettlementPeriod(settlement.okres);
-
-  if (!deliveredAt || !dueAt) {
-    return "Dokumenty dostarczone po terminie wynikającym z umowy.";
-  }
-
-  return `Dokumenty za okres ${periodLabel} dostarczono ${formatDate(deliveredAt)}; zgodnie z umową powinny być dostarczone do ${formatDate(dueAt)}.`;
-}
-
-function getLateDocumentsFeeClient(client: LateDocumentsFeeSettlement["klienci"]) {
-  if (Array.isArray(client)) return client[0] || null;
-  return client || null;
-}
-
-function documentsDueDate(period: string) {
-  const [year, month] = period.split("-").map(Number);
-  if (!year || !month) return null;
-  return new Date(year, month, 7, 12, 0, 0, 0);
-}
-
-function addDays(date: Date, days: number) {
-  const next = new Date(date);
-  next.setDate(next.getDate() + days);
-  return next;
-}
-
-function formatSettlementPeriod(period: string) {
-  const [year, month] = period.split("-").map(Number);
-  if (!year || !month) return period;
-  return new Intl.DateTimeFormat("pl-PL", { month: "long", year: "numeric" }).format(new Date(year, month - 1, 1, 12, 0, 0, 0));
-}
-
-function formatDate(date: Date) {
-  return new Intl.DateTimeFormat("pl-PL", { day: "2-digit", month: "2-digit", year: "numeric" }).format(date);
-}
-
-function isLateDocumentsFeeExcludedClient(clientName: string | null | undefined) {
-  const normalized = (clientName || "").toLowerCase();
-  return normalized.includes("śremski klub sportowy warta") || normalized.includes("adalbertus");
-}
-
-function toDate(value: string | null | undefined) {
-  if (!value) return null;
-  const [year, month, day] = value.split("-").map(Number);
-  if (!year || !month || !day) return null;
-  return new Date(year, month - 1, day, 12, 0, 0, 0);
 }

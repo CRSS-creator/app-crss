@@ -6,9 +6,7 @@ import {
   createSettlementAdditionalFee,
   deleteSettlementAdditionalFee,
   fetchAvailableSettlementFeeDefinitions,
-  fetchLateDocumentsFeeSettlement,
   fetchSettlementAdditionalFees,
-  syncLateDocumentsAdditionalFee,
   updateSettlementAdditionalFee,
   type AdditionalFeeDefinition,
   type LateDocumentsFeeSettlement,
@@ -33,14 +31,6 @@ export default function SettlementAdditionalFeesPanel({ settlement, settlementId
     async function loadFees() {
       setLoading(true);
       setDefinitions([]);
-      let syncSettlement: LateDocumentsFeeSettlement | null = settlement || null;
-      if (!syncSettlement) {
-        const settlementResult = await fetchLateDocumentsFeeSettlement(effectiveSettlementId);
-        if (settlementResult.error) console.error("Blad pobierania rozliczenia do oplaty za nieterminowe dokumenty:", settlementResult.error);
-        syncSettlement = (settlementResult.data || null) as LateDocumentsFeeSettlement | null;
-      }
-      const syncResult = syncSettlement ? await syncLateDocumentsAdditionalFee(syncSettlement) : { error: null };
-      if (syncResult.error) console.error("Błąd synchronizacji opłaty za nieterminowe dokumenty:", syncResult.error);
       const [definitionsResult, feesResult] = await Promise.all([
         fetchAvailableSettlementFeeDefinitions(effectiveSettlementId),
         fetchSettlementAdditionalFees(effectiveSettlementId),
@@ -88,7 +78,7 @@ export default function SettlementAdditionalFeesPanel({ settlement, settlementId
     setSavingId(null);
     if (result.error) {
       console.error("Błąd zapisu opłaty rozliczenia:", result.error);
-      alert("Nie udało się zapisać opłaty.");
+      alert(`Nie udało się zapisać opłaty: ${result.error.message}`);
       return;
     }
     const updated = result.data as SettlementAdditionalFee;
@@ -111,7 +101,7 @@ export default function SettlementAdditionalFeesPanel({ settlement, settlementId
     setSavingId(null);
     if (result.error) {
       console.error("Błąd usuwania opłaty rozliczenia:", result.error);
-      alert("Nie udało się usunąć opłaty.");
+      alert(`Nie udało się usunąć opłaty: ${result.error.message}`);
       return;
     }
     setFees((current) => current.filter((item) => item.id !== fee.id));
@@ -154,11 +144,15 @@ export default function SettlementAdditionalFeesPanel({ settlement, settlementId
             <article key={fee.id} style={itemStyle}>
               <div style={itemHeaderStyle}>
                 <strong>{fee.nazwa}</strong>
-                <button style={dangerButtonStyle} disabled={savingId === fee.id} onClick={() => removeFee(fee)}>Usuń</button>
+                <button style={dangerButtonStyle} disabled={savingId === fee.id || fee.billing_origin === "documents" || !!fee.fakturowane_at} onClick={() => removeFee(fee)}>Usuń</button>
+              </div>
+              <div style={{ color: fee.billing_hold_reason ? "#b91c1c" : colors.navy, fontSize: 13 }}>
+                {fee.billing_hold_reason || (fee.fakturowane_at ? "Zafakturowana" : fee.faktura_id ? "Przypisana do szkicu" : "Oczekuje na fakturę")}
+                {fee.billing_period && ` · Najwcześniejszy okres faktury: ${fee.billing_period.slice(0, 7)}`}
               </div>
               <div style={rowStyle}>
-                <label style={fieldStyle}><span>Kwota netto</span><input style={financialInputStyle} type="number" min={0} step="0.01" value={fee.kwota_netto} onChange={(event) => updateFee(fee, { kwota_netto: Number(event.target.value || 0) })} /></label>
-                <label style={fieldStyle}><span>Ilość</span><input style={financialInputStyle} type="number" min={0} step="0.01" value={fee.ilosc} onChange={(event) => updateFee(fee, { ilosc: Number(event.target.value || 0) })} /></label>
+                <label style={fieldStyle}><span>Kwota netto</span><input style={financialInputStyle} readOnly={fee.billing_origin === "documents" || !!fee.fakturowane_at} type="number" min={0} step="0.01" value={fee.kwota_netto} onChange={(event) => updateFee(fee, { kwota_netto: Number(event.target.value || 0) })} /></label>
+                <label style={fieldStyle}><span>Ilość</span><input style={financialInputStyle} readOnly={fee.billing_origin === "documents" || !!fee.fakturowane_at} type="number" min={0} step="0.01" value={fee.ilosc} onChange={(event) => updateFee(fee, { ilosc: Number(event.target.value || 0) })} /></label>
                 <label style={fieldStyle}><span>Razem</span><input style={financialInputStyle} value={formatMoney(Number(fee.kwota_netto || 0) * Number(fee.ilosc || 0))} readOnly /></label>
               </div>
               <label style={fieldStyle}>

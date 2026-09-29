@@ -191,50 +191,8 @@ export async function POST(request: NextRequest) {
 }
 
 async function claimInvoiceForWfirma(admin: SupabaseClient, invoiceId: string) {
-  const { data, error } = await admin
-    .from("faktury")
-    .update({
-      wfirma_sync_status: "w_kolejce",
-      wfirma_sync_error: null,
-    })
-    .eq("id", invoiceId)
-    .is("wfirma_id", null)
-    .eq("status", "szkic")
-    .eq("zrodlo", "aplikacja")
-    .in("wfirma_sync_status", ["nie_wyslano", "blad"])
-    .select(`
-      id,
-      created_at,
-      klient_id,
-      numer,
-      status,
-      zrodlo,
-      data_wystawienia,
-      data_sprzedazy,
-      termin_platnosci,
-      okres,
-      kategoria,
-      kontrahent_nazwa,
-      kontrahent_nip,
-      kontrahent_email,
-      waluta,
-      opis,
-      wfirma_sync_status,
-      klienci (
-        email
-      ),
-      faktury_pozycje (
-        nazwa,
-        ilosc,
-        jednostka,
-        cena_netto,
-        stawka_vat,
-        sort_order
-      )
-    `)
-    .maybeSingle();
-
-  if (error) return { data: null, error: "Nie udalo sie zablokowac faktury do wysylki." };
+  const { data, error } = await admin.rpc("claim_invoice_for_billing", { public_invoice_id: invoiceId });
+  if (error) return { data: null, error: error.message };
   return { data: data as InvoiceRow | null, error: null };
 }
 

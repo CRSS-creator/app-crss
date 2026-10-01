@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { getUserLandingPage } from "@/lib/userLandingPage";
 import { colors, radius, shadow } from "@/app/design";
 
 export default function PasswordChangePage() {
@@ -57,7 +58,7 @@ export default function PasswordChangePage() {
     }
 
     await supabase.auth.refreshSession();
-    router.push("/dashboard");
+    router.push(getUserLandingPage(sessionData.session?.user.id));
   }
 
   return (

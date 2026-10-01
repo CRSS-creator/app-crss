@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { getUserLandingPage } from "@/lib/userLandingPage";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -33,7 +34,7 @@ export default function LoginPage() {
       data.user?.user_metadata?.must_change_password
     );
 
-    window.location.href = mustChangePassword ? "/zmiana-hasla" : "/dashboard";
+    window.location.href = mustChangePassword ? "/zmiana-hasla" : getUserLandingPage(data.user?.id);
   }
 
   async function handlePasswordReset(event: React.FormEvent) {

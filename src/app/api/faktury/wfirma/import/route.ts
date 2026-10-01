@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAuthorizedServerUser } from "@/lib/serverAuth";
+import { createInvoiceBankAccountResolver, ensureDraftInvoiceBankAccount, isWfirmaDraft } from "@/lib/invoiceBankAccount";
 import {
   extractWfirmaInvoiceLines,
   extractWfirmaInvoices,
@@ -73,6 +74,7 @@ export async function POST(request: NextRequest) {
   if (!range) return NextResponse.json({ error: "Nieprawidłowy miesiąc importu." }, { status: 400 });
 
   const clients = await loadClientMatches(auth.admin);
+  const resolveBankAccount = createInvoiceBankAccountResolver(auth.admin, wfirma.config);
   const imported: string[] = [];
   let skippedExisting = 0;
   const failed: { wfirmaId: string | null; error: string }[] = [];
@@ -98,6 +100,9 @@ export async function POST(request: NextRequest) {
         try {
           if (!isInvoiceDateInRange(invoice, range.dateFrom, range.dateTo)) continue;
           if (isCorrectionInvoice(invoice)) continue;
+          if (isWfirmaDraft(invoice)) {
+            await ensureDraftInvoiceBankAccount(wfirma.config, stringify(invoice.id), await resolveBankAccount());
+          }
           const result = await saveImportedInvoice(auth.admin, invoice, clients);
           if (!result) continue;
           if (result.status === "imported") imported.push(result.id);

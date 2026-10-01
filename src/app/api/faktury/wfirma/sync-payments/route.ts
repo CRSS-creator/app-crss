@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAuthorizedServerUser } from "@/lib/serverAuth";
+import { createInvoiceBankAccountResolver, ensureDraftInvoiceBankAccount, isWfirmaDraft, type RequiredInvoiceBankAccount } from "@/lib/invoiceBankAccount";
 import {
   downloadWfirmaInvoicePdf,
   extractWfirmaInvoiceLines,
@@ -108,6 +109,7 @@ async function syncPayments(request: NextRequest) {
   }
 
   const payload = await syncPayload(request);
+  const resolveBankAccount = createInvoiceBankAccountResolver(admin, wfirma.config);
   const requestedMonth = syncMonth(request, payload);
   const requestedInvoiceIds = syncInvoiceIds(payload);
   const requestedRange = requestedMonth ? monthRange(requestedMonth) : null;
@@ -150,7 +152,7 @@ async function syncPayments(request: NextRequest) {
       if (!wfirmaInvoice) throw new Error("wFirma nie zwróciła danych tej faktury.");
 
       if (requestedMonth || requestedInvoiceIds.length > 0) {
-        const syncResult = await syncWfirmaInvoiceSnapshot(admin, wfirma.config, invoice, wfirmaInvoice);
+        const syncResult = await syncWfirmaInvoiceSnapshot(admin, wfirma.config, invoice, wfirmaInvoice, resolveBankAccount);
         if (syncResult.updatedNumber || syncResult.savedPdf) {
           refreshed.push({ invoiceId: invoice.id, number: syncResult.invoiceNumber, pdf: syncResult.savedPdf });
         }
@@ -399,9 +401,13 @@ async function syncWfirmaInvoiceSnapshot(
   admin: SupabaseClient,
   config: Parameters<typeof findWfirmaInvoices>[0]["config"],
   invoice: InvoiceRow,
-  wfirmaInvoice: WfirmaInvoice
+  wfirmaInvoice: WfirmaInvoice,
+  resolveBankAccount: () => Promise<RequiredInvoiceBankAccount>
 ) {
   const wfirmaId = stringify(invoice.wfirma_id);
+  if (isWfirmaDraft(wfirmaInvoice)) {
+    wfirmaInvoice = await ensureDraftInvoiceBankAccount(config, stringify(wfirmaInvoice.id) || wfirmaId, await resolveBankAccount());
+  }
   const nextWfirmaId = stringify(wfirmaInvoice.id) || wfirmaId;
   const invoiceNumber = stringify(wfirmaInvoice.fullnumber || wfirmaInvoice.number) || invoice.numer;
   const issueDate = dateOnly(wfirmaInvoice.date);

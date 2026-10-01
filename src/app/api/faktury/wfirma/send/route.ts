@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAuthorizedServerUser } from "@/lib/serverAuth";
+import { ensureDraftInvoiceBankAccount, resolveInvoiceBankAccount, type RequiredInvoiceBankAccount } from "@/lib/invoiceBankAccount";
 import {
   addWfirmaInvoice,
   extractWfirmaContractors,
@@ -73,6 +74,12 @@ export async function POST(request: NextRequest) {
 
   const sent: string[] = [];
   const failed: { invoiceId: string; error: string }[] = [];
+  let bankAccount: RequiredInvoiceBankAccount;
+  try {
+    bankAccount = await resolveInvoiceBankAccount(auth.admin, wfirma.config);
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Nie udało się ustalić rachunku bankowego." }, { status: 400 });
+  }
 
   for (const invoiceId of invoiceIds) {
     const { data: invoice, error } = await claimInvoiceForWfirma(auth.admin, invoiceId);
@@ -101,7 +108,8 @@ export async function POST(request: NextRequest) {
       }
       const response = await addWfirmaInvoice(
         wfirma.config,
-        buildWfirmaInvoicePayload(invoice, issueDate, paymentDate, contractorAddress, wfirmaContractorId)
+        { ...buildWfirmaInvoicePayload(invoice, issueDate, paymentDate, contractorAddress, wfirmaContractorId),
+          company_account: { id: bankAccount.id } }
       );
       const wfirmaInvoice = firstWfirmaInvoice(response);
       const wfirmaIssueDate = dateOnly(wfirmaInvoice?.date) || issueDate;
@@ -112,6 +120,8 @@ export async function POST(request: NextRequest) {
       createdWfirmaNumber = wfirmaNumber;
       createdWfirmaIssueDate = wfirmaIssueDate;
       createdPaymentDate = finalPaymentDate;
+      if (!createdWfirmaId) throw new Error("wFirma nie zwróciła identyfikatora utworzonego szkicu.");
+      await ensureDraftInvoiceBankAccount(wfirma.config, createdWfirmaId, bankAccount);
       // Drafts are created here; the final PDF is downloaded during refresh.
 
       const updatePayload = {

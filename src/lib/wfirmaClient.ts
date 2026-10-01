@@ -40,6 +40,8 @@ export type WfirmaInvoiceLine = {
 };
 
 export type WfirmaInvoice = {
+  company_account?: { id?: string | number | null } | null;
+  company_detail?: { bank_account?: string | null } | null;
   id?: string | number | null;
   fullnumber?: string | null;
   number?: string | null;
@@ -230,6 +232,23 @@ export async function addWfirmaInvoice(config: WfirmaConfig, invoice: unknown) {
     method: "POST",
     body: { invoices: { invoice } },
     config,
+  });
+}
+
+export type WfirmaCompanyAccount = { id?: string | number | null; number?: string | null };
+
+export async function findWfirmaCompanyAccounts(config: WfirmaConfig, page: number) {
+  const response = await wfirmaRequest<{ company_accounts?: unknown }>("company_accounts/find", {
+    config,
+    body: { company_accounts: { parameters: { page, limit: 100 } } },
+  });
+  return extractModuleRecords<WfirmaCompanyAccount>(response.company_accounts, "company_account");
+}
+
+export async function setWfirmaInvoiceBankAccount(config: WfirmaConfig, invoiceId: string, accountId: string) {
+  return wfirmaRequest(`invoices/edit/${encodeURIComponent(invoiceId)}`, {
+    config,
+    body: { invoices: { invoice: { company_account: { id: accountId } } } },
   });
 }
 

@@ -6,6 +6,7 @@ const { PGlite } = require('@electric-sql/pglite');
 
 const migration = readFileSync(join(__dirname, '../supabase/migrations/20260929143601_durable_settlement_fee_billing.sql'), 'utf8');
 const reconcileMigration = readFileSync(join(__dirname, '../supabase/migrations/20260929150118_reconcile_existing_invoice_drafts.sql'), 'utf8');
+const mksSeptemberMigration = readFileSync(join(__dirname, '../supabase/migrations/20261001061713_mks_jedynka_september_arrears.sql'), 'utf8');
 const schema = `
 create role anon; create role authenticated; create role service_role;
 create schema auth;
@@ -213,5 +214,36 @@ test('a late caretaker fee automatically refreshes an existing next-period draft
   const next=await invoice(await settlement('2026-10-01'));
   await db.query("insert into rozliczenia_oplaty_dodatkowe(rozliczenie_id,nazwa,kwota_netto) values($1,'Korekta',200)",[sep]);
   assert.equal(Number((await db.query('select kwota_netto from faktury where id=$1',[next])).rows[0].kwota_netto),300);
+ } finally {await db.close();}
+});
+
+test('MKS September waits for completion and October returns to upfront billing',async()=>{
+ const {db,client,settlement,invoice}=await setup('z_gory');
+ try {
+  await db.query("update klienci set nip='9721378590' where id=$1",[client]);
+  const sep=await settlement('2026-09-01',13);
+  const premature=await invoice(sep);
+  assert.ok(premature);
+  await db.exec(readFileSync(join(__dirname,'fixtures/create-invoice-after-taxes-sent.sql'),'utf8'));
+  await db.exec(`
+    create function has_existing_standard_wfirma_invoice(uuid,date) returns boolean language sql as $$
+      select exists(select 1 from faktury where klient_id=$1 and okres=$2 and wfirma_id is not null)$$;
+    create function invoice_issue_date_for_settlement(uuid,date) returns date language sql as $$select $2$$;
+    create trigger invoice_after_taxes_sent after update of status_ksiegowosci on rozliczenia_miesieczne
+      for each row execute function create_invoice_after_taxes_sent();
+  `);
+  await db.exec(mksSeptemberMigration);
+  assert.equal((await db.query('select id from faktury where id=$1',[premature])).rows.length,0);
+  assert.equal(await invoice(sep),null);
+  assert.equal(Number((await db.query('select sum(kwota_netto*ilosc) net from rozliczenia_oplaty_dodatkowe where rozliczenie_id=$1',[sep])).rows[0].net),60);
+  await db.query("update rozliczenia_miesieczne set status_ksiegowosci='podatki_wyslane' where id=$1",[sep]);
+  const completed=(await db.query("select kwota_netto from faktury where klient_id=$1 and okres='2026-09-01'",[client])).rows;
+  assert.equal(completed.length,1);
+  assert.equal(Number(completed[0].kwota_netto),160);
+  const oct=await settlement('2026-10-01',12);
+  const upfront=await invoice(oct);
+  assert.ok(upfront);
+  assert.equal(Number((await db.query('select kwota_netto from faktury where id=$1',[upfront])).rows[0].kwota_netto),100);
+  assert.equal((await db.query('select model_fakturowania from klienci where id=$1',[client])).rows[0].model_fakturowania,'z_gory');
  } finally {await db.close();}
 });

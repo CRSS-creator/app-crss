@@ -604,7 +604,6 @@ function LeadDrawer({ mode, lead, tasks, onClose, onCreated, onSaved, onDeleted,
           <FormSection title="Zakres obsługi">
             <EditableSelect label="Forma prawna" value={draft.forma_prawna} onChange={(value) => updateDraft("forma_prawna", value)} options={LEGAL_FORM_OPTIONS} />
             <EditableInput label="Liczba dokumentów" type="number" value={draft.liczba_dokumentow} onChange={(value) => updateDraft("liczba_dokumentow", value)} />
-            <EditableInput label="Liczba transakcji" type="number" value={draft.liczba_transakcji} onChange={(value) => updateDraft("liczba_transakcji", value)} />
             <EditableCheckbox label="Kadry" checked={draft.czy_kadry} onChange={(value) => updateDraft("czy_kadry", value)} />
             {draft.czy_kadry && <EditableInput label="Liczba pracowników" type="number" value={draft.liczba_pracownikow} onChange={(value) => updateDraft("liczba_pracownikow", value)} />}
             {draft.czy_kadry && <EditableInput label="Liczba zleceniobiorców" type="number" value={draft.liczba_zleceniobiorcow} onChange={(value) => updateDraft("liczba_zleceniobiorcow", value)} />}

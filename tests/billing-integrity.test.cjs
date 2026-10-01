@@ -7,6 +7,8 @@ const { PGlite } = require('@electric-sql/pglite');
 const migration = readFileSync(join(__dirname, '../supabase/migrations/20260929143601_durable_settlement_fee_billing.sql'), 'utf8');
 const reconcileMigration = readFileSync(join(__dirname, '../supabase/migrations/20260929150118_reconcile_existing_invoice_drafts.sql'), 'utf8');
 const mksSeptemberMigration = readFileSync(join(__dirname, '../supabase/migrations/20261001061713_mks_jedynka_september_arrears.sql'), 'utf8');
+const descriptionMigration = readFileSync(join(__dirname, '../supabase/migrations/20261001063401_document_fee_description.sql'), 'utf8');
+const quantityMigration = readFileSync(join(__dirname, '../supabase/migrations/20261001064419_document_fee_quantity_unit_price.sql'), 'utf8');
 const schema = `
 create role anon; create role authenticated; create role service_role;
 create schema auth;
@@ -60,6 +62,8 @@ async function setup(model='z_dolu', beforeMigration='') {
  if (beforeMigration) await db.exec(beforeMigration);
  await db.exec(migration);
  await db.exec(reconcileMigration);
+ await db.exec(descriptionMigration);
+ await db.exec(quantityMigration);
  const client=(await db.query('insert into klienci(model_fakturowania) values ($1) returning id',[model])).rows[0].id;
  async function settlement(period,docs=10) {
   return (await db.query('insert into rozliczenia_miesieczne(klient_id,okres,liczba_dokumentow) values ($1,$2,$3) returning id',[client,period,docs])).rows[0].id;
@@ -80,7 +84,10 @@ test('upfront document fees appear in next period exactly once', async()=>{
   const next=await invoice(oct);
   await invoice(oct);
   assert.equal(Number((await db.query('select kwota_netto from faktury where id=$1',[next])).rows[0].kwota_netto),360);
-  assert.equal((await db.query('select * from faktury_pozycje where rozliczenie_oplata_id is not null')).rows.length,1);
+  const documentLines=(await db.query('select * from faktury_pozycje where rozliczenie_oplata_id is not null')).rows;
+  assert.equal(documentLines.length,1);
+  assert.equal(Number(documentLines[0].ilosc),13);
+  assert.equal(Number(documentLines[0].cena_netto),20);
  } finally {await db.close();}
 });
 
@@ -176,7 +183,8 @@ test('historical waiver is preserved and only IDIL August is released for Septem
   const fees=(await db.query('select * from rozliczenia_oplaty_dodatkowe')).rows;
   assert.equal(fees.length,1);
   assert.equal(fees[0].rozliczenie_id,'80a52328-db8d-4ac5-bbe7-bcdf09fc9918');
-  assert.equal(Number(fees[0].kwota_netto),260);
+  assert.equal(Number(fees[0].kwota_netto),20);
+  assert.equal(Number(fees[0].ilosc),13);
   assert.equal(fees[0].billing_period.toISOString().slice(0,10),'2026-09-01');
   assert.equal(fees[0].billing_hold_reason,null);
  } finally {await db.close();}

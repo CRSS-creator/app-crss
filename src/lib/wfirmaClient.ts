@@ -28,6 +28,7 @@ export type WfirmaGood = {
 };
 
 export type WfirmaInvoiceLine = {
+  brutto?: string | number | null;
   id?: string | number | null;
   name?: string | null;
   count?: string | number | null;
@@ -38,6 +39,22 @@ export type WfirmaInvoiceLine = {
   total?: string | number | null;
   vat?: string | number | null;
 };
+
+export function wfirmaLineAmounts(line: WfirmaInvoiceLine) {
+  const amount = (value: unknown) => {
+    if (value === null || value === undefined || String(value).trim() === "") return null;
+    const parsed = Number(String(value).replace(",", "."));
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+  const net = amount(line.netto);
+  const gross = amount(line.brutto) ?? amount(line.total);
+  const explicitTax = amount(line.tax);
+  if (net === null || (gross === null && explicitTax === null)) {
+    throw new Error("wFirma nie zwróciła pełnych kwot pozycji faktury. Zachowano dotychczasowe pozycje.");
+  }
+  const round = (value: number) => Math.round(value * 100) / 100;
+  return { net, gross: gross ?? round(net + explicitTax!), tax: gross === null ? explicitTax! : round(gross - net) };
+}
 
 export type WfirmaInvoice = {
   company_account?: { id?: string | number | null } | null;

@@ -9,6 +9,20 @@ const code = ts.transpileModule(fs.readFileSync(path.join(__dirname, '../src/lib
 }).outputText;
 const config = { accessKey: 'test', secretKey: 'test', appKey: 'test', companyId: '42' };
 
+test('documented netto/brutto amounts preserve fee VAT including multiple documents', () => {
+  const exports = {};
+  vm.runInNewContext(code, { exports });
+  for (const [net, gross, tax] of [[250, 307.5, 57.5], [200, 246, 46], [260, 319.8, 59.8], [100, 100, 0]]) {
+    const result = exports.wfirmaLineAmounts({ netto: String(net), brutto: String(gross), count: '13', price: '20' });
+    assert.equal(result.net, net);
+    assert.equal(result.gross, gross);
+    assert.equal(result.tax, tax);
+  }
+  assert.throws(() => exports.wfirmaLineAmounts({ netto: '250', price: '250' }), /pełnych kwot/);
+  assert.throws(() => exports.wfirmaLineAmounts({ netto: 'invalid', brutto: '307.50' }), /pełnych kwot/);
+  assert.equal(exports.wfirmaLineAmounts({ netto: '250', tax: '57.50' }).gross, 307.5);
+});
+
 test('invoice read addresses the invoice ID with GET and no request body', async () => {
   const exports = {};
   vm.runInNewContext(code, { exports, URL, fetch: async (url, options) => {

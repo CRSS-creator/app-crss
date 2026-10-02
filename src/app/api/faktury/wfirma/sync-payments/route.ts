@@ -6,6 +6,7 @@ import { createInvoiceBankAccountResolver, ensureDraftInvoiceBankAccount, isWfir
 import {
   downloadWfirmaInvoicePdf,
   extractWfirmaInvoiceLines,
+  wfirmaLineAmounts,
   extractWfirmaInvoices,
   findWfirmaInvoices,
   firstWfirmaInvoice,
@@ -521,9 +522,7 @@ async function replaceInvoiceLines(
   lines: WfirmaInvoiceLine[]
 ) {
   const records = lines.map((line, index) => {
-    const net = numberValue(line.netto ?? line.price);
-    const tax = numberValue(line.tax);
-    const gross = numberValue(line.total) || net + tax;
+    const { net, tax, gross } = wfirmaLineAmounts(line);
     return {
       faktura_id: invoiceId,
       source_key: `wfirma:${stringify(line.id) || index + 1}`,

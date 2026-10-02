@@ -668,7 +668,7 @@ function A1Table({
                 <Td>
                   <strong style={clientNameStyle}>{row.client?.nazwa || "Klient bez nazwy"}</strong>
                   <span style={clientMetaStyle}>{row.client?.nip || "Brak NIP"}</span>
-                  <span style={clientMetaStyle}>{row.record.rozliczona_at ? `Rozliczona: ${formatDate(row.record.rozliczona_at)}` : "Aktywna A1"}</span>
+                  <span style={clientMetaStyle}>{row.record.rozliczona_at ? `Rozliczona: ${formatDateTime(row.record.rozliczona_at)}` : "Aktywna A1"}</span>
                 </Td>
                 <Td>{caregiverLabel(row.client)}</Td>
                 <Td>{formatDate(row.record.data_uzyskania_a1)}</Td>

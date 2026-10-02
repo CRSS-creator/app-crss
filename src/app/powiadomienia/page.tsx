@@ -334,6 +334,7 @@ function stringMeta(value: unknown) {
 function payrollDateKindLabel(value: string | null) {
   if (value === "contract_end") return "Koniec umowy";
   if (value === "student_card_expiry") return "Koniec ważności legitymacji studenckiej";
+  if (value === "student_26_birthday") return "Ukończenie 26 lat przez studenta / ucznia";
   if (value === "medical_exam_expiry") return "Koniec ważności badań lekarskich";
   if (value === "bhp_training_expiry") return "Koniec ważności szkolenia BHP";
   return value || "-";

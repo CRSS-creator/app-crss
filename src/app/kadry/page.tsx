@@ -77,6 +77,7 @@ type ContractDraft = {
   badania_lekarskie_wazne_do: string;
   szkolenie_bhp_wazne_do: string;
   legitymacja_studencka_wazna_do: string;
+  data_urodzenia: string;
 };
 
 type A1Draft = {
@@ -112,7 +113,7 @@ const PAYROLL_TABS: PayrollTabDefinition[] = [
 const CONTRACT_TYPE_OPTIONS: { value: PayrollContractType; label: string }[] = [
   { value: "umowa_o_prace", label: "Umowa o pracę" },
   { value: "umowa_cywilnoprawna", label: "Umowa cywilnoprawna" },
-  { value: "student", label: "Student" },
+  { value: "student", label: "Student / uczeń" },
 ];
 
 const FULL_ZUS_SCHEME = "Duży ZUS";
@@ -1536,6 +1537,7 @@ function PayrollDetailsModal({
     setSaving(true);
     const payload: PayrollContractPayload = {
       klient_id: client.id,
+      data_urodzenia: emptyToNull(draft.data_urodzenia),
       imie: draft.imie.trim(),
       nazwisko: draft.nazwisko.trim(),
       typ_umowy: draft.typ_umowy,
@@ -1645,7 +1647,7 @@ function PayrollDetailsModal({
                       <Th>Data końca</Th>
                       <Th>Badania lekarskie</Th>
                       <Th>Szkolenie BHP</Th>
-                      <Th>Legitymacja studencka</Th>
+                      <Th>Student / uczeń — terminy</Th>
                       <Th align="center">Akcje</Th>
                     </tr>
                   </thead>
@@ -1681,7 +1683,7 @@ function PayrollDetailsModal({
                         <Th>Data końca</Th>
                         <Th>Badania lekarskie</Th>
                         <Th>Szkolenie BHP</Th>
-                        <Th>Legitymacja studencka</Th>
+                        <Th>Student / uczeń — terminy</Th>
                         <Th align="center">Akcje</Th>
                       </tr>
                     </thead>
@@ -1774,6 +1776,9 @@ function PayrollContractFormModal({
                 </>
               )}
               {draft.typ_umowy === "student" && (
+                <Field label="Data urodzenia studenta / ucznia"><input type="date" style={inputStyle} value={draft.data_urodzenia} onChange={(event) => onDraftChange("data_urodzenia", event.target.value)} /></Field>
+              )}
+              {draft.typ_umowy === "student" && (
                 <Field label="Legitymacja studencka ważna do"><input type="date" style={inputStyle} value={draft.legitymacja_studencka_wazna_do} onChange={(event) => onDraftChange("legitymacja_studencka_wazna_do", event.target.value)} /></Field>
               )}
             </div>
@@ -1801,7 +1806,11 @@ function ContractRow({ contract, onEdit, onArchive }: { contract: PayrollContrac
       <Td>{contract.typ_umowy === "umowa_o_prace" && contract.umowa_na_czas_nieokreslony ? "czas nieokreślony" : formatDate(contract.data_konca)}</Td>
       <Td>{contract.typ_umowy === "umowa_o_prace" ? formatDate(contract.badania_lekarskie_wazne_do) : "-"}</Td>
       <Td>{contract.typ_umowy === "umowa_o_prace" ? formatDate(contract.szkolenie_bhp_wazne_do) : "-"}</Td>
-      <Td>{contract.typ_umowy === "student" ? formatDate(contract.legitymacja_studencka_wazna_do) : "-"}</Td>
+      <Td>{contract.typ_umowy === "student" ? <>
+        <div>Legitymacja ważna do: {formatDate(contract.legitymacja_studencka_wazna_do)}</div>
+        <div>Data urodzenia: {formatDate(contract.data_urodzenia)}</div>
+        <div>Ukończenie 26 lat: {formatDate(contract.data_26_urodzin)}</div>
+      </> : "-"}</Td>
       <Td align="center">
         <div style={rowActionsStyle}>
           <button type="button" style={iconActionButtonStyle} onClick={() => onEdit(contract)} aria-label="Edytuj umowę">
@@ -1925,6 +1934,7 @@ function Td({ children, align = "left" }: { children: React.ReactNode; align?: "
 
 function createEmptyDraft(): ContractDraft {
   return {
+    data_urodzenia: "",
     imie: "",
     nazwisko: "",
     typ_umowy: "umowa_o_prace",
@@ -1940,6 +1950,7 @@ function createEmptyDraft(): ContractDraft {
 
 function createDraftFromContract(contract: PayrollContract): ContractDraft {
   return {
+    data_urodzenia: contract.data_urodzenia || "",
     imie: contract.imie || "",
     nazwisko: contract.nazwisko || "",
     typ_umowy: contract.typ_umowy,
@@ -2090,6 +2101,7 @@ function stringMeta(value: unknown) {
 function payrollDateKindLabel(value: string | null) {
   if (value === "contract_end") return "Koniec umowy";
   if (value === "student_card_expiry") return "Koniec ważności legitymacji studenckiej";
+  if (value === "student_26_birthday") return "Ukończenie 26 lat przez studenta / ucznia";
   if (value === "medical_exam_expiry") return "Koniec ważności badań lekarskich";
   if (value === "bhp_training_expiry") return "Koniec ważności szkolenia BHP";
   return value || "-";

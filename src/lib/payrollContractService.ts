@@ -3,6 +3,8 @@ import { supabase } from "@/lib/supabaseClient";
 export type PayrollContractType = "umowa_o_prace" | "umowa_cywilnoprawna" | "student";
 
 export type PayrollContract = {
+  data_urodzenia: string | null;
+  data_26_urodzin: string | null;
   id: string;
   created_at: string;
   updated_at: string;
@@ -22,6 +24,7 @@ export type PayrollContract = {
 };
 
 export type PayrollContractPayload = {
+  data_urodzenia?: string | null;
   klient_id: string;
   imie: string;
   nazwisko: string;

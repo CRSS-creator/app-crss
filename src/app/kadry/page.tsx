@@ -141,6 +141,7 @@ export default function PayrollPage() {
 
 function PayrollContent() {
   const [activeTab, setActiveTab] = useState<PayrollTab>("kadry");
+  const [a1Tab, setA1Tab] = useState<"active" | "archive">("active");
   const [clients, setClients] = useState<PayrollClient[]>([]);
   const [contracts, setContracts] = useState<PayrollContract[]>([]);
   const [a1Records, setA1Records] = useState<PayrollA1Record[]>([]);
@@ -264,6 +265,7 @@ function PayrollContent() {
     }
 
     setA1Records((current) => [result.data as PayrollA1Record, ...current]);
+    setA1Tab("active");
     setA1ClientToAdd("");
     setA1AddSearch("");
     setShowA1AddForm(false);
@@ -437,7 +439,7 @@ function PayrollContent() {
           )}
           {activeTab === "a1" && (
             <button type="button" onClick={() => setShowA1AddForm((value) => !value)} style={primaryButtonStyle}>
-              <Plus size={18} /> Dodaj klienta
+              <Plus size={18} /> Dodaj A1
             </button>
           )}
           {activeTab === "zus_przedsiebiorcy" && (
@@ -528,16 +530,19 @@ function PayrollContent() {
           />
         ) : activeTab === "a1" ? (
           <>
-          <h3>Aktywne A1</h3>
+          <nav aria-label="Widok A1" style={{ display: "flex", gap: 8, marginBottom: 20, borderBottom: "1px solid #e2e8f0", paddingBottom: 12 }}>
+            {([{ value: "active", label: "Aktywne" }, { value: "archive", label: "Archiwum" }] as const).map((item) => (
+              <button key={item.value} type="button" aria-pressed={a1Tab === item.value} onClick={() => setA1Tab(item.value)}
+                style={a1Tab === item.value ? activeTabStyle : tabStyle}>
+                {item.label} ({filteredA1Rows.filter((row) => Boolean(row.record.rozliczona_at) === (item.value === "archive")).length})
+              </button>
+            ))}
+          </nav>
           <A1Table
-            rows={filteredA1Rows.filter((row) => !row.record.rozliczona_at)}
+            rows={filteredA1Rows.filter((row) => Boolean(row.record.rozliczona_at) === (a1Tab === "archive"))}
             loading={loading}
             onDetails={(recordId) => setSelectedA1RecordId(recordId)}
           />
-          <details style={{ marginTop: 24 }}>
-            <summary>Archiwum rozliczonych A1 ({filteredA1Rows.filter((row) => row.record.rozliczona_at).length})</summary>
-            <A1Table rows={filteredA1Rows.filter((row) => Boolean(row.record.rozliczona_at))} loading={loading} onDetails={setSelectedA1RecordId} />
-          </details>
           </>
         ) : (
           <ZusEntrepreneursTable
@@ -574,6 +579,7 @@ function PayrollContent() {
             if (result.error) { alert("Nie udało się dodać nowej A1. Odśwież listę i spróbuj ponownie."); return; }
             const record = result.data as PayrollA1Record;
             setA1Records((current) => [record, ...current]);
+            setA1Tab("active");
             setSelectedA1RecordId(record.id);
           }}
           onClose={() => setSelectedA1RecordId(null)}

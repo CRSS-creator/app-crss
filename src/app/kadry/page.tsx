@@ -530,7 +530,7 @@ function PayrollContent() {
           />
         ) : activeTab === "a1" ? (
           <>
-          <nav aria-label="Widok A1" style={{ display: "flex", gap: 8, marginBottom: 20, borderBottom: "1px solid #e2e8f0", paddingBottom: 12 }}>
+          <nav aria-label="Widok A1" style={{ display: "flex", gap: 8, marginBottom: 20, borderBottom: "1px solid #e2e8f0", padding: "0 24px 12px" }}>
             {([{ value: "active", label: "Aktywne" }, { value: "archive", label: "Archiwum" }] as const).map((item) => (
               <button key={item.value} type="button" aria-pressed={a1Tab === item.value} onClick={() => setA1Tab(item.value)}
                 style={a1Tab === item.value ? activeTabStyle : tabStyle}>

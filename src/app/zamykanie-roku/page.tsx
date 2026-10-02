@@ -97,7 +97,7 @@ function YearClosingList() {
           <tbody>{rows.map(client => <tr key={client.id}><td style={cell}>
             <strong>{client.nazwa || "Klient bez nazwy"}</strong>
             <div style={{ marginTop: 5, fontSize: 12, color: colors.muted }}>NIP: {client.nip || "—"} · {client.forma_prawna || "—"}</div>
-          </td><td style={{ ...cell, width: 390 }}><AppSelect style={{ width: "100%" }} options={options} value={statuses.find(item => item.klient_id === client.id && item.rodzaj === tab)?.status || ""} disabled={saving || statusLoading || Boolean(statusError)} onChange={value => void saveStatus(client.id, value)} /></td></tr>)}</tbody>
+          </td><td style={{ ...cell, width: 390 }}><AppSelect style={{ width: "100%", ...jpkStatusStyle(statuses.find(item => item.klient_id === client.id && item.rodzaj === tab)?.status) }} options={options} value={statuses.find(item => item.klient_id === client.id && item.rodzaj === tab)?.status || ""} disabled={saving || statusLoading || Boolean(statusError)} onChange={value => void saveStatus(client.id, value)} /></td></tr>)}</tbody>
         </table>
         {rows.length === 0 && <p style={{ padding: 24 }}>Brak klientów w tej kategorii.</p>}
       </div>}
@@ -106,3 +106,10 @@ function YearClosingList() {
 }
 
 const cell: CSSProperties = { padding: "16px 24px", borderTop: `1px solid ${colors.border}`, color: colors.navy, fontSize: 14 };
+
+function jpkStatusStyle(status?: string): CSSProperties {
+  if (status === "wyslane" || status === "brak_wysylki") return { background: "rgba(22, 163, 74, 0.12)", borderColor: "rgba(22, 163, 74, 0.24)" };
+  if (status === "do_wyslania") return { background: "rgba(239, 68, 68, 0.12)", borderColor: "rgba(239, 68, 68, 0.24)" };
+  if (status === "potrzebne_dane") return { background: "rgba(245, 158, 11, 0.12)", borderColor: "rgba(245, 158, 11, 0.24)" };
+  return {};
+}

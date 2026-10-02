@@ -527,11 +527,18 @@ function PayrollContent() {
             onDetails={setSelectedClient}
           />
         ) : activeTab === "a1" ? (
+          <>
+          <h3>Aktywne A1</h3>
           <A1Table
-            rows={filteredA1Rows}
+            rows={filteredA1Rows.filter((row) => !row.record.rozliczona_at)}
             loading={loading}
             onDetails={(recordId) => setSelectedA1RecordId(recordId)}
           />
+          <details style={{ marginTop: 24 }}>
+            <summary>Archiwum rozliczonych A1 ({filteredA1Rows.filter((row) => row.record.rozliczona_at).length})</summary>
+            <A1Table rows={filteredA1Rows.filter((row) => Boolean(row.record.rozliczona_at))} loading={loading} onDetails={setSelectedA1RecordId} />
+          </details>
+          </>
         ) : (
           <ZusEntrepreneursTable
             clients={filteredZusEntrepreneurClients}
@@ -558,7 +565,17 @@ function PayrollContent() {
 
       {selectedA1Row && (
         <A1DetailsModal
+          key={selectedA1Row.record.id}
           row={selectedA1Row}
+          onNew={async () => {
+            const active = a1Records.find((record) => record.klient_id === selectedA1Row.record.klient_id && !record.rozliczona_at);
+            if (active) { setSelectedA1RecordId(active.id); return; }
+            const result = await addClientToPayrollA1(selectedA1Row.record.klient_id);
+            if (result.error) { alert("Nie udało się dodać nowej A1. Odśwież listę i spróbuj ponownie."); return; }
+            const record = result.data as PayrollA1Record;
+            setA1Records((current) => [record, ...current]);
+            setSelectedA1RecordId(record.id);
+          }}
           onClose={() => setSelectedA1RecordId(null)}
           onUpdated={handleA1Updated}
           onMonthlyUpdated={handleA1MonthlyUpdated}
@@ -1195,11 +1212,13 @@ function ZusContributionsModal({ schemes, onClose }: { schemes: string[]; onClos
 }
 
 function A1DetailsModal({
+  onNew,
   row,
   onClose,
   onUpdated,
   onMonthlyUpdated,
 }: {
+  onNew: () => Promise<void>;
   row: A1Row;
   onClose: () => void;
   onUpdated: (record: PayrollA1Record) => void;
@@ -1269,7 +1288,7 @@ function A1DetailsModal({
     }
     setSaving(false);
     onUpdated(savedRecord);
-    onClose();
+    if (!settle) onClose();
   }
 
   async function sendA1ClientNotification() {
@@ -1317,7 +1336,7 @@ function A1DetailsModal({
       <section style={a1DetailsModalStyle} onClick={(event) => event.stopPropagation()}>
         <div style={modalHeaderStyle}>
           <div>
-            <p style={eyebrowStyle}>Szczegóły A1</p>
+            <p style={eyebrowStyle}>{row.record.rozliczona_at ? "Archiwum — rozliczona A1" : "Szczegóły A1"}</p>
             <h2 style={modalTitleStyle}>{row.client?.nazwa || "Klient bez nazwy"}</h2>
             <p style={modalSubtitleStyle}>NIP: {row.client?.nip || "Brak"} · {caregiverLabel(row.client)}</p>
           </div>
@@ -1326,7 +1345,7 @@ function A1DetailsModal({
           </button>
         </div>
 
-        <div style={a1ModalBodyStyle}>
+        <fieldset disabled={Boolean(row.record.rozliczona_at)} style={{ ...a1ModalBodyStyle, border: 0, margin: 0, minWidth: 0 }}>
           {showA1History && (
             <A1NotificationHistoryPanel history={a1History} loading={a1HistoryLoading} />
           )}
@@ -1393,11 +1412,15 @@ function A1DetailsModal({
             )}
           </section>
 
-        </div>
+        </fieldset>
         <div style={stickyModalFooterStyle}>
           <button type="button" style={secondaryButtonStyle} onClick={() => void toggleA1History()}>
             Historia powiadomień
           </button>
+          {row.record.rozliczona_at ? <button type="button" style={primaryButtonStyle} disabled={saving} onClick={async () => {
+            setSaving(true);
+            try { await onNew(); } finally { setSaving(false); }
+          }}>{saving ? "Otwieranie..." : "Dodaj nową A1"}</button> : <>
           <button type="button" style={secondaryButtonStyle} onClick={() => void sendA1ClientNotification()} disabled={sendingClientNotification}>
             {sendingClientNotification ? "Wysyłanie..." : "Wyślij powiadomienie do klienta"}
           </button>
@@ -1407,6 +1430,7 @@ function A1DetailsModal({
           <button type="button" style={primaryButtonStyle} onClick={() => void saveA1()} disabled={saving}>
             {saving ? "Zapisywanie..." : "Zapisz szczegóły"}
           </button>
+          </>}
         </div>
       </section>
     </div>

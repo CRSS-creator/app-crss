@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { MailCheck } from "lucide-react";
+import NotificationDeliveryStatus from "@/components/NotificationDeliveryStatus";
 import { supabase } from "@/lib/supabaseClient";
 import AppSelect from "@/components/AppSelect";
 import { colors, radius } from "@/app/design";
@@ -167,17 +167,7 @@ export default function ContributionHolidaysPanel({ clients, loading: clientsLoa
 
 function NotificationStatus({ notification, error }: { notification?: ContributionHolidayNotification; error: boolean }) {
   if (error) return <span style={{ color: colors.muted, fontSize: "13px" }}>Brak danych</span>;
-  if (!notification) return <span style={missingStyle}>Nie wysłano</span>;
-  const date = new Intl.DateTimeFormat("pl-PL", { dateStyle: "short", timeStyle: "short", timeZone: "Europe/Warsaw" }).format(new Date(notification.sent_at));
-  return <div style={{ display: "inline-flex", alignItems: "center", gap: "10px" }}>
-    <span title="Powiadomienie wysłane" style={{ display: "inline-flex", padding: "8px", background: "#e9f7ef", borderRadius: "10px", color: colors.success, flexShrink: 0 }}>
-      <MailCheck size={20} aria-label="Wysłano" />
-    </span>
-    <div style={{ minWidth: 0, display: "grid", gap: "3px", fontSize: "12px", lineHeight: 1.4 }}>
-      <span style={{ color: colors.text, overflowWrap: "anywhere" }}>{notification.sent_by_name}</span>
-      <time dateTime={notification.sent_at} style={{ color: colors.muted }}>{date}</time>
-    </div>
-  </div>;
+  return <NotificationDeliveryStatus sentAt={notification?.sent_at} sender={notification?.sent_by_name} />;
 }
 
 function caregiverLabel(client: ContributionHolidayClient) {

@@ -1,4 +1,5 @@
 "use client";
+import NotificationDeliveryStatus from "@/components/NotificationDeliveryStatus";
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight, ClipboardCheck, Download, Eye, FileSearch, History, Plus, Send, ShieldCheck, Upload, X } from "lucide-react";
@@ -1066,7 +1067,7 @@ function InitialFormItem({ form, profilesById }: { form: AmlInitialFormRecord; p
           <span style={sourceBadgeStyle(active ? "warning" : form.status === "completed" ? "ok" : "archiwalny")}>
             Link · {active ? "aktywny" : form.status === "completed" ? "zamknięty po zapisie" : "unieważniony"}
           </span>
-          {form.sent_at ? <span style={sourceBadgeStyle("archiwalny")}>Wysłano · {formatDateTime(form.sent_at)}</span> : null}
+          <NotificationDeliveryStatus sentAt={form.sent_at} sender={form.sent_by_name || profileLabel(form.sent_by, profilesById)} />
           {form.completed_at ? <span style={sourceBadgeStyle("ok")}>Zapisano · {formatDateTime(form.completed_at)}</span> : null}
           {form.wazny_do ? <span style={sourceBadgeStyle("confirmed")}>Ważny do · {formatDate(form.wazny_do)}</span> : null}
         </div>

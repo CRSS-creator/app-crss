@@ -1,4 +1,5 @@
 "use client";
+import NotificationDeliveryStatus from "@/components/NotificationDeliveryStatus";
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Archive, CalendarDays, Check, ChevronLeft, ChevronRight, History as HistoryIcon, Pencil, Plus, Save, Send, X } from "lucide-react";
@@ -844,14 +845,7 @@ function ZusEntrepreneursTable({
 }
 
 function ZusPreferenceNotificationStatus({ history }: { history: ZusPreferenceNotificationHistory | undefined }) {
-  if (!history) return <span style={monthlyMissingStyle}>Nie wysłano</span>;
-
-  return (
-    <span style={zusNotificationStatusStyle}>
-      Wysłano {formatDateTime(history.created_at)}
-      <span style={zusNotificationMetaStyle}>przez {history.sent_by_name || history.sent_by_email || "nieustalonego użytkownika"}</span>
-    </span>
-  );
+  return <NotificationDeliveryStatus sentAt={history?.created_at} sender={history?.sent_by_name || history?.sent_by_email} />;
 }
 
 function ZusNotificationHistoryModal({ history, clients, onClose }: { history: ZusPreferenceNotificationHistory[]; clients: PayrollClient[]; onClose: () => void }) {
@@ -901,7 +895,7 @@ function ZusNotificationHistoryModal({ history, clients, onClose }: { history: Z
                         <Td>{entry.recipient_email}</Td>
                         <Td>{entry.nastepny_schemat_zus || entry.schemat_zus || "-"}</Td>
                         <Td align="center"><strong>{entry.skladka_miesieczna === null ? "-" : formatMoney(toNumber(entry.skladka_miesieczna))}</strong></Td>
-                        <Td>{entry.sent_by_name || entry.sent_by_email || "-"}</Td>
+                        <Td><NotificationDeliveryStatus sentAt={entry.created_at} sender={entry.sent_by_name || entry.sent_by_email} /></Td>
                       </tr>
                     );
                   })}
@@ -1470,7 +1464,7 @@ function A1NotificationHistoryPanel({ history, loading }: { history: PayrollA1No
                   <Td>{formatDateTime(entry.created_at)}</Td>
                   <Td>{entry.recipient_email}</Td>
                   <Td>{entry.subject}</Td>
-                  <Td>{entry.sent_by_name || entry.sent_by_email || "-"}</Td>
+                  <Td><NotificationDeliveryStatus sentAt={entry.created_at} sender={entry.sent_by_name || entry.sent_by_email} /></Td>
                 </tr>
               ))}
             </tbody>
@@ -1512,7 +1506,7 @@ function PayrollNotificationHistoryPanel({ notifications, loading }: { notificat
                   <Td>{stringMeta(notification.metadata?.employee_name) || "-"}</Td>
                   <Td>{formatDate(stringMeta(notification.metadata?.due_date))}</Td>
                   <Td>{notification.status === "read" ? "Przeczytane" : "Nieprzeczytane"}</Td>
-                  <Td>{stringMeta(notification.metadata?.client_email_sent_at) ? `Wysłano ${formatDateTime(stringMeta(notification.metadata?.client_email_sent_at) || "")}` : "Nie wysłano"}</Td>
+                  <Td><NotificationDeliveryStatus sentAt={stringMeta(notification.metadata?.client_email_sent_at)} sender={stringMeta(notification.metadata?.client_email_sent_by_name)} /></Td>
                 </tr>
               ))}
             </tbody>

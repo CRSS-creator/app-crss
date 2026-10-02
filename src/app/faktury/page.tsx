@@ -1,4 +1,5 @@
 "use client";
+import NotificationDeliveryStatus from "@/components/NotificationDeliveryStatus";
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { CalendarClock, DownloadCloud, FileText, Mail, Pencil, RotateCw, Save, Send, Trash2, TriangleAlert, X } from "lucide-react";
@@ -1165,6 +1166,7 @@ function InvoicesContent() {
                     <div key={entry.id} style={mailHistoryItemStyle}>
                       <div>
                         <strong>{invoiceHistoryTitle(entry)}</strong>
+                        {entry.status === "wyslane" && <NotificationDeliveryStatus sentAt={entry.created_at} sender={entry.sent_by_name} />}
                         <p style={pdfMetaStyle}>
                           {formatDateTime(entry.created_at)} · {entry.recipient_email}
                           {entry.recipient_phone ? ` · SMS: ${entry.recipient_phone}` : ""}

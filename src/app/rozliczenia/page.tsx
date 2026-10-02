@@ -1,4 +1,5 @@
 "use client";
+import NotificationDeliveryStatus from "@/components/NotificationDeliveryStatus";
 
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { FileText, Landmark, Play, Square } from "lucide-react";
@@ -507,7 +508,7 @@ function SettlementDrawer({ settlement, progress, recurringTasks, recurringTimeE
               </button>
               {settlement.przypomnienie_dokumenty_wyslane_at && (
                 <p style={reminderMetaStyle}>
-                  Przypomnienie wysłane {formatReminderTimestamp(settlement.przypomnienie_dokumenty_wyslane_at)} przez {settlement.przypomnienie_dokumenty_wyslane_przez_nazwa || "nieustalonego użytkownika"}.
+                  <NotificationDeliveryStatus sentAt={settlement.przypomnienie_dokumenty_wyslane_at} sender={settlement.przypomnienie_dokumenty_wyslane_przez_nazwa} />
                 </p>
               )}
               <div style={hasPayroll ? countFieldsGridStyle : oneColumnStyle}>
@@ -556,11 +557,11 @@ function SettlementDrawer({ settlement, progress, recurringTasks, recurringTimeE
                       <div style={taxStatusGridStyle}>
                         <div>
                           <span style={sendStatusStyle(obligation.status_email)}>E-mail: {sendStatusLabel(obligation.status_email)}</span>
-                          {sendStatusDetails(obligation.email_sent_at, obligation.email_sent_by_name) ? <p style={taxSentInfoStyle}>{sendStatusDetails(obligation.email_sent_at, obligation.email_sent_by_name)}</p> : null}
+                          {obligation.email_sent_at && <NotificationDeliveryStatus sentAt={obligation.email_sent_at} sender={obligation.email_sent_by_name} />}
                         </div>
                         <div>
                           <span style={sendStatusStyle(obligation.status_sms)}>SMS: {sendStatusLabel(obligation.status_sms)}</span>
-                          {sendStatusDetails(obligation.sms_sent_at, obligation.sms_sent_by_name) ? <p style={taxSentInfoStyle}>{sendStatusDetails(obligation.sms_sent_at, obligation.sms_sent_by_name)}</p> : null}
+                          {obligation.sms_sent_at && <NotificationDeliveryStatus sentAt={obligation.sms_sent_at} sender={obligation.sms_sent_by_name} channel="sms" />}
                         </div>
                         <button type="button" style={deleteTaxButtonStyle} onClick={() => onTaxObligationDelete(obligation.id)}>Usuń</button>
                       </div>

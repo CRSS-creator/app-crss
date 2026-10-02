@@ -1,4 +1,5 @@
 "use client";
+import NotificationDeliveryStatus from "@/components/NotificationDeliveryStatus";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import AppLayout from "@/components/AppLayout";
@@ -384,7 +385,7 @@ function KomunikatyContent() {
                   <div>
                     <div style={historySubjectStyle}>{record.subject || "Bez tematu"}</div>
                     <div style={historyMetaStyle}>
-                      Wysłane {formatHistoryDate(record.created_at)} przez {record.sent_by_name || "nieustalonego użytkownika"}.
+                      <NotificationDeliveryStatus sentAt={record.created_at} sender={record.sent_by_name} />
                     </div>
                   </div>
                   <div style={historyActionsStyle}>

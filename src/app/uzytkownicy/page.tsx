@@ -1,4 +1,5 @@
 "use client";
+import NotificationDeliveryStatus from "@/components/NotificationDeliveryStatus";
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import AppLayout from "@/components/AppLayout";
@@ -461,7 +462,7 @@ function TaxHistoryTab({ entries, loading }: { entries: TaxObligationHistoryRow[
                     <span style={taxRecipientStyle}>{entry.channel === "email" ? entry.recipient_email || "Brak e-maila" : entry.recipient_phone || "Brak telefonu"}</span>
                   </TaxHistoryTd>
                   <TaxHistoryTd>
-                    <span style={taxSenderStyle}>{entry.sent_by_name || "Nieustalony użytkownik"}</span>
+                    <NotificationDeliveryStatus sentAt={entry.created_at} sender={entry.sent_by_name} channel={entry.channel === "email" ? "email" : "sms"} />
                   </TaxHistoryTd>
                 </tr>
               );

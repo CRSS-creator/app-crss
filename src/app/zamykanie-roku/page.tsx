@@ -47,8 +47,11 @@ function YearClosingList() {
       </nav>
       {loading ? <p style={{ padding: 24 }}>Ładowanie klientów…</p> : error ? <p role="alert" style={{ padding: 24, color: colors.danger }}>{error}</p> : <div style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
-          <thead><tr>{["Klient", "NIP", "Forma prawna"].map(label => <th key={label} scope="col" style={cell}>{label}</th>)}</tr></thead>
-          <tbody>{rows.map(client => <tr key={client.id}><td style={cell}><strong>{client.nazwa || "Klient bez nazwy"}</strong></td><td style={cell}>{client.nip || "—"}</td><td style={cell}>{client.forma_prawna || "—"}</td></tr>)}</tbody>
+          <thead><tr><th scope="col" style={cell}>Klient</th></tr></thead>
+          <tbody>{rows.map(client => <tr key={client.id}><td style={cell}>
+            <strong>{client.nazwa || "Klient bez nazwy"}</strong>
+            <div style={{ marginTop: 5, fontSize: 12, color: colors.muted }}>NIP: {client.nip || "—"} · {client.forma_prawna || "—"}</div>
+          </td></tr>)}</tbody>
         </table>
         {rows.length === 0 && <p style={{ padding: 24 }}>Brak klientów w tej kategorii.</p>}
       </div>}

@@ -227,7 +227,7 @@ function PayrollContent() {
   const a1Rows = useMemo(() => buildA1Rows(a1Records, clients, a1MonthlyRevenues), [a1Records, clients, a1MonthlyRevenues]);
   const filteredA1Rows = useMemo(() => filterA1Rows(a1Rows, searchTerm), [a1Rows, searchTerm]);
   const availableA1Clients = useMemo(
-    () => clients.filter((client) => !a1Records.some((record) => record.klient_id === client.id)),
+    () => clients.filter((client) => !a1Records.some((record) => record.klient_id === client.id && !record.rozliczona_at)),
     [clients, a1Records]
   );
   const filteredA1Clients = useMemo(() => filterClients(availableA1Clients, a1AddSearch), [availableA1Clients, a1AddSearch]);
@@ -668,11 +668,12 @@ function A1Table({
                 <Td>
                   <strong style={clientNameStyle}>{row.client?.nazwa || "Klient bez nazwy"}</strong>
                   <span style={clientMetaStyle}>{row.client?.nip || "Brak NIP"}</span>
+                  <span style={clientMetaStyle}>{row.record.rozliczona_at ? `Rozliczona: ${formatDate(row.record.rozliczona_at)}` : "Aktywna A1"}</span>
                 </Td>
                 <Td>{caregiverLabel(row.client)}</Td>
                 <Td>{formatDate(row.record.data_uzyskania_a1)}</Td>
                 <Td>{formatDate(row.record.data_konca_a1)}</Td>
-                <Td align="center"><MonthlyStatus done={previousMonthDone} /></Td>
+                <Td align="center">{row.record.rozliczona_at ? "Rozliczona" : <MonthlyStatus done={previousMonthDone} />}</Td>
                 <Td align="center"><A1PercentBadge value={calculateA1Totals(row.monthly).procentZagraniczny} /></Td>
                 <Td align="center">
                   <button type="button" style={detailsButtonStyle} onClick={() => onDetails(row.record.id)}>
@@ -1219,7 +1220,7 @@ function A1DetailsModal({
     setDraft((current) => ({ ...current, [key]: value }));
   }
 
-  async function saveA1() {
+  async function saveA1(settle = false) {
     setSaving(true);
     const result = await updatePayrollA1Record(row.record.id, {
       data_uzyskania_a1: emptyToNull(draft.data_uzyskania_a1),
@@ -1256,8 +1257,18 @@ function A1DetailsModal({
       onMonthlyUpdated(monthlyResult.data as PayrollA1MonthlyRevenue);
     }
 
+    let savedRecord = result.data as PayrollA1Record;
+    if (settle) {
+      const settled = await updatePayrollA1Record(row.record.id, { rozliczona_at: new Date().toISOString() });
+      if (settled.error) {
+        setSaving(false);
+        alert("Dane zapisano, ale nie udało się oznaczyć A1 jako rozliczonej. Spróbuj ponownie.");
+        return;
+      }
+      savedRecord = settled.data as PayrollA1Record;
+    }
     setSaving(false);
-    onUpdated(result.data as PayrollA1Record);
+    onUpdated(savedRecord);
     onClose();
   }
 
@@ -1390,7 +1401,10 @@ function A1DetailsModal({
           <button type="button" style={secondaryButtonStyle} onClick={() => void sendA1ClientNotification()} disabled={sendingClientNotification}>
             {sendingClientNotification ? "Wysyłanie..." : "Wyślij powiadomienie do klienta"}
           </button>
-          <button type="button" style={primaryButtonStyle} onClick={saveA1} disabled={saving}>
+          {!row.record.rozliczona_at && <button type="button" style={secondaryButtonStyle} onClick={() => void saveA1(true)} disabled={saving}>
+            Zapisz i oznacz jako rozliczoną
+          </button>}
+          <button type="button" style={primaryButtonStyle} onClick={() => void saveA1()} disabled={saving}>
             {saving ? "Zapisywanie..." : "Zapisz szczegóły"}
           </button>
         </div>

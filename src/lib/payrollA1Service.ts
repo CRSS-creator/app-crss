@@ -1,6 +1,7 @@
 import { supabase } from "@/lib/supabaseClient";
 
 export type PayrollA1Record = {
+  rozliczona_at: string | null;
   id: string;
   created_at: string;
   updated_at: string;
@@ -41,6 +42,7 @@ export type PayrollA1NotificationHistory = {
 };
 
 export type PayrollA1UpdatePayload = {
+  rozliczona_at?: string;
   data_uzyskania_a1?: string | null;
   data_konca_a1?: string | null;
   procent_przychodow_zagranicznych?: number;

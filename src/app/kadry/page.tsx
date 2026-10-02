@@ -1238,7 +1238,7 @@ function A1DetailsModal({
   const [a1History, setA1History] = useState<PayrollA1NotificationHistory[]>([]);
   const [a1HistoryLoading, setA1HistoryLoading] = useState(false);
   const months = a1MonthsBetween(draft.data_uzyskania_a1, draft.data_konca_a1);
-  const visibleMonths = [...months].reverse();
+  const visibleMonths = months;
   const totals = calculateA1TotalsFromValues(monthValues);
 
   function updateDraft<K extends keyof A1Draft>(key: K, value: A1Draft[K]) {
@@ -1346,9 +1346,12 @@ function A1DetailsModal({
             <h2 style={modalTitleStyle}>{row.client?.nazwa || "Klient bez nazwy"}</h2>
             <p style={modalSubtitleStyle}>NIP: {row.client?.nip || "Brak"} · {caregiverLabel(row.client)}</p>
           </div>
+          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+          {!row.record.rozliczona_at && <button type="button" style={primaryButtonStyle} onClick={() => void saveA1(true)} disabled={saving}>Rozliczona</button>}
           <button type="button" style={iconButtonStyle} onClick={onClose} aria-label="Zamknij">
             <X size={20} />
           </button>
+          </div>
         </div>
 
         <fieldset disabled={Boolean(row.record.rozliczona_at)} style={{ ...a1ModalBodyStyle, border: 0, margin: 0, minWidth: 0 }}>
@@ -1430,9 +1433,6 @@ function A1DetailsModal({
           <button type="button" style={secondaryButtonStyle} onClick={() => void sendA1ClientNotification()} disabled={sendingClientNotification}>
             {sendingClientNotification ? "Wysyłanie..." : "Wyślij powiadomienie do klienta"}
           </button>
-          {!row.record.rozliczona_at && <button type="button" style={secondaryButtonStyle} onClick={() => void saveA1(true)} disabled={saving}>
-            Zapisz i oznacz jako rozliczoną
-          </button>}
           <button type="button" style={primaryButtonStyle} onClick={() => void saveA1()} disabled={saving}>
             {saving ? "Zapisywanie..." : "Zapisz szczegóły"}
           </button>
@@ -2365,7 +2365,7 @@ const a1RegisterTableStyle: CSSProperties = { ...tableStyle, minWidth: "1120px" 
 const zusEntrepreneursTableStyle: CSSProperties = { ...tableStyle, minWidth: "1360px" };
 const detailsTableStyle: CSSProperties = { width: "100%", minWidth: "0", borderCollapse: "collapse", tableLayout: "fixed" };
 const a1MonthlyTableStyle: CSSProperties = { width: "100%", minWidth: "760px", borderCollapse: "collapse" };
-const a1MonthlyScrollStyle: CSSProperties = { width: "100%", maxHeight: "min(48vh, 520px)", overflow: "auto" };
+const a1MonthlyScrollStyle: CSSProperties = { width: "100%", overflowX: "auto" };
 const thStyle: CSSProperties = { padding: "14px 12px", textAlign: "left", fontSize: "12px", color: colors.text, textTransform: "uppercase", letterSpacing: "0.08em", borderBottom: `1px solid ${colors.border}`, whiteSpace: "normal", lineHeight: 1.25 };
 const tdStyle: CSSProperties = { padding: "16px 12px", borderBottom: `1px solid ${colors.border}`, color: colors.text, verticalAlign: "middle", fontSize: "14px", wordBreak: "break-word" };
 const centeredThStyle: CSSProperties = { ...thStyle, textAlign: "center" };
@@ -2398,7 +2398,7 @@ const modalSubtitleStyle: CSSProperties = { margin: "8px 0 0", color: colors.mut
 const modalActionsStyle: CSSProperties = { display: "flex", gap: "10px", alignItems: "center", justifyContent: "flex-end", flexWrap: "wrap" };
 const modalBodyStyle: CSSProperties = { padding: "22px 24px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "18px" };
 const payrollDetailsBodyStyle: CSSProperties = { ...modalBodyStyle, flex: "1 1 auto", minHeight: 0, overflow: "hidden" };
-const a1ModalBodyStyle: CSSProperties = { ...modalBodyStyle, flex: "1 1 auto", minHeight: 0, paddingBottom: "24px" };
+const a1ModalBodyStyle: CSSProperties = { ...modalBodyStyle, display: "grid", gridAutoRows: "max-content", flex: "1 1 auto", minHeight: 0, paddingBottom: "24px" };
 const stickyModalFooterStyle: CSSProperties = { flex: "0 0 auto", display: "flex", justifyContent: "flex-end", gap: "10px", padding: "16px 24px 22px", borderTop: `1px solid ${colors.border}`, background: colors.white, flexWrap: "wrap" };
 const iconButtonStyle: CSSProperties = { width: "42px", height: "42px", borderRadius: radius.button, border: `1px solid ${colors.border}`, background: colors.white, color: colors.navy, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer" };
 const iconActionButtonStyle: CSSProperties = { width: "34px", height: "34px", borderRadius: radius.button, border: `1px solid ${colors.border}`, background: colors.white, color: colors.navy, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer" };

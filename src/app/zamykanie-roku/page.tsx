@@ -40,7 +40,7 @@ function YearClosingList() {
   }, []);
   const rows = clients.filter(client => group(client) === tab).sort((a, b) => (a.nazwa || "").localeCompare(b.nazwa || "", "pl"));
   return <>
-    <h1 style={{ color: colors.navy }}>Zamykanie roku</h1>
+    <h1 style={{ color: colors.navy, fontSize: 30, fontWeight: 700, lineHeight: 1.25, margin: "0 0 24px" }}>Zamykanie roku</h1>
     <section style={{ background: colors.card, border: `1px solid ${colors.border}`, borderRadius: radius.card, overflow: "hidden" }}>
       <nav aria-label="Rodzaj księgowości" style={{ display: "flex", flexWrap: "wrap", gap: 8, padding: 24 }}>
         {([{ value: "jdg", label: "JDG" }, { value: "full", label: "Pełna księgowość" }] as const).map(item => <button key={item.value} type="button" aria-pressed={tab === item.value} onClick={() => setTab(item.value)} style={{ padding: "10px 18px", borderRadius: 14, border: `1px solid ${colors.border}`, fontWeight: 700, cursor: "pointer", background: tab === item.value ? colors.navy : colors.white, color: tab === item.value ? colors.white : colors.navy }}>{item.label}</button>)}

@@ -91,7 +91,7 @@ export function getWfirmaConfig() {
 
 export async function wfirmaRequest<T>(
   action: string,
-  options: { method?: "POST"; body?: unknown; config: WfirmaConfig }
+  options: { method?: "GET" | "POST"; body?: unknown; config: WfirmaConfig }
 ) {
   const method = options.method || "POST";
   const url = new URL(`${WFIRMA_API_URL}/${action.replace(/^\/+/, "")}`);
@@ -253,9 +253,8 @@ export async function setWfirmaInvoiceBankAccount(config: WfirmaConfig, invoiceI
 }
 
 export async function getWfirmaInvoice(config: WfirmaConfig, id: string | number) {
-  return wfirmaRequest<{ invoices?: unknown; status?: { code?: string } }>("invoices/get", {
-    method: "POST",
-    body: { invoices: { invoice: { id } } },
+  return wfirmaRequest<{ invoices?: unknown; status?: { code?: string } }>(`invoices/get/${encodeURIComponent(String(id))}`, {
+    method: "GET",
     config,
   });
 }

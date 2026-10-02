@@ -186,7 +186,7 @@ export async function POST(request: NextRequest) {
             wfirma_sync_error: message,
           };
       await auth.admin.from("faktury").update(failedUpdatePayload).eq("id", invoice.id);
-      failed.push({ invoiceId: invoice.id, error: message });
+      failed.push({ invoiceId: invoice.id, error: failedUpdatePayload.wfirma_sync_error });
     }
   }
 

@@ -1475,7 +1475,7 @@ function dateSortValue(value: string | null) {
 }
 
 function invoiceListMonth(invoice: Invoice) {
-  if (invoice.status === "szkic" || !hasFinalInvoiceNumber(invoice.numer)) return currentMonthInput();
+  if (invoice.status === "szkic" || (!invoice.data_wystawienia && !hasFinalInvoiceNumber(invoice.numer))) return currentMonthInput();
   if (invoice.data_wystawienia) return toMonthInput(invoice.data_wystawienia);
   if (invoice.okres) return toMonthInput(addMonths(invoice.okres, 1));
   return toMonthInput(invoice.created_at);

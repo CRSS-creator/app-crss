@@ -1302,23 +1302,30 @@ function renderTeamSectionTable(
 function renderClientsSection(report: ReturnType<typeof clientProfitability>) {
   const cashValue = (value: number | null) => value === null ? "—" : formatMoney(value);
   return (
-    <section style={sectionStackStyle}>
+    <section style={{ ...sectionStackStyle, minWidth: 0 }}>
+      <style>{`
+        .cfo-client-table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: clamp(9px, .8vw, 12px); }
+        .cfo-client-table th, .cfo-client-table td { padding: 9px 4px !important; white-space: normal !important; overflow-wrap: anywhere; font-size: inherit !important; }
+        .cfo-client-table th { font-size: .9em !important; line-height: 1.3; }
+        .cfo-client-table td span { max-width: 100%; box-sizing: border-box; white-space: normal !important; font-size: .9em !important; padding: 5px !important; }
+      `}</style>
       <article style={panelStyle}>
         <div style={panelHeaderStyle}><BriefcaseBusiness size={21} style={panelIconStyle} /><h2 style={panelTitleStyle}>Rentowność klientów</h2></div>
         <p style={smallStyle}>Przychód i godziny dotyczą tego samego miesiąca rozliczenia, również gdy pracę wykonano później. Koszt godziny wynika z pełnego kosztu zespołu i dostępności w miesiącu wykonania pracy. Widok roczny sumuje obliczenia miesięczne.</p>
-        <p style={smallStyle}>Koszty wspólne obejmują pozostałe koszty CFO, w tym zarząd. Dzielimy je według udziału w przychodzie każdego miesiąca. Praca wewnętrzna i nieprzypisany koszt wynagrodzeń pozostają poza klientami. Marża po kosztach wspólnych jest szacunkiem według tej zasady.</p>
+        <p style={smallStyle}>Koszty wspólne obejmują pozostałe koszty CFO, w tym zarząd. Dzielimy je według udziału w przychodzie każdego miesiąca. Praca wewnętrzna i nieprzypisany koszt wynagrodzeń pozostają poza klientami. Wynik pełny i marża pełna uwzględniają te koszty wspólne. Koszt zespołu pokazuje już wycenioną kwotę; godziny bez stawki wskazuje Status. Do uzupełnienia stawek wynik i marża pozostają niepełne.</p>
         {report.revenueWithoutFullCost > 0 ? <div style={infoNoticeStyle}>Przychód bez pełnej wyceny pracy: <strong>{formatMoney(report.revenueWithoutFullCost)}</strong>. Brak godzin lub historycznego kosztu pracownika oznacza niepełny wynik, a nie 100% marży.</div> : null}
         {report.missingPayrollMonths.length ? <div style={infoNoticeStyle}>Brak kosztów zespołu za: {report.missingPayrollMonths.join(", ")}.</div> : null}
         {report.missingRateMonths.length ? <div style={infoNoticeStyle}>Część godzin nie ma historycznej stawki kosztowej za miesiące wykonania: {report.missingRateMonths.join(", ")}. Uzupełnij koszty i dostępność pracowników w sekcji Zespół dla tych miesięcy.</div> : null}
-        <div style={tableWrapperStyle}>
-          <table style={{ ...tableStyle, minWidth: "1380px" }}>
-            <thead><tr><Th>Klient</Th><Th align="right">Przychód</Th><Th align="right">MRR</Th><Th align="right">Godziny</Th><Th align="right">Koszt zespołu</Th><Th align="right">Wynik po zespole</Th><Th align="right">Marża po zespole</Th><Th align="right">Koszty wspólne</Th><Th align="right">Wynik po kosztach wspólnych</Th><Th align="right">Marża po kosztach wspólnych</Th><Th>Status</Th></tr></thead>
+        <div style={{ width: "100%", minWidth: 0 }}>
+          <table className="cfo-client-table">
+            <colgroup>{[18, 9, 8, 6, 9, 9, 6, 9, 9, 6, 11].map((width, index) => <col key={index} style={{ width: `${width}%` }} />)}</colgroup>
+            <thead><tr><Th>Klient</Th><Th align="right">Przychód</Th><Th align="right">MRR</Th><Th align="right">Godziny</Th><Th align="right">Koszt zespołu</Th><Th align="right">Wynik po zespole</Th><Th align="right">Marża zespołu</Th><Th align="right">Koszty wspólne</Th><Th align="right">Wynik pełny</Th><Th align="right">Marża pełna</Th><Th>Status</Th></tr></thead>
             <tbody>{report.clients.length === 0 ? <EmptyRow colSpan={11} text="Brak przychodów i pracy klientów dla tego okresu." /> : report.clients.map(client => {
-              const status = client.incomplete ? { status: client.missingRateHours > 0 ? "Brak kosztu historycznego" : "Brakuje czasu rozliczenia", statusTone: "missing" as const } : clientProfitabilityStatus(client.fullMargin, client.hours);
+              const status = client.incomplete ? { status: client.missingRateHours > 0 ? `Brak stawki: ${formatHours(client.missingRateHours)}` : "Brakuje czasu rozliczenia", statusTone: "missing" as const } : clientProfitabilityStatus(client.fullMargin, client.hours);
               return <tr key={client.key}>
                 <Td>{client.name}</Td><Td align="right">{formatMoney(client.revenue)}</Td><Td align="right">{formatMoney(client.mrr)}</Td>
                 <Td align="right">{formatHours(client.hours)}</Td>
-                <Td align="right">{cashValue(client.laborCost)}{client.incomplete && client.hours > 0 ? <small style={smallStyle}>Wyceniono: {formatMoney(client.knownLaborCost)}; bez stawki: {formatHours(client.missingRateHours)}</small> : null}</Td>
+                <Td align="right">{formatMoney(client.knownLaborCost)}</Td>
                 <Td align="right"><strong>{cashValue(client.directResult)}</strong></Td><Td align="right">{client.directMargin === null ? "—" : formatPercent(client.directMargin)}</Td>
                 <Td align="right">{formatMoney(client.overhead)}</Td><Td align="right"><strong>{cashValue(client.fullResult)}</strong></Td><Td align="right">{client.fullMargin === null ? "—" : formatPercent(client.fullMargin)}</Td>
                 <Td><span style={clientStatusStyle(status.statusTone)}>{status.status}</span></Td>
@@ -1328,14 +1335,14 @@ function renderClientsSection(report: ReturnType<typeof clientProfitability>) {
         </div>
       </article>
       <article style={panelStyle}>
-        <h2 style={panelTitleStyle}>Koszt zespołu poza obsługą klientów</h2>
-        <p style={smallStyle}>Poniższe wartości dotyczą miesiąca wykonania pracy. Nie rozdzielamy ich automatycznie na klientów.</p>
+        <h2 style={panelTitleStyle}>Na co przypada koszt zespołu w tym miesiącu?</h2>
+        <p style={smallStyle}>To podział wynagrodzeń za wybrany miesiąc według pracy wykonanej w tym miesiącu — także przy rozliczeniach innych miesięcy. Tabela klientów powyżej grupuje pracę według miesiąca rozliczenia.</p>
         <div style={miniListStyle}>
           <div style={miniItemStyle}><span>Pełny zapisany koszt zespołu</span><strong>{formatMoney(report.payroll)}</strong></div>
+          <div style={miniItemStyle}><span>Praca dla klientów wykonana w miesiącu</span><strong>{formatMoney(report.payroll - report.internalCost - report.unknownPeriodCost - report.unallocatedPayroll)}</strong></div>
           <div style={miniItemStyle}><span>Praca wewnętrzna — bez klienta</span><span>{formatHours(report.internalHours)}</span><strong>{formatMoney(report.internalCost)}</strong></div>
           <div style={miniItemStyle}><span>Praca klientowa bez miesiąca rozliczenia</span><span>{formatHours(report.unknownPeriodHours)}</span><strong>{formatMoney(report.unknownPeriodCost)}</strong></div>
-          <div style={miniItemStyle}><span>{report.unallocatedPayroll >= 0 ? "Pozostały koszt wynagrodzeń — niewykorzystana dostępność / niepełna ewidencja" : "Przekroczenie kosztu wynagrodzeń przez wycenę godzin — wymaga sprawdzenia"}</span><strong>{formatMoney(report.unallocatedPayroll)}</strong></div>
-          <div style={miniItemStyle}><span>Różnica okresów: koszt obsługi rozliczeń minus koszt pracy klientowej wykonanej w okresie</span><strong>{formatMoney(report.timingDifference)}</strong></div>
+          <div style={miniItemStyle}><span>{report.unallocatedPayroll >= 0 ? "Koszt bez pokrycia w wycenionych godzinach (np. brak wpisów lub stawek)" : "Przekroczenie kosztu wynagrodzeń przez wycenę godzin — wymaga sprawdzenia"}</span><strong>{formatMoney(report.unallocatedPayroll)}</strong></div>
           <div style={miniItemStyle}><span>Koszty wspólne nierozdzielone z powodu braku przychodów w miesiącu</span><strong>{formatMoney(report.unallocatedOverhead)}</strong></div>
         </div>
         {report.missingWorkedRateHours > 0 ? <p style={infoNoticeStyle}>{formatHours(report.missingWorkedRateHours)} pracy wykonanej w okresie nie ma historycznej stawki kosztowej. Powyższe kwoty pracy i podział wynagrodzeń są niepełne.</p> : null}

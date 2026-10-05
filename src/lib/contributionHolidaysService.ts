@@ -5,6 +5,8 @@ export type ContributionHolidayRecord = {
   rok: number;
   skorzystal: boolean | null;
   moze_skorzystac: boolean | null;
+  nie_chce_skorzystac: boolean;
+  miesiac_skorzystania: number | null;
 };
 
 export type ContributionHolidayClient = {

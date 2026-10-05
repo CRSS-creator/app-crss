@@ -1307,28 +1307,20 @@ function renderClientsSection(report: ReturnType<typeof clientProfitability>) {
         .cfo-client-table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: clamp(9px, .8vw, 12px); }
         .cfo-client-table th, .cfo-client-table td { padding: 9px 4px !important; white-space: normal !important; overflow-wrap: anywhere; font-size: inherit !important; }
         .cfo-client-table th { font-size: .9em !important; line-height: 1.3; }
-        .cfo-client-table td span { max-width: 100%; box-sizing: border-box; white-space: normal !important; font-size: .9em !important; padding: 5px !important; }
       `}</style>
       <article style={panelStyle}>
         <div style={panelHeaderStyle}><BriefcaseBusiness size={21} style={panelIconStyle} /><h2 style={panelTitleStyle}>Rentowność klientów</h2></div>
-        <p style={smallStyle}>Przychód i godziny dotyczą tego samego miesiąca rozliczenia, również gdy pracę wykonano później. Koszt godziny wynika z pełnego kosztu zespołu i dostępności w miesiącu wykonania pracy. Widok roczny sumuje obliczenia miesięczne.</p>
-        <p style={smallStyle}>Koszty wspólne obejmują pozostałe koszty CFO, w tym zarząd. Dzielimy je według udziału w przychodzie każdego miesiąca. Praca wewnętrzna i nieprzypisany koszt wynagrodzeń pozostają poza klientami. Wynik pełny i marża pełna uwzględniają te koszty wspólne. Koszt zespołu pokazuje już wycenioną kwotę; godziny bez stawki wskazuje Status. Do uzupełnienia stawek wynik i marża pozostają niepełne.</p>
-        {report.revenueWithoutFullCost > 0 ? <div style={infoNoticeStyle}>Przychód bez pełnej wyceny pracy: <strong>{formatMoney(report.revenueWithoutFullCost)}</strong>. Brak godzin lub historycznego kosztu pracownika oznacza niepełny wynik, a nie 100% marży.</div> : null}
-        {report.missingPayrollMonths.length ? <div style={infoNoticeStyle}>Brak kosztów zespołu za: {report.missingPayrollMonths.join(", ")}.</div> : null}
-        {report.missingRateMonths.length ? <div style={infoNoticeStyle}>Część godzin nie ma historycznej stawki kosztowej za miesiące wykonania: {report.missingRateMonths.join(", ")}. Uzupełnij koszty i dostępność pracowników w sekcji Zespół dla tych miesięcy.</div> : null}
         <div style={{ width: "100%", minWidth: 0 }}>
           <table className="cfo-client-table">
-            <colgroup>{[18, 9, 8, 6, 9, 9, 6, 9, 9, 6, 11].map((width, index) => <col key={index} style={{ width: `${width}%` }} />)}</colgroup>
-            <thead><tr><Th>Klient</Th><Th align="right">Przychód</Th><Th align="right">MRR</Th><Th align="right">Godziny</Th><Th align="right">Koszt zespołu</Th><Th align="right">Wynik po zespole</Th><Th align="right">Marża zespołu</Th><Th align="right">Koszty wspólne</Th><Th align="right">Wynik pełny</Th><Th align="right">Marża pełna</Th><Th>Status</Th></tr></thead>
-            <tbody>{report.clients.length === 0 ? <EmptyRow colSpan={11} text="Brak przychodów i pracy klientów dla tego okresu." /> : report.clients.map(client => {
-              const status = client.incomplete ? { status: client.missingRateHours > 0 ? `Brak stawki: ${formatHours(client.missingRateHours)}` : "Brakuje czasu rozliczenia", statusTone: "missing" as const } : clientProfitabilityStatus(client.fullMargin, client.hours);
+            <colgroup>{[23, 10, 9, 6, 10, 10, 6, 10, 10, 6].map((width, index) => <col key={index} style={{ width: `${width}%` }} />)}</colgroup>
+            <thead><tr><Th>Klient</Th><Th align="right">Przychód</Th><Th align="right">MRR</Th><Th align="right">Godziny</Th><Th align="right">Koszt zespołu</Th><Th align="right">Wynik po zespole</Th><Th align="right">Marża zespołu</Th><Th align="right">Koszty wspólne</Th><Th align="right">Wynik pełny</Th><Th align="right">Marża pełna</Th></tr></thead>
+            <tbody>{report.clients.length === 0 ? <EmptyRow colSpan={10} text="Brak przychodów i pracy klientów dla tego okresu." /> : report.clients.map(client => {
               return <tr key={client.key}>
                 <Td>{client.name}</Td><Td align="right">{formatMoney(client.revenue)}</Td><Td align="right">{formatMoney(client.mrr)}</Td>
                 <Td align="right">{formatHours(client.hours)}</Td>
                 <Td align="right">{formatMoney(client.knownLaborCost)}</Td>
                 <Td align="right"><strong>{cashValue(client.directResult)}</strong></Td><Td align="right">{client.directMargin === null ? "—" : formatPercent(client.directMargin)}</Td>
                 <Td align="right">{formatMoney(client.overhead)}</Td><Td align="right"><strong>{cashValue(client.fullResult)}</strong></Td><Td align="right">{client.fullMargin === null ? "—" : formatPercent(client.fullMargin)}</Td>
-                <Td><span style={clientStatusStyle(status.statusTone)}>{status.status}</span></Td>
               </tr>;
             })}</tbody>
           </table>
@@ -1801,15 +1793,6 @@ function invoiceOptionLabel(invoice: CfoCashflowInvoice, selectedPeriod: string)
   const number = invoice.numer || "Faktura bez numeru";
   const contractor = invoice.kontrahent_nazwa || "Bez kontrahenta";
   return `${scope} · ${number} · ${contractor} · ${formatMoney(invoice.kwota_brutto)}`;
-}
-
-function clientProfitabilityStatus(margin: number | null, hours: number) {
-  if (hours <= 0) return { status: "Brakuje czasu pracy", statusTone: "missing" as const };
-  if (margin === null) return { status: "Brak przychodu", statusTone: "missing" as const };
-  if (margin >= 0.4) return { status: "Chronić", statusTone: "good" as const };
-  if (margin >= 0.25) return { status: "Obserwować", statusTone: "watch" as const };
-  if (margin >= 0.15) return { status: "Podwyżka", statusTone: "warn" as const };
-  return { status: "Konieczna podwyżka / rozważyć zakończenie", statusTone: "bad" as const };
 }
 
 function buildCfoView(period: string, viewMode: CfoViewMode, revenueLines: CfoInvoiceLine[], costs: CfoCostItem[], employees: CfoEmployeeCost[], bank: CfoBankTransaction[]) {
@@ -2627,7 +2610,6 @@ const miniListStyle: CSSProperties = { display: "grid", gap: "8px" };
 const miniItemStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto auto", gap: "10px", border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "10px 12px", color: colors.text, alignItems: "center" };
 const teamCapacityItemStyle: CSSProperties = { ...miniItemStyle, gridTemplateColumns: "minmax(220px, 1.4fr) repeat(5, minmax(120px, auto))", alignItems: "center" };
 const infoNoticeStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: "#e9eef7", color: colors.navy, padding: "12px", fontWeight: 800 };
-const badgeStyle: CSSProperties = { display: "inline-flex", borderRadius: radius.badge, background: "rgba(23, 59, 115, 0.10)", color: colors.navy, padding: "7px 10px", fontSize: "12px", fontWeight: 900 };
 const costBreakdownGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(310px, 1fr))", gap: "12px" };
 const costBreakdownItemStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "14px", display: "grid", gap: "11px", minWidth: 0 };
 const costBreakdownHeaderStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: "14px", color: colors.navy, alignItems: "start" };
@@ -2635,16 +2617,4 @@ const costBreakdownAmountStyle: CSSProperties = { whiteSpace: "nowrap", textAlig
 const costSubListStyle: CSSProperties = { display: "grid", gap: "7px" };
 const costSubItemStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: "14px", color: colors.text, fontSize: "13px", borderTop: `1px solid ${colors.border}`, paddingTop: "7px", alignItems: "start" };
 const costPaymentStatusStyle: CSSProperties = { display: "grid", gap: "3px", color: colors.text, fontSize: "12px", lineHeight: 1.25, minWidth: 0 };
-
-function clientStatusStyle(tone: "good" | "watch" | "warn" | "bad" | "missing"): CSSProperties {
-  const palette = {
-    good: { background: "#dcfce7", color: colors.success },
-    watch: { background: "#e9eef7", color: colors.navy },
-    warn: { background: "#fef3c7", color: colors.warning },
-    bad: { background: "#fee2e2", color: colors.danger },
-    missing: { background: "rgba(23, 59, 115, 0.10)", color: colors.navy },
-  }[tone];
-
-  return { ...badgeStyle, ...palette };
-}
 

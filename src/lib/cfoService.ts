@@ -1,4 +1,51 @@
 import { supabase } from "@/lib/supabaseClient";
+import { workMonth } from "./cfoAnalytics";
+
+type QueryError = { message: string };
+async function allPages<T>(query: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: QueryError | null }>) {
+  const data: T[] = [];
+  for (let offset = 0; ; offset += 500) {
+    const result = await query(offset, offset + 499);
+    if (result.error) return { data: null, error: result.error };
+    const rows = result.data || [];
+    data.push(...rows);
+    if (rows.length < 500) return { data, error: null };
+  }
+}
+
+export async function fetchCfoAnalysis(from: string, to: string) {
+  // Include actual work in the selected period AND all work on its settlements,
+  // even if performed months later. Pad the UTC boundary for Warsaw local time.
+  const start = new Date(from + "T00:00:00Z");
+  start.setUTCDate(start.getUTCDate() - 1);
+  const end = new Date(to + "T00:00:00Z");
+  end.setUTCDate(end.getUTCDate() + 2);
+  const [time, accounts, bank] = await Promise.all([
+    allPages((a,b) => supabase.from("czas_pracy")
+      .select("id,klient_id,osoba_id,started_at,ended_at,duration_seconds,miesiac_rozliczeniowy,czy_wewnetrzne,klienci(nazwa)")
+      .not("ended_at", "is", null)
+      .or(`and(started_at.gte.${start.toISOString()},started_at.lt.${end.toISOString()}),and(miesiac_rozliczeniowy.gte.${from},miesiac_rozliczeniowy.lte.${to})`)
+      .order("id").range(a,b)),
+    allPages((a,b) => supabase.from("cfo_rachunki_bankowe").select("*").order("id").range(a,b)),
+    allPages((a,b) => supabase.from("cfo_transakcje_bankowe")
+      .select("id,rachunek_id,data_ksiegowania,kwota,saldo_po,lp")
+      .lte("data_ksiegowania", to).order("id").range(a,b)),
+  ]);
+  const error = time.error || accounts.error || bank.error;
+  if (error) return { data: null, error };
+  const entries = (time.data || []) as unknown as CfoClientTimeEntry[];
+  const periods = [from.slice(0,7), to.slice(0,7), ...entries.map(e => workMonth(e.started_at))].sort();
+  const employees = await allPages((a,b) => supabase.from("cfo_koszty_pracownikow").select("*")
+    .gte("okres", periods[0] + "-01").lte("okres", periods[periods.length - 1] + "-01").order("id").range(a,b));
+  if (employees.error) return { data: null, error: employees.error };
+  return { data: { entries, employees: (employees.data || []) as CfoEmployeeCost[],
+    accounts: (accounts.data || []) as CfoBankAccount[],
+    bank: (bank.data || []) as unknown as CfoBankTransaction[] }, error: null };
+}
+
+export async function updateCfoAccountKind(id: string, kind: NonNullable<CfoBankAccount["rodzaj_srodkow"]>) {
+  return supabase.from("cfo_rachunki_bankowe").update({ rodzaj_srodkow: kind }).eq("id", id);
+}
 
 export type CfoRevenueCategory = "abonamenty" | "kadry_place" | "uslugi_dodatkowe" | "wdrozenia" | "pozostale";
 export type CfoCostCategory =
@@ -136,6 +183,8 @@ export type CfoTeamMember = {
 };
 
 export type CfoClientTimeEntry = {
+  czy_wewnetrzne?: boolean;
+  klienci?: { nazwa: string | null } | { nazwa: string | null }[] | null;
   profiles?: { client_work_hourly_rate: number | null } | { client_work_hourly_rate: number | null }[] | null;
   id: string;
   klient_id: string | null;
@@ -147,6 +196,7 @@ export type CfoClientTimeEntry = {
 };
 
 export type CfoBankAccount = {
+  rodzaj_srodkow?: "operacyjne" | "vat" | "nieokreslone";
   id: string;
   numer_rachunku: string;
   nazwa: string | null;
@@ -154,6 +204,7 @@ export type CfoBankAccount = {
 };
 
 export type CfoBankTransaction = {
+  lp?: number | null;
   id: string;
   rachunek_id: string;
   data_ksiegowania: string;
@@ -657,3 +708,4 @@ function startOfNextMonth(period: string) {
 function uniqueValues(values: string[]) {
   return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
 }
+

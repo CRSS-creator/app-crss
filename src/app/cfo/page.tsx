@@ -4,11 +4,14 @@ import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } fr
 import { Banknote, BriefcaseBusiness, CalendarDays, FileSpreadsheet, LayoutDashboard, Plus, ReceiptText, RefreshCw, Save, Trash2, TrendingUp, Upload, Users } from "lucide-react";
 import * as XLSX from "xlsx";
 
+import { clientProfitability, closingCash, type ClientRevenue } from "@/lib/cfoAnalytics";
 import { colors, radius, shadow } from "@/app/design";
 import AccessGuard from "@/components/AccessGuard";
 import AppLayout from "@/components/AppLayout";
 import AppSelect from "@/components/AppSelect";
 import {
+  fetchCfoAnalysis,
+  updateCfoAccountKind,
   fetchCfoBankTransactions,
   fetchCfoBankTransactionsRange,
   fetchCfoCashflowInvoices,
@@ -161,6 +164,9 @@ function CfoContent() {
   const [bankTransactions, setBankTransactions] = useState<CfoBankTransaction[]>([]);
   const [cashflowInvoices, setCashflowInvoices] = useState<CfoCashflowInvoice[]>([]);
   const [clientTimeEntries, setClientTimeEntries] = useState<CfoClientTimeEntry[]>([]);
+  const [analysis, setAnalysis] = useState<NonNullable<Awaited<ReturnType<typeof fetchCfoAnalysis>>["data"]> | null>(null);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const loadVersion = useRef(0);
   const [teamMembers, setTeamMembers] = useState<CfoTeamMember[]>([]);
   const [manualCost, setManualCost] = useState<ManualCostDraft>(() => emptyManualCost(period));
   const [manualInterperiod, setManualInterperiod] = useState(false);
@@ -180,17 +186,29 @@ function CfoContent() {
     [period, viewMode, revenueLines, costs, employeeCosts, bankTransactions],
   );
 
-  const clientProfitability = useMemo(
-    () => buildClientProfitability(period, view.clients, employeeCosts, clientTimeEntries),
-    [period, view.clients, employeeCosts, clientTimeEntries],
-  );
+  const clientAnalysis = useMemo(() => {
+    if (!analysis || analysisError) return null;
+    const range = cfoPeriodRange(period, viewMode);
+    const revenues: ClientRevenue[] = view.revenueLines.map(line => {
+      const id = invoiceClientId(line), name = invoiceClientName(line);
+      return { key: id || name, id, name, period: revenueLineEffectivePeriod(line),
+        revenue: Number(line.kwota_netto || 0),
+        mrr: line.cfo_przychod_kategoria === "abonamenty" ? Number(line.kwota_netto || 0) : 0 };
+    });
+    return clientProfitability(range.from, range.to, revenues, costs, analysis.employees, analysis.entries);
+  }, [analysis, analysisError, period, viewMode, view.revenueLines, costs]);
+  const cash = useMemo(() => analysis && !analysisError
+    ? closingCash(analysis.accounts, analysis.bank, cfoPeriodRange(period, viewMode).to) : null,
+    [analysis, analysisError, period, viewMode]);
 
   async function loadData() {
+    const version = ++loadVersion.current;
     setLoading(true);
+    setAnalysisError(null);
     const range = cfoPeriodRange(period, viewMode);
     const revenueRange = revenueFetchRange(range.from, range.to);
     const cashflowCostRange = cfoCashflowCostLinkRange(period);
-    const [revenueResult, costsResult, cashflowCostsResult, employeeResult, bankResult, invoicesResult, teamResult, timeResult] = await Promise.all([
+    const [revenueResult, costsResult, cashflowCostsResult, employeeResult, bankResult, invoicesResult, teamResult, timeResult, analysisResult] = await Promise.all([
       fetchCfoRevenueLinesRange(revenueRange.from, revenueRange.to),
       viewMode === "year" ? fetchCfoCostsRange(range.from, range.to) : fetchCfoCosts(range.from),
       fetchCfoCostsRange(cashflowCostRange.from, cashflowCostRange.to),
@@ -199,7 +217,13 @@ function CfoContent() {
       fetchCfoCashflowInvoices(period),
       fetchCfoTeamMembers(),
       viewMode === "year" ? fetchCfoClientTimeEntriesRange(range.from, range.to) : fetchCfoClientTimeEntries(range.from),
+      fetchCfoAnalysis(range.from, range.to).catch((error: Error) => ({ data: null, error })),
     ]);
+
+    if (version !== loadVersion.current) return;
+    setAnalysis(analysisResult.data);
+    const incomplete = analysisResult.error || revenueResult.error || costsResult.error || employeeResult.error;
+    setAnalysisError(incomplete ? "Nie udało się pobrać kompletu danych do rentowności i sald. Odśwież zakładkę." : null);
 
     if (revenueResult.error) console.error("Błąd pobierania przychodów CFO:", revenueResult.error);
     if (costsResult.error) console.error("Błąd pobierania kosztów CFO:", costsResult.error);
@@ -331,6 +355,13 @@ function CfoContent() {
         <Metric label="Cel właściciela" value={view.ownerGoalText} tone={view.ownerGoalGap <= 0 ? "good" : "bad"} />
       </section>
 
+      {!loading && analysisError ? <section style={infoNoticeStyle}>{analysisError}</section> : null}
+      {!loading && cash && (activeTab === "dashboard" || activeTab === "cashflow") ? renderCashBalances(cash, cfoPeriodRange(period, viewMode).to, async (id, kind) => {
+        const result = await updateCfoAccountKind(id, kind);
+        if (result.error) return alert("Nie udało się zapisać rodzaju rachunku.");
+        setAnalysis(current => current ? { ...current, accounts: current.accounts.map(a => a.id === id ? { ...a, rodzaj_srodkow: kind } : a) } : current);
+      }) : null}
+
       <nav style={tabsStyle} aria-label="Sekcje CFO">
         {TABS.map((tab) => {
           const Icon = tab.icon;
@@ -351,7 +382,7 @@ function CfoContent() {
       {!loading && activeTab === "koszty" ? renderCostSection(period, costs, bankTransactions, setCosts, manualCost, setManualCost, manualInterperiod, setManualInterperiod, expandedCostPeriods, setExpandedCostPeriods, addManualCost, importCostsFile, saving, costSearch, setCostSearch) : null}
       {!loading && activeTab === "cashflow" ? renderCashflowSection(period, bankTransactions, mergeCostLists(costs, cashflowCosts), cashflowInvoices, importBankFile, saving, setBankTransactions, cashflowSearch, setCashflowSearch) : null}
       {!loading && activeTab === "zespol" ? renderTeamSectionTable(teamMembers, employeeDrafts, setEmployeeDrafts, saveTeamCosts, saving, period, clientTimeEntries) : null}
-      {!loading && activeTab === "klienci" ? renderClientsSection(clientProfitability) : null}
+      {!loading && activeTab === "klienci" ? clientAnalysis ? renderClientsSection(clientAnalysis) : <section style={infoNoticeStyle}>Rentowność wymaga kompletu danych.</section> : null}
     </main>
   );
 }
@@ -1268,34 +1299,67 @@ function renderTeamSectionTable(
   );
 }
 
-function renderClientsSection(clients: CfoClientProfitabilityRow[]) {
+function renderClientsSection(report: ReturnType<typeof clientProfitability>) {
+  const cashValue = (value: number | null) => value === null ? "—" : formatMoney(value);
   return (
-    <section style={panelStyle}>
-      <div style={panelHeaderStyle}>
-        <BriefcaseBusiness size={21} style={panelIconStyle} />
-        <h2 style={panelTitleStyle}>Rentowność klientów</h2>
-      </div>
-      <div style={tableWrapperStyle}>
-        <table style={tableStyle}>
-          <thead><tr><Th>Klient</Th><Th align="right">Przychód</Th><Th align="right">MRR</Th><Th align="right">Godziny</Th><Th align="right">Koszt pracy</Th><Th align="right">Wynik</Th><Th align="right">Marża</Th><Th>Status</Th></tr></thead>
-          <tbody>
-            {clients.length === 0 ? <EmptyRow colSpan={8} text="Brak klientów z przychodami w tym okresie." /> : clients.map((client) => (
-              <tr key={client.key}>
-                <Td>{client.name}</Td>
-                <Td align="right"><strong>{formatMoney(client.revenue)}</strong></Td>
-                <Td align="right">{formatMoney(client.mrr)}</Td>
+    <section style={sectionStackStyle}>
+      <article style={panelStyle}>
+        <div style={panelHeaderStyle}><BriefcaseBusiness size={21} style={panelIconStyle} /><h2 style={panelTitleStyle}>Rentowność klientów</h2></div>
+        <p style={smallStyle}>Przychód i godziny dotyczą tego samego miesiąca rozliczenia, również gdy pracę wykonano później. Koszt godziny wynika z pełnego kosztu zespołu i dostępności w miesiącu wykonania pracy. Widok roczny sumuje obliczenia miesięczne.</p>
+        <p style={smallStyle}>Koszty wspólne obejmują pozostałe koszty CFO, w tym zarząd. Dzielimy je według udziału w przychodzie każdego miesiąca. Praca wewnętrzna i nieprzypisany koszt wynagrodzeń pozostają poza klientami. Marża po kosztach wspólnych jest szacunkiem według tej zasady.</p>
+        {report.revenueWithoutFullCost > 0 ? <div style={infoNoticeStyle}>Przychód bez pełnej wyceny pracy: <strong>{formatMoney(report.revenueWithoutFullCost)}</strong>. Brak godzin lub historycznego kosztu pracownika oznacza niepełny wynik, a nie 100% marży.</div> : null}
+        {report.missingPayrollMonths.length ? <div style={infoNoticeStyle}>Brak kosztów zespołu za: {report.missingPayrollMonths.join(", ")}.</div> : null}
+        {report.missingRateMonths.length ? <div style={infoNoticeStyle}>Część godzin nie ma historycznej stawki kosztowej za miesiące wykonania: {report.missingRateMonths.join(", ")}. Uzupełnij koszty i dostępność pracowników w sekcji Zespół dla tych miesięcy.</div> : null}
+        <div style={tableWrapperStyle}>
+          <table style={{ ...tableStyle, minWidth: "1380px" }}>
+            <thead><tr><Th>Klient</Th><Th align="right">Przychód</Th><Th align="right">MRR</Th><Th align="right">Godziny</Th><Th align="right">Koszt zespołu</Th><Th align="right">Wynik po zespole</Th><Th align="right">Marża po zespole</Th><Th align="right">Koszty wspólne</Th><Th align="right">Wynik po kosztach wspólnych</Th><Th align="right">Marża po kosztach wspólnych</Th><Th>Status</Th></tr></thead>
+            <tbody>{report.clients.length === 0 ? <EmptyRow colSpan={11} text="Brak przychodów i pracy klientów dla tego okresu." /> : report.clients.map(client => {
+              const status = client.incomplete ? { status: client.missingRateHours > 0 ? "Brak kosztu historycznego" : "Brakuje czasu rozliczenia", statusTone: "missing" as const } : clientProfitabilityStatus(client.fullMargin, client.hours);
+              return <tr key={client.key}>
+                <Td>{client.name}</Td><Td align="right">{formatMoney(client.revenue)}</Td><Td align="right">{formatMoney(client.mrr)}</Td>
                 <Td align="right">{formatHours(client.hours)}</Td>
-                <Td align="right">{formatMoney(client.laborCost)}</Td>
-                <Td align="right"><strong>{formatMoney(client.result)}</strong></Td>
-                <Td align="right"><strong>{formatPercent(client.margin)}</strong></Td>
-                <Td><span style={clientStatusStyle(client.statusTone)}>{client.status}</span></Td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                <Td align="right">{cashValue(client.laborCost)}{client.incomplete && client.hours > 0 ? <small style={smallStyle}>Wyceniono: {formatMoney(client.knownLaborCost)}; bez stawki: {formatHours(client.missingRateHours)}</small> : null}</Td>
+                <Td align="right"><strong>{cashValue(client.directResult)}</strong></Td><Td align="right">{client.directMargin === null ? "—" : formatPercent(client.directMargin)}</Td>
+                <Td align="right">{formatMoney(client.overhead)}</Td><Td align="right"><strong>{cashValue(client.fullResult)}</strong></Td><Td align="right">{client.fullMargin === null ? "—" : formatPercent(client.fullMargin)}</Td>
+                <Td><span style={clientStatusStyle(status.statusTone)}>{status.status}</span></Td>
+              </tr>;
+            })}</tbody>
+          </table>
+        </div>
+      </article>
+      <article style={panelStyle}>
+        <h2 style={panelTitleStyle}>Koszt zespołu poza obsługą klientów</h2>
+        <p style={smallStyle}>Poniższe wartości dotyczą miesiąca wykonania pracy. Nie rozdzielamy ich automatycznie na klientów.</p>
+        <div style={miniListStyle}>
+          <div style={miniItemStyle}><span>Pełny zapisany koszt zespołu</span><strong>{formatMoney(report.payroll)}</strong></div>
+          <div style={miniItemStyle}><span>Praca wewnętrzna — bez klienta</span><span>{formatHours(report.internalHours)}</span><strong>{formatMoney(report.internalCost)}</strong></div>
+          <div style={miniItemStyle}><span>Praca klientowa bez miesiąca rozliczenia</span><span>{formatHours(report.unknownPeriodHours)}</span><strong>{formatMoney(report.unknownPeriodCost)}</strong></div>
+          <div style={miniItemStyle}><span>{report.unallocatedPayroll >= 0 ? "Pozostały koszt wynagrodzeń — niewykorzystana dostępność / niepełna ewidencja" : "Przekroczenie kosztu wynagrodzeń przez wycenę godzin — wymaga sprawdzenia"}</span><strong>{formatMoney(report.unallocatedPayroll)}</strong></div>
+          <div style={miniItemStyle}><span>Różnica okresów: koszt obsługi rozliczeń minus koszt pracy klientowej wykonanej w okresie</span><strong>{formatMoney(report.timingDifference)}</strong></div>
+          <div style={miniItemStyle}><span>Koszty wspólne nierozdzielone z powodu braku przychodów w miesiącu</span><strong>{formatMoney(report.unallocatedOverhead)}</strong></div>
+        </div>
+        {report.missingWorkedRateHours > 0 ? <p style={infoNoticeStyle}>{formatHours(report.missingWorkedRateHours)} pracy wykonanej w okresie nie ma historycznej stawki kosztowej. Powyższe kwoty pracy i podział wynagrodzeń są niepełne.</p> : null}
+        <p style={smallStyle}>Dostępność: etat × miesięczna norma czasu pracy, minus wpisane dni nieobecności, plus nadgodziny. Norma uwzględnia polskie święta; zakłada miesięczny okres rozliczeniowy. Zmiany historycznych kosztów lub czasu przeliczają raport.</p>
+      </article>
     </section>
   );
+}
+
+function renderCashBalances(cash: ReturnType<typeof closingCash>, to: string, changeKind: (id: string, kind: "operacyjne" | "vat" | "nieokreslone") => Promise<void>) {
+  return <section style={{ ...panelStyle, marginBottom: "18px" }}>
+    <div style={panelHeaderWithTotalStyle}><h2 style={panelTitleStyle}>Gotówka na {formatDate(to)}</h2><strong style={panelHeaderTotalStyle}>{cash.complete ? formatMoney(cash.available) : "Niepełne dane sald"}</strong></div>
+    <p style={smallStyle}>Ostatnie zaimportowane saldo każdego rachunku do wskazanej daty. Obejmuje wszystkie operacje, również transfery i ignorowane w CashFlow. Kwota do dyspozycji wyklucza rachunki VAT. Nie jest pomniejszona o przyszłe zobowiązania.</p>
+    <div style={tableWrapperStyle}><table style={tableStyle}>
+      <thead><tr><Th>Rachunek</Th><Th>Rodzaj środków</Th><Th>Data salda</Th><Th align="right">Saldo z wyciągu</Th><Th>Kompletność</Th></tr></thead>
+      <tbody>{cash.rows.length ? cash.rows.map(row => <tr key={row.account.id}>
+        <Td>•••• {row.account.numer_rachunku.slice(-4)}<small style={smallStyle}>{row.account.waluta}</small></Td>
+        <Td><AppSelect value={row.account.rodzaj_srodkow || "nieokreslone"} options={[{ value: "nieokreslone", label: "Wybierz rodzaj" }, { value: "operacyjne", label: "Do dyspozycji" }, { value: "vat", label: "Rachunek VAT" }]} onChange={value => void changeKind(row.account.id, value as "operacyjne" | "vat" | "nieokreslone")} style={compactSelectStyle} /></Td>
+        <Td>{row.date ? formatDate(row.date) : "Brak danych"}</Td><Td align="right">{row.balance === null ? "—" : new Intl.NumberFormat("pl-PL", { style: "currency", currency: row.account.waluta }).format(row.balance)}</Td>
+        <Td>{row.unknownOrder ? "Brak salda lub niejednoznaczna kolejność operacji" : row.balance === null ? "Brak wyciągu" : row.stale ? "Saldo ze starszego miesiąca — uzupełnij wyciąg" : "Saldo ostatniej operacji w miesiącu"}{!row.account.rodzaj_srodkow || row.account.rodzaj_srodkow === "nieokreslone" ? <small style={smallStyle}>Wybierz rodzaj rachunku.</small> : null}{row.account.waluta !== "PLN" ? <small style={smallStyle}>Waluta obca poza sumą PLN.</small> : null}</Td>
+      </tr>) : <EmptyRow colSpan={5} text="Brak zaimportowanych rachunków." />}</tbody>
+    </table></div>
+    <p style={smallStyle}>{cash.complete ? "Do dyspozycji" : "Suma częściowa oznaczonych rachunków z danymi z miesiąca"}: <strong>{cash.availableAccounts ? formatMoney(cash.available) : "brak danych"}</strong> · Rachunki VAT: <strong>{cash.vatAccounts ? formatMoney(cash.vat) : "brak oznaczonych sald"}</strong>. Kompletność wyciągu wymaga sprawdzenia z bankiem; data ostatniej operacji nie potwierdza braku późniejszych operacji.</p>
+  </section>;
 }
 
 function TeamInput({ value, onChange }: { value: number; onChange: (value: number) => void }) {
@@ -1429,15 +1493,6 @@ type CfoClientRow = { key: string; id: string | null; name: string; revenue: num
 type CfoCostBreakdownRow = { label: string; value: number; children: { label: string; value: number }[] };
 type CfoRevenueInvoiceGroup = { id: string; number: string; date: string | null; clientName: string; total: number; lines: CfoInvoiceLine[] };
 type CfoTeamWorkTime = { total: number; client: number };
-type CfoClientProfitabilityRow = CfoClientRow & {
-  hours: number;
-  laborCost: number;
-  result: number;
-  margin: number | null;
-  status: string;
-  statusTone: "good" | "watch" | "warn" | "bad" | "missing";
-};
-
 const EMPTY_WORK_TIME: CfoTeamWorkTime = { total: 0, client: 0 };
 type CfoView = ReturnType<typeof buildCfoView>;
 
@@ -1528,36 +1583,6 @@ function defaultEmployeeDraft(member: CfoTeamMember, period: string): EmployeeCo
     osoba_nazwa: teamMemberName(member),
     zespol: member.role === "manager" ? "ksiegowy" : "ksiegowy",
   };
-}
-
-function buildClientProfitability(period: string, clients: CfoClientRow[], employees: CfoEmployeeCost[], timeEntries: CfoClientTimeEntry[]): CfoClientProfitabilityRow[] {
-  const hourlyCostByPerson = new Map<string, number>();
-  employees.forEach((employee) => {
-    if (!employee.osoba_id || !employee.w_capacity) return;
-    const hours = availableHours(employee, period);
-    const directCost = Number(employee.podstawa || 0) + Number(employee.zus_pracodawcy || 0) + Number(employee.benefity || 0);
-    hourlyCostByPerson.set(employee.osoba_id, hours > 0 ? directCost / hours : 0);
-  });
-
-  const clientHours = new Map<string, number>();
-  const clientLaborCost = new Map<string, number>();
-  timeEntries.forEach((entry) => {
-    if (!entry.klient_id) return;
-    const hours = Number(entry.duration_seconds || 0) / 3600;
-    const profile = Array.isArray(entry.profiles) ? entry.profiles[0] : entry.profiles;
-    const hourlyCost = profile?.client_work_hourly_rate ?? hourlyCostByPerson.get(entry.osoba_id) ?? 0;
-    clientHours.set(entry.klient_id, (clientHours.get(entry.klient_id) || 0) + hours);
-    clientLaborCost.set(entry.klient_id, (clientLaborCost.get(entry.klient_id) || 0) + hours * hourlyCost);
-  });
-
-  return clients.map((client) => {
-    const hours = client.id ? clientHours.get(client.id) || 0 : 0;
-    const laborCost = client.id ? clientLaborCost.get(client.id) || 0 : 0;
-    const result = client.revenue - laborCost;
-    const margin = client.revenue > 0 ? result / client.revenue : null;
-    const status = clientProfitabilityStatus(margin, hours);
-    return { ...client, hours, laborCost, result, margin, ...status };
-  });
 }
 
 function buildTeamWorkTime(timeEntries: CfoClientTimeEntry[]) {
@@ -2604,7 +2629,7 @@ const costSubListStyle: CSSProperties = { display: "grid", gap: "7px" };
 const costSubItemStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: "14px", color: colors.text, fontSize: "13px", borderTop: `1px solid ${colors.border}`, paddingTop: "7px", alignItems: "start" };
 const costPaymentStatusStyle: CSSProperties = { display: "grid", gap: "3px", color: colors.text, fontSize: "12px", lineHeight: 1.25, minWidth: 0 };
 
-function clientStatusStyle(tone: CfoClientProfitabilityRow["statusTone"]): CSSProperties {
+function clientStatusStyle(tone: "good" | "watch" | "warn" | "bad" | "missing"): CSSProperties {
   const palette = {
     good: { background: "#dcfce7", color: colors.success },
     watch: { background: "#e9eef7", color: colors.navy },
@@ -2615,3 +2640,4 @@ function clientStatusStyle(tone: CfoClientProfitabilityRow["statusTone"]): CSSPr
 
   return { ...badgeStyle, ...palette };
 }
+

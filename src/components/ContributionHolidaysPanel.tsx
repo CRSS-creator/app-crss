@@ -52,7 +52,14 @@ export default function ContributionHolidaysPanel({ clients, loading: clientsLoa
 
   const query = search.trim().toLowerCase();
   const eligible = clients.filter(isContributionHolidayClient);
-  const visible = eligible.filter(client => [client.nazwa, client.nip, client.schemat_zus, caregiverLabel(client)].join(" ").toLowerCase().includes(query));
+  const recordsByClient = new Map(records.map(record => [record.klient_id, record]));
+  const hasColoredRow = (clientId: string) => {
+    const record = recordsByClient.get(clientId);
+    return Boolean(record?.nie_chce_skorzystac || record?.skorzystal);
+  };
+  const visible = eligible
+    .filter(client => [client.nazwa, client.nip, client.schemat_zus, caregiverLabel(client)].join(" ").toLowerCase().includes(query))
+    .sort((a, b) => Number(hasColoredRow(a.id)) - Number(hasColoredRow(b.id)));
   const selectedVisible = visible.filter(client => selected.includes(client.id));
   const allSelected = visible.length > 0 && selectedVisible.length === visible.length;
 
@@ -140,8 +147,8 @@ export default function ContributionHolidaysPanel({ clients, loading: clientsLoa
               {["Klient", "Schemat ZUS", "Czy już skorzystał", "Czy może skorzystać", "Miesiąc skorzystania", "Nie chce skorzystać", "Powiadomienie"].map(label => <th key={label} style={{ ...headCellStyle, textAlign: label === "Klient" || label === "Schemat ZUS" ? "left" : "center" }}>{label}</th>)}
             </tr></thead>
             <tbody>{visible.map(client => {
-              const record = records.find(row => row.klient_id === client.id);
-              return <tr key={client.id} style={{ background: record?.nie_chce_skorzystac ? "rgba(100, 116, 139, 0.10)" : undefined }}>
+              const record = recordsByClient.get(client.id);
+              return <tr key={client.id} style={{ background: record?.nie_chce_skorzystac ? "rgba(100, 116, 139, 0.10)" : record?.skorzystal ? "rgba(22, 163, 74, 0.10)" : undefined }}>
                 <td style={{ ...cellStyle, textAlign: "center" }}><input style={checkboxStyle} type="checkbox" aria-label={`Zaznacz ${client.nazwa || "klienta"}`} checked={selected.includes(client.id)}
                   onChange={event => setSelected(current => event.target.checked ? [...current, client.id] : current.filter(id => id !== client.id))} /></td>
                 <td style={cellStyle}>

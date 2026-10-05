@@ -43,3 +43,47 @@ test('a missing invoice remains an error, not a successful verification', async 
   }) });
   await assert.rejects(exports.getWfirmaInvoice(config, 'missing'), /NOT FOUND/);
 });
+
+test('invoice gross falls back to documented line gross instead of net when header VAT is missing', () => {
+  const exports = {};
+  vm.runInNewContext(code, { exports });
+  const result = exports.wfirmaInvoiceAmounts({
+    netto: '250.00',
+    invoicecontents: { invoicecontent: [{ netto: '250.00', brutto: '307.50' }] },
+  });
+  assert.equal(result.net, 250);
+  assert.equal(result.tax, 57.5);
+  assert.equal(result.gross, 307.5);
+  assert.throws(() => exports.wfirmaInvoiceAmounts({ netto: '250.00' }), /pełnych kwot faktury/);
+});
+
+test('invoice totals preserve explicit zero VAT and corrected gross, and reject incomplete amounts', () => {
+  const exports = {};
+  vm.runInNewContext(code, { exports });
+  for (const [invoice, expectedGross, expectedTax] of [
+    [{ netto: '250', tax: '57,50' }, 307.5, 57.5],
+    [{ netto: '250', total: '307.50' }, 307.5, 57.5],
+    [{ netto: '250', tax: '0' }, 250, 0],
+    [{ netto: '250', tax: '57.50', total: '307.50', total_composed: '0' }, 0, 57.5],
+    [{ netto: '250', tax: '57.50', total: '307.50', total_composed: '' }, 307.5, 57.5],
+    [{ invoicecontents: { invoicecontent: [
+      { netto: '250', brutto: '307.50' }, { netto: '75', brutto: '92.25' },
+    ] } }, 399.75, 74.75],
+  ]) {
+    const result = exports.wfirmaInvoiceAmounts(invoice);
+    assert.equal(result.gross, expectedGross);
+    assert.equal(result.tax, expectedTax);
+  }
+  assert.throws(() => exports.wfirmaInvoiceAmounts({ netto: 'invalid', total: '307.50' }), /pełnych kwot faktury/);
+  assert.throws(() => exports.wfirmaInvoiceAmounts({ netto: '250', invoicecontents: {
+    invoicecontent: [{ netto: '250', price: '250' }],
+  } }), /pełnych kwot pozycji/);
+});
+
+test('partial invoice lines cannot replace the complete invoice gross', () => {
+  const exports = {};
+  vm.runInNewContext(code, { exports });
+  assert.throws(() => exports.wfirmaInvoiceAmounts({ netto: '500', invoicecontents: {
+    invoicecontent: [{ netto: '250', brutto: '307.50' }],
+  } }), /nie zgadzają się/);
+});

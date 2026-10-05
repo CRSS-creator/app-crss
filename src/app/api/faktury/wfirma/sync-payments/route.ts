@@ -7,6 +7,7 @@ import {
   downloadWfirmaInvoicePdf,
   extractWfirmaInvoiceLines,
   wfirmaLineAmounts,
+  wfirmaInvoiceAmounts,
   extractWfirmaInvoices,
   findWfirmaInvoices,
   firstWfirmaInvoice,
@@ -415,9 +416,7 @@ async function syncWfirmaInvoiceSnapshot(
   const saleDate = dateOnly(wfirmaInvoice.disposaldate);
   const paymentDate = dateOnly(wfirmaInvoice.payment_date);
   const finalPaymentDate = specialInvoicePaymentDate(invoice, issueDate) || paymentDate;
-  const net = numberValue(wfirmaInvoice.netto);
-  const tax = numberValue(wfirmaInvoice.tax);
-  const gross = numberValue(wfirmaInvoice.total_composed ?? wfirmaInvoice.total) || net + tax;
+  const { net, tax, gross } = wfirmaInvoiceAmounts(wfirmaInvoice);
   const updatedNumber = Boolean(invoiceNumber && invoiceNumber !== invoice.numer);
   let pdfResult: { path: string | null; name: string | null; error: string | null } | null = null;
 

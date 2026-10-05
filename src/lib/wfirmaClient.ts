@@ -56,6 +56,44 @@ export function wfirmaLineAmounts(line: WfirmaInvoiceLine) {
   return { net, gross: gross ?? round(net + explicitTax!), tax: gross === null ? explicitTax! : round(gross - net) };
 }
 
+export function wfirmaInvoiceAmounts(invoice: WfirmaInvoice) {
+  const amount = (value: unknown) => {
+    if (value === null || value === undefined || String(value).trim() === "") return null;
+    const parsed = Number(String(value).replace(",", "."));
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+  const round = (value: number) => Math.round(value * 100) / 100;
+  let net = amount(invoice.netto);
+  let tax = amount(invoice.tax);
+  let gross = amount(invoice.total_composed) ?? amount(invoice.total);
+
+  // Missing VAT is not zero VAT. Use the amounts returned for invoice lines,
+  // never a VAT rate assumption or the bank payment amount.
+  if (net === null || (tax === null && gross === null)) {
+    const lines = extractWfirmaInvoiceLines(invoice);
+    if (lines.length > 0) {
+      const amounts = lines.map(wfirmaLineAmounts);
+      const lineNet = round(amounts.reduce((sum, line) => sum + line.net, 0));
+      if (net !== null && Math.abs(Math.round(net * 100) - Math.round(lineNet * 100)) > 1) {
+        throw new Error("Kwoty pozycji wFirmy nie zgadzają się z sumą faktury. Zachowano dotychczasowe kwoty.");
+      }
+      net ??= lineNet;
+      if (tax === null && gross === null) {
+        tax = round(amounts.reduce((sum, line) => sum + line.tax, 0));
+        gross = round(amounts.reduce((sum, line) => sum + line.gross, 0));
+      }
+    }
+  }
+  if (net === null || (tax === null && gross === null)) {
+    throw new Error("wFirma nie zwróciła pełnych kwot faktury. Zachowano dotychczasowe kwoty.");
+  }
+  return {
+    net,
+    tax: tax ?? round(gross! - net),
+    gross: gross ?? round(net + tax!),
+  };
+}
+
 export type WfirmaInvoice = {
   company_account?: { id?: string | number | null } | null;
   company_detail?: { bank_account?: string | null } | null;

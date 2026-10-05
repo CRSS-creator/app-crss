@@ -5,6 +5,7 @@ import { createInvoiceBankAccountResolver, ensureDraftInvoiceBankAccount, isWfir
 import {
   extractWfirmaInvoiceLines,
   wfirmaLineAmounts,
+  wfirmaInvoiceAmounts,
   extractWfirmaInvoices,
   findWfirmaInvoices,
   getWfirmaConfig,
@@ -179,9 +180,7 @@ async function saveImportedInvoice(
   const contractorNip = contractorInfo.nip;
   const client = clients.find((item) => normalizeNip(item.nip) === normalizeNip(contractorNip));
   const paymentState = normalizeText(invoice.paymentstate);
-  const gross = numberValue(invoice.total_composed ?? invoice.total);
-  const net = numberValue(invoice.netto);
-  const tax = numberValue(invoice.tax);
+  const { net, tax, gross } = wfirmaInvoiceAmounts(invoice);
   const issueDate = dateOnly(invoice.date);
 
   const payload = {
@@ -200,7 +199,7 @@ async function saveImportedInvoice(
     waluta: stringify(invoice.currency) || "PLN",
     kwota_netto: net,
     kwota_vat: tax,
-    kwota_brutto: gross || net + tax,
+    kwota_brutto: gross,
     opis: stringify(invoice.description) || null,
     wfirma_id: wfirmaId,
     wfirma_url: invoice.hash ? `https://wfirma.pl/faktury/podglad/${invoice.hash}` : null,

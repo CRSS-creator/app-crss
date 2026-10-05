@@ -1251,7 +1251,8 @@ function categorySelectToneStyle(category: InvoiceCategory | null | undefined): 
 }
 
 function currentMonthInput() {
-  return new Date().toISOString().slice(0, 7);
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Warsaw", year: "numeric", month: "2-digit" }).formatToParts(new Date());
+  return `${parts.find(part => part.type === "year")!.value}-${parts.find(part => part.type === "month")!.value}`;
 }
 
 function monthToDate(value: string) {
@@ -1474,6 +1475,7 @@ function dateSortValue(value: string | null) {
 }
 
 function invoiceListMonth(invoice: Invoice) {
+  if (invoice.status === "szkic" || !hasFinalInvoiceNumber(invoice.numer)) return currentMonthInput();
   if (invoice.data_wystawienia) return toMonthInput(invoice.data_wystawienia);
   if (invoice.okres) return toMonthInput(addMonths(invoice.okres, 1));
   return toMonthInput(invoice.created_at);

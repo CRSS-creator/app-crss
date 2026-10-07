@@ -75,3 +75,42 @@ test("stale, missing, unclassified or ambiguous balances prevent a complete tota
  assert.equal(r.rows[0].balance,null);assert.equal(r.complete,false);
 });
 
+
+test("task corrections preserve original workers, periods and historical costs",()=>{
+ const timed={...entry("a","2026-07-01","2026-08-10T10:00:00Z",65),zadanie_cykliczne_id:"task"};
+ const corrections=[{id:"fix",zadanie_cykliczne_id:"task",klient_id:"a",miesiac_rozliczeniowy:"2026-07-01",osoba_id:"editor",created_at:"2026-10-01T10:00:00Z",duration_seconds:-64*3600}];
+ const adjusted=exportsObject.applyCfoTimeCorrections([timed],corrections);
+ const r=calc("2026-07-01","2026-07-31",[revenue()],[],[wage("2026-08-01",3200)],adjusted);
+ assert.equal(r.clients[0].hours,1);assert.equal(r.clients[0].laborCost,20);
+ assert.equal(adjusted[0].osoba_id,"p");assert.equal(adjusted[0].started_at,timed.started_at);
+ assert.equal(timed.duration_seconds,65*3600);
+});
+test("positive, zero and repeated corrections are summed once and isolated by client/month",()=>{
+ const base={...entry("a","2026-07-01",undefined,1),zadanie_cykliczne_id:"t"};
+ const other={...base,id:"other",miesiac_rozliczeniowy:"2026-08-01"};
+ const c=n=>({...base,id:String(n),created_at:base.started_at,duration_seconds:n});
+ const rows=exportsObject.applyCfoTimeCorrections([base,other],[c(1800),c(-900),c(0)]);
+ assert.equal(rows[0].duration_seconds,4500);assert.equal(rows[1].duration_seconds,3600);
+ assert.equal(exportsObject.applyCfoTimeCorrections([base],[c(-3600)])[0].duration_seconds,0);
+});
+test("ordinary task corrections without a month are allocated across its original periods",()=>{
+ const first={...entry("a","2026-07-01",undefined,1),zadanie_id:"t"};
+ const second={...entry("a","2026-08-01","2026-08-10T10:00:00Z",3),zadanie_id:"t"};
+ const correction={...first,id:"fix",miesiac_rozliczeniowy:null,created_at:"2026-10-01T00:00:00Z",duration_seconds:-7200};
+ const rows=exportsObject.applyCfoTimeCorrections([first,second],[correction]);
+ assert.equal(rows[0].duration_seconds,1800);assert.equal(rows[1].duration_seconds,5400);
+});
+test("manual-only totals and subsequent negative corrections remain visible",()=>{
+ const c={id:"manual",zadanie_id:"t",klient_id:"a",osoba_id:"p",miesiac_rozliczeniowy:null,created_at:"2026-08-10T10:00:00Z",duration_seconds:3600};
+ const rows=exportsObject.applyCfoTimeCorrections([], [c,{...c,id:"reduce",duration_seconds:-900}]);
+ assert.equal(rows.length,1);assert.equal(rows[0].duration_seconds,2700);
+});
+test("August regression: 72:18:58 becomes 8:21:30 after three corrections",()=>{
+ const seconds=[2400,429,5424,480,51,9065,498,4825,235417,1749];
+ const rows=seconds.map((seconds,i)=>({...entry("a","2026-08-01","2026-09-11T10:00:00Z",seconds/3600),id:String(i),zadanie_cykliczne_id:String(i)}));
+ const changes=[[3,720],[4,849],[8,-231817]].map(([i,seconds])=>({...rows[i],id:"fix"+i,created_at:"2026-09-14T10:00:00Z",duration_seconds:seconds}));
+ const adjusted=exportsObject.applyCfoTimeCorrections(rows,changes);
+ assert.equal(adjusted.reduce((sum,row)=>sum+row.duration_seconds,0),30090);
+ const report=calc("2026-08-01","2026-08-31",[],[],[wage("2026-09-01",1760)],adjusted);
+ assert.ok(Math.abs(report.clients[0].hours-30090/3600)<1e-9);
+});

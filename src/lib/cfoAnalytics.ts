@@ -1,4 +1,4 @@
-import type { CfoBankAccount, CfoBankTransaction, CfoClientTimeEntry, CfoCostItem, CfoEmployeeCost } from "./cfoService";
+import type { CfoBankAccount, CfoBankTransaction, CfoClientTimeEntry, CfoTimeCorrection, CfoCostItem, CfoEmployeeCost } from "./cfoService";
 
 export type ClientRevenue = { key: string; id: string | null; name: string; period: string; revenue: number; mrr: number };
 export type ClientProfit = {
@@ -168,3 +168,51 @@ export function closingCash(accounts: CfoBankAccount[], transactions: CfoBankTra
     availableAccounts: availableRows.length, vatAccounts: vatRows.length };
 }
 
+
+/** Corrections change task totals, not the editor's work date or hourly rate.
+ * Allocate the corrected total proportionally to the original work entries.
+ * Ordinary tasks span periods; recurring tasks are scoped by client and month.
+ */
+export function applyCfoTimeCorrections(entries: CfoClientTimeEntry[], corrections: CfoTimeCorrection[]) {
+  const key = (row: { zadanie_id?: string | null; zadanie_cykliczne_id?: string | null; klient_id: string | null; miesiac_rozliczeniowy: string | null }) =>
+    row.zadanie_id ? `task:${row.zadanie_id}` : row.zadanie_cykliczne_id
+      ? JSON.stringify([row.zadanie_cykliczne_id, row.klient_id, row.miesiac_rozliczeniowy]) : null;
+  const groups = new Map<string, CfoClientTimeEntry[]>();
+  const changes = new Map<string, CfoTimeCorrection[]>();
+  for (const entry of entries) {
+    const id = key(entry);
+    if (id && entry.ended_at) {
+      if (!groups.has(id)) groups.set(id, []);
+      groups.get(id)!.push(entry);
+    }
+  }
+  for (const correction of corrections) {
+    const id = key(correction);
+    if (id) {
+      if (!changes.has(id)) changes.set(id, []);
+      changes.get(id)!.push(correction);
+    }
+  }
+  const adjusted = new Map<string, number>();
+  const standalone: CfoClientTimeEntry[] = [];
+  for (const [id, rows] of changes) {
+    const originals = groups.get(id) || [];
+    const base = originals.reduce((sum, row) => sum + Math.max(0, Number(row.duration_seconds || 0)), 0);
+    const delta = rows.reduce((sum, row) => sum + Number(row.duration_seconds || 0), 0);
+    const total = Math.max(0, base + delta);
+    if (base > 0) {
+      for (const entry of originals) {
+        adjusted.set(entry.id, Math.max(0, Number(entry.duration_seconds || 0)) * total / base);
+      }
+    } else if (total > 0) {
+      // Manually entered totals without any timed work use the correction metadata.
+      const positive = rows.filter(row => Number(row.duration_seconds) > 0);
+      const positiveTotal = positive.reduce((sum, row) => sum + Number(row.duration_seconds), 0);
+      for (const row of positive) standalone.push({
+        ...row, id: `correction:${row.id}`, started_at: row.created_at, ended_at: row.created_at,
+        czy_wewnetrzne: !row.klient_id, duration_seconds: Number(row.duration_seconds) * total / positiveTotal,
+      });
+    }
+  }
+  return [...entries.map(row => adjusted.has(row.id) ? { ...row, duration_seconds: adjusted.get(row.id)! } : row), ...standalone];
+}

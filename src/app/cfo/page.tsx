@@ -4,7 +4,7 @@ import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } fr
 import { Banknote, BriefcaseBusiness, CalendarDays, FileSpreadsheet, LayoutDashboard, Plus, ReceiptText, RefreshCw, Save, Trash2, TrendingUp, Upload, Users } from "lucide-react";
 import * as XLSX from "xlsx";
 
-import { clientProfitability, closingCash, type ClientRevenue } from "@/lib/cfoAnalytics";
+import { clientProfitability, closingCash, workMonth, type ClientRevenue } from "@/lib/cfoAnalytics";
 import { colors, radius, shadow } from "@/app/design";
 import AccessGuard from "@/components/AccessGuard";
 import AppLayout from "@/components/AppLayout";
@@ -15,8 +15,6 @@ import {
   fetchCfoBankTransactions,
   fetchCfoBankTransactionsRange,
   fetchCfoCashflowInvoices,
-  fetchCfoClientTimeEntries,
-  fetchCfoClientTimeEntriesRange,
   fetchCfoCosts,
   fetchCfoCostsRange,
   fetchCfoCostDuplicateCandidates,
@@ -208,7 +206,7 @@ function CfoContent() {
     const range = cfoPeriodRange(period, viewMode);
     const revenueRange = revenueFetchRange(range.from, range.to);
     const cashflowCostRange = cfoCashflowCostLinkRange(period);
-    const [revenueResult, costsResult, cashflowCostsResult, employeeResult, bankResult, invoicesResult, teamResult, timeResult, analysisResult] = await Promise.all([
+    const [revenueResult, costsResult, cashflowCostsResult, employeeResult, bankResult, invoicesResult, teamResult, analysisResult] = await Promise.all([
       fetchCfoRevenueLinesRange(revenueRange.from, revenueRange.to),
       viewMode === "year" ? fetchCfoCostsRange(range.from, range.to) : fetchCfoCosts(range.from),
       fetchCfoCostsRange(cashflowCostRange.from, cashflowCostRange.to),
@@ -216,11 +214,17 @@ function CfoContent() {
       viewMode === "year" ? fetchCfoBankTransactionsRange(range.from, range.to) : fetchCfoBankTransactions(range.from),
       fetchCfoCashflowInvoices(period),
       fetchCfoTeamMembers(),
-      viewMode === "year" ? fetchCfoClientTimeEntriesRange(range.from, range.to) : fetchCfoClientTimeEntries(range.from),
       fetchCfoAnalysis(range.from, range.to).catch((error: Error) => ({ data: null, error })),
     ]);
 
     if (version !== loadVersion.current) return;
+    const timeResult = {
+      error: analysisResult.error,
+      data: analysisResult.data?.entries.filter(entry => {
+        const month = workMonth(entry.started_at);
+        return month >= range.from.slice(0, 7) && month <= range.to.slice(0, 7);
+      }) || [],
+    };
     setAnalysis(analysisResult.data);
     const incomplete = analysisResult.error || revenueResult.error || costsResult.error || employeeResult.error;
     setAnalysisError(incomplete ? "Nie udało się pobrać kompletu danych do rentowności i sald. Odśwież zakładkę." : null);

@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabaseClient";
-import { workMonth } from "./cfoAnalytics";
+import { applyCfoTimeCorrections, workMonth } from "./cfoAnalytics";
 
 type QueryError = { message: string };
 async function allPages<T>(query: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: QueryError | null }>) {
@@ -14,18 +14,8 @@ async function allPages<T>(query: (from: number, to: number) => PromiseLike<{ da
 }
 
 export async function fetchCfoAnalysis(from: string, to: string) {
-  // Include actual work in the selected period AND all work on its settlements,
-  // even if performed months later. Pad the UTC boundary for Warsaw local time.
-  const start = new Date(from + "T00:00:00Z");
-  start.setUTCDate(start.getUTCDate() - 1);
-  const end = new Date(to + "T00:00:00Z");
-  end.setUTCDate(end.getUTCDate() + 2);
   const [time, accounts, bank] = await Promise.all([
-    allPages((a,b) => supabase.from("czas_pracy")
-      .select("id,klient_id,osoba_id,started_at,ended_at,duration_seconds,miesiac_rozliczeniowy,czy_wewnetrzne,klienci(nazwa)")
-      .not("ended_at", "is", null)
-      .or(`and(started_at.gte.${start.toISOString()},started_at.lt.${end.toISOString()}),and(miesiac_rozliczeniowy.gte.${from},miesiac_rozliczeniowy.lte.${to})`)
-      .order("id").range(a,b)),
+    fetchCfoAdjustedTimeEntries(),
     allPages((a,b) => supabase.from("cfo_rachunki_bankowe").select("*").order("id").range(a,b)),
     allPages((a,b) => supabase.from("cfo_transakcje_bankowe")
       .select("id,rachunek_id,data_ksiegowania,kwota,saldo_po,lp")
@@ -33,7 +23,9 @@ export async function fetchCfoAnalysis(from: string, to: string) {
   ]);
   const error = time.error || accounts.error || bank.error;
   if (error) return { data: null, error };
-  const entries = (time.data || []) as unknown as CfoClientTimeEntry[];
+  const inRange = (period: string) => period.slice(0, 7) >= from.slice(0, 7) && period.slice(0, 7) <= to.slice(0, 7);
+  const entries = (time.data || []).filter(entry =>
+    inRange(workMonth(entry.started_at)) || (entry.miesiac_rozliczeniowy && inRange(entry.miesiac_rozliczeniowy)));
   const periods = [from.slice(0,7), to.slice(0,7), ...entries.map(e => workMonth(e.started_at))].sort();
   const employees = await allPages((a,b) => supabase.from("cfo_koszty_pracownikow").select("*")
     .gte("okres", periods[0] + "-01").lte("okres", periods[periods.length - 1] + "-01").order("id").range(a,b));
@@ -182,7 +174,11 @@ export type CfoTeamMember = {
   aktywne: boolean | null;
 };
 
+export type CfoTimeCorrection = Omit<CfoClientTimeEntry, "started_at" | "ended_at"> & { created_at: string };
+
 export type CfoClientTimeEntry = {
+  zadanie_id?: string | null;
+  zadanie_cykliczne_id?: string | null;
   czy_wewnetrzne?: boolean;
   klienci?: { nazwa: string | null } | { nazwa: string | null }[] | null;
   profiles?: { client_work_hourly_rate: number | null } | { client_work_hourly_rate: number | null }[] | null;
@@ -579,25 +575,35 @@ export async function fetchCfoTeamMembers() {
     .order("full_name", { ascending: true });
 }
 
-export async function fetchCfoClientTimeEntries(period: string) {
-  const from = period;
-  const to = startOfNextMonth(period);
+// Read complete task histories before allocating corrections, including corrections
+// entered after the selected month and ordinary tasks spanning several periods.
+async function fetchCfoAdjustedTimeEntries() {
+  const [time, corrections] = await Promise.all([
+    allPages((a,b) => supabase.from("czas_pracy")
+      .select("id,zadanie_id,zadanie_cykliczne_id,klient_id,osoba_id,started_at,ended_at,duration_seconds,miesiac_rozliczeniowy,czy_wewnetrzne,klienci(nazwa),profiles!czas_pracy_osoba_id_fkey(client_work_hourly_rate)")
+      .not("ended_at", "is", null).order("id").range(a,b)),
+    allPages((a,b) => supabase.from("korekty_czasu_zadan")
+      .select("id,zadanie_id,zadanie_cykliczne_id,klient_id,osoba_id,created_at,duration_seconds,miesiac_rozliczeniowy,klienci(nazwa),profiles!korekty_czasu_zadan_osoba_id_fkey(client_work_hourly_rate)")
+      .order("id").range(a,b)),
+  ]);
+  if (time.error || corrections.error) return { data: null, error: time.error || corrections.error };
+  return { data: applyCfoTimeCorrections(
+    (time.data || []) as unknown as CfoClientTimeEntry[],
+    (corrections.data || []) as unknown as CfoTimeCorrection[]
+  ), error: null };
+}
 
-  return supabase
-    .from("czas_pracy")
-    .select("id, klient_id, osoba_id, started_at, ended_at, duration_seconds, miesiac_rozliczeniowy, profiles!czas_pracy_osoba_id_fkey(client_work_hourly_rate)")
-    .not("ended_at", "is", null)
-    .gte("started_at", from)
-    .lt("started_at", to);
+export async function fetchCfoClientTimeEntries(period: string) {
+  return fetchCfoClientTimeEntriesRange(period, period);
 }
 
 export async function fetchCfoClientTimeEntriesRange(from: string, to: string) {
-  return supabase
-    .from("czas_pracy")
-    .select("id, klient_id, osoba_id, started_at, ended_at, duration_seconds, miesiac_rozliczeniowy, profiles!czas_pracy_osoba_id_fkey(client_work_hourly_rate)")
-    .not("ended_at", "is", null)
-    .gte("started_at", from)
-    .lt("started_at", startOfNextMonth(to));
+  const result = await fetchCfoAdjustedTimeEntries();
+  if (result.error || !result.data) return result;
+  return { ...result, data: result.data.filter(entry => {
+    const month = workMonth(entry.started_at);
+    return month >= from.slice(0, 7) && month <= to.slice(0, 7);
+  }) };
 }
 
 export async function upsertCfoEmployeeCost(row: Omit<CfoEmployeeCost, "id"> & { id?: string }) {

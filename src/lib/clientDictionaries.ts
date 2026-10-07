@@ -30,3 +30,21 @@ export function normalizeTaxationForm(value: string | null | undefined) {
   if (!normalized || normalized === "Karta podatkowa" || normalized === "Inne") return "";
   return normalized;
 }
+
+export const ZUS_SCHEME_OPTIONS = [
+  { value: "Duży ZUS", label: "Duży ZUS" },
+  { value: "Preferencyjny ZUS", label: "Preferencyjny ZUS" },
+  { value: "Mały ZUS Plus", label: "Mały ZUS Plus" },
+  { value: "Ulga na start", label: "Ulga na start" },
+  { value: "Tylko zdrowotna", label: "Tylko zdrowotna" },
+  { value: "Brak ZUS", label: "Brak ZUS" },
+  { value: "Inny", label: "Inny" },
+] as const;
+
+// Older contract forms used shortened labels for these same schemes.
+export function normalizeZusScheme(value: string | null | undefined) {
+  const trimmed = value?.trim() || "";
+  if (trimmed.toLowerCase() === "brak") return "Brak ZUS";
+  if (trimmed.toLowerCase() === "preferencyjny") return "Preferencyjny ZUS";
+  return ZUS_SCHEME_OPTIONS.find(option => option.value.toLowerCase() === trimmed.toLowerCase())?.value || trimmed;
+}

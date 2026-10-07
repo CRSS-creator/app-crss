@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import AppSelect from "@/components/AppSelect";
 import { AppMonthInput } from "@/components/AppDateInputs";
 import { colors, radius, shadow } from "@/app/design";
-import { LEGAL_FORM_OPTIONS, TAXATION_FORM_OPTIONS } from "@/lib/clientDictionaries";
+import { LEGAL_FORM_OPTIONS, TAXATION_FORM_OPTIONS, ZUS_SCHEME_OPTIONS, normalizeZusScheme } from "@/lib/clientDictionaries";
 import { normalizeContactList } from "@/lib/contactFields";
 import { createClient as createClientRecord, fetchClientCaregivers, findClientByNip } from "@/lib/clientService";
 import { updateCrmContract, type CrmContract } from "@/lib/crmContractService";
@@ -43,7 +43,6 @@ type Props = {
 };
 
 const CLIENT_STATUSES = ["Onboarding", "Aktywny", "Zawieszony", "Do zamknięcia", "Archiwalny"];
-const ZUS_OPTIONS = ["", "Brak", "Preferencyjny", "Mały ZUS Plus", "Duży ZUS", "Tylko zdrowotna"];
 const BILLING_MODEL_OPTIONS = [
   { value: "z_dolu", label: "Z dołu" },
   { value: "z_gory", label: "Z góry" },
@@ -119,6 +118,7 @@ export default function ContractClientOnboardingPanel({ contract, onCreated }: P
     const clientResult = await createClientRecord({
       nazwa: contract.nazwa_klienta.trim(),
       nip: nullableToNull(contract.nip),
+      adres_dzialalnosci: nullableToNull(contract.siedziba),
       telefon: normalizeContactList(draft.telefon),
       email: normalizeContactList(contract.email_klienta),
       osoba_kontaktowa: emptyToNull(draft.osoba_kontaktowa),
@@ -130,7 +130,7 @@ export default function ContractClientOnboardingPanel({ contract, onCreated }: P
       obsluga_kadrowa: Boolean(contract.obsluga_kadrowa),
       czynny_vat: draft.czynny_vat,
       vat_ue: draft.vat_ue,
-      schemat_zus: isDraftJdg ? emptyToNull(draft.schemat_zus) : null,
+      schemat_zus: isDraftJdg ? normalizeZusScheme(draft.schemat_zus) || null : null,
       model_fakturowania: draft.model_fakturowania || "z_gory",
       abonament: contract.abonament_netto ?? null,
       limit_dokumentow: contract.limit_dokumentow ?? null,
@@ -187,7 +187,7 @@ export default function ContractClientOnboardingPanel({ contract, onCreated }: P
         <SelectField label="Forma prawna" value={draft.forma_prawna} onChange={(value) => { updateDraft("forma_prawna", value); if (!isJdgLegalForm(value)) updateDraft("schemat_zus", ""); }} options={[{ value: "", label: "Do uzupełnienia" }, ...LEGAL_FORM_OPTIONS]} />
         <SelectField label="Opodatkowanie" value={draft.forma_opodatkowania} onChange={(value) => updateDraft("forma_opodatkowania", value)} options={[{ value: "", label: "Do uzupełnienia" }, ...TAXATION_FORM_OPTIONS]} />
         <SelectField label="Status klienta" value={draft.status_klienta} onChange={(value) => updateDraft("status_klienta", value)} options={CLIENT_STATUSES.map((status) => ({ value: status, label: status }))} />
-        {isDraftJdg && <SelectField label="Schemat ZUS" value={draft.schemat_zus} onChange={(value) => updateDraft("schemat_zus", value)} options={ZUS_OPTIONS.map((option) => ({ value: option, label: option || "Do uzupełnienia" }))} />}
+        {isDraftJdg && <SelectField label="Schemat ZUS" value={draft.schemat_zus} onChange={(value) => updateDraft("schemat_zus", value)} options={[{ value: "", label: "Do uzupełnienia" }, ...ZUS_SCHEME_OPTIONS]} />}
         <SelectField label="Schemat płatności faktury" value={draft.model_fakturowania} onChange={(value) => updateDraft("model_fakturowania", value)} options={BILLING_MODEL_OPTIONS} />
         <TextField label="Pierwszy okres" type="month" value={draft.pierwszy_okres_rozliczeniowy} onChange={(value) => updateDraft("pierwszy_okres_rozliczeniowy", value)} />
         <TextField label="Ostatni okres" type="month" value={draft.ostatni_okres_rozliczeniowy} onChange={(value) => updateDraft("ostatni_okres_rozliczeniowy", value)} />

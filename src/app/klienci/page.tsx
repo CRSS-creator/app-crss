@@ -12,6 +12,7 @@ import {
   fetchClients,
   updateClient,
 } from "@/lib/clientService";
+import { ZUS_SCHEME_OPTIONS, normalizeZusScheme } from "@/lib/clientDictionaries";
 import { normalizeContactList } from "@/lib/contactFields";
 import {
   createClientDocumentSignedUrl,
@@ -735,7 +736,7 @@ function ClientDrawer({
       czynny_vat: draft.czynny_vat,
       vat_okres_rozliczeniowy: draft.czynny_vat ? draft.vat_okres_rozliczeniowy : "miesieczny",
       vat_ue: draft.vat_ue,
-      schemat_zus: isDraftJdg ? draft.schemat_zus.trim() || null : null,
+      schemat_zus: isDraftJdg ? normalizeZusScheme(draft.schemat_zus) || null : null,
       zus_preferencja_start: isDraftJdg ? emptyToNull(draft.zus_preferencja_start) : null,
       zus_preferencja_koniec: isDraftJdg ? emptyToNull(draft.zus_preferencja_koniec) : null,
       limit_dokumentow: draft.limit_dokumentow
@@ -1006,15 +1007,7 @@ function ClientDrawer({
                     label="Schemat ZUS"
                     value={draft.schemat_zus}
                     onChange={(value) => updateDraft("schemat_zus", value)}
-                    options={[
-                      { value: "", label: "Wybierz" },
-                      { value: "Duży ZUS", label: "Duży ZUS" },
-                      { value: "Preferencyjny ZUS", label: "Preferencyjny ZUS" },
-                      { value: "Mały ZUS Plus", label: "Mały ZUS Plus" },
-                      { value: "Ulga na start", label: "Ulga na start" },
-                      { value: "Brak ZUS", label: "Brak ZUS" },
-                      { value: "Inny", label: "Inny" },
-                    ]}
+                    options={[{ value: "", label: "Wybierz" }, ...ZUS_SCHEME_OPTIONS]}
                   />
                 )}
                 {isDraftJdg && (
@@ -1411,7 +1404,7 @@ function CreateClientDrawer({
       czynny_vat: draft.czynny_vat,
       vat_okres_rozliczeniowy: draft.czynny_vat ? draft.vat_okres_rozliczeniowy : "miesieczny",
       vat_ue: draft.vat_ue,
-      schemat_zus: isJdg ? draft.schemat_zus.trim() || null : null,
+      schemat_zus: isJdg ? normalizeZusScheme(draft.schemat_zus) || null : null,
       zus_preferencja_start: isJdg ? emptyToNull(draft.zus_preferencja_start) : null,
       zus_preferencja_koniec: isJdg ? emptyToNull(draft.zus_preferencja_koniec) : null,
       limit_dokumentow: draft.limit_dokumentow
@@ -1620,15 +1613,7 @@ function CreateClientDrawer({
         label="Schemat ZUS"
         value={draft.schemat_zus}
         onChange={(v) => updateDraft("schemat_zus", v)}
-        options={[
-          { value: "", label: "Wybierz" },
-          { value: "Duży ZUS", label: "Duży ZUS" },
-          { value: "Preferencyjny ZUS", label: "Preferencyjny ZUS" },
-          { value: "Mały ZUS Plus", label: "Mały ZUS Plus" },
-          { value: "Ulga na start", label: "Ulga na start" },
-          { value: "Brak ZUS", label: "Brak ZUS" },
-          { value: "Inny", label: "Inny" },
-        ]}
+        options={[{ value: "", label: "Wybierz" }, ...ZUS_SCHEME_OPTIONS]}
       />
       <EditableInput
         label="Data rozpoczęcia preferencji ZUS"
@@ -1830,7 +1815,7 @@ function createDraft(client: Client): ClientDraft {
     czynny_vat: Boolean(client.czynny_vat),
     vat_okres_rozliczeniowy: client.vat_okres_rozliczeniowy === "kwartalny" ? "kwartalny" : "miesieczny",
     vat_ue: Boolean(client.vat_ue),
-    schemat_zus: client.schemat_zus || "",
+    schemat_zus: normalizeZusScheme(client.schemat_zus),
     zus_preferencja_start: client.zus_preferencja_start || "",
     zus_preferencja_koniec: client.zus_preferencja_koniec || "",
     limit_dokumentow:

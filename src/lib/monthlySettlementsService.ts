@@ -27,6 +27,8 @@ type SettlementClient = {
   vat_okres_rozliczeniowy: string | null;
   vat_ue: boolean | null;
   obsluga_kadrowa: boolean | null;
+  pierwszy_okres_rozliczeniowy: string | null;
+  ostatni_okres_rozliczeniowy: string | null;
   profiles?: SettlementClientProfile | SettlementClientProfile[] | null;
 };
 
@@ -90,6 +92,8 @@ const SETTLEMENT_SELECT = `
     vat_okres_rozliczeniowy,
     vat_ue,
     obsluga_kadrowa,
+    pierwszy_okres_rozliczeniowy,
+    ostatni_okres_rozliczeniowy,
     profiles!klienci_opiekun_id_fkey (
       full_name,
       email
@@ -102,11 +106,27 @@ export async function ensureCurrentMonthSettlements(period?: string) {
 }
 
 export async function fetchMonthlySettlements(period: string) {
-  return supabase
+  const result = await supabase
     .from("rozliczenia_miesieczne")
     .select(SETTLEMENT_SELECT)
     .eq("okres", period)
     .order("created_at", { ascending: false });
+
+  if (result.error || !result.data) return result;
+
+  return {
+    ...result,
+    data: result.data.filter((settlement) => {
+      const client = Array.isArray(settlement.klienci) ? settlement.klienci[0] : settlement.klienci;
+      if (!client) return false;
+      // Suspension must not hide valid historical months. The range is inclusive.
+      const month = settlement.okres.slice(0, 7);
+      return (
+        (!client.pierwszy_okres_rozliczeniowy || month >= client.pierwszy_okres_rozliczeniowy.slice(0, 7)) &&
+        (!client.ostatni_okres_rozliczeniowy || month <= client.ostatni_okres_rozliczeniowy.slice(0, 7))
+      );
+    }),
+  };
 }
 
 export async function updateMonthlySettlement(settlementId: string, payload: SettlementUpdatePayload) {

@@ -1,7 +1,7 @@
 "use client";
 import NotificationDeliveryStatus from "@/components/NotificationDeliveryStatus";
 
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { FileText, Landmark, Play, Square } from "lucide-react";
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
@@ -67,6 +67,7 @@ export default function SettlementsPage() {
 
 function SettlementsContent() {
   const [period, setPeriod] = useState(currentMonthInput());
+  const loadRequestId = useRef(0);
   const [settlements, setSettlements] = useState<MonthlySettlement[]>([]);
   const [progressRows, setProgressRows] = useState<SettlementProgress[]>([]);
   const [invoiceMarkers, setInvoiceMarkers] = useState<SettlementInvoiceMarker[]>([]);
@@ -108,16 +109,14 @@ function SettlementsContent() {
     ? Math.round(settlements.reduce((sum, settlement) => sum + (progressBySettlement[settlement.id]?.progress || 0), 0) / settlements.length)
     : 0;
 
-  useEffect(() => {
-    loadSettlements();
-  }, [period]);
-
-  async function loadSettlements() {
+  const loadSettlements = useCallback(async () => {
+    const requestId = ++loadRequestId.current;
     setLoading(true);
     const normalizedPeriod = `${period}-01`;
     await ensureCurrentMonthSettlements(normalizedPeriod);
     const userResult = await supabase.auth.getUser();
     const userId = userResult.data.user?.id || null;
+    if (requestId !== loadRequestId.current) return;
     setCurrentUserId(userId);
 
     const [settlementsResult, progressResult, invoiceMarkersResult, taxMarkersResult, recurringResult, recurringTimeResult, taxResult, timersResult] = await Promise.all([
@@ -131,6 +130,8 @@ function SettlementsContent() {
       userId ? fetchActiveRecurringTaskTimers(userId) : Promise.resolve({ data: [], error: null }),
     ]);
 
+    if (requestId !== loadRequestId.current) return;
+
     if (settlementsResult.error) console.error("Błąd pobierania rozliczeń:", settlementsResult.error);
     if (progressResult.error) console.error("Błąd pobierania postępu zadań:", progressResult.error);
     if (invoiceMarkersResult.error) console.error("Błąd pobierania oznaczeń faktur:", invoiceMarkersResult.error);
@@ -139,7 +140,9 @@ function SettlementsContent() {
     if (taxResult.error) console.error("Błąd pobierania zobowiązań podatkowych:", taxResult.error);
     if (timersResult.error) console.error("Błąd pobierania aktywnych liczników:", timersResult.error);
 
-    setSettlements((settlementsResult.data || []) as MonthlySettlement[]);
+    const nextSettlements = (settlementsResult.data || []) as MonthlySettlement[];
+    setSettlements(nextSettlements);
+    setSelected((current) => current ? nextSettlements.find((item) => item.id === current.id) || null : null);
     setProgressRows((progressResult.data || []) as SettlementProgress[]);
     setInvoiceMarkers((invoiceMarkersResult.data || []) as SettlementInvoiceMarker[]);
     setTaxObligationMarkers((taxMarkersResult.data || []) as SettlementTaxObligationMarker[]);
@@ -148,7 +151,18 @@ function SettlementsContent() {
     setTaxObligations((taxResult.data || []) as TaxObligation[]);
     setActiveTimers((timersResult.data || []) as TimeEntry[]);
     setLoading(false);
-  }
+  }, [period]);
+
+  useEffect(() => {
+    void loadSettlements();
+    // Re-read the range after saving a client in another tab and returning here.
+    const refresh = () => { void loadSettlements(); };
+    window.addEventListener("focus", refresh);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      loadRequestId.current += 1;
+    };
+  }, [loadSettlements]);
 
   async function patchSettlement(settlement: MonthlySettlement, payload: Partial<MonthlySettlement>) {
     setSavingId(settlement.id);

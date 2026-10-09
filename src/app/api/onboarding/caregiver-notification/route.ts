@@ -111,6 +111,7 @@ function buildCaregiverHtml(client: ClientWithCaregiver, caregiverName: string, 
       <p style="margin:0 0 16px 0;">Numer telefonu jest ogólny do biura, po dodzwonieniu się należy poprosić o kontakt z dedykowanym opiekunem.</p>
       <p style="margin:0 0 16px 0;">Państwa opiekun będzie odpowiadać za bieżący kontakt, udzielanie informacji oraz wspieranie w sprawach związanych z księgowością i rozliczeniami.</p>
       <p style="margin:0 0 16px 0;">W przypadku dodatkowych pytań lub pilnych spraw zawsze pozostaje również do dyspozycji nasz główny adres e-mail: <a href="mailto:biuro@crss.com.pl" style="color:#173b73;font-weight:850;">biuro@crss.com.pl</a>. Na tego maila proszę również kierować pytania związane z kwestiami formalno-prawnymi naszej umowy.</p>
+      <p style="margin:0 0 16px 0;"><strong>Przypominamy</strong>, że w związku z podjęciem współpracy księgowej z naszym biurem powinni Państwo zaktualizować dane dotyczące prowadzenia dokumentacji rachunkowej: 1) składając formularz NIP-8 do urzędu skarbowego — w przypadku podmiotów wpisanych do KRS; 2) poprzez aktualizację danych w CEIDG — w przypadku jednoosobowej działalności gospodarczej (JDG), jeżeli jeszcze tego Państwo nie zrobili.</p>
       <p style="margin:0 0 16px 0;">Dziękujemy za zaufanie i cieszymy się na dalszą współpracę.</p>
       <p style="margin:24px 0 0 0;">Pozdrawiamy serdecznie,<br><strong>Zespół CRSS</strong></p>
     </div>

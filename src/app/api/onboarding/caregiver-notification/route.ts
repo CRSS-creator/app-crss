@@ -18,6 +18,7 @@ type ClientWithCaregiver = {
   nip: string | null;
   email: string | null;
   opiekun_id: string | null;
+  forma_prawna: string | null;
   profiles?: { full_name: string | null; email: string | null }[] | { full_name: string | null; email: string | null } | null;
 };
 
@@ -93,6 +94,13 @@ function caregiverFromClient(client: ClientWithCaregiver) {
 }
 
 function buildCaregiverHtml(client: ClientWithCaregiver, caregiverName: string, caregiverEmail: string) {
+  const legalForm = client.forma_prawna?.trim().toLowerCase() || "";
+  const registrationReminder = legalForm === "jdg"
+    ? "poprzez aktualizację danych w CEIDG"
+    : legalForm === "spółka z o.o." || legalForm === "prosta spółka akcyjna"
+      ? "składając formularz NIP-8 do urzędu skarbowego"
+      : "składając właściwe zgłoszenie aktualizacyjne do urzędu skarbowego (NIP-8 w przypadku podmiotu wpisanego do KRS)";
+
   return `
 <div style="margin:0;padding:0;background:#f6f8fb;font-family:Arial,sans-serif;color:#173b73;">
   <div style="max-width:640px;margin:0 auto;padding:28px 18px;">
@@ -111,7 +119,7 @@ function buildCaregiverHtml(client: ClientWithCaregiver, caregiverName: string, 
       <p style="margin:0 0 16px 0;">Numer telefonu jest ogólny do biura, po dodzwonieniu się należy poprosić o kontakt z dedykowanym opiekunem.</p>
       <p style="margin:0 0 16px 0;">Państwa opiekun będzie odpowiadać za bieżący kontakt, udzielanie informacji oraz wspieranie w sprawach związanych z księgowością i rozliczeniami.</p>
       <p style="margin:0 0 16px 0;">W przypadku dodatkowych pytań lub pilnych spraw zawsze pozostaje również do dyspozycji nasz główny adres e-mail: <a href="mailto:biuro@crss.com.pl" style="color:#173b73;font-weight:850;">biuro@crss.com.pl</a>. Na tego maila proszę również kierować pytania związane z kwestiami formalno-prawnymi naszej umowy.</p>
-      <p style="margin:0 0 16px 0;"><strong>Przypominamy</strong>, że w związku z podjęciem współpracy księgowej z naszym biurem powinni Państwo zaktualizować dane dotyczące prowadzenia dokumentacji rachunkowej: 1) składając formularz NIP-8 do urzędu skarbowego — w przypadku podmiotów wpisanych do KRS; 2) poprzez aktualizację danych w CEIDG — w przypadku jednoosobowej działalności gospodarczej (JDG), jeżeli jeszcze tego Państwo nie zrobili.</p>
+      <p style="margin:0 0 16px 0;"><strong>Przypominamy</strong>, że w związku z podjęciem współpracy księgowej z naszym biurem powinni Państwo zaktualizować dane dotyczące prowadzenia dokumentacji rachunkowej, ${registrationReminder}, jeżeli jeszcze tego Państwo nie zrobili.</p>
       <p style="margin:0 0 16px 0;">Dziękujemy za zaufanie i cieszymy się na dalszą współpracę.</p>
       <p style="margin:24px 0 0 0;">Pozdrawiamy serdecznie,<br><strong>Zespół CRSS</strong></p>
     </div>
@@ -146,6 +154,7 @@ export async function POST(request: NextRequest) {
       nip,
       email,
       opiekun_id,
+      forma_prawna,
       profiles!klienci_opiekun_id_fkey (
         full_name,
         email

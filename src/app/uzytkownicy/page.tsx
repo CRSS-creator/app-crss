@@ -75,8 +75,8 @@ type VatMode = typeof VAT_OPTIONS[number]["value"];
 type VatUeMode = typeof VAT_UE_OPTIONS[number]["value"];
 type PayrollMode = typeof PAYROLL_OPTIONS[number]["value"];
 type FrequencyMode = typeof FREQUENCY_OPTIONS[number]["value"];
-type UserProfile = ProfileSummary & { id: string; role: string | null };
-type NewUserDraft = { fullName: string; email: string; role: string; password: string };
+type UserProfile = ProfileSummary & { id: string; role: string | null; phone: string | null };
+type NewUserDraft = { fullName: string; email: string; phone: string; role: string; password: string };
 type ClientRow = {
   id: string;
   nazwa: string | null;
@@ -147,6 +147,7 @@ const emptyDraft: TemplateDraft = {
 const emptyNewUserDraft: NewUserDraft = {
   fullName: "",
   email: "",
+  phone: "",
   role: "accountant",
   password: "",
 };
@@ -197,7 +198,7 @@ function SettingsContent({ role }: { role: UserRole | null }) {
     const [templatesResult, clientsResult, usersResult, taxHistoryResult, a1Result] = await Promise.all([
       fetchRecurringTaskTemplates(),
       fetchClients(),
-      supabase.from("profiles").select("id, full_name, email, role").order("full_name", { ascending: true }),
+      supabase.from("profiles").select("id, full_name, email, phone, role").order("full_name", { ascending: true }),
       supabase.from("zobowiazania_wysylki_historia").select("*").order("created_at", { ascending: false }).limit(250),
       supabase.from("kadry_a1").select("klient_id"),
     ]);
@@ -636,6 +637,7 @@ function UsersTab({ users, loading, onUserCreated, onUserUpdated }: { users: Use
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [editedFullName, setEditedFullName] = useState("");
   const [editedEmail, setEditedEmail] = useState("");
+  const [editedPhone, setEditedPhone] = useState("");
   const [editedRole, setEditedRole] = useState("accountant");
   const [savingUserId, setSavingUserId] = useState<string | null>(null);
 
@@ -699,6 +701,7 @@ function UsersTab({ users, loading, onUserCreated, onUserUpdated }: { users: Use
     setEditingUserId(user.id);
     setEditedFullName(user.full_name || "");
     setEditedEmail(user.email || "");
+    setEditedPhone(user.phone || "");
     setEditedRole(user.role || "accountant");
   }
 
@@ -706,6 +709,7 @@ function UsersTab({ users, loading, onUserCreated, onUserUpdated }: { users: Use
     setEditingUserId(null);
     setEditedFullName("");
     setEditedEmail("");
+    setEditedPhone("");
     setEditedRole("accountant");
   }
 
@@ -726,7 +730,7 @@ function UsersTab({ users, loading, onUserCreated, onUserUpdated }: { users: Use
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ userId: user.id, action: "update_profile", fullName, email, role: editedRole }),
+      body: JSON.stringify({ userId: user.id, action: "update_profile", fullName, email, phone: editedPhone, role: editedRole }),
     });
     const result = await response.json().catch(() => null);
     setSavingUserId(null);
@@ -746,6 +750,7 @@ function UsersTab({ users, loading, onUserCreated, onUserUpdated }: { users: Use
       <div style={userCreateFormStyle}>
         <Field label="Imię i nazwisko"><input style={inputStyle} value={newUser.fullName} onChange={(event) => setNewUser((current) => ({ ...current, fullName: event.target.value }))} placeholder="np. Anna Kowalska" /></Field>
         <Field label="Email"><input style={inputStyle} type="email" value={newUser.email} onChange={(event) => setNewUser((current) => ({ ...current, email: event.target.value }))} placeholder="adres@email.pl" /></Field>
+        <Field label="Telefon opiekuna (opcjonalnie)"><input style={inputStyle} type="tel" maxLength={40} value={newUser.phone} onChange={(event) => setNewUser((current) => ({ ...current, phone: event.target.value }))} placeholder="np. +48 600 123 456" /></Field>
         <Field label="Rola"><AppSelect style={inputStyle} value={newUser.role} options={ROLE_OPTIONS} onChange={(value) => setNewUser((current) => ({ ...current, role: value }))} /></Field>
         <Field label="Hasło jednorazowe"><input style={inputStyle} value={newUser.password} onChange={(event) => setNewUser((current) => ({ ...current, password: event.target.value }))} placeholder="Wygeneruj hasło" /></Field>
         <button style={secondaryButtonStyle} type="button" onClick={() => setNewUser((current) => ({ ...current, password: generateTemporaryPassword() }))}>Generuj hasło</button>
@@ -753,9 +758,9 @@ function UsersTab({ users, loading, onUserCreated, onUserUpdated }: { users: Use
       </div>
       <div style={tableShellStyle}>
         <table style={tableStyle}>
-          <thead><tr><Th>Użytkownik</Th><Th>Email</Th><Th>Rola</Th><Th>Hasło</Th><th style={thStyle} data-user-actions-header="true">Akcje</th></tr></thead>
+          <thead><tr><Th>Użytkownik</Th><Th>Email</Th><Th>Telefon opiekuna</Th><Th>Rola</Th><Th>Hasło</Th><th style={thStyle} data-user-actions-header="true">Akcje</th></tr></thead>
           <tbody>
-            {loading ? <tr><Td colSpan={5}>Ładowanie użytkowników...</Td></tr> : users.map((user) => <tr key={user.id} style={rowStyle}>
+            {loading ? <tr><Td colSpan={6}>Ładowanie użytkowników...</Td></tr> : users.map((user) => <tr key={user.id} style={rowStyle}>
               <Td strong>
                 {editingUserId === user.id ? (
                   <input
@@ -789,6 +794,23 @@ function UsersTab({ users, loading, onUserCreated, onUserUpdated }: { users: Use
                 ) : (
                   user.email || "Brak emaila"
                 )}
+              </Td>
+              <Td>
+                {editingUserId === user.id ? (
+                  <input
+                    style={inputStyle}
+                    type="tel"
+                    aria-label="Telefon opiekuna"
+                    value={editedPhone}
+                    maxLength={40}
+                    placeholder="Brak — numer biura"
+                    onChange={(event) => setEditedPhone(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") void saveUser(user);
+                      if (event.key === "Escape") cancelEditingUser();
+                    }}
+                  />
+                ) : (user.phone || "Brak — numer biura")}
               </Td>
               <Td>{editingUserId === user.id ? <AppSelect style={roleSelectStyle} value={editedRole} options={ROLE_OPTIONS} onChange={setEditedRole} /> : roleLabel(user.role)}</Td>
               <Td><button style={secondaryButtonStyle} type="button" disabled={resettingUserId === user.id} onClick={() => resetPassword(user)}>{resettingUserId === user.id ? "Reset..." : "Reset hasła"}</button></Td>
@@ -917,7 +939,7 @@ const dangerButtonStyle: CSSProperties = { ...secondaryButtonStyle, color: color
 const templateFilterStyle: CSSProperties = { marginBottom: "12px" };
 const historyFiltersStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(260px, 1fr) 180px 220px", gap: "12px", marginBottom: "14px", alignItems: "center" };
 const tableShellStyle: CSSProperties = { overflowX: "auto", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white };
-const userCreateFormStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(4, minmax(160px, 1fr)) auto auto", gap: "12px", alignItems: "end", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "14px", marginBottom: "18px" };
+const userCreateFormStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "12px", alignItems: "end", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "14px", marginBottom: "18px" };
 const tableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse" };
 const thStyle: CSSProperties = { textAlign: "left", padding: "13px 14px", color: colors.muted, fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: `1px solid ${colors.border}`, whiteSpace: "nowrap" };
 const tdStyle: CSSProperties = { padding: "14px", borderBottom: `1px solid ${colors.border}`, color: colors.text, verticalAlign: "middle" };

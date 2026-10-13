@@ -19,7 +19,7 @@ type ClientWithCaregiver = {
   email: string | null;
   opiekun_id: string | null;
   forma_prawna: string | null;
-  profiles?: { full_name: string | null; email: string | null }[] | { full_name: string | null; email: string | null } | null;
+  profiles?: { full_name: string | null; email: string | null; phone: string | null }[] | { full_name: string | null; email: string | null; phone: string | null } | null;
 };
 
 function getWebhookUrl() {
@@ -93,7 +93,10 @@ function caregiverFromClient(client: ClientWithCaregiver) {
   return Array.isArray(client.profiles) ? client.profiles[0] : client.profiles;
 }
 
-function buildCaregiverHtml(client: ClientWithCaregiver, caregiverName: string, caregiverEmail: string) {
+function buildCaregiverHtml(client: ClientWithCaregiver, caregiverName: string, caregiverEmail: string, caregiverPhone: string | null) {
+  const phone = (caregiverPhone || "600-950-940").replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;",
+  })[character]!);
   const legalForm = client.forma_prawna?.trim().toLowerCase() || "";
   const registrationReminder = legalForm === "jdg"
     ? "poprzez aktualizację danych w CEIDG"
@@ -113,10 +116,10 @@ function buildCaregiverHtml(client: ClientWithCaregiver, caregiverName: string, 
       <p style="margin:0 0 16px 0;">Od dziś wszelkie sprawy związane z obsługą księgową będzie prowadzić:</p>
       <div style="background:#eef3fb;border:1px solid #c9d6e8;border-radius:14px;padding:18px;margin:24px 0;">
         <p style="margin:0 0 8px 0;font-size:18px;font-weight:850;">${caregiverName}</p>
-        <p style="margin:0 0 8px 0;"><strong>tel.:</strong> 600-950-940</p>
+        <p style="margin:0 0 8px 0;"><strong>tel.:</strong> ${phone}</p>
         <p style="margin:0;"><strong>e-mail:</strong> ${caregiverEmail}</p>
       </div>
-      <p style="margin:0 0 16px 0;">Numer telefonu jest ogólny do biura, po dodzwonieniu się należy poprosić o kontakt z dedykowanym opiekunem.</p>
+      ${!caregiverPhone ? '<p style="margin:0 0 16px 0;">Numer telefonu jest ogólny do biura, po dodzwonieniu się należy poprosić o kontakt z dedykowanym opiekunem.</p>' : ""}
       <p style="margin:0 0 16px 0;">Państwa opiekun będzie odpowiadać za bieżący kontakt, udzielanie informacji oraz wspieranie w sprawach związanych z księgowością i rozliczeniami.</p>
       <p style="margin:0 0 16px 0;">W przypadku dodatkowych pytań lub pilnych spraw zawsze pozostaje również do dyspozycji nasz główny adres e-mail: <a href="mailto:biuro@crss.com.pl" style="color:#173b73;font-weight:850;">biuro@crss.com.pl</a>. Na tego maila proszę również kierować pytania związane z kwestiami formalno-prawnymi naszej umowy.</p>
       <p style="margin:0 0 16px 0;"><strong>Przypominamy</strong>, że w związku z podjęciem współpracy księgowej z naszym biurem powinni Państwo zaktualizować dane dotyczące prowadzenia dokumentacji rachunkowej, ${registrationReminder}, jeżeli jeszcze tego Państwo nie zrobili.</p>
@@ -157,7 +160,8 @@ export async function POST(request: NextRequest) {
       forma_prawna,
       profiles!klienci_opiekun_id_fkey (
         full_name,
-        email
+        email,
+        phone
       )
     `)
     .eq("id", payload.clientId)
@@ -175,6 +179,7 @@ export async function POST(request: NextRequest) {
   const caregiver = caregiverFromClient(clientRecord);
   const caregiverName = caregiver?.full_name?.trim();
   const caregiverEmail = caregiver?.email?.trim();
+  const caregiverPhone = caregiver?.phone?.trim() || null;
 
   if (!clientRecord.opiekun_id || !caregiverName || !caregiverEmail) {
     return NextResponse.json({ error: "Najpierw wybierz opiekuna księgowego z imieniem, nazwiskiem i adresem e-mail." }, { status: 400 });
@@ -191,9 +196,10 @@ export async function POST(request: NextRequest) {
         clientNip: clientRecord.nip,
         recipientEmail: clientRecord.email,
         subject: "Twój opiekun księgowy CRSS",
-        html: buildCaregiverHtml(clientRecord, caregiverName, caregiverEmail),
+        html: buildCaregiverHtml(clientRecord, caregiverName, caregiverEmail, caregiverPhone),
         caregiverName,
         caregiverEmail,
+        caregiverPhone: caregiverPhone || "600-950-940",
         requestedByName: auth.requesterName,
         appUrl: APP_URL,
       }),

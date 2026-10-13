@@ -9,6 +9,7 @@ const LOGO_URL = `${APP_URL}/logo-crss-mail.png`;
 type CreateUserPayload = {
   fullName?: string;
   email?: string;
+  phone?: string | null;
   role?: string;
   password?: string;
 };
@@ -18,6 +19,7 @@ type UserActionPayload = {
   password?: string;
   fullName?: string;
   email?: string;
+  phone?: string | null;
   role?: string;
   action?: "reset_password" | "deactivate" | "activate" | "update_name" | "update_profile";
 };
@@ -35,6 +37,13 @@ function generateTemporaryPassword() {
   const values = new Uint32Array(16);
   crypto.getRandomValues(values);
   return Array.from(values, (value) => alphabet[value % alphabet.length]).join("");
+}
+
+function isValidPhone(phone: unknown) {
+  return phone == null || (typeof phone === "string" && (
+    phone.trim() === "" || (phone.trim().length <= 40 && /^\+?[0-9 ()-]+$/.test(phone.trim()) &&
+      phone.replace(/\D/g, "").length >= 7 && phone.replace(/\D/g, "").length <= 15)
+  ));
 }
 
 function escapeHtml(value: string) {
@@ -218,7 +227,7 @@ async function getAuthorizedAdmin(request: NextRequest): Promise<AuthorizedAdmin
 async function fetchUserProfile(admin: SupabaseClient, userId: string) {
   const { data } = await admin
     .from("profiles")
-    .select("id, full_name, email, role, aktywne")
+    .select("id, full_name, email, phone, role, aktywne")
     .eq("id", userId)
     .single();
 
@@ -244,6 +253,11 @@ export async function POST(request: NextRequest) {
   const email = payload.email?.trim().toLowerCase();
   const role = ALLOWED_USER_ROLES.has(payload.role || "") ? payload.role as string : "accountant";
   const password = payload.password?.trim();
+
+  if (!isValidPhone(payload.phone)) {
+    return NextResponse.json({ error: "Wpisz prawidłowy numer telefonu (7–15 cyfr) albo pozostaw pole puste." }, { status: 400 });
+  }
+  const phone = payload.phone?.trim() || null;
 
   if (!fullName || !email || !password) {
     return NextResponse.json({ error: "Uzupełnij imię i nazwisko, email oraz hasło." }, { status: 400 });
@@ -278,10 +292,11 @@ export async function POST(request: NextRequest) {
       id: createdUser.user.id,
       full_name: fullName,
       email,
+      phone,
       role,
       aktywne: true,
     }, { onConflict: "id" })
-    .select("id, full_name, email, role, aktywne")
+    .select("id, full_name, email, phone, role, aktywne")
     .single();
 
   if (profileError) {
@@ -364,6 +379,9 @@ export async function PATCH(request: NextRequest) {
   }
 
   if (action === "update_name" || action === "update_profile") {
+    if (action === "update_profile" && !isValidPhone(payload.phone)) {
+      return NextResponse.json({ error: "Wpisz prawidłowy numer telefonu (7–15 cyfr) albo pozostaw pole puste." }, { status: 400 });
+    }
     const fullName = payload.fullName?.trim().replace(/\s+/g, " ");
     const email = action === "update_profile" ? payload.email?.trim().toLowerCase() : existingUser.user.email;
     const role = action === "update_profile" ? payload.role?.trim() : undefined;
@@ -405,7 +423,10 @@ export async function PATCH(request: NextRequest) {
 
     const { error: updateProfileError } = await admin
       .from("profiles")
-      .update({ full_name: fullName, email, ...(action === "update_profile" ? { role } : {}) })
+      .update({ full_name: fullName, email, ...(action === "update_profile" ? {
+        role,
+        ...(payload.phone !== undefined ? { phone: payload.phone?.trim() || null } : {}),
+      } : {}) })
       .eq("id", userId);
 
     if (updateProfileError) {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthorizedServerUser } from "@/lib/serverAuth";
 import { splitEmails, splitPhones } from "@/lib/contactFields";
+import { sendInvoiceNotificationTargets } from "@/lib/invoiceNotificationDelivery";
 
 const ALLOWED_ROLES = new Set(["owner", "admin"]);
 const APP_URL = "https://app.crss.com.pl";
@@ -11,6 +12,7 @@ type OverdueReminderPayload = {
 
 type OverdueInvoiceRow = {
   id: string;
+  klient_id: string | null;
   numer: string | null;
   status: string;
   kontrahent_nazwa: string;
@@ -40,8 +42,8 @@ type ReminderContext = {
 };
 
 type ReminderGroup = {
-  recipientEmail: string;
-  recipientPhone: string | null;
+  recipientEmails: string[];
+  recipientPhones: string[];
   clientName: string;
   replyToEmail: string | null;
   replyToName: string | null;
@@ -91,6 +93,7 @@ export async function POST(request: NextRequest) {
     .from("faktury")
     .select(`
       id,
+      klient_id,
       numer,
       status,
       kontrahent_nazwa,
@@ -122,11 +125,11 @@ export async function POST(request: NextRequest) {
       failed.push({ invoiceId: invoice.id, error: "Ta faktura nie ma statusu przeterminowana." });
       return false;
     }
-    if (!firstInvoiceEmail(invoice)) {
+    if (invoiceEmails(invoice).length === 0) {
       failed.push({ invoiceId: invoice.id, error: "Brak adresu e-mail klienta przy tej fakturze." });
       return false;
     }
-    if (!firstInvoicePhone(invoice)) {
+    if (invoicePhones(invoice).length === 0) {
       failed.push({ invoiceId: invoice.id, error: "Brak numeru telefonu klienta przy tej fakturze." });
       return false;
     }
@@ -149,7 +152,7 @@ export async function POST(request: NextRequest) {
   for (const group of groups) {
     try {
       await sendReminderGroup(context, group);
-      sent.push({ recipientEmail: group.recipientEmail, invoiceIds: group.invoices.map((invoice) => invoice.id) });
+      sent.push({ recipientEmail: group.recipientEmails.join("; "), invoiceIds: group.invoices.map((invoice) => invoice.id) });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Nieznany błąd wysyłki przypomnienia.";
       group.invoices.forEach((invoice) => failed.push({ invoiceId: invoice.id, error: message }));
@@ -174,48 +177,23 @@ async function sendReminderGroup(context: ReminderContext, group: ReminderGroup)
   const smsMessage = buildOverdueNotificationSms(group);
 
   try {
-    const failedChannels: string[] = [];
-    for (const channel of ["email", "sms"] as const) {
-      const response = await fetch(context.webhookUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          event: "overdue_invoice_notification_requested",
-          channel,
-          clientName: group.clientName,
-          recipientEmail: channel === "email" ? group.recipientEmail : null,
-          recipientEmails: channel === "email" ? [group.recipientEmail] : [],
-          recipientPhone: channel === "sms" ? group.recipientPhone : null,
-          recipientPhones: channel === "sms" && group.recipientPhone ? [group.recipientPhone] : [],
-          replyToEmail: group.replyToEmail,
-          replyToName: group.replyToName,
-          subject,
-          messageHtml,
-          smsMessage,
-          invoices: preparedInvoices(group),
-          requestedByName: context.requesterName,
-          appUrl: APP_URL,
-        }),
-      });
-
-      if (!response.ok) {
-        const details = await response.text().catch(() => "");
-        failedChannels.push(details ? `${channel}: ${response.status} ${details}` : `${channel}: ${response.status}`);
-      }
-    }
-
-    if (failedChannels.length > 0) {
-      const message = `Automatyzacja nie przyjęła wysyłki: ${failedChannels.join("; ")}`;
-      await insertReminderHistory(context, group, subject, "blad", message);
-      throw new Error(message);
-    }
+    await sendInvoiceNotificationTargets(context.webhookUrl, {
+      event: "overdue_invoice_notification_requested",
+      clientName: group.clientName,
+      replyToEmail: group.replyToEmail,
+      replyToName: group.replyToName,
+      subject,
+      messageHtml,
+      smsMessage,
+      invoices: preparedInvoices(group),
+      requestedByName: context.requesterName,
+      appUrl: APP_URL,
+    }, group.recipientEmails, group.recipientPhones);
 
     await insertReminderHistory(context, group, subject, "wyslane", null);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Nie udało się połączyć z n8n.";
-    if (!message.includes("Automatyzacja zwróciła status") && !message.includes("Automatyzacja nie przyjęła wysyłki")) {
-      await insertReminderHistory(context, group, subject, "blad", message);
-    }
+    await insertReminderHistory(context, group, subject, "blad", message);
     throw new Error(message);
   }
 }
@@ -232,8 +210,8 @@ async function insertReminderHistory(
     group.invoices.map((invoice) => ({
       faktura_id: invoice.id,
       notification_type: "overdue_notification",
-      recipient_email: group.recipientEmail,
-      recipient_phone: group.recipientPhone,
+      recipient_email: group.recipientEmails.join("; "),
+      recipient_phone: group.recipientPhones.join("; ") || null,
       subject,
       status,
       error,
@@ -249,19 +227,26 @@ async function insertReminderHistory(
 function groupInvoicesByRecipient(invoices: OverdueInvoiceRow[]) {
   const groups = new Map<string, ReminderGroup>();
   for (const invoice of invoices) {
-    const recipientEmail = firstInvoiceEmail(invoice);
-    if (!recipientEmail) continue;
+    const recipientEmails = invoiceEmails(invoice);
+    const recipientPhones = invoicePhones(invoice);
+    if (recipientEmails.length === 0) continue;
     const caregiver = invoiceCaregiver(invoice);
     const replyToEmail = firstEmail(caregiver?.email);
-    const key = recipientEmail.toLowerCase();
+    // A shared first email must not expose one client's invoices to another
+    // client's secondary contacts.
+    const key = JSON.stringify([
+      invoice.klient_id || invoice.id,
+      [...recipientEmails].sort(),
+      [...recipientPhones].sort(),
+    ]);
     const existing = groups.get(key);
     if (existing) {
       existing.invoices.push(invoice);
       continue;
     }
     groups.set(key, {
-      recipientEmail,
-      recipientPhone: firstInvoicePhone(invoice),
+      recipientEmails,
+      recipientPhones,
       clientName: invoice.kontrahent_nazwa,
       replyToEmail,
       replyToName: caregiver?.full_name || replyToEmail || null,
@@ -274,14 +259,14 @@ function groupInvoicesByRecipient(invoices: OverdueInvoiceRow[]) {
   }));
 }
 
-function firstInvoiceEmail(invoice: OverdueInvoiceRow) {
+function invoiceEmails(invoice: OverdueInvoiceRow) {
   const client = Array.isArray(invoice.klienci) ? invoice.klienci[0] : invoice.klienci;
-  return splitEmails(client?.email)[0] || null;
+  return splitEmails(client?.email);
 }
 
-function firstInvoicePhone(invoice: OverdueInvoiceRow) {
+function invoicePhones(invoice: OverdueInvoiceRow) {
   const client = Array.isArray(invoice.klienci) ? invoice.klienci[0] : invoice.klienci;
-  return splitPhones(client?.telefon)[0] || null;
+  return splitPhones(client?.telefon);
 }
 
 function invoiceCaregiver(invoice: OverdueInvoiceRow) {

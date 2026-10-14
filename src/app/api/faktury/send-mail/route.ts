@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthorizedServerUser } from "@/lib/serverAuth";
 import { splitEmails, splitPhones } from "@/lib/contactFields";
+import { sendInvoiceNotificationTargets } from "@/lib/invoiceNotificationDelivery";
 
 const ALLOWED_ROLES = new Set(["owner", "admin"]);
 const APP_URL = "https://app.crss.com.pl";
@@ -153,9 +154,12 @@ async function sendSingleInvoiceMail(context: SendContext, invoice: InvoiceMailR
   if (!context.admin) throw new Error("Brak połączenia z bazą.");
   if (!invoice.wfirma_pdf_path) throw new Error("Ta faktura nie ma jeszcze PDF do wysyłki.");
 
-  const recipientEmail = firstInvoiceEmail(invoice);
-  if (!recipientEmail) throw new Error("Brak adresu e-mail klienta przy tej fakturze.");
-  const recipientPhone = firstInvoicePhone(invoice);
+  const client = Array.isArray(invoice.klienci) ? invoice.klienci[0] : invoice.klienci;
+  const recipientEmails = splitEmails(client?.email);
+  if (recipientEmails.length === 0) throw new Error("Brak adresu e-mail klienta przy tej fakturze.");
+  const recipientPhones = splitPhones(client?.telefon);
+  const recipientEmail = recipientEmails.join("; ");
+  const recipientPhone = recipientPhones.join("; ") || null;
 
   const signedUrl = await context.admin.storage
     .from(INVOICE_PDF_BUCKET)
@@ -174,43 +178,30 @@ async function sendSingleInvoiceMail(context: SendContext, invoice: InvoiceMailR
   const replyToName = caregiver?.full_name || replyToEmail || null;
 
   try {
-    const response = await fetch(context.webhookUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        event: "invoice_mail_requested",
-        invoiceId: invoice.id,
-        invoiceNumber,
-        clientName: invoice.kontrahent_nazwa,
-        recipientEmail,
-        recipientPhone,
-        replyToEmail,
-        replyToName,
-        subject,
-        html,
-        amountGross: invoice.kwota_brutto,
-        currency: invoice.waluta || "PLN",
-        issueDate: invoice.data_wystawienia,
-        paymentDate: invoice.termin_platnosci,
-        attachments: [
-          {
-            fileName: attachmentName,
-            url: signedUrl.data.signedUrl,
-            contentType: "application/pdf",
-          },
-        ],
-        appUrl: APP_URL,
-      }),
-    });
+    await sendInvoiceNotificationTargets(context.webhookUrl, {
+      event: "invoice_mail_requested",
+      invoiceId: invoice.id,
+      invoiceNumber,
+      clientName: invoice.kontrahent_nazwa,
+      replyToEmail,
+      replyToName,
+      subject,
+      html,
+      amountGross: invoice.kwota_brutto,
+      currency: invoice.waluta || "PLN",
+      issueDate: invoice.data_wystawienia,
+      paymentDate: invoice.termin_platnosci,
+      attachments: [
+        {
+          fileName: attachmentName,
+          url: signedUrl.data.signedUrl,
+          contentType: "application/pdf",
+        },
+      ],
+      appUrl: APP_URL,
+    }, recipientEmails, recipientPhones);
 
-    if (!response.ok) {
-      const details = await response.text().catch(() => "");
-      const message = details ? `Automatyzacja zwróciła status ${response.status}: ${details}` : `Automatyzacja zwróciła status ${response.status}.`;
-      await insertMailHistory(context, invoice, recipientEmail, subject, "blad", message);
-      throw new Error(message);
-    }
-
-    await insertMailHistory(context, invoice, recipientEmail, subject, "wyslane", null);
+    await insertMailHistory(context, invoice, recipientEmail, recipientPhone, subject, "wyslane", null);
 
     if (!["oplacona", "anulowana"].includes(invoice.status)) {
       await context.admin
@@ -222,9 +213,7 @@ async function sendSingleInvoiceMail(context: SendContext, invoice: InvoiceMailR
     return recipientEmail;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Nie udało się połączyć z n8n.";
-    if (!message.includes("Automatyzacja zwróciła status")) {
-      await insertMailHistory(context, invoice, recipientEmail, subject, "blad", message);
-    }
+    await insertMailHistory(context, invoice, recipientEmail, recipientPhone, subject, "blad", message);
     throw new Error(message);
   }
 }
@@ -233,6 +222,7 @@ async function insertMailHistory(
   context: SendContext,
   invoice: InvoiceMailRow,
   recipientEmail: string,
+  recipientPhone: string | null,
   subject: string,
   status: "wyslane" | "blad",
   error: string | null
@@ -242,7 +232,7 @@ async function insertMailHistory(
     faktura_id: invoice.id,
     notification_type: "invoice_mail",
     recipient_email: recipientEmail,
-    recipient_phone: null,
+    recipient_phone: recipientPhone,
     subject,
     status,
     error,
@@ -252,16 +242,6 @@ async function insertMailHistory(
     sent_by: context.requesterId,
     sent_by_name: context.requesterName,
   });
-}
-
-function firstInvoiceEmail(invoice: InvoiceMailRow) {
-  const client = Array.isArray(invoice.klienci) ? invoice.klienci[0] : invoice.klienci;
-  return splitEmails(client?.email)[0] || null;
-}
-
-function firstInvoicePhone(invoice: InvoiceMailRow) {
-  const client = Array.isArray(invoice.klienci) ? invoice.klienci[0] : invoice.klienci;
-  return splitPhones(client?.telefon)[0] || null;
 }
 
 function invoiceCaregiver(invoice: InvoiceMailRow) {

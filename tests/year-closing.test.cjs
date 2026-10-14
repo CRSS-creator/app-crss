@@ -12,6 +12,38 @@ vm.runInNewContext(ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
 }).outputText, { exports: exportsForTest });
 const { isYearClosingClient } = exportsForTest;
+test('IFT-2R saves all statuses independently per year and accounting tab', async () => {
+  const db = new PGlite();
+  try {
+    await db.exec(`
+      create role authenticated;
+      create table klienci (id uuid primary key);
+      create function public.get_current_user_role() returns text language sql stable as
+        $$ select current_setting('test.role',true) $$;
+      insert into klienci values ('00000000-0000-0000-0000-000000000001');
+    `);
+    const name = fs.readdirSync(path.join(root, 'supabase/migrations'))
+      .find(name => name.endsWith('_year_closing_ift2r_status.sql'));
+    await db.exec(fs.readFileSync(path.join(root, 'supabase/migrations', name), 'utf8'));
+    await db.exec("set role authenticated; select set_config('test.role','manager',false)");
+    for (const tab of ['jdg','full']) {
+      for (const status of ['wyslane','do_wyslania','brak_wysylki']) {
+        await db.query(`insert into zamykanie_roku_ift2r values
+          ('00000000-0000-0000-0000-000000000001',2026,$1,$2)
+          on conflict (klient_id,rok,rodzaj) do update set status=excluded.status`, [tab,status]);
+        assert.equal((await db.query('select status from zamykanie_roku_ift2r where rodzaj=$1',[tab])).rows[0].status,status);
+      }
+    }
+    await db.exec(`insert into zamykanie_roku_ift2r values
+      ('00000000-0000-0000-0000-000000000001',2027,'jdg','do_wyslania')`);
+    assert.equal((await db.query('select count(*)::int as n from zamykanie_roku_ift2r')).rows[0].n,3);
+    await assert.rejects(db.exec("update zamykanie_roku_ift2r set status='invalid'"), /check constraint/);
+    await db.exec("select set_config('test.role','accountant',false)");
+    assert.equal((await db.query('select * from zamykanie_roku_ift2r')).rows.length,0);
+    await assert.rejects(db.exec(`insert into zamykanie_roku_ift2r values
+      ('00000000-0000-0000-0000-000000000001',2028,'full','wyslane')`), /row-level security/);
+  } finally { await db.close(); }
+});
 const client = { status_klienta: 'Aktywny', pierwszy_okres_rozliczeniowy: null, ostatni_okres_rozliczeniowy: null };
 
 test('only active and onboarding clients qualify', () => {

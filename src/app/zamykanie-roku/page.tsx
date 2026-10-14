@@ -19,6 +19,12 @@ const options = [
   { value: "brak_wysylki", label: "Brak wysyłki", tone: "success" },
   { value: "potrzebne_dane", label: "Potrzebne dane z poprzedniej księgowości", tone: "warning" },
 ] as const;
+const iftOptions = [
+  { value: "", label: "Wybierz status" },
+  { value: "wyslane", label: "Wysłane", tone: "success" },
+  { value: "do_wyslania", label: "Do wysłania", tone: "danger" },
+  { value: "brak_wysylki", label: "Brak", tone: "success" },
+] as const;
 function group(client: Client) {
   const form = (client.forma_prawna || "").toLowerCase().trim();
   if (form === "jdg" || form.includes("jednoosob")) return "jdg";
@@ -37,6 +43,7 @@ function YearClosingList() {
   const [error, setError] = useState("");
   const [year, setYear] = useState(Number(new Intl.DateTimeFormat("en", { year: "numeric", timeZone: "Europe/Warsaw" }).format(new Date())));
   const [statuses, setStatuses] = useState<Jpk[]>([]);
+  const [iftStatuses, setIftStatuses] = useState<Jpk[]>([]);
   const [balances, setBalances] = useState<BalanceConfirmation[]>([]);
   const [statusLoading, setStatusLoading] = useState(true);
   const [statusError, setStatusError] = useState("");
@@ -46,14 +53,16 @@ function YearClosingList() {
     let active = true;
     void (async () => {
       try {
-        const [result, balanceResult] = await Promise.all([
+        const [result, balanceResult, iftResult] = await Promise.all([
           supabase.from("zamykanie_roku_jpk").select("*").eq("rok", year),
           supabase.from("zamykanie_roku_salda").select("*").eq("rok", year),
+          supabase.from("zamykanie_roku_ift2r").select("*").eq("rok", year),
         ]);
         if (!active) return;
         setStatuses(result.data || []);
         setBalances(balanceResult.data || []);
-        setStatusError(result.error || balanceResult.error ? "Nie udało się pobrać statusów zamykania roku. Odśwież stronę." : "");
+        setIftStatuses(iftResult.data || []);
+        setStatusError(result.error || balanceResult.error || iftResult.error ? "Nie udało się pobrać statusów zamykania roku. Odśwież stronę." : "");
       } catch { if (active) setStatusError("Nie udało się pobrać statusów zamykania roku. Odśwież stronę."); }
       finally { if (active) setStatusLoading(false); }
     })();
@@ -68,6 +77,17 @@ function YearClosingList() {
       if (result.error) throw result.error;
       setStatuses(current => [...current.filter(item => !(item.klient_id === clientId && item.rodzaj === record.rodzaj)), result.data]);
     } catch { window.alert("Nie udało się zapisać statusu JPK. Spróbuj ponownie."); }
+    finally { saveLock.current = false; setSaving(false); }
+  }
+  async function saveIftStatus(clientId: string, status: string) {
+    if (!status || saveLock.current || statusLoading || statusError) return;
+    saveLock.current = true; setSaving(true);
+    const record = { klient_id: clientId, rok: year, rodzaj: tab, status };
+    try {
+      const result = await supabase.from("zamykanie_roku_ift2r").upsert(record).select("*").single();
+      if (result.error) throw result.error;
+      setIftStatuses(current => [...current.filter(item => !(item.klient_id === clientId && item.rodzaj === record.rodzaj)), result.data]);
+    } catch { window.alert("Nie udało się zapisać statusu IFT-2R. Spróbuj ponownie."); }
     finally { saveLock.current = false; setSaving(false); }
   }
   async function saveBalance(clientId: string, zrobione: boolean) {
@@ -104,14 +124,14 @@ function YearClosingList() {
         {([{ value: "jdg", label: "JDG" }, { value: "full", label: "Pełna księgowość" }] as const).map(item => <button key={item.value} type="button" aria-pressed={tab === item.value} onClick={() => setTab(item.value)} style={{ padding: "10px 18px", borderRadius: 14, border: `1px solid ${colors.border}`, fontWeight: 700, cursor: "pointer", background: tab === item.value ? colors.navy : colors.white, color: tab === item.value ? colors.white : colors.navy }}>{item.label}</button>)}
       </nav>
       <label style={{ display: "flex", gap: 12, alignItems: "center", padding: "0 24px 20px" }}>Rok
-        <select value={year} disabled={saving} onChange={event => { setStatusLoading(true); setStatuses([]); setBalances([]); setYear(Number(event.target.value)); }} style={{ padding: 10, borderRadius: 12, border: `1px solid ${colors.border}` }}>
+        <select value={year} disabled={saving} onChange={event => { setStatusLoading(true); setStatuses([]); setBalances([]); setIftStatuses([]); setYear(Number(event.target.value)); }} style={{ padding: 10, borderRadius: 12, border: `1px solid ${colors.border}` }}>
           {Array.from({ length: 5 }, (_, index) => new Date().getFullYear() - 2 + index).map(value => <option key={value} value={value}>{value}</option>)}
         </select>
       </label>
       {statusError && <p role="alert" style={{ padding: "0 24px", color: colors.danger }}>{statusError}</p>}
       {loading ? <p style={{ padding: 24 }}>Ładowanie klientów…</p> : error ? <p role="alert" style={{ padding: 24, color: colors.danger }}>{error}</p> : <div style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
-          <thead><tr><th scope="col" style={cell}>Klient</th><th scope="col" style={cell}>Czy {tab === "jdg" ? "JPK_PIT" : "JPK_CIT"}?</th>{tab === "full" && <th scope="col" style={cell}>Potwierdzenia sald</th>}</tr></thead>
+          <thead><tr><th scope="col" style={cell}>Klient</th><th scope="col" style={cell}>Czy {tab === "jdg" ? "JPK_PIT" : "JPK_CIT"}?</th>{tab === "full" && <th scope="col" style={cell}>Potwierdzenia sald</th>}<th scope="col" style={cell}>IFT-2R</th></tr></thead>
           <tbody>{rows.map(client => <tr key={client.id}><td style={cell}>
             <strong>{client.nazwa || "Klient bez nazwy"}</strong>
             <div style={{ marginTop: 5, fontSize: 12, color: colors.muted }}>NIP: {client.nip || "—"} · {client.forma_prawna || "—"}</div>
@@ -119,6 +139,7 @@ function YearClosingList() {
             {tab === "full" && <td style={{ ...cell, width: 200 }}><label style={{ display: "flex", gap: 8, alignItems: "center", whiteSpace: "nowrap" }}>
               <input type="checkbox" aria-label={`Potwierdzenia sald — ${client.nazwa || "Klient bez nazwy"} — Zrobione`} checked={balances.find(item => item.klient_id === client.id)?.zrobione ?? false} disabled={saving || statusLoading || Boolean(statusError)} onChange={event => void saveBalance(client.id, event.target.checked)} /> Zrobione
             </label></td>}
+            <td style={{ ...cell, width: 220 }}><AppSelect aria-label={`IFT-2R — ${client.nazwa || "Klient bez nazwy"}`} style={{ width: "100%", ...jpkStatusStyle(iftStatuses.find(item => item.klient_id === client.id && item.rodzaj === tab)?.status) }} options={iftOptions} value={iftStatuses.find(item => item.klient_id === client.id && item.rodzaj === tab)?.status || ""} disabled={saving || statusLoading || Boolean(statusError)} onChange={value => void saveIftStatus(client.id, value)} /></td>
           </tr>)}</tbody>
         </table>
         {rows.length === 0 && <p style={{ padding: 24 }}>Brak klientów w tej kategorii.</p>}

@@ -14,7 +14,7 @@ const payrollColumns = [
   { key: "pit11_us", label: "PITy-11 wysłane do US" },
   { key: "pit11_klient", label: "PITy-11 przesłane do Klienta" },
   { key: "pit4r", label: "PIT-4R" },
-  { key: "zus_roczna", label: "Roczna informacja dla osoby ubezpieczonej ZUS" },
+  { key: "zus_roczna", label: "Informacja roczna ZUS dla osoby ubezpieczonej" },
 ] as const;
 type PayrollTask = typeof payrollColumns[number]["key"];
 type PayrollStatus = { klient_id: string; rok: number; zadanie: PayrollTask; zrobione: boolean };

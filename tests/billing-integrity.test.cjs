@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { readFileSync } = require('node:fs');
+const { readFileSync, readdirSync } = require('node:fs');
 const { join } = require('node:path');
 const { PGlite } = require('@electric-sql/pglite');
 
@@ -64,6 +64,7 @@ async function setup(model='z_dolu', beforeMigration='') {
  await db.exec(reconcileMigration);
  await db.exec(descriptionMigration);
  await db.exec(quantityMigration);
+ await db.exec(readFileSync(join(__dirname, "../supabase/migrations", readdirSync(join(__dirname,"../supabase/migrations")).find(name=>name.endsWith("_reconcile_wfirma_fee_vat_by_identity.sql"))),"utf8"));
  const client=(await db.query('insert into klienci(model_fakturowania) values ($1) returning id',[model])).rows[0].id;
  async function settlement(period,docs=10) {
   return (await db.query('insert into rozliczenia_miesieczne(klient_id,okres,liczba_dokumentow) values ($1,$2,$3) returning id',[client,period,docs])).rows[0].id;
@@ -253,5 +254,32 @@ test('MKS September waits for completion and October returns to upfront billing'
   assert.ok(upfront);
   assert.equal(Number((await db.query('select kwota_netto from faktury where id=$1',[upfront])).rows[0].kwota_netto),100);
   assert.equal((await db.query('select model_fakturowania from klienci where id=$1',[client])).rows[0].model_fakturowania,'z_gory');
+ } finally {await db.close();}
+});
+
+test('refresh repairs stale fee VAT only for a unique unchanged wFirma line identity', async()=>{
+ const {db,settlement,invoice}=await setup();
+ try {
+  const inv=await invoice(await settlement('2026-09-01',15));
+  await db.query("update faktury_pozycje set source_key='wfirma:1565336139',kwota_vat=0,kwota_brutto=kwota_netto,cfo_przychod_kategoria='abonamenty' where faktura_id=$1 and rozliczenie_oplata_id is not null",[inv]);
+  const before=(await db.query('select * from faktury_pozycje where faktura_id=$1 order by sort_order',[inv])).rows;
+  const feeIndex=before.findIndex(p=>p.rozliczenie_oplata_id);
+  const feeId=before[feeIndex].rozliczenie_oplata_id;
+  const remote=before.map(p=>({...p}));
+  remote[feeIndex].kwota_vat=Number(remote[feeIndex].kwota_netto)*0.23;
+  remote[feeIndex].kwota_brutto=Number(remote[feeIndex].kwota_netto)+remote[feeIndex].kwota_vat;
+  for(const patch of [{source_key:'wfirma:9999'},{nazwa:'Different fee'},{ilosc:2},{kwota_netto:999},{kwota_brutto:999}]) {
+   const changed=remote.map((p,i)=>i===feeIndex?{...p,...patch}:p);
+   await assert.rejects(db.query('select replace_wfirma_invoice_lines($1,$2)',[inv,JSON.stringify(changed)]),/nie ma zgodnej pozycji/);
+  }
+  await assert.rejects(db.query('select replace_wfirma_invoice_lines($1,$2)',[inv,JSON.stringify([...remote,remote[feeIndex]])]),/nie ma zgodnej pozycji/);
+  assert.equal(Number((await db.query('select kwota_vat from faktury_pozycje where rozliczenie_oplata_id=$1',[feeId])).rows[0].kwota_vat),0);
+  await db.query('select replace_wfirma_invoice_lines($1,$2)',[inv,JSON.stringify(remote)]);
+  await db.query('select replace_wfirma_invoice_lines($1,$2)',[inv,JSON.stringify(remote)]);
+  const saved=(await db.query('select * from faktury_pozycje where rozliczenie_oplata_id=$1',[feeId])).rows;
+  assert.equal(saved.length,1);
+  assert.equal(Number(saved[0].kwota_vat),remote[feeIndex].kwota_vat);
+  assert.equal(saved[0].cfo_przychod_kategoria,'abonamenty');
+  assert.equal((await db.query('select faktura_id from rozliczenia_oplaty_dodatkowe where id=$1',[feeId])).rows[0].faktura_id,inv);
  } finally {await db.close();}
 });

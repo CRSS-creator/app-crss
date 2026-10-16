@@ -103,7 +103,7 @@ function YearClosingList() {
     } catch { window.alert("Nie udało się zapisać statusu JPK. Spróbuj ponownie."); }
     finally { saveLock.current = false; setSaving(false); }
   }
-  async function saveIftStatus(clientId: string, change: Partial<Pick<IftStatus, IftStage>>) {
+  async function saveIftStatus(clientId: string, change: Partial<Pick<IftStatus, IftStage | "status">>) {
     if (saveLock.current || statusLoading || statusError) return;
     saveLock.current = true; setSaving(true);
     const existing = iftStatuses.find(item => item.klient_id === clientId && item.rodzaj === tab);
@@ -178,39 +178,47 @@ function YearClosingList() {
       {statusError && <p role="alert" style={{ padding: "0 24px", color: colors.danger }}>{statusError}</p>}
       {loading ? <p style={{ padding: 24 }}>Ładowanie klientów…</p> : error ? <p role="alert" style={{ padding: 24, color: colors.danger }}>{error}</p> : <div className={styles.tableScroll} tabIndex={0} role="region" aria-label="Tabela zamykania roku">
         <table className={styles.table} style={{ minWidth: tab === "jdg" ? 1200 : 960 }}>
-          <colgroup>{(tab === "jdg" ? [18, 14, 9, 9, 9, 9, 9, 9, 14] : tab === "full" ? [25, 20, 16, 13, 13, 13] : [24, 19, 19, 19, 19]).map((width, index) => <col key={index} style={{ width: width + "%" }} />)}</colgroup>
+          <colgroup>{(tab === "jdg" ? [17, 13, 10, 8, 8, 8, 8, 8, 8, 12] : tab === "full" ? [22, 18, 12, 12, 12, 12, 12] : [24, 19, 19, 19, 19]).map((width, index) => <col key={index} style={{ width: width + "%" }} />)}</colgroup>
           <thead><tr>
             <th scope="col" rowSpan={tab === "kadry" ? 1 : 2} style={cell}>Klient</th>
             {tab === "kadry" ? payrollColumns.map(column => <th key={column.key} scope="col" style={cell}>{column.label}</th>) : <>
               <th scope="col" rowSpan={2} style={cell}>Czy {tab === "jdg" ? "JPK_PIT" : "JPK_CIT"}?</th>
               {tab === "full" && <th scope="col" rowSpan={2} style={cell}>Potwierdzenia sald</th>}
-              <th scope="colgroup" colSpan={3} className={styles.groupStart} style={{ ...cell, textAlign: "center" }}>IFT-2R</th>
+              <th scope="colgroup" colSpan={4} className={styles.groupStart} style={{ ...cell, textAlign: "center" }}>IFT-2R</th>
               {tab === "jdg" && <><th scope="colgroup" colSpan={3} className={styles.groupStart} style={{ ...cell, textAlign: "center" }}>PIT</th><th scope="col" rowSpan={2} className={styles.groupStart} style={cell}>Roczne rozliczenie składki zdrowotnej</th></>}
             </>}
           </tr>{tab !== "kadry" && <tr>
-            {iftColumns.map(column => <th key={column.key} className={column.key === "sporzadzony" ? styles.groupStart : undefined} scope="col" style={cell}>{column.label}</th>)}
+            <th scope="col" className={styles.groupStart} style={cell}>Wymagane sporządzenie?</th>
+            {iftColumns.map(column => <th key={column.key} scope="col" style={cell}>{column.label}</th>)}
             {tab === "jdg" && jdgColumns.slice(0, 3).map(column => <th key={column.key} className={column.key === "pit_roczny" ? styles.groupStart : undefined} scope="col" style={cell}>{column.label}</th>)}
           </tr>}</thead>
           <tbody>{rows.map(client => <tr key={client.id}><td style={cell}>
             <strong>{client.nazwa || "Klient bez nazwy"}</strong>
             <div style={{ marginTop: 5, fontSize: 12, color: colors.muted }}>NIP: {client.nip || "—"} · {client.forma_prawna || "—"}</div>
           </td>{tab === "kadry" ? payrollColumns.map(column => <td key={column.key} style={cell}><label style={{ display: "flex", gap: 8, alignItems: "center", whiteSpace: "nowrap" }}>
-            <input type="checkbox" aria-label={`${column.label} — ${client.nazwa || "Klient bez nazwy"} — Zrobione`} checked={payrollStatuses.find(item => item.klient_id === client.id && item.zadanie === column.key)?.zrobione ?? false} disabled={saving || statusLoading || Boolean(statusError)} onChange={event => void savePayroll(client.id, column.key, event.target.checked)} /> Zrobione
+            <input type="checkbox" aria-label={`${column.label} — ${client.nazwa || "Klient bez nazwy"} — Zrobione`} checked={payrollStatuses.find(item => item.klient_id === client.id && item.zadanie === column.key)?.zrobione ?? false} disabled={saving || statusLoading || Boolean(statusError)} onChange={event => void savePayroll(client.id, column.key, event.target.checked)} />
           </label></td>) : <><td style={cell}><AppSelect style={{ width: "100%", ...jpkStatusStyle(statuses.find(item => item.klient_id === client.id && item.rodzaj === tab)?.status) }} options={options} value={statuses.find(item => item.klient_id === client.id && item.rodzaj === tab)?.status || ""} disabled={saving || statusLoading || Boolean(statusError)} onChange={value => void saveStatus(client.id, value)} /></td>
             {tab === "full" && <td style={cell}><label style={{ display: "flex", gap: 8, alignItems: "center", whiteSpace: "nowrap" }}>
-              <input type="checkbox" aria-label={`Potwierdzenia sald — ${client.nazwa || "Klient bez nazwy"} — Zrobione`} checked={balances.find(item => item.klient_id === client.id)?.zrobione ?? false} disabled={saving || statusLoading || Boolean(statusError)} onChange={event => void saveBalance(client.id, event.target.checked)} /> Zrobione
+              <input type="checkbox" aria-label={`Potwierdzenia sald — ${client.nazwa || "Klient bez nazwy"} — Zrobione`} checked={balances.find(item => item.klient_id === client.id)?.zrobione ?? false} disabled={saving || statusLoading || Boolean(statusError)} onChange={event => void saveBalance(client.id, event.target.checked)} />
             </label></td>}
+            <td className={styles.groupStart} style={cell}>
+              <select className={styles.requiredSelect} aria-label={"IFT-2R — Wymagane sporządzenie? — " + (client.nazwa || "Klient bez nazwy")} value={iftStatuses.find(item => item.klient_id === client.id && item.rodzaj === tab)?.status === "brak_wysylki" ? "nie" : "tak"} disabled={saving || statusLoading || Boolean(statusError)} onChange={event => void saveIftStatus(client.id, { status: event.target.value === "nie" ? "brak_wysylki" : "do_wyslania" })}>
+                <option value="tak">Tak</option>
+                <option value="nie">Nie</option>
+              </select>
+            </td>
             {iftColumns.map(column => {
               const status = iftStatuses.find(item => item.klient_id === client.id && item.rodzaj === tab);
-              return <td key={column.key} className={column.key === "sporzadzony" ? styles.groupStart : undefined} style={cell}>
+              return <td key={column.key} style={cell}>
+                {status?.status !== "brak_wysylki" && <>
                 <label style={{ display: "flex", gap: 8, alignItems: "center", whiteSpace: "nowrap" }}>
-                  <input type="checkbox" aria-label={"IFT-2R — " + column.label + " — " + (client.nazwa || "Klient bez nazwy")} checked={status?.[column.key] ?? false} disabled={saving || statusLoading || Boolean(statusError)} onChange={event => void saveIftStatus(client.id, { [column.key]: event.target.checked })} /> Zrobione
+                  <input type="checkbox" aria-label={"IFT-2R — " + column.label + " — " + (client.nazwa || "Klient bez nazwy")} checked={status?.[column.key] ?? false} disabled={saving || statusLoading || Boolean(statusError)} onChange={event => void saveIftStatus(client.id, { [column.key]: event.target.checked })} />
                 </label>
-
+                </>}
               </td>;
             })}
             {tab === "jdg" && jdgColumns.map(column => <td key={column.key} className={column.key === "pit_roczny" || column.key === "skladka_zdrowotna" ? styles.groupStart : undefined} style={cell}><label style={{ display: "flex", gap: 8, alignItems: "center", whiteSpace: "nowrap" }}>
-              <input type="checkbox" aria-label={`${column.label} — ${client.nazwa || "Klient bez nazwy"} — Zrobione`} checked={jdgStatuses.find(item => item.klient_id === client.id && item.zadanie === column.key)?.zrobione ?? false} disabled={saving || statusLoading || Boolean(statusError)} onChange={event => void saveJdg(client.id, column.key, event.target.checked)} /> Zrobione
+              <input type="checkbox" aria-label={`${column.label} — ${client.nazwa || "Klient bez nazwy"} — Zrobione`} checked={jdgStatuses.find(item => item.klient_id === client.id && item.zadanie === column.key)?.zrobione ?? false} disabled={saving || statusLoading || Boolean(statusError)} onChange={event => void saveJdg(client.id, column.key, event.target.checked)} />
             </label></td>)}
           </>}
           </tr>)}</tbody>

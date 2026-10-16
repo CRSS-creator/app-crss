@@ -56,11 +56,43 @@
 }
 
 .table input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
+  appearance: none;
+  width: 24px;
+  height: 24px;
   margin: 0;
   flex-shrink: 0;
-  accent-color: #213d72;
+  border: 1px solid #efb4b4;
+  border-radius: 5px;
+  background: #fff0f0;
+  cursor: pointer;
+}
+
+.table input[type="checkbox"]:checked {
+  border-color: #86c99b;
+  background: #edf9f0 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m5 12 4 4 10-10' fill='none' stroke='%2315803d' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 22px 22px no-repeat;
+}
+
+.table input[type="checkbox"]:focus-visible,
+.requiredSelect:focus-visible {
+  outline: 2px solid #213d72;
+  outline-offset: 3px;
+}
+
+.table input[type="checkbox"]:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.requiredSelect {
+  width: 100%;
+  max-width: 100px;
+  padding: 6px 10px;
+  border: 1px solid #b7c7df;
+  border-radius: 8px;
+  background: white;
+  color: #213d72;
+  font: inherit;
+  cursor: pointer;
 }
 
 .table .groupStart {

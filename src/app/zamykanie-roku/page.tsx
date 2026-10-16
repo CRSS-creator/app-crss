@@ -14,7 +14,7 @@ type Client = YearClosingClientPeriod & { id: string; nazwa: string | null; nip:
 const jdgColumns = [
   { key: "pit_roczny", label: "Sporządzony" },
   { key: "pit_us", label: "Wysłany do urzędu" },
-  { key: "pit_klient", label: "Wysłany do klienta z UPO + informacja podatkowa" },
+  { key: "pit_klient", label: "Wysłany do klienta z UPO" },
   { key: "skladka_zdrowotna", label: "Roczne rozliczenie składki zdrowotnej" },
 ] as const;
 type JdgTask = typeof jdgColumns[number]["key"];
@@ -103,7 +103,7 @@ function YearClosingList() {
     } catch { window.alert("Nie udało się zapisać statusu JPK. Spróbuj ponownie."); }
     finally { saveLock.current = false; setSaving(false); }
   }
-  async function saveIftStatus(clientId: string, change: Partial<Pick<IftStatus, IftStage | "status">>) {
+  async function saveIftStatus(clientId: string, change: Partial<Pick<IftStatus, IftStage>>) {
     if (saveLock.current || statusLoading || statusError) return;
     saveLock.current = true; setSaving(true);
     const existing = iftStatuses.find(item => item.klient_id === clientId && item.rodzaj === tab);
@@ -202,14 +202,11 @@ function YearClosingList() {
             </label></td>}
             {iftColumns.map(column => {
               const status = iftStatuses.find(item => item.klient_id === client.id && item.rodzaj === tab);
-              const notApplicable = status?.status === "brak_wysylki";
               return <td key={column.key} className={column.key === "sporzadzony" ? styles.groupStart : undefined} style={cell}>
                 <label style={{ display: "flex", gap: 8, alignItems: "center", whiteSpace: "nowrap" }}>
-                  <input type="checkbox" aria-label={"IFT-2R — " + column.label + " — " + (client.nazwa || "Klient bez nazwy")} checked={status?.[column.key] ?? false} disabled={saving || statusLoading || Boolean(statusError) || notApplicable} onChange={event => void saveIftStatus(client.id, { [column.key]: event.target.checked })} /> Zrobione
+                  <input type="checkbox" aria-label={"IFT-2R — " + column.label + " — " + (client.nazwa || "Klient bez nazwy")} checked={status?.[column.key] ?? false} disabled={saving || statusLoading || Boolean(statusError)} onChange={event => void saveIftStatus(client.id, { [column.key]: event.target.checked })} /> Zrobione
                 </label>
-                {column.key === "sporzadzony" && <label style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 10, color: notApplicable ? colors.success : colors.navy }}>
-                  <input type="checkbox" aria-label={"IFT-2R — Brak — " + (client.nazwa || "Klient bez nazwy")} checked={notApplicable} disabled={saving || statusLoading || Boolean(statusError)} onChange={event => void saveIftStatus(client.id, { status: event.target.checked ? "brak_wysylki" : "do_wyslania" })} /> Brak
-                </label>}
+
               </td>;
             })}
             {tab === "jdg" && jdgColumns.map(column => <td key={column.key} className={column.key === "pit_roczny" || column.key === "skladka_zdrowotna" ? styles.groupStart : undefined} style={cell}><label style={{ display: "flex", gap: 8, alignItems: "center", whiteSpace: "nowrap" }}>

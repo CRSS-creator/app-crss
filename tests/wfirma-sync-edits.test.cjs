@@ -9,7 +9,7 @@ function load(overrides={}) {
  const exports={};
  const wfirma={extractWfirmaInvoices:x=>x,firstWfirmaInvoice:x=>x,...overrides};
  vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText,{
-  exports,console,process,require(name){if(name==='@/lib/wfirmaClient')return wfirma;if(name==='@/lib/invoiceBankAccount')return {isWfirmaDraft:()=>false};return {};}
+  exports,console,process,Error,require(name){if(name==='@/lib/wfirmaClient')return wfirma;if(name==='@/lib/invoiceBankAccount')return {isWfirmaDraft:()=>false};return {};}
  });
  return exports;
 }
@@ -74,4 +74,23 @@ test('inconsistent totals and a failed PDF download do not write a partial snaps
  assert.equal(downloads,0);
  await assert.rejects(load({...overrides,wfirmaLineAmounts:()=>({net:100,tax:23,gross:123})}).syncWfirmaInvoiceSnapshot(admin,{},local,final,()=>{}),/aktualnego PDF/);
  assert.equal(calls,0);
+});
+
+test('confirmed final number resolves a disappeared draft despite edited subscription amount',async()=>{
+ const renamed={...local,numer:final.fullnumber};
+ const changed={...final,total:'999'};
+ const {findMatchingFinalWfirmaInvoice:match,loadWfirmaInvoicesByMonth:loadInvoices}=load({findWfirmaInvoices:async()=>[changed],getWfirmaInvoice:async()=>null});
+ assert.equal(match(renamed,[changed],new Set()).id,'final');
+ assert.equal(match(renamed,[{...changed,contractor_nip:'9999999999'}],new Set()),null);
+ const query={select(){return this},eq(){return this},neq(){return this},async maybeSingle(){return {data:null,error:null}}};
+ const data=await loadInvoices({from:()=>query},{},[renamed],null);
+ assert.equal(data.get('draft').id,'final');
+ assert.equal(data.get('draft').total,'999');
+});
+test('lookup preserves API errors instead of reporting that a document is missing',async()=>{
+ const errors=new Map();
+ const {loadWfirmaInvoicesByMonth:loadInvoices}=load({findWfirmaInvoices:async()=>{throw Error('wFirma AUTH: unavailable')},getWfirmaInvoice:async()=>{throw Error('wFirma ERROR: unavailable')}});
+ const data=await loadInvoices({}, {}, [local],null,errors);
+ assert.equal(data.has('draft'),false);
+ assert.match(errors.get('draft'),/wFirma AUTH: unavailable/);
 });

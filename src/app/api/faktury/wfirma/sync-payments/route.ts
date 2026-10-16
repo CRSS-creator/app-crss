@@ -140,7 +140,8 @@ async function syncPayments(request: NextRequest) {
   }
 
   const invoices = ((data || []) as InvoiceRow[]).filter((invoice) => stringify(invoice.wfirma_id));
-  const wfirmaInvoicesById = await loadWfirmaInvoicesByMonth(admin, wfirma.config, invoices, requestedMonth);
+  const lookupErrors = new Map<string, string>();
+  const wfirmaInvoicesById = await loadWfirmaInvoicesByMonth(admin, wfirma.config, invoices, requestedMonth, lookupErrors);
   const paid: PaidInvoice[] = [];
   const failed: FailedInvoice[] = [];
   const refreshed: { invoiceId: string; number: string | null; pdf: boolean }[] = [];
@@ -151,7 +152,7 @@ async function syncPayments(request: NextRequest) {
 
     try {
       let wfirmaInvoice = wfirmaInvoicesById.get(wfirmaId);
-      if (!wfirmaInvoice) throw new Error("wFirma nie zwróciła danych tej faktury.");
+      if (!wfirmaInvoice) throw new Error(lookupErrors.get(wfirmaId) || "Nie znaleziono faktury w wFirmie. Jeśli szkic został wystawiony pod nowym numerem, trzeba potwierdzić numer dokumentu docelowego.");
 
       if (requestedMonth || requestedInvoiceIds.length > 0) {
         const syncResult = await syncWfirmaInvoiceSnapshot(admin, wfirma.config, invoice, wfirmaInvoice, resolveBankAccount);
@@ -214,8 +215,10 @@ async function loadWfirmaInvoicesByMonth(
   admin: SupabaseClient,
   config: Parameters<typeof findWfirmaInvoices>[0]["config"],
   invoices: InvoiceRow[],
-  requestedMonth: string | null
+  requestedMonth: string | null,
+  lookupErrors = new Map<string, string>()
 ) {
+  let listingError: string | null = null;
   const months = syncSearchMonths(invoices, requestedMonth);
   const invoicesById = new Map<string, WfirmaInvoice>();
   const requestedWfirmaIds = new Set(invoices.map((invoice) => stringify(invoice.wfirma_id)).filter(Boolean));
@@ -244,6 +247,7 @@ async function loadWfirmaInvoicesByMonth(
         if (hasAllRequestedInvoices(invoicesById, requestedWfirmaIds)) break;
         if (wfirmaInvoices.length < limit) break;
       } catch (error) {
+        listingError = error instanceof Error ? error.message : "Nieznany błąd odczytu listy faktur.";
         console.error("Nie udało się pobrać faktur z wFirmy dla miesiąca.", {
           month,
           page,
@@ -267,11 +271,16 @@ async function loadWfirmaInvoicesByMonth(
           currentMatch = direct;
           invoicesById.set(wfirmaId, direct);
         }
-      } catch { /* Keep a valid monthly snapshot if direct lookup is unavailable. */ }
+      } catch (error) {
+        lookupErrors.set(wfirmaId, `Nie udało się odczytać faktury z wFirmy: ${error instanceof Error ? error.message : "Nieznany błąd połączenia."}`);
+      }
     }
     if (currentMatch && !isDraftInvoiceNumber(currentMatch)) continue;
     const replacement = findMatchingFinalWfirmaInvoice(invoice, Array.from(invoicesById.values()), reservedIds);
-    if (!replacement) continue;
+    if (!replacement) {
+      if (!currentMatch && listingError) lookupErrors.set(wfirmaId, `Nie udało się przeszukać faktur w wFirmie: ${listingError}`);
+      continue;
+    }
     const nextId = stringify(replacement.id);
     const occupied = await admin.from("faktury").select("id").eq("wfirma_id", nextId).neq("id", invoice.id).maybeSingle();
     if (occupied.error || occupied.data) continue;

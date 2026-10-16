@@ -1,5 +1,6 @@
 .tableScroll {
   width: 100%;
+  container-type: inline-size;
   overflow-x: auto;
   padding-bottom: 8px;
 }
@@ -17,7 +18,9 @@
   padding: 20px 12px;
   border-left: 1px solid #e1e7f0;
   line-height: 1.5;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
 }
 
 .table th {
@@ -97,4 +100,29 @@
 
 .table .groupStart {
   border-left: 2px solid #b7c7df;
+}
+
+.compactTable {
+  --year-closing-font: clamp(10px, 0.8cqw, 12px);
+}
+
+.compactTable th,
+.compactTable td {
+  padding: 12px 4px;
+  line-height: 1.4;
+}
+
+.compactTable th:first-child[rowspan],
+.compactTable td:first-child {
+  padding-left: 8px;
+}
+
+.compactTable input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  background-size: 18px 18px;
+}
+
+.compactTable .requiredSelect {
+  padding: 6px 4px;
 }

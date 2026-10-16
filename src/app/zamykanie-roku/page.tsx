@@ -207,8 +207,8 @@ function YearClosingList() {
       </label>
       {statusError && <p role="alert" style={{ padding: "0 24px", color: colors.danger }}>{statusError}</p>}
       {loading ? <p style={{ padding: 24 }}>Ładowanie klientów…</p> : error ? <p role="alert" style={{ padding: 24, color: colors.danger }}>{error}</p> : <div className={styles.tableScroll} tabIndex={0} role="region" aria-label="Tabela zamykania roku">
-        <table className={styles.table} style={{ minWidth: tab === "full" ? 2200 : 1200 }}>
-          <colgroup>{(tab === "jdg" ? [17, 13, 10, 8, 8, 8, 8, 8, 8, 12] : tab === "full" ? [12, 10, 6, 6, 5, 5, 6, 5, 5, 8, 5, 5, 5, 8, 9] : [23, 11, 11, 11, 11, 11, 11, 11]).map((width, index) => <col key={index} style={{ width: width + "%" }} />)}</colgroup>
+        <table className={[styles.table, tab === "full" ? styles.compactTable : ""].join(" ")} style={{ minWidth: tab === "full" ? 0 : 1200 }}>
+          <colgroup>{(tab === "jdg" ? [17, 13, 10, 8, 8, 8, 8, 8, 8, 12] : tab === "full" ? [12, 9, 7, 7, 6, 5, 6, 6, 5, 7, 6, 5, 4, 8, 7] : [23, 11, 11, 11, 11, 11, 11, 11]).map((width, index) => <col key={index} style={{ width: width + "%" }} />)}</colgroup>
           <thead><tr>
             <th scope="col" rowSpan={2} style={cell}>Klient</th>
             {tab === "kadry" ? [{ label: "PIT-11", span: 3 }, { label: "PIT-4R", span: 2 }, { label: "Informacja roczna ZUS dla osoby ubezpieczonej", span: 2 }].map(item => <th key={item.label} scope="colgroup" colSpan={item.span} className={styles.groupStart} style={cell}>{item.label}</th>) : <>
@@ -231,10 +231,10 @@ function YearClosingList() {
           </>}</tr></thead>
           <tbody>{rows.map(client => <tr key={client.id}><td style={cell}>
             <strong>{client.nazwa || "Klient bez nazwy"}</strong>
-            <div style={{ marginTop: 5, fontSize: 12, color: colors.muted }}>NIP: {client.nip || "—"} · {client.forma_prawna || "—"}</div>
+            <div style={{ marginTop: 5, fontSize: tab === "full" ? 10 : 12, color: colors.muted }}>NIP: {client.nip || "—"} · {client.forma_prawna || "—"}</div>
           </td>{tab === "kadry" ? payrollColumns.map(column => <td key={column.key} className={column.start ? styles.groupStart : undefined} style={cell}><label style={{ display: "flex", gap: 8, alignItems: "center", whiteSpace: "nowrap" }}>
             <input type="checkbox" aria-label={`${column.group} — ${column.label} — ${client.nazwa || "Klient bez nazwy"}`} checked={payrollStatuses.find(item => item.klient_id === client.id && item.zadanie === column.key)?.zrobione ?? false} disabled={saving || statusLoading || Boolean(statusError)} onChange={event => void savePayroll(client.id, column.key, event.target.checked)} />
-          </label></td>) : <><td style={cell}><AppSelect labelStyle={{ fontWeight: 400 }} style={{ width: "100%", ...jpkStatusStyle(statuses.find(item => item.klient_id === client.id && item.rodzaj === tab)?.status) }} options={options} value={statuses.find(item => item.klient_id === client.id && item.rodzaj === tab)?.status || ""} disabled={saving || statusLoading || Boolean(statusError)} onChange={value => void saveStatus(client.id, value)} /></td>
+          </label></td>) : <><td style={cell}><AppSelect labelStyle={{ fontWeight: 400, ...(tab === "full" ? { whiteSpace: "normal", overflow: "visible", textOverflow: "clip" } : {}) }} style={{ width: "100%", ...(tab === "full" ? { fontSize: "inherit", padding: "6px", gap: 4, minHeight: 32 } : {}), ...jpkStatusStyle(statuses.find(item => item.klient_id === client.id && item.rodzaj === tab)?.status) }} options={options} value={statuses.find(item => item.klient_id === client.id && item.rodzaj === tab)?.status || ""} disabled={saving || statusLoading || Boolean(statusError)} onChange={value => void saveStatus(client.id, value)} /></td>
             {tab === "full" && <td style={cell}><label style={{ display: "flex", gap: 8, alignItems: "center", whiteSpace: "nowrap" }}>
               <input type="checkbox" aria-label={`Potwierdzenia sald — ${client.nazwa || "Klient bez nazwy"} — Zrobione`} checked={balances.find(item => item.klient_id === client.id)?.zrobione ?? false} disabled={saving || statusLoading || Boolean(statusError)} onChange={event => void saveBalance(client.id, event.target.checked)} />
             </label></td>}
@@ -269,7 +269,7 @@ function YearClosingList() {
   </>;
 }
 
-const cell: CSSProperties = { borderTop: `1px solid ${colors.border}`, color: colors.navy, fontSize: 14 };
+const cell: CSSProperties = { borderTop: `1px solid ${colors.border}`, color: colors.navy, fontSize: "var(--year-closing-font, 14px)" };
 
 function jpkStatusStyle(status?: string): CSSProperties {
   if (status === "wyslane" || status === "brak_wysylki") return { background: "rgba(22, 163, 74, 0.12)", borderColor: "rgba(22, 163, 74, 0.24)" };

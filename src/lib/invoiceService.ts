@@ -167,20 +167,12 @@ const INVOICE_LIST_SELECT = `*, klienci(nazwa,nip,email,telefon), delivery_summa
 export async function fetchInvoices() {
   const overdue = await supabase.rpc("mark_overdue_invoices");
   if (overdue.error) return { data: null, error: overdue.error };
-  const invoices: Invoice[] = [];
-  const pageSize = 1000;
-  for (let offset = 0; ; offset += pageSize) {
-    const result = await supabase.from("faktury").select(INVOICE_LIST_SELECT)
-      .neq("typ", "korekta")
-      .order("data_wystawienia", { ascending: false, nullsFirst: true })
-      .order("created_at", { ascending: false })
-      .order("id", { ascending: false })
-      .range(offset, offset + pageSize - 1);
-    if (result.error) return { data: null, error: result.error };
-    const page = (result.data || []) as Invoice[];
-    invoices.push(...page);
-    if (page.length < pageSize) return { data: invoices, error: null };
-  }
+  // Preserve the existing list range and ordering; only the payload is lighter.
+  return supabase.from("faktury").select(INVOICE_LIST_SELECT)
+    .neq("typ", "korekta")
+    .order("data_wystawienia", { ascending: false, nullsFirst: true })
+    .order("created_at", { ascending: false })
+    .range(0, 4999);
 }
 
 export async function fetchInvoiceDetails(invoiceId: string) {

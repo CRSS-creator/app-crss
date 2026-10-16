@@ -20,11 +20,27 @@ const jdgColumns = [
 type JdgTask = typeof jdgColumns[number]["key"];
 type JdgStatus = { klient_id: string; rok: number; zadanie: JdgTask; zrobione: boolean };
 const payrollColumns = [
-  { key: "pit11_us", label: "PITy-11 wysłane do US" },
-  { key: "pit11_klient", label: "PITy-11 przesłane do Klienta" },
-  { key: "pit4r", label: "PIT-4R" },
-  { key: "zus_roczna", label: "Informacja roczna ZUS dla osoby ubezpieczonej" },
+  { key: "pit11_sporzadzone", label: "Sporządzone", group: "PIT-11", start: true },
+  { key: "pit11_us", label: "Wysłane do US", group: "PIT-11", start: false },
+  { key: "pit11_klient", label: "Przekazane do klienta", group: "PIT-11", start: false },
+  { key: "pit4r", label: "Sporządzone", group: "PIT-4R", start: true },
+  { key: "pit4r_klient", label: "Przekazane do klienta", group: "PIT-4R", start: false },
+  { key: "zus_roczna", label: "Sporządzone", group: "Informacja roczna ZUS dla osoby ubezpieczonej", start: true },
+  { key: "zus_roczna_klient", label: "Przekazane do klienta", group: "Informacja roczna ZUS dla osoby ubezpieczonej", start: false },
 ] as const;
+const fullColumns = [
+  { key: "cit_sporzadzony", label: "Sporządzony", group: "CIT", start: true },
+  { key: "cit_us", label: "Wysłany do urzędu", group: "CIT", start: false },
+  { key: "cit_klient", label: "Wysłany do klienta z UPO + informacja podatkowa", group: "CIT", start: false },
+  { key: "sf_sporzadzone", label: "Sporządzone", group: "Sprawozdanie finansowe", start: true },
+  { key: "sf_wyslane", label: "Wysłane", group: "Sprawozdanie finansowe", start: false },
+  { key: "sf_uchwala", label: "Uchwała", group: "Sprawozdanie finansowe", start: false },
+  { key: "przeksiegowania_wf", label: "Przeksięgowania na WF", group: "", start: true },
+  { key: "przeniesienie_bo", label: "Przeniesienie BO na kolejny rok", group: "", start: true },
+] as const;
+type FullTask = typeof fullColumns[number]["key"];
+type FullStatus = { klient_id: string; rok: number; zadanie: FullTask; zrobione: boolean };
+
 type PayrollTask = typeof payrollColumns[number]["key"];
 type PayrollStatus = { klient_id: string; rok: number; zadanie: PayrollTask; zrobione: boolean };
 type BalanceConfirmation = { klient_id: string; rok: number; zrobione: boolean };
@@ -64,6 +80,7 @@ function YearClosingList() {
   const [iftStatuses, setIftStatuses] = useState<IftStatus[]>([]);
   const [balances, setBalances] = useState<BalanceConfirmation[]>([]);
   const [payrollStatuses, setPayrollStatuses] = useState<PayrollStatus[]>([]);
+  const [fullStatuses, setFullStatuses] = useState<FullStatus[]>([]);
   const [jdgStatuses, setJdgStatuses] = useState<JdgStatus[]>([]);
   const [statusLoading, setStatusLoading] = useState(true);
   const [statusError, setStatusError] = useState("");
@@ -73,12 +90,13 @@ function YearClosingList() {
     let active = true;
     void (async () => {
       try {
-        const [result, balanceResult, iftResult, payrollResult, jdgResult] = await Promise.all([
+        const [result, balanceResult, iftResult, payrollResult, jdgResult, fullResult] = await Promise.all([
           supabase.from("zamykanie_roku_jpk").select("*").eq("rok", year),
           supabase.from("zamykanie_roku_salda").select("*").eq("rok", year),
           supabase.from("zamykanie_roku_ift2r").select("*").eq("rok", year),
           supabase.from("zamykanie_roku_kadry").select("*").eq("rok", year),
           supabase.from("zamykanie_roku_jdg").select("*").eq("rok", year),
+          supabase.from("zamykanie_roku_full").select("*").eq("rok", year),
         ]);
         if (!active) return;
         setStatuses(result.data || []);
@@ -86,7 +104,8 @@ function YearClosingList() {
         setIftStatuses(iftResult.data || []);
         setPayrollStatuses(payrollResult.data || []);
         setJdgStatuses(jdgResult.data || []);
-        setStatusError(result.error || balanceResult.error || iftResult.error || payrollResult.error || jdgResult.error ? "Nie udało się pobrać statusów zamykania roku. Odśwież stronę." : "");
+        setFullStatuses(fullResult.data || []);
+        setStatusError(result.error || balanceResult.error || iftResult.error || payrollResult.error || jdgResult.error || fullResult.error ? "Nie udało się pobrać statusów zamykania roku. Odśwież stronę." : "");
       } catch { if (active) setStatusError("Nie udało się pobrać statusów zamykania roku. Odśwież stronę."); }
       finally { if (active) setStatusLoading(false); }
     })();
@@ -124,6 +143,17 @@ function YearClosingList() {
       if (result.error) throw result.error;
       setJdgStatuses(current => [...current.filter(item => !(item.klient_id === clientId && item.zadanie === zadanie)), result.data]);
     } catch { window.alert("Nie udało się zapisać statusu JDG. Spróbuj ponownie."); }
+    finally { saveLock.current = false; setSaving(false); }
+  }
+  async function saveFull(clientId: string, zadanie: FullTask, zrobione: boolean) {
+    if (saveLock.current || statusLoading || statusError) return;
+    saveLock.current = true; setSaving(true);
+    const record = { klient_id: clientId, rok: year, zadanie, zrobione };
+    try {
+      const result = await supabase.from("zamykanie_roku_full").upsert(record).select("*").single();
+      if (result.error) throw result.error;
+      setFullStatuses(current => [...current.filter(item => !(item.klient_id === clientId && item.zadanie === zadanie)), result.data]);
+    } catch { window.alert("Nie udało się zapisać statusu pełnej księgowości. Spróbuj ponownie."); }
     finally { saveLock.current = false; setSaving(false); }
   }
   async function savePayroll(clientId: string, zadanie: PayrollTask, zrobione: boolean) {
@@ -171,32 +201,39 @@ function YearClosingList() {
         {([{ value: "jdg", label: "JDG" }, { value: "full", label: "Pełna księgowość" }, { value: "kadry", label: "Kadry" }] as const).map(item => <button key={item.value} type="button" aria-pressed={tab === item.value} onClick={() => setTab(item.value)} style={{ padding: "10px 18px", borderRadius: 14, border: `1px solid ${colors.border}`, fontWeight: 700, cursor: "pointer", background: tab === item.value ? colors.navy : colors.white, color: tab === item.value ? colors.white : colors.navy }}>{item.label}</button>)}
       </nav>
       <label style={{ display: "flex", gap: 12, alignItems: "center", padding: "0 24px 20px" }}>Rok
-        <select value={year} disabled={saving} onChange={event => { setStatusLoading(true); setStatuses([]); setBalances([]); setIftStatuses([]); setPayrollStatuses([]); setJdgStatuses([]); setYear(Number(event.target.value)); }} style={{ padding: 10, borderRadius: 12, border: `1px solid ${colors.border}` }}>
+        <select value={year} disabled={saving} onChange={event => { setStatusLoading(true); setStatuses([]); setBalances([]); setIftStatuses([]); setPayrollStatuses([]); setJdgStatuses([]); setFullStatuses([]); setYear(Number(event.target.value)); }} style={{ padding: 10, borderRadius: 12, border: `1px solid ${colors.border}` }}>
           {Array.from({ length: 5 }, (_, index) => new Date().getFullYear() - 2 + index).map(value => <option key={value} value={value}>{value}</option>)}
         </select>
       </label>
       {statusError && <p role="alert" style={{ padding: "0 24px", color: colors.danger }}>{statusError}</p>}
       {loading ? <p style={{ padding: 24 }}>Ładowanie klientów…</p> : error ? <p role="alert" style={{ padding: 24, color: colors.danger }}>{error}</p> : <div className={styles.tableScroll} tabIndex={0} role="region" aria-label="Tabela zamykania roku">
-        <table className={styles.table} style={{ minWidth: tab === "jdg" ? 1200 : 960 }}>
-          <colgroup>{(tab === "jdg" ? [17, 13, 10, 8, 8, 8, 8, 8, 8, 12] : tab === "full" ? [22, 18, 12, 12, 12, 12, 12] : [24, 19, 19, 19, 19]).map((width, index) => <col key={index} style={{ width: width + "%" }} />)}</colgroup>
+        <table className={styles.table} style={{ minWidth: tab === "full" ? 2200 : 1200 }}>
+          <colgroup>{(tab === "jdg" ? [17, 13, 10, 8, 8, 8, 8, 8, 8, 12] : tab === "full" ? [12, 10, 6, 6, 5, 5, 6, 5, 5, 8, 5, 5, 5, 8, 9] : [23, 11, 11, 11, 11, 11, 11, 11]).map((width, index) => <col key={index} style={{ width: width + "%" }} />)}</colgroup>
           <thead><tr>
-            <th scope="col" rowSpan={tab === "kadry" ? 1 : 2} style={cell}>Klient</th>
-            {tab === "kadry" ? payrollColumns.map(column => <th key={column.key} scope="col" style={cell}>{column.label}</th>) : <>
+            <th scope="col" rowSpan={2} style={cell}>Klient</th>
+            {tab === "kadry" ? [{ label: "PIT-11", span: 3 }, { label: "PIT-4R", span: 2 }, { label: "Informacja roczna ZUS dla osoby ubezpieczonej", span: 2 }].map(item => <th key={item.label} scope="colgroup" colSpan={item.span} className={styles.groupStart} style={cell}>{item.label}</th>) : <>
               <th scope="col" rowSpan={2} style={cell}>Czy {tab === "jdg" ? "JPK_PIT" : "JPK_CIT"}?</th>
               {tab === "full" && <th scope="col" rowSpan={2} style={cell}>Potwierdzenia sald</th>}
               <th scope="colgroup" colSpan={4} className={styles.groupStart} style={{ ...cell, textAlign: "center" }}>IFT-2R</th>
               {tab === "jdg" && <><th scope="colgroup" colSpan={3} className={styles.groupStart} style={{ ...cell, textAlign: "center" }}>PIT</th><th scope="col" rowSpan={2} className={styles.groupStart} style={cell}>Roczne rozliczenie składki zdrowotnej</th></>}
+              {tab === "full" && <>
+                <th scope="colgroup" colSpan={3} className={styles.groupStart} style={cell}>CIT</th>
+                <th scope="colgroup" colSpan={3} className={styles.groupStart} style={cell}>Sprawozdanie finansowe</th>
+                {fullColumns.slice(6).map(column => <th key={column.key} scope="col" rowSpan={2} className={styles.groupStart} style={cell}>{column.label}</th>)}
+              </>}
             </>}
-          </tr>{tab !== "kadry" && <tr>
+          </tr><tr>{tab === "kadry" ? payrollColumns.map(column => <th key={column.key} scope="col" className={column.start ? styles.groupStart : undefined} style={cell}>{column.label}</th>) : <>
+
             <th scope="col" className={styles.groupStart} style={cell}>Wymagane sporządzenie?</th>
             {iftColumns.map(column => <th key={column.key} scope="col" style={cell}>{column.label}</th>)}
             {tab === "jdg" && jdgColumns.slice(0, 3).map(column => <th key={column.key} className={column.key === "pit_roczny" ? styles.groupStart : undefined} scope="col" style={cell}>{column.label}</th>)}
-          </tr>}</thead>
+            {tab === "full" && fullColumns.slice(0, 6).map(column => <th key={column.key} scope="col" className={column.start ? styles.groupStart : undefined} style={cell}>{column.label}</th>)}
+          </>}</tr></thead>
           <tbody>{rows.map(client => <tr key={client.id}><td style={cell}>
             <strong>{client.nazwa || "Klient bez nazwy"}</strong>
             <div style={{ marginTop: 5, fontSize: 12, color: colors.muted }}>NIP: {client.nip || "—"} · {client.forma_prawna || "—"}</div>
-          </td>{tab === "kadry" ? payrollColumns.map(column => <td key={column.key} style={cell}><label style={{ display: "flex", gap: 8, alignItems: "center", whiteSpace: "nowrap" }}>
-            <input type="checkbox" aria-label={`${column.label} — ${client.nazwa || "Klient bez nazwy"} — Zrobione`} checked={payrollStatuses.find(item => item.klient_id === client.id && item.zadanie === column.key)?.zrobione ?? false} disabled={saving || statusLoading || Boolean(statusError)} onChange={event => void savePayroll(client.id, column.key, event.target.checked)} />
+          </td>{tab === "kadry" ? payrollColumns.map(column => <td key={column.key} className={column.start ? styles.groupStart : undefined} style={cell}><label style={{ display: "flex", gap: 8, alignItems: "center", whiteSpace: "nowrap" }}>
+            <input type="checkbox" aria-label={`${column.group} — ${column.label} — ${client.nazwa || "Klient bez nazwy"}`} checked={payrollStatuses.find(item => item.klient_id === client.id && item.zadanie === column.key)?.zrobione ?? false} disabled={saving || statusLoading || Boolean(statusError)} onChange={event => void savePayroll(client.id, column.key, event.target.checked)} />
           </label></td>) : <><td style={cell}><AppSelect labelStyle={{ fontWeight: 400 }} style={{ width: "100%", ...jpkStatusStyle(statuses.find(item => item.klient_id === client.id && item.rodzaj === tab)?.status) }} options={options} value={statuses.find(item => item.klient_id === client.id && item.rodzaj === tab)?.status || ""} disabled={saving || statusLoading || Boolean(statusError)} onChange={value => void saveStatus(client.id, value)} /></td>
             {tab === "full" && <td style={cell}><label style={{ display: "flex", gap: 8, alignItems: "center", whiteSpace: "nowrap" }}>
               <input type="checkbox" aria-label={`Potwierdzenia sald — ${client.nazwa || "Klient bez nazwy"} — Zrobione`} checked={balances.find(item => item.klient_id === client.id)?.zrobione ?? false} disabled={saving || statusLoading || Boolean(statusError)} onChange={event => void saveBalance(client.id, event.target.checked)} />
@@ -220,6 +257,9 @@ function YearClosingList() {
             {tab === "jdg" && jdgColumns.map(column => <td key={column.key} className={column.key === "pit_roczny" || column.key === "skladka_zdrowotna" ? styles.groupStart : undefined} style={cell}><label style={{ display: "flex", gap: 8, alignItems: "center", whiteSpace: "nowrap" }}>
               <input type="checkbox" aria-label={`${column.label} — ${client.nazwa || "Klient bez nazwy"} — Zrobione`} checked={jdgStatuses.find(item => item.klient_id === client.id && item.zadanie === column.key)?.zrobione ?? false} disabled={saving || statusLoading || Boolean(statusError)} onChange={event => void saveJdg(client.id, column.key, event.target.checked)} />
             </label></td>)}
+            {tab === "full" && fullColumns.map(column => <td key={column.key} className={column.start ? styles.groupStart : undefined} style={cell}>
+              <input type="checkbox" aria-label={column.group + " — " + column.label + " — " + (client.nazwa || "Klient bez nazwy")} checked={fullStatuses.find(item => item.klient_id === client.id && item.zadanie === column.key)?.zrobione ?? false} disabled={saving || statusLoading || Boolean(statusError)} onChange={event => void saveFull(client.id, column.key, event.target.checked)} />
+            </td>)}
           </>}
           </tr>)}</tbody>
         </table>

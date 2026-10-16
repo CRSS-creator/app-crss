@@ -200,3 +200,32 @@ test('declaration stages save independently and preserve existing checklists and
     await assert.rejects(db.exec("insert into zamykanie_roku_jdg values ('00000000-0000-0000-0000-000000000001',2027,'pit_us',true)"),/row-level security/);
   } finally { await db.close(); }
 });
+
+test('full accounting and expanded payroll tasks persist separately with role restrictions', async () => {
+  const db = new PGlite();
+  try {
+    await db.exec(`create role authenticated;
+      create table klienci(id uuid primary key);
+      create function get_current_user_role() returns text language sql stable as $$select current_setting('test.role',true)$$;
+      insert into klienci values ('00000000-0000-0000-0000-000000000001'), ('00000000-0000-0000-0000-000000000002');`);
+    for (const suffix of ['payroll_checklist','full_and_payroll_stages']) {
+      const file=fs.readdirSync(path.join(root,'supabase/migrations')).find(n=>n.endsWith('_year_closing_'+suffix+'.sql'));
+      await db.exec(fs.readFileSync(path.join(root,'supabase/migrations',file),'utf8'));
+    }
+    await db.exec("set role authenticated; select set_config('test.role','manager',false)");
+    for (const [table,tasks] of [
+      ['zamykanie_roku_full',['cit_sporzadzony','cit_us','cit_klient','sf_sporzadzone','sf_wyslane','sf_uchwala','przeksiegowania_wf','przeniesienie_bo']],
+      ['zamykanie_roku_kadry',['pit11_sporzadzone','pit11_us','pit11_klient','pit4r','pit4r_klient','zus_roczna','zus_roczna_klient']]
+    ]) {
+      for (const task of tasks) await db.query(`insert into ${table} values ('00000000-0000-0000-0000-000000000001',2026,$1,true)`,[task]);
+      await db.query(`insert into ${table} values ('00000000-0000-0000-0000-000000000001',2027,$1,false), ('00000000-0000-0000-0000-000000000002',2026,$1,false)`,[tasks[0]]);
+      await db.query(`update ${table} set zrobione=false where zadanie=$1 and rok=2026`,[tasks[0]]);
+      assert.equal((await db.query(`select count(*)::int n from ${table} where zrobione`)).rows[0].n,tasks.length-1);
+      await assert.rejects(db.exec(`update ${table} set zadanie='invalid'`), /check constraint/);
+      await db.exec("select set_config('test.role','accountant',false)");
+      assert.equal((await db.query(`select * from ${table}`)).rows.length,0);
+      await assert.rejects(db.query(`insert into ${table} values ('00000000-0000-0000-0000-000000000002',2027,$1,true)`,[tasks[0]]),/row-level security/);
+      await db.exec("select set_config('test.role','manager',false)");
+    }
+  } finally { await db.close(); }
+});

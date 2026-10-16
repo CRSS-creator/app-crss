@@ -218,6 +218,17 @@ function InvoicesContent() {
     await loadData();
   }
 
+  async function refreshInvoiceDetails() {
+    if (!detailsInvoice?.wfirma_id || refreshingSelected) return;
+    setRefreshingSelected(true);
+    try {
+      const result = await syncWfirmaPayments(undefined, [detailsInvoice.id]);
+      await loadData();
+      const errors = result.error?.message || result.data?.failed.map(item => item.error).join("\n");
+      if (errors) alert("Nie udało się odświeżyć szczegółów faktury:\n\n" + errors);
+    } finally { setRefreshingSelected(false); }
+  }
+
   async function refreshSelectedInvoices() {
     const invoiceIds = [...selectedRefreshIds];
     if (invoiceIds.length === 0 || refreshingSelected) return;
@@ -231,7 +242,7 @@ function InvoicesContent() {
           break;
         }
         for (const failed of result.data?.failed || []) {
-          errors.push(failed.error);
+          errors.push(`${failed.number || "Faktura"}: ${failed.error}`);
         }
       }
       await loadData();
@@ -247,10 +258,12 @@ function InvoicesContent() {
       .filter((invoice) => canRefreshSelectedMonthInvoice(invoice, invoiceMonth))
       .map((invoice) => invoice.id);
     let firstError: Error | null = null;
+    const errors: string[] = [];
 
     for (let index = 0; index < invoiceIds.length; index += MONTH_REFRESH_BATCH_SIZE) {
       const batch = invoiceIds.slice(index, index + MONTH_REFRESH_BATCH_SIZE);
       const syncResult = await syncWfirmaPayments(invoiceMonth, batch);
+      errors.push(...(syncResult.data?.failed || []).map(item => `${item.number || "Faktura"}: ${item.error}`));
       if (syncResult.error) {
         firstError = syncResult.error;
         break;
@@ -258,6 +271,7 @@ function InvoicesContent() {
     }
     setSyncingSelectedMonth(false);
 
+    if (!firstError && errors.length) firstError = new Error(errors.join("\n"));
     if (firstError) {
       console.error("Błąd sprawdzania płatności w wFirmie dla miesiąca:", firstError);
       alert(`Nie udało się odświeżyć płatności za wybrany miesiąc.\n\n${firstError.message}`);
@@ -581,7 +595,7 @@ function InvoicesContent() {
         <div style={headerActionsStyle}>
           <button type="button" style={secondaryButtonStyle} onClick={refreshInvoices} disabled={loading || generating || syncingPayments}>
             <RotateCw size={18} />
-            {loading || syncingPayments ? "Odświeżanie..." : "Odśwież"}
+            {loading || syncingPayments ? "Sprawdzanie..." : "Sprawdź płatności"}
           </button>
           <button type="button" style={secondaryButtonStyle} onClick={() => {
             setSelectedInvoiceIds([]);
@@ -938,6 +952,9 @@ function InvoicesContent() {
                     {deletingInvoiceId === detailsInvoice.id ? "Usuwanie..." : "Usuń"}
                   </button>
                 ) : null}
+                {detailsInvoice.wfirma_id && <button type="button" style={secondaryButtonStyle} onClick={refreshInvoiceDetails} disabled={refreshingSelected || loading}>
+                  <RotateCw size={18} /> {refreshingSelected ? "Odświeżanie..." : "Odśwież z wFirmy"}
+                </button>}
                 <button type="button" style={secondaryButtonStyle} onClick={() => setDetailsInvoice(null)}>
                   Zamknij
                 </button>

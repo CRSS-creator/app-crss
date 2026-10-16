@@ -40,7 +40,7 @@ test('replacement cannot claim an ID already stored outside the selected invoice
 });
 test('refresh replaces unchanged-name PDF and sends zero amounts plus lines in one RPC',async()=>{
  let downloads=0,call;
- const {syncWfirmaInvoiceSnapshot:sync}=load({downloadWfirmaInvoicePdf:async()=>{downloads++;return new Uint8Array([1]);},wfirmaInvoiceAmounts:()=>({net:0,tax:0,gross:0}),extractWfirmaInvoiceLines:()=>[{id:1,name:'Changed',netto:0,brutto:0}],wfirmaLineAmounts:()=>({net:0,tax:0,gross:0})});
+ const {syncWfirmaInvoiceSnapshot:sync}=load({getWfirmaInvoice:async()=>({...final,description:"Aktualny opis z wFirmy"}),downloadWfirmaInvoicePdf:async()=>{downloads++;return new Uint8Array([1]);},wfirmaInvoiceAmounts:()=>({net:0,tax:0,gross:0}),extractWfirmaInvoiceLines:()=>[{id:1,name:'Changed',netto:0,brutto:0}],wfirmaLineAmounts:()=>({net:0,tax:0,gross:0})});
  const admin={storage:{from:()=>({upload:async()=>({error:null})})},async rpc(name,args){call={name,args};return {error:null}}};
  await sync(admin,{}, {...local,wfirma_id:'final',numer:final.fullnumber,wfirma_pdf_path:'old/path',wfirma_pdf_name:'old.pdf'},final,()=>{throw Error('not a draft')});
  assert.equal(downloads,1);
@@ -49,5 +49,29 @@ test('refresh replaces unchanged-name PDF and sends zero amounts plus lines in o
  assert.equal(call.args.public_header.kwota_vat,0);
  assert.equal(call.args.public_header.kwota_brutto,0);
  assert.equal(call.args.public_lines.length,1);
+ assert.equal(call.args.public_header.opis,'Aktualny opis z wFirmy');
  assert.notEqual(call.args.public_header.wfirma_pdf_path,'old/path');
+});
+
+test('empty remote description clears the old one and incomplete detail never reaches the write RPC',async()=>{
+ let calls=0,description;
+ const overrides={getWfirmaInvoice:async()=>({...final,description:''}),downloadWfirmaInvoicePdf:async()=>new Uint8Array([1]),wfirmaInvoiceAmounts:()=>({net:100,tax:23,gross:123}),extractWfirmaInvoiceLines:()=>[{id:1}],wfirmaLineAmounts:()=>({net:100,tax:23,gross:123})};
+ const admin={storage:{from:()=>({upload:async()=>({error:null})})},async rpc(_,args){calls++;description=args.public_header.opis;return {error:null}}};
+ await load(overrides).syncWfirmaInvoiceSnapshot(admin,{},local,final,()=>{});
+ assert.equal(description,null);
+ assert.equal(calls,1);
+ await assert.rejects(load({...overrides,extractWfirmaInvoiceLines:()=>[]}).syncWfirmaInvoiceSnapshot(admin,{},local,final,()=>{}),/nie zwróciła pozycji/);
+ assert.equal(calls,1);
+ await assert.rejects(load({...overrides,getWfirmaInvoice:async()=>({...final,id:'wrong'})}).syncWfirmaInvoiceSnapshot(admin,{},local,final,()=>{}),/nie zwróciła szczegółów/);
+ assert.equal(calls,1);
+});
+
+test('inconsistent totals and a failed PDF download do not write a partial snapshot',async()=>{
+ let calls=0,downloads=0;
+ const overrides={getWfirmaInvoice:async()=>final,downloadWfirmaInvoicePdf:async()=>{downloads++;throw Error('Unavailable')},wfirmaInvoiceAmounts:()=>({net:100,tax:23,gross:123}),extractWfirmaInvoiceLines:()=>[{id:1}],wfirmaLineAmounts:()=>({net:50,tax:11.5,gross:61.5})};
+ const admin={async rpc(){calls++;return {error:null}}};
+ await assert.rejects(load(overrides).syncWfirmaInvoiceSnapshot(admin,{},local,final,()=>{}),/niespójne/);
+ assert.equal(downloads,0);
+ await assert.rejects(load({...overrides,wfirmaLineAmounts:()=>({net:100,tax:23,gross:123})}).syncWfirmaInvoiceSnapshot(admin,{},local,final,()=>{}),/aktualnego PDF/);
+ assert.equal(calls,0);
 });

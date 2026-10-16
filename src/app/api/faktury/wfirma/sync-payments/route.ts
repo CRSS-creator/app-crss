@@ -150,11 +150,12 @@ async function syncPayments(request: NextRequest) {
     const baseResult = { invoiceId: invoice.id, number: invoice.numer, wfirmaId };
 
     try {
-      const wfirmaInvoice = wfirmaInvoicesById.get(wfirmaId);
+      let wfirmaInvoice = wfirmaInvoicesById.get(wfirmaId);
       if (!wfirmaInvoice) throw new Error("wFirma nie zwróciła danych tej faktury.");
 
       if (requestedMonth || requestedInvoiceIds.length > 0) {
         const syncResult = await syncWfirmaInvoiceSnapshot(admin, wfirma.config, invoice, wfirmaInvoice, resolveBankAccount);
+        wfirmaInvoice = syncResult.remoteInvoice;
         if (syncResult.updatedNumber || syncResult.savedPdf) {
           refreshed.push({ invoiceId: invoice.id, number: syncResult.invoiceNumber, pdf: syncResult.savedPdf });
         }
@@ -387,6 +388,11 @@ async function syncWfirmaInvoiceSnapshot(
   resolveBankAccount: () => Promise<RequiredInvoiceBankAccount>
 ) {
   const wfirmaId = stringify(invoice.wfirma_id);
+  // Monthly listings are not a complete detail snapshot after external edits.
+  const detailId = stringify(wfirmaInvoice.id) || wfirmaId;
+  const detail = firstWfirmaInvoice(await getWfirmaInvoice(config, detailId));
+  if (!detail || stringify(detail.id) !== detailId) throw new Error("wFirma nie zwróciła szczegółów tej faktury. Zachowano dotychczasowe dane.");
+  wfirmaInvoice = detail;
   if (isWfirmaDraft(wfirmaInvoice)) {
     wfirmaInvoice = await ensureDraftInvoiceBankAccount(config, stringify(wfirmaInvoice.id) || wfirmaId, await resolveBankAccount());
   }
@@ -397,6 +403,16 @@ async function syncWfirmaInvoiceSnapshot(
   const paymentDate = dateOnly(wfirmaInvoice.payment_date);
   const finalPaymentDate = specialInvoicePaymentDate(invoice, issueDate) || paymentDate;
   const { net, tax, gross } = wfirmaInvoiceAmounts(wfirmaInvoice);
+  const lines = extractWfirmaInvoiceLines(wfirmaInvoice);
+  if (lines.length === 0 && (net !== 0 || gross !== 0)) throw new Error("wFirma nie zwróciła pozycji faktury. Zachowano dotychczasowe szczegóły.");
+  const totals = lines.reduce<{ net: number; tax: number; gross: number }>((sum, line) => {
+    const value = wfirmaLineAmounts(line);
+    return { net: sum.net + value.net, tax: sum.tax + value.tax, gross: sum.gross + value.gross };
+  }, { net: 0, tax: 0, gross: 0 });
+  if (![net, tax, gross, totals.net, totals.tax, totals.gross].every(Number.isFinite)
+    || Math.abs(totals.net - net) > 0.021 || Math.abs(totals.tax - tax) > 0.021 || Math.abs(totals.gross - gross) > 0.021) {
+    throw new Error("Kwoty i pozycje z wFirmy są niespójne. Zachowano dotychczasową fakturę; spróbuj odświeżyć ponownie.");
+  }
   const updatedNumber = Boolean(invoiceNumber && invoiceNumber !== invoice.numer);
   let pdfResult: { path: string | null; name: string | null; error: string | null } | null = null;
 
@@ -412,6 +428,7 @@ async function syncWfirmaInvoiceSnapshot(
 
   const updatePayload: Record<string, unknown> = {
     wfirma_synced_at: new Date().toISOString(),
+    opis: stringify(wfirmaInvoice.description) || null,
   };
 
   if (updatedNumber) updatePayload.numer = invoiceNumber;
@@ -430,16 +447,16 @@ async function syncWfirmaInvoiceSnapshot(
     updatePayload.wfirma_pdf_synced_at = new Date().toISOString();
     updatePayload.wfirma_sync_error = null;
   } else if (pdfResult?.error) {
-    updatePayload.wfirma_sync_error = `Faktura odświeżona, ale nie udało się pobrać PDF z wFirmy: ${pdfResult.error}`;
+    throw new Error(`Nie udało się pobrać aktualnego PDF z wFirmy. Zachowano dotychczasową fakturę: ${pdfResult.error}`);
   }
 
-  const lines = extractWfirmaInvoiceLines(wfirmaInvoice);
   await replaceInvoiceLines(admin, invoice.id, lines, updatePayload);
 
   return {
     invoiceNumber,
     updatedNumber,
     savedPdf: Boolean(pdfResult?.path),
+    remoteInvoice: wfirmaInvoice,
   };
 }
 
@@ -489,7 +506,7 @@ async function replaceInvoiceLines(
     const { net, tax, gross } = wfirmaLineAmounts(line);
     return {
       faktura_id: invoiceId,
-      source_key: `wfirma:${stringify(line.id) || index + 1}`,
+      source_key: stringify(line.id) ? `wfirma:${stringify(line.id)}` : `wfirma-index:${index + 1}`,
       nazwa: stringify(line.name) || "Pozycja faktury",
       ilosc: numberValue(line.count) || 1,
       jednostka: stringify(line.unit) || "szt.",

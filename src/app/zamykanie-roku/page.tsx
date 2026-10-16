@@ -107,7 +107,7 @@ function YearClosingList() {
     if (saveLock.current || statusLoading || statusError) return;
     saveLock.current = true; setSaving(true);
     const existing = iftStatuses.find(item => item.klient_id === clientId && item.rodzaj === tab);
-    const record = { status: "do_wyslania", sporzadzony: false, wyslany_us: false, wyslany_klient: false, ...existing, klient_id: clientId, rok: year, rodzaj: tab, ...change };
+    const record = { status: "brak_wysylki", sporzadzony: false, wyslany_us: false, wyslany_klient: false, ...existing, klient_id: clientId, rok: year, rodzaj: tab, ...change };
     try {
       const result = await supabase.from("zamykanie_roku_ift2r").upsert(record).select("*").single();
       if (result.error) throw result.error;
@@ -197,12 +197,12 @@ function YearClosingList() {
             <div style={{ marginTop: 5, fontSize: 12, color: colors.muted }}>NIP: {client.nip || "—"} · {client.forma_prawna || "—"}</div>
           </td>{tab === "kadry" ? payrollColumns.map(column => <td key={column.key} style={cell}><label style={{ display: "flex", gap: 8, alignItems: "center", whiteSpace: "nowrap" }}>
             <input type="checkbox" aria-label={`${column.label} — ${client.nazwa || "Klient bez nazwy"} — Zrobione`} checked={payrollStatuses.find(item => item.klient_id === client.id && item.zadanie === column.key)?.zrobione ?? false} disabled={saving || statusLoading || Boolean(statusError)} onChange={event => void savePayroll(client.id, column.key, event.target.checked)} />
-          </label></td>) : <><td style={cell}><AppSelect style={{ width: "100%", ...jpkStatusStyle(statuses.find(item => item.klient_id === client.id && item.rodzaj === tab)?.status) }} options={options} value={statuses.find(item => item.klient_id === client.id && item.rodzaj === tab)?.status || ""} disabled={saving || statusLoading || Boolean(statusError)} onChange={value => void saveStatus(client.id, value)} /></td>
+          </label></td>) : <><td style={cell}><AppSelect labelStyle={{ fontWeight: 400 }} style={{ width: "100%", ...jpkStatusStyle(statuses.find(item => item.klient_id === client.id && item.rodzaj === tab)?.status) }} options={options} value={statuses.find(item => item.klient_id === client.id && item.rodzaj === tab)?.status || ""} disabled={saving || statusLoading || Boolean(statusError)} onChange={value => void saveStatus(client.id, value)} /></td>
             {tab === "full" && <td style={cell}><label style={{ display: "flex", gap: 8, alignItems: "center", whiteSpace: "nowrap" }}>
               <input type="checkbox" aria-label={`Potwierdzenia sald — ${client.nazwa || "Klient bez nazwy"} — Zrobione`} checked={balances.find(item => item.klient_id === client.id)?.zrobione ?? false} disabled={saving || statusLoading || Boolean(statusError)} onChange={event => void saveBalance(client.id, event.target.checked)} />
             </label></td>}
             <td className={styles.groupStart} style={cell}>
-              <select className={styles.requiredSelect} aria-label={"IFT-2R — Wymagane sporządzenie? — " + (client.nazwa || "Klient bez nazwy")} value={iftStatuses.find(item => item.klient_id === client.id && item.rodzaj === tab)?.status === "brak_wysylki" ? "nie" : "tak"} disabled={saving || statusLoading || Boolean(statusError)} onChange={event => void saveIftStatus(client.id, { status: event.target.value === "nie" ? "brak_wysylki" : "do_wyslania" })}>
+              <select className={styles.requiredSelect} aria-label={"IFT-2R — Wymagane sporządzenie? — " + (client.nazwa || "Klient bez nazwy")} value={(iftStatuses.find(item => item.klient_id === client.id && item.rodzaj === tab)?.status ?? "brak_wysylki") === "brak_wysylki" ? "nie" : "tak"} disabled={saving || statusLoading || Boolean(statusError)} onChange={event => void saveIftStatus(client.id, { status: event.target.value === "nie" ? "brak_wysylki" : "do_wyslania" })}>
                 <option value="tak">Tak</option>
                 <option value="nie">Nie</option>
               </select>
@@ -210,7 +210,7 @@ function YearClosingList() {
             {iftColumns.map(column => {
               const status = iftStatuses.find(item => item.klient_id === client.id && item.rodzaj === tab);
               return <td key={column.key} style={cell}>
-                {status?.status !== "brak_wysylki" && <>
+                {status && status.status !== "brak_wysylki" && <>
                 <label style={{ display: "flex", gap: 8, alignItems: "center", whiteSpace: "nowrap" }}>
                   <input type="checkbox" aria-label={"IFT-2R — " + column.label + " — " + (client.nazwa || "Klient bez nazwy")} checked={status?.[column.key] ?? false} disabled={saving || statusLoading || Boolean(statusError)} onChange={event => void saveIftStatus(client.id, { [column.key]: event.target.checked })} />
                 </label>

@@ -26,6 +26,7 @@ export default function AppSelect({
   searchPlaceholder = "Szukaj...",
   style,
   menuStyle,
+  labelStyle,
 }: {
   value: string;
   options: readonly SelectOption[];
@@ -35,6 +36,7 @@ export default function AppSelect({
   searchPlaceholder?: string;
   style?: CSSProperties;
   menuStyle?: CSSProperties;
+  labelStyle?: CSSProperties;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -103,7 +105,7 @@ export default function AppSelect({
           return !current;
         })}
       >
-        <span style={{ ...selectLabelStyle, ...selectedToneStyle }}>{selected?.label || "Wybierz"}</span>
+        <span style={{ ...selectLabelStyle, ...selectedToneStyle, ...labelStyle }}>{selected?.label || "Wybierz"}</span>
         <ChevronDown size={16} strokeWidth={2.5} style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 0.16s ease" }} />
       </button>
 

@@ -140,7 +140,7 @@ async function syncPayments(request: NextRequest) {
   }
 
   const invoices = ((data || []) as InvoiceRow[]).filter((invoice) => stringify(invoice.wfirma_id));
-  const wfirmaInvoicesById = await loadWfirmaInvoicesByMonth(wfirma.config, invoices, requestedMonth);
+  const wfirmaInvoicesById = await loadWfirmaInvoicesByMonth(admin, wfirma.config, invoices, requestedMonth);
   const paid: PaidInvoice[] = [];
   const failed: FailedInvoice[] = [];
   const refreshed: { invoiceId: string; number: string | null; pdf: boolean }[] = [];
@@ -210,6 +210,7 @@ async function syncPayments(request: NextRequest) {
 }
 
 async function loadWfirmaInvoicesByMonth(
+  admin: SupabaseClient,
   config: Parameters<typeof findWfirmaInvoices>[0]["config"],
   invoices: InvoiceRow[],
   requestedMonth: string | null
@@ -253,34 +254,28 @@ async function loadWfirmaInvoicesByMonth(
     }
   }
 
+  const reservedIds = new Set(invoices.map(invoice => stringify(invoice.wfirma_id)).filter(Boolean));
   for (const invoice of invoices) {
     const wfirmaId = stringify(invoice.wfirma_id);
-    const currentMatch = invoicesById.get(wfirmaId);
-    if (currentMatch && !isDraftInvoiceNumber(currentMatch)) continue;
-
-    const reservedIds = new Set(
-      invoices
-        .filter((other) => other.id !== invoice.id)
-        .map((other) => stringify(other.wfirma_id))
-        .filter(Boolean)
-    );
-    const replacement = findMatchingFinalWfirmaInvoice(invoice, Array.from(invoicesById.values()), reservedIds);
-    if (replacement) invoicesById.set(wfirmaId, replacement);
-  }
-
-  const missingIds = invoices
-    .map((invoice) => stringify(invoice.wfirma_id))
-    .filter((wfirmaId) => wfirmaId && !invoicesById.has(wfirmaId));
-
-  for (const wfirmaId of missingIds) {
-    try {
-      const response = await getWfirmaInvoice(config, wfirmaId);
-      const invoice = firstWfirmaInvoice(response);
-      const id = stringify(invoice?.id || wfirmaId);
-      if (invoice && id) invoicesById.set(id, invoice);
-    } catch {
-      // The caller reports missing invoices in the regular failed list.
+    // Read this exact ID before resolving a formerly saved draft.
+    let currentMatch = invoicesById.get(wfirmaId);
+    if (!currentMatch || isDraftInvoiceNumber(currentMatch)) {
+      try {
+        const direct = firstWfirmaInvoice(await getWfirmaInvoice(config, wfirmaId));
+        if (direct && stringify(direct.id) === wfirmaId) {
+          currentMatch = direct;
+          invoicesById.set(wfirmaId, direct);
+        }
+      } catch { /* Keep a valid monthly snapshot if direct lookup is unavailable. */ }
     }
+    if (currentMatch && !isDraftInvoiceNumber(currentMatch)) continue;
+    const replacement = findMatchingFinalWfirmaInvoice(invoice, Array.from(invoicesById.values()), reservedIds);
+    if (!replacement) continue;
+    const nextId = stringify(replacement.id);
+    const occupied = await admin.from("faktury").select("id").eq("wfirma_id", nextId).neq("id", invoice.id).maybeSingle();
+    if (occupied.error || occupied.data) continue;
+    invoicesById.set(wfirmaId, replacement);
+    reservedIds.add(nextId);
   }
 
   return invoicesById;
@@ -319,36 +314,21 @@ function addMonthWithNeighbours(months: Set<string>, month: string) {
 }
 
 function findMatchingFinalWfirmaInvoice(invoice: InvoiceRow, candidates: WfirmaInvoice[], reservedWfirmaIds: Set<string>) {
-  const invoiceNip = normalizeNip(invoice.kontrahent_nip);
-  const invoiceGross = numberValue(invoice.kwota_brutto);
-  const invoiceDate = dateOnly(invoice.data_wystawienia);
-  if (!invoiceNip) return null;
-
-  const matches = candidates
-    .filter((candidate) => {
-      const candidateId = stringify(candidate.id);
-      const candidateNip = normalizeNip(wfirmaInvoiceContractorNip(candidate));
-      return candidateId
-        && !reservedWfirmaIds.has(candidateId)
-        && candidateNip === invoiceNip
-        && !isDraftInvoiceNumber(candidate)
-        && !isCorrectionInvoice(candidate);
-    })
-    .map((candidate) => {
-      const candidateGross = numberValue(candidate.total_composed ?? candidate.total);
-      const candidateDate = dateOnly(candidate.date);
-      const exactGross = invoiceGross > 0 && Math.abs(candidateGross - invoiceGross) < 0.02;
-      return {
-        candidate,
-        score:
-          (exactGross ? 0 : 1_000) +
-          dateDistanceDays(invoiceDate, candidateDate) * 4 +
-          Math.min(Math.abs(candidateGross - invoiceGross), 10_000) / 10,
-      };
-    })
-    .sort((first, second) => first.score - second.score);
-
-  return matches[0]?.candidate || null;
+  const nip = normalizeNip(invoice.kontrahent_nip);
+  if (!nip) return null;
+  const number = stringify(invoice.numer).trim();
+  const isDraft = !number || number.toUpperCase().startsWith("WRF");
+  const matches = candidates.filter(candidate => {
+    const id = stringify(candidate.id);
+    if (!id || reservedWfirmaIds.has(id) || isDraftInvoiceNumber(candidate) || isCorrectionInvoice(candidate)
+      || normalizeNip(wfirmaInvoiceContractorNip(candidate)) !== nip) return false;
+    if (!isDraft) return stringify(candidate.fullnumber || candidate.number).trim() === number;
+    const issueDate = dateOnly(invoice.data_wystawienia);
+    const gross = numberValue(candidate.total_composed ?? candidate.total);
+    return Boolean(issueDate && issueDate === dateOnly(candidate.date))
+      && numberValue(invoice.kwota_brutto) > 0 && Math.abs(gross - numberValue(invoice.kwota_brutto)) < 0.02;
+  });
+  return matches.length === 1 ? matches[0] : null;
 }
 
 function isDraftInvoiceNumber(invoice: WfirmaInvoice) {
@@ -420,7 +400,7 @@ async function syncWfirmaInvoiceSnapshot(
   const updatedNumber = Boolean(invoiceNumber && invoiceNumber !== invoice.numer);
   let pdfResult: { path: string | null; name: string | null; error: string | null } | null = null;
 
-  if (nextWfirmaId && !isDraftInvoiceNumber(wfirmaInvoice) && shouldRefreshPdf(invoice, invoiceNumber)) {
+  if (nextWfirmaId && !isDraftInvoiceNumber(wfirmaInvoice)) {
     pdfResult = await saveWfirmaInvoicePdf({
       admin,
       invoiceId: invoice.id,
@@ -440,9 +420,9 @@ async function syncWfirmaInvoiceSnapshot(
   if (issueDate) updatePayload.data_wystawienia = issueDate;
   if (saleDate) updatePayload.data_sprzedazy = saleDate;
   if (finalPaymentDate) updatePayload.termin_platnosci = finalPaymentDate;
-  if (net > 0) updatePayload.kwota_netto = net;
-  if (tax > 0) updatePayload.kwota_vat = tax;
-  if (gross > 0) updatePayload.kwota_brutto = gross;
+  updatePayload.kwota_netto = net;
+  updatePayload.kwota_vat = tax;
+  updatePayload.kwota_brutto = gross;
 
   if (pdfResult?.path) {
     updatePayload.wfirma_pdf_path = pdfResult.path;
@@ -450,22 +430,11 @@ async function syncWfirmaInvoiceSnapshot(
     updatePayload.wfirma_pdf_synced_at = new Date().toISOString();
     updatePayload.wfirma_sync_error = null;
   } else if (pdfResult?.error) {
-    updatePayload.wfirma_sync_error = `Faktura odĹ›wieĹĽona, ale nie udaĹ‚o siÄ™ pobraÄ‡ PDF z wFirmy: ${pdfResult.error}`;
-  }
-
-  const update = await admin
-    .from("faktury")
-    .update(updatePayload)
-    .eq("id", invoice.id);
-
-  if (update.error) {
-    throw new Error(`Nie udaĹ‚o siÄ™ zapisaÄ‡ danych faktury z wFirmy: ${update.error.message}`);
+    updatePayload.wfirma_sync_error = `Faktura odświeżona, ale nie udało się pobrać PDF z wFirmy: ${pdfResult.error}`;
   }
 
   const lines = extractWfirmaInvoiceLines(wfirmaInvoice);
-  if (lines.length > 0) {
-    await replaceInvoiceLines(admin, invoice.id, lines);
-  }
+  await replaceInvoiceLines(admin, invoice.id, lines, updatePayload);
 
   return {
     invoiceNumber,
@@ -486,11 +455,6 @@ function specialInvoicePaymentDate(invoice: InvoiceRow, syncedIssueDate?: string
   return dueDate.toISOString().slice(0, 10);
 }
 
-function shouldRefreshPdf(invoice: InvoiceRow, invoiceNumber: string | null) {
-  if (!invoiceNumber || invoiceNumber.trim().toUpperCase().startsWith("WRF")) return false;
-  const expectedName = buildInvoicePdfName(invoiceNumber, stringify(invoice.wfirma_id));
-  return !invoice.wfirma_pdf_path || invoice.wfirma_pdf_name !== expectedName;
-}
 
 async function saveWfirmaInvoicePdf(params: {
   admin: SupabaseClient;
@@ -511,14 +475,15 @@ async function saveWfirmaInvoicePdf(params: {
     if (upload.error) throw upload.error;
     return { path, name, error: null as string | null };
   } catch (error) {
-    return { path: null, name: null, error: error instanceof Error ? error.message : "Nieznany bĹ‚Ä…d pobierania PDF." };
+    return { path: null, name: null, error: error instanceof Error ? error.message : "Nieznany błąd pobierania PDF." };
   }
 }
 
 async function replaceInvoiceLines(
   admin: SupabaseClient,
   invoiceId: string,
-  lines: WfirmaInvoiceLine[]
+  lines: WfirmaInvoiceLine[],
+  header: Record<string, unknown>
 ) {
   const records = lines.map((line, index) => {
     const { net, tax, gross } = wfirmaLineAmounts(line);
@@ -537,11 +502,14 @@ async function replaceInvoiceLines(
     };
   });
 
-  const { error } = await admin.rpc("replace_wfirma_invoice_lines", {
+  const { error } = await admin.rpc("sync_wfirma_invoice_snapshot", {
     public_invoice_id: invoiceId,
     public_lines: records,
+    public_header: header,
   });
-  if (error) throw new Error(`Nie udało się uzgodnić pozycji faktury z wFirmy: ${error.message}`);
+  if (error) throw new Error(error.code === "23505"
+    ? "Ta faktura wFirmy jest już powiązana z inną fakturą w aplikacji. Zachowano dotychczasowe dane."
+    : `Nie udało się odświeżyć faktury z wFirmy: ${error.message}`);
 }
 
 async function syncPayload(request: NextRequest) {
@@ -653,13 +621,6 @@ function dateOnly(value: unknown) {
   return /^\d{4}-\d{2}-\d{2}/.test(text) ? text.slice(0, 10) : null;
 }
 
-function dateDistanceDays(first: string | null, second: string | null) {
-  if (!first || !second) return 365;
-  const firstTime = new Date(`${first}T00:00:00.000Z`).getTime();
-  const secondTime = new Date(`${second}T00:00:00.000Z`).getTime();
-  if (!Number.isFinite(firstTime) || !Number.isFinite(secondTime)) return 365;
-  return Math.abs(firstTime - secondTime) / 86_400_000;
-}
 
 function monthRange(month: string) {
   const dateFrom = `${month}-01`;

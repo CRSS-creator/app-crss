@@ -23,7 +23,7 @@ create table rozliczenia_miesieczne (id uuid primary key default gen_random_uuid
  liczba_zleceniobiorcow integer default 0, faktura_wystawiona boolean default false,
  data_dostarczenia_dokumentow date);
 create table faktury (id uuid primary key default gen_random_uuid(), created_at timestamptz default now(),
- klient_id uuid references klienci, typ text default 'sprzedaz', status text default 'szkic', zrodlo text default 'aplikacja',
+ numer text, klient_id uuid references klienci, typ text default 'sprzedaz', status text default 'szkic', zrodlo text default 'aplikacja',
  data_wystawienia date, data_sprzedazy date, termin_platnosci date, okres date, automatyczna boolean default false,
  kontrahent_nazwa text, kontrahent_nip text, kontrahent_email text, waluta text, kwota_netto numeric,
  kwota_vat numeric, kwota_brutto numeric, opis text, wfirma_sync_status text default 'nie_wyslano',
@@ -281,5 +281,30 @@ test('refresh repairs stale fee VAT only for a unique unchanged wFirma line iden
   assert.equal(Number(saved[0].kwota_vat),remote[feeIndex].kwota_vat);
   assert.equal(saved[0].cfo_przychod_kategoria,'abonamenty');
   assert.equal((await db.query('select faktura_id from rozliczenia_oplaty_dodatkowe where id=$1',[feeId])).rows[0].faktura_id,inv);
+ } finally {await db.close();}
+});
+
+test('confirmed remote removals preserve billing history and snapshot errors roll back header and lines', async()=>{
+ const {db,settlement,invoice}=await setup();
+ try {
+  const period=await settlement('2026-09-01');
+  for(const [name,net] of [['Korekta deklaracji',200],['Opłata za nieterminowe dostarczenie dokumentów',150],['Other fee',300]])
+   await db.query('insert into rozliczenia_oplaty_dodatkowe(rozliczenie_id,nazwa,kwota_netto) values ($1,$2,$3)',[period,name,net]);
+  const inv=await invoice(period);
+  await db.query("update faktury set numer='FV 45/10/2026',kontrahent_nazwa='Stowarzyszenie Pomerania Sports',wfirma_id='test-remote',status='wystawiona' where id=$1",[inv]);
+  await db.exec('alter table faktury add column wfirma_url text,add column wfirma_synced_at timestamptz,add column wfirma_pdf_path text,add column wfirma_pdf_name text,add column wfirma_pdf_synced_at timestamptz');
+  const file=readdirSync(join(__dirname,'../supabase/migrations')).find(n=>n.endsWith('_reconcile_confirmed_wfirma_fee_removals.sql'));
+  await db.exec(readFileSync(join(__dirname,'../supabase/migrations',file),'utf8'));
+  const before=(await db.query('select * from faktury_pozycje where faktura_id=$1 order by sort_order',[inv])).rows;
+  const remote=before.filter(p=>!['Korekta deklaracji','Opłata za nieterminowe dostarczenie dokumentów'].includes(p.nazwa));
+  await assert.rejects(db.query('select sync_wfirma_invoice_snapshot($1,$2,$3)',[inv,JSON.stringify({kwota_netto:100,kwota_brutto:100,kwota_vat:0}),JSON.stringify(remote.filter(p=>p.nazwa!=='Other fee'))]),/nie ma zgodnej pozycji/);
+  assert.equal(Number((await db.query('select kwota_netto from faktury where id=$1',[inv])).rows[0].kwota_netto),750);
+  assert.equal((await db.query('select * from faktury_pozycje where faktura_id=$1',[inv])).rows.length,4);
+  for(let n=0;n<2;n++) await db.query('select sync_wfirma_invoice_snapshot($1,$2,$3)',[inv,JSON.stringify({kwota_netto:400,kwota_brutto:492,kwota_vat:92}),JSON.stringify(remote)]);
+  assert.equal((await db.query('select * from faktury_pozycje where faktura_id=$1',[inv])).rows.length,2);
+  assert.equal((await db.query('select * from rozliczenia_oplaty_dodatkowe where faktura_id=$1 and wfirma_removal_confirmed',[inv])).rows.length,2);
+  assert.equal(Number((await db.query('select kwota_netto from faktury where id=$1',[inv])).rows[0].kwota_netto),400);
+  const next=await invoice(await settlement('2026-10-01'));
+  assert.equal(Number((await db.query('select kwota_netto from faktury where id=$1',[next])).rows[0].kwota_netto),100);
  } finally {await db.close();}
 });

@@ -58,7 +58,7 @@
   font-size: 13px;
 }
 
-.table td:has(input[type="checkbox"]) {
+.table td:not(:first-child) {
   vertical-align: middle;
 }
 
@@ -96,6 +96,8 @@
 }
 
 .requiredSelect {
+  text-align: center;
+  text-align-last: center;
   width: 100%;
   max-width: 100px;
   padding: 6px 10px;

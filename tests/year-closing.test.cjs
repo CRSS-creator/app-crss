@@ -43,6 +43,37 @@ test('payroll checkboxes persist independently for each task, client and year', 
       ('00000000-0000-0000-0000-000000000002',2027,'pit4r',true)`), /row-level security/);
   } finally { await db.close(); }
 });
+test('JDG checkboxes persist independently for each task, client and year', async () => {
+  const db = new PGlite();
+  try {
+    await db.exec(`create role authenticated;
+      create table klienci(id uuid primary key);
+      create function get_current_user_role() returns text language sql stable as
+        $$select current_setting('test.role',true)$$;
+      insert into klienci values ('00000000-0000-0000-0000-000000000001'),
+        ('00000000-0000-0000-0000-000000000002');`);
+    const file = fs.readdirSync(path.join(root,'supabase/migrations')).find(n => n.endsWith('_year_closing_jdg_checklist.sql'));
+    await db.exec(fs.readFileSync(path.join(root,'supabase/migrations',file),'utf8'));
+    await db.exec("set role authenticated; select set_config('test.role','manager',false)");
+    for (const task of ['pit_roczny','skladka_zdrowotna']) {
+      await db.query(`insert into zamykanie_roku_jdg(klient_id,rok,zadanie,zrobione)
+        values ('00000000-0000-0000-0000-000000000001',2026,$1,true)`,[task]);
+    }
+    await db.exec(`insert into zamykanie_roku_jdg values
+      ('00000000-0000-0000-0000-000000000001',2027,'pit_roczny',false),
+      ('00000000-0000-0000-0000-000000000002',2026,'pit_roczny',false);
+      insert into zamykanie_roku_jdg values
+      ('00000000-0000-0000-0000-000000000001',2026,'pit_roczny',false)
+      on conflict (klient_id,rok,zadanie) do update set zrobione=excluded.zrobione;`);
+    assert.equal((await db.query('select count(*)::int n from zamykanie_roku_jdg')).rows[0].n,4);
+    assert.equal((await db.query('select count(*)::int n from zamykanie_roku_jdg where zrobione')).rows[0].n,1);
+    await assert.rejects(db.exec("update zamykanie_roku_jdg set zadanie='invalid'"), /check constraint/);
+    await db.exec("select set_config('test.role','accountant',false)");
+    assert.equal((await db.query('select * from zamykanie_roku_jdg')).rows.length,0);
+    await assert.rejects(db.exec(`insert into zamykanie_roku_jdg values
+      ('00000000-0000-0000-0000-000000000002',2027,'skladka_zdrowotna',true)`), /row-level security/);
+  } finally { await db.close(); }
+});
 test('IFT-2R saves all statuses independently per year and accounting tab', async () => {
   const db = new PGlite();
   try {

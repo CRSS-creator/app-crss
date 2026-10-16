@@ -68,6 +68,7 @@ export default function SettlementsPage() {
 function SettlementsContent() {
   const [period, setPeriod] = useState(currentMonthInput());
   const loadRequestId = useRef(0);
+  const loadedPeriod = useRef<string | null>(null);
   const [settlements, setSettlements] = useState<MonthlySettlement[]>([]);
   const [progressRows, setProgressRows] = useState<SettlementProgress[]>([]);
   const [invoiceMarkers, setInvoiceMarkers] = useState<SettlementInvoiceMarker[]>([]);
@@ -111,10 +112,13 @@ function SettlementsContent() {
 
   const loadSettlements = useCallback(async () => {
     const requestId = ++loadRequestId.current;
-    setLoading(true);
+    if (loadedPeriod.current !== period) setLoading(true);
     const normalizedPeriod = `${period}-01`;
-    await ensureCurrentMonthSettlements(normalizedPeriod);
-    const userResult = await supabase.auth.getUser();
+    const [prepared, userResult] = await Promise.all([
+      ensureCurrentMonthSettlements(normalizedPeriod),
+      supabase.auth.getUser(),
+    ]);
+    if (prepared.error) console.error("Błąd przygotowania rozliczeń:", prepared.error);
     const userId = userResult.data.user?.id || null;
     if (requestId !== loadRequestId.current) return;
     setCurrentUserId(userId);
@@ -150,6 +154,7 @@ function SettlementsContent() {
     setRecurringTimeEntries((recurringTimeResult.data || []) as TimeEntry[]);
     setTaxObligations((taxResult.data || []) as TaxObligation[]);
     setActiveTimers((timersResult.data || []) as TimeEntry[]);
+    loadedPeriod.current = period;
     setLoading(false);
   }, [period]);
 

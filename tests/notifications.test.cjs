@@ -69,9 +69,9 @@ test('simultaneous layout/page/focus requests share one generation and allow the
   assert.equal(service.createDueNotifications(), first);
   assert.equal(service.createDueNotifications(), first);
   await first;
-  assert.equal(calls, 12);
+  assert.equal(calls, 1);
   await service.createDueNotifications();
-  assert.equal(calls, 24);
+  assert.equal(calls, 2);
 });
 
 test('a rejected generation does not block future attempts', async () => {

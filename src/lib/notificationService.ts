@@ -119,49 +119,10 @@ export function createDueNotifications() {
 }
 
 async function generateDueNotifications() {
-  const [taskResult, crmFollowUpResult, recurringTaskResult, clientCardResult, rodoReviewResult, onboardingCompletionResult, payrollContractResult, payrollA1Result, zusPreferentialRateResult, zusPreferenceExpiryResult, zusSmallPlusCheckResult, amlNextVerificationResult] = await Promise.all([
-    createDueTaskNotifications(),
-    createDueCrmFollowUpNotifications(),
-    createDueRecurringTaskNotifications(),
-    createDueClientCardNotifications(),
-    createDueRodoReviewNotifications(),
-    createDueOnboardingCompletionNotifications(),
-    createDuePayrollContractNotifications(),
-    createDuePayrollA1Notifications(),
-    createDueZusPreferentialRateNotifications(),
-    createDueZusPreferenceExpiryNotifications(),
-    createDueZusSmallPlusCheckNotifications(),
-    createDueAmlNextVerificationNotifications(),
-  ]);
-
+  const result = await supabase.rpc("refresh_due_notifications");
   return {
-    data: {
-      taskNotifications: taskResult.data || 0,
-      crmFollowUpNotifications: crmFollowUpResult.data || 0,
-      recurringTaskNotifications: recurringTaskResult.data || 0,
-      clientCardNotifications: clientCardResult.data || 0,
-      rodoReviewNotifications: rodoReviewResult.data || 0,
-      onboardingCompletionNotifications: onboardingCompletionResult.data || 0,
-      payrollContractNotifications: payrollContractResult.data || 0,
-      payrollA1Notifications: payrollA1Result.data || 0,
-      zusPreferentialRateNotifications: zusPreferentialRateResult.data || 0,
-      zusPreferenceExpiryNotifications: zusPreferenceExpiryResult.data || 0,
-      zusSmallPlusCheckNotifications: zusSmallPlusCheckResult.data || 0,
-      amlNextVerificationNotifications: amlNextVerificationResult.data || 0,
-    },
-    error:
-      taskResult.error ||
-      crmFollowUpResult.error ||
-      recurringTaskResult.error ||
-      clientCardResult.error ||
-      rodoReviewResult.error ||
-      onboardingCompletionResult.error ||
-      payrollContractResult.error ||
-      payrollA1Result.error ||
-      zusPreferentialRateResult.error ||
-      zusPreferenceExpiryResult.error ||
-      zusSmallPlusCheckResult.error ||
-      amlNextVerificationResult.error,
+    data: result.data,
+    error: result.error || (result.data?.error ? new Error(result.data.error) : null),
   };
 }
 

@@ -123,10 +123,13 @@ export default function AppLayout({ children, activePage }: AppLayoutProps) {
   }, []);
 
   const loadUnreadCount = useCallback(async () => {
-    await createDueNotifications();
-    const { count } = await fetchUnreadNotificationsCount();
+    const generated = await createDueNotifications();
+    if (generated.error) console.error("Błąd przygotowania powiadomień:", generated.error);
+    const [{ count }] = await Promise.all([
+      fetchUnreadNotificationsCount(),
+      showNewBrowserNotifications(),
+    ]);
     setUnreadCount(count || 0);
-    await showNewBrowserNotifications();
   }, [showNewBrowserNotifications]);
 
   useEffect(() => {

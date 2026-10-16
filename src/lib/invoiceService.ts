@@ -112,12 +112,16 @@ export type DraftInvoiceLinePayload = {
   stawka_vat: string;
 };
 
+export type WfirmaRecoveryCandidate = { wfirmaId: string; number: string; date: string | null; gross: number; nip: string };
+export type WfirmaSyncFailure = { invoiceId: string; number: string | null; wfirmaId: string; error: string; candidates?: WfirmaRecoveryCandidate[] };
+export type WfirmaConfirmedReplacement = { invoiceId: string; previousWfirmaId: string; wfirmaId: string };
+
 export type WfirmaPaymentSyncResult = {
   checked: number;
   markedPaid: number;
   refreshed?: { invoiceId: string; number: string | null; pdf: boolean }[];
   paid: { invoiceId: string; number: string | null; wfirmaId: string }[];
-  failed: { invoiceId: string; number: string | null; wfirmaId: string; error: string }[];
+  failed: WfirmaSyncFailure[];
 };
 
 const INVOICE_SELECT = `
@@ -249,10 +253,11 @@ export async function sendInvoicesToWfirma(invoiceIds: string[]) {
   );
 }
 
-export async function syncWfirmaPayments(month?: string, invoiceIds?: string[]): Promise<{ data: WfirmaPaymentSyncResult | null; error: Error | null }> {
+export async function syncWfirmaPayments(month?: string, invoiceIds?: string[], confirmedReplacement?: WfirmaConfirmedReplacement): Promise<{ data: WfirmaPaymentSyncResult | null; error: Error | null }> {
   return callWfirmaEndpoint<WfirmaPaymentSyncResult>(
     "/api/faktury/wfirma/sync-payments",
     {
+      ...(confirmedReplacement ? { confirmedReplacement } : {}),
       ...(month ? { month } : {}),
       ...(invoiceIds?.length ? { invoiceIds } : {}),
     }

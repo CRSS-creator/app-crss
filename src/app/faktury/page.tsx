@@ -22,6 +22,7 @@ import {
   syncWfirmaPayments,
   updateDraftInvoiceLine,
   updateInvoice,
+  type WfirmaSyncFailure,
   type DraftInvoiceLinePayload,
   type Invoice,
   type InvoiceCategory,
@@ -84,6 +85,9 @@ function InvoicesContent() {
   const [openingPdfId, setOpeningPdfId] = useState<string | null>(null);
   const [sendingMailId, setSendingMailId] = useState<string | null>(null);
   const [deletingInvoiceId, setDeletingInvoiceId] = useState<string | null>(null);
+  const [recoveryQueue, setRecoveryQueue] = useState<WfirmaSyncFailure[]>([]);
+  const [replacementId, setReplacementId] = useState("");
+  const [linkingInvoice, setLinkingInvoice] = useState(false);
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
   const [savingLineId, setSavingLineId] = useState<string | null>(null);
   const [deletingLineId, setDeletingLineId] = useState<string | null>(null);
@@ -205,10 +209,41 @@ function InvoicesContent() {
     setLoading(false);
   }
 
+  function collectSyncErrors(failures: WfirmaSyncFailure[]) {
+    const recoverable = failures.filter(item => item.candidates?.length);
+    if (recoverable.length) setRecoveryQueue(current => [...current.filter(item => !recoverable.some(next => next.invoiceId === item.invoiceId)), ...recoverable]);
+    return failures.filter(item => !item.candidates?.length).map(item => `${item.number || "Faktura"}: ${item.error}`);
+  }
+
+  function dismissRecovery() {
+    setRecoveryQueue(current => current.slice(1));
+    setReplacementId("");
+  }
+
+  async function confirmReplacement() {
+    const item = recoveryQueue[0];
+    if (!item || !item.candidates?.some(candidate => candidate.wfirmaId === replacementId) || linkingInvoice || refreshingSelected || syncingSelectedMonth || syncingPayments) return;
+    setLinkingInvoice(true);
+    try {
+      const result = await syncWfirmaPayments(undefined, [item.invoiceId], {
+        invoiceId: item.invoiceId, previousWfirmaId: item.wfirmaId, wfirmaId: replacementId,
+      });
+      const error = result.error?.message || result.data?.failed.map(failure => failure.error).join("\n");
+      if (error) { alert(error); return; }
+      if (!result.data?.refreshed?.some(refreshed => refreshed.invoiceId === item.invoiceId)) {
+        alert("Nie zapisano powiązania. Odśwież listę faktur i spróbuj ponownie."); return;
+      }
+      dismissRecovery();
+      await loadData();
+    } finally { setLinkingInvoice(false); }
+  }
+
   async function refreshInvoices() {
     setSyncingPayments(true);
     const syncResult = await syncWfirmaPayments();
     setSyncingPayments(false);
+    const errors = collectSyncErrors(syncResult.data?.failed || []);
+    if (errors.length) alert(errors.join("\n"));
 
     if (syncResult.error) {
       console.error("Błąd sprawdzania płatności w wFirmie:", syncResult.error);
@@ -224,7 +259,7 @@ function InvoicesContent() {
     try {
       const result = await syncWfirmaPayments(undefined, [detailsInvoice.id]);
       await loadData();
-      const errors = result.error?.message || result.data?.failed.map(item => item.error).join("\n");
+      const errors = result.error?.message || collectSyncErrors(result.data?.failed || []).join("\n");
       if (errors) alert("Nie udało się odświeżyć szczegółów faktury:\n\n" + errors);
     } finally { setRefreshingSelected(false); }
   }
@@ -241,9 +276,7 @@ function InvoicesContent() {
           errors.push(result.error.message);
           break;
         }
-        for (const failed of result.data?.failed || []) {
-          errors.push(`${failed.number || "Faktura"}: ${failed.error}`);
-        }
+        errors.push(...collectSyncErrors(result.data?.failed || []));
       }
       await loadData();
       if (errors.length) alert("Nie udało się odświeżyć części zaznaczonych faktur:\n\n" + errors.join("\n"));
@@ -263,7 +296,7 @@ function InvoicesContent() {
     for (let index = 0; index < invoiceIds.length; index += MONTH_REFRESH_BATCH_SIZE) {
       const batch = invoiceIds.slice(index, index + MONTH_REFRESH_BATCH_SIZE);
       const syncResult = await syncWfirmaPayments(invoiceMonth, batch);
-      errors.push(...(syncResult.data?.failed || []).map(item => `${item.number || "Faktura"}: ${item.error}`));
+      errors.push(...collectSyncErrors(syncResult.data?.failed || []));
       if (syncResult.error) {
         firstError = syncResult.error;
         break;
@@ -928,6 +961,28 @@ function InvoicesContent() {
               </div>
             )}
           </aside>
+        </div>
+      )}
+
+      {recoveryQueue[0] && (
+        <div style={{ ...overlayStyle, zIndex: 70, justifyContent: "center", alignItems: "center" }}>
+          <section role="dialog" aria-modal="true" aria-labelledby="invoice-recovery-title" style={{ background: "white", padding: 28, borderRadius: 20, width: "min(640px, 94vw)", maxHeight: "90vh", overflowY: "auto" }}>
+            <h2 id="invoice-recovery-title">Wybierz fakturę z wFirmy</h2>
+            <p>Dokument w aplikacji: <strong>{recoveryQueue[0].number || "Bez numeru"}</strong><br />
+              {invoices.find(invoice => invoice.id === recoveryQueue[0].invoiceId)?.kontrahent_nazwa}</p>
+            <p>Jeśli ten dokument został wystawiony pod innym numerem, wybierz właściwą fakturę. Po potwierdzeniu pobierzemy jej aktualne dane i zapamiętamy powiązanie.</p>
+            <label htmlFor="replacement-invoice">Faktura docelowa</label>
+            <select id="replacement-invoice" value={replacementId} onChange={event => setReplacementId(event.target.value)} disabled={linkingInvoice} style={{ width: "100%", padding: 12, margin: "12px 0 24px" }}>
+              <option value="">Wybierz fakturę...</option>
+              {recoveryQueue[0].candidates?.map(candidate => <option key={candidate.wfirmaId} value={candidate.wfirmaId}>
+                {candidate.number} · {candidate.date} · {candidate.gross.toLocaleString("pl-PL", { style: "currency", currency: "PLN" })} · NIP {candidate.nip}
+              </option>)}
+            </select>
+            <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
+              <button type="button" style={secondaryButtonStyle} disabled={linkingInvoice} onClick={dismissRecovery}>Pomiń</button>
+              <button type="button" style={secondaryButtonStyle} disabled={!recoveryQueue[0].candidates?.some(candidate => candidate.wfirmaId === replacementId) || linkingInvoice || refreshingSelected || syncingSelectedMonth || syncingPayments} onClick={confirmReplacement}>{linkingInvoice ? "Zapisywanie..." : "Potwierdź i odśwież"}</button>
+            </div>
+          </section>
         </div>
       )}
 

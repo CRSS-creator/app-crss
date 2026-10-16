@@ -4,12 +4,12 @@ const fs=require('node:fs');
 const path=require('node:path');
 const vm=require('node:vm');
 const ts=require('typescript');
-const source=fs.readFileSync(path.join(__dirname,'../src/app/api/faktury/wfirma/sync-payments/route.ts'),'utf8')+'\nexport {findMatchingFinalWfirmaInvoice,loadWfirmaInvoicesByMonth,syncWfirmaInvoiceSnapshot};';
+const source=fs.readFileSync(path.join(__dirname,'../src/app/api/faktury/wfirma/sync-payments/route.ts'),'utf8')+'\nexport {findMatchingFinalWfirmaInvoice,loadWfirmaInvoicesByMonth,syncWfirmaInvoiceSnapshot,retryWfirmaRead,isRecoveryCandidate,loadConfirmedReplacement};';
 function load(overrides={}) {
  const exports={};
  const wfirma={extractWfirmaInvoices:x=>x,firstWfirmaInvoice:x=>x,...overrides};
  vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText,{
-  exports,console,process,Error,require(name){if(name==='@/lib/wfirmaClient')return wfirma;if(name==='@/lib/invoiceBankAccount')return {isWfirmaDraft:()=>false};return {};}
+  exports,console,process,Error,setTimeout,require(name){if(name==='@/lib/wfirmaClient')return wfirma;if(name==='@/lib/invoiceBankAccount')return {isWfirmaDraft:()=>false};return {};}
  });
  return exports;
 }
@@ -93,4 +93,30 @@ test('lookup preserves API errors instead of reporting that a document is missin
  const data=await loadInvoices({}, {}, [local],null,errors);
  assert.equal(data.has('draft'),false);
  assert.match(errors.get('draft'),/wFirma AUTH: unavailable/);
+});
+
+test('transient reads retry twice, permanent errors do not retry',async()=>{
+ const {retryWfirmaRead:retry}=load();let calls=0;const delays=[];
+ assert.equal(await retry(async()=>{if(++calls<3)throw Error('fetch failed');return 'ok'},async ms=>delays.push(ms)),'ok');
+ assert.deepEqual(delays,[400,1200]);assert.equal(calls,3);
+ calls=0;await assert.rejects(retry(async()=>{calls++;throw Error('wFirma 401: denied')},async()=>{}));assert.equal(calls,1);
+ calls=0;await assert.rejects(retry(async()=>{calls++;throw Object.assign(Error('temporary'),{httpStatus:503})},async()=>{}));assert.equal(calls,3);
+});
+test('confirmed replacement validates identity, period, occupied ID and stale selection',async()=>{
+ const candidate={...final,id:'123',total:999};
+ const {loadConfirmedReplacement:confirm}=load({getWfirmaInvoice:async()=>candidate});
+ const query={select(){return this},eq(){return this},neq(){return this},async maybeSingle(){return {data:null,error:null}}};
+ const admin={from:()=>query};const selection={invoiceId:local.id,previousWfirmaId:'draft',wfirmaId:'123'};
+ assert.equal((await confirm(admin,{},local,selection)).id,'123');
+ await assert.rejects(confirm(admin,{},local,{...selection,previousWfirmaId:'old'}),/zmieniło/);
+ await assert.rejects(confirm(admin,{}, {...local,kontrahent_nip:'999'},selection),/nie pasuje/);
+ await assert.rejects(confirm(admin,{}, {...local,data_wystawienia:'2025-01-01'},selection),/nie pasuje/);
+ query.maybeSingle=async()=>({data:{id:'occupied'},error:null});
+ await assert.rejects(confirm(admin,{},local,selection),/już powiązana/);
+});
+test('missing edited draft offers unoccupied same-client candidates without auto-linking',async()=>{
+ const {loadWfirmaInvoicesByMonth:loadInvoices}=load({findWfirmaInvoices:async()=>[{...final,id:'123',total:999}],getWfirmaInvoice:async()=>null});
+ const query={select(){return this},in(){return this},async neq(){return {data:[],error:null}}};
+ const choices=new Map();const result=await loadInvoices({from:()=>query},{},[local],null,new Map(),choices);
+ assert.equal(result.has('draft'),false);assert.equal(choices.get('draft')[0].wfirmaId,'123');
 });

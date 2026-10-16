@@ -79,11 +79,16 @@ type PaidInvoice = {
   wfirmaId: string;
 };
 
+type RecoveryCandidate = { wfirmaId: string; number: string; date: string | null; gross: number; nip: string };
+type ConfirmedReplacement = { invoiceId: string; previousWfirmaId: string; wfirmaId: string };
+
 type FailedInvoice = PaidInvoice & {
+  candidates?: RecoveryCandidate[];
   error: string;
 };
 
 type SyncPayload = {
+  confirmedReplacement?: ConfirmedReplacement;
   month?: string;
   invoiceIds?: string[];
 };
@@ -111,6 +116,13 @@ async function syncPayments(request: NextRequest) {
   }
 
   const payload = await syncPayload(request);
+  if (payload.confirmedReplacement && (request.method !== "POST" || payload.invoiceIds?.length !== 1 || payload.invoiceIds[0] !== payload.confirmedReplacement.invoiceId)) {
+    return NextResponse.json({ error: "Nieprawidłowe potwierdzenie powiązania faktury." }, { status: 400 });
+  }
+  if (payload.confirmedReplacement) {
+    const confirmationAuth = await getAuthorizedServerUser(request, ALLOWED_ROLES, "Brak uprawnień do zmiany powiązania faktury.");
+    if (confirmationAuth.error) return confirmationAuth.error;
+  }
   const resolveBankAccount = createInvoiceBankAccountResolver(admin, wfirma.config);
   const requestedMonth = syncMonth(request, payload);
   const requestedInvoiceIds = syncInvoiceIds(payload);
@@ -141,7 +153,9 @@ async function syncPayments(request: NextRequest) {
 
   const invoices = ((data || []) as InvoiceRow[]).filter((invoice) => stringify(invoice.wfirma_id));
   const lookupErrors = new Map<string, string>();
-  const wfirmaInvoicesById = await loadWfirmaInvoicesByMonth(admin, wfirma.config, invoices, requestedMonth, lookupErrors);
+  const recoveryCandidates = new Map<string, RecoveryCandidate[]>();
+  const wfirmaInvoicesById = payload.confirmedReplacement ? new Map<string, WfirmaInvoice>()
+    : await loadWfirmaInvoicesByMonth(admin, wfirma.config, invoices, requestedMonth, lookupErrors, recoveryCandidates);
   const paid: PaidInvoice[] = [];
   const failed: FailedInvoice[] = [];
   const refreshed: { invoiceId: string; number: string | null; pdf: boolean }[] = [];
@@ -152,6 +166,11 @@ async function syncPayments(request: NextRequest) {
 
     try {
       let wfirmaInvoice = wfirmaInvoicesById.get(wfirmaId);
+      if (payload.confirmedReplacement?.invoiceId === invoice.id) {
+        wfirmaInvoice = await loadConfirmedReplacement(admin, wfirma.config, invoice, payload.confirmedReplacement);
+      } else if (recoveryCandidates.get(wfirmaId)?.length) {
+        throw new Error("Wybierz fakturę wystawioną w miejsce tego dokumentu.");
+      }
       if (!wfirmaInvoice) throw new Error(lookupErrors.get(wfirmaId) || "Nie znaleziono faktury w wFirmie. Jeśli szkic został wystawiony pod nowym numerem, trzeba potwierdzić numer dokumentu docelowego.");
 
       if (requestedMonth || requestedInvoiceIds.length > 0) {
@@ -192,7 +211,7 @@ async function syncPayments(request: NextRequest) {
       paid.push(baseResult);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Nieznany błąd sprawdzania płatności.";
-      failed.push({ ...baseResult, error: message });
+      failed.push({ ...baseResult, error: message, candidates: recoveryCandidates.get(wfirmaId) });
       await admin
         .from("faktury")
         .update({
@@ -216,7 +235,8 @@ async function loadWfirmaInvoicesByMonth(
   config: Parameters<typeof findWfirmaInvoices>[0]["config"],
   invoices: InvoiceRow[],
   requestedMonth: string | null,
-  lookupErrors = new Map<string, string>()
+  lookupErrors = new Map<string, string>(),
+  recoveryCandidates?: Map<string, RecoveryCandidate[]>
 ) {
   let listingError: string | null = null;
   const months = syncSearchMonths(invoices, requestedMonth);
@@ -231,13 +251,13 @@ async function loadWfirmaInvoicesByMonth(
 
     while (page <= 20) {
       try {
-        const response = await findWfirmaInvoices({
+        const response = await retryWfirmaRead(() => findWfirmaInvoices({
           config,
           dateFrom: range.dateFrom,
           dateTo: range.dateTo,
           page,
           limit,
-        });
+        }));
         const wfirmaInvoices = extractWfirmaInvoices(response);
         for (const invoice of wfirmaInvoices) {
           if (isCorrectionInvoice(invoice)) continue;
@@ -266,7 +286,7 @@ async function loadWfirmaInvoicesByMonth(
     let currentMatch = invoicesById.get(wfirmaId);
     if (!currentMatch || isDraftInvoiceNumber(currentMatch)) {
       try {
-        const direct = firstWfirmaInvoice(await getWfirmaInvoice(config, wfirmaId));
+        const direct = firstWfirmaInvoice(await retryWfirmaRead(() => getWfirmaInvoice(config, wfirmaId)));
         if (direct && stringify(direct.id) === wfirmaId) {
           currentMatch = direct;
           invoicesById.set(wfirmaId, direct);
@@ -278,6 +298,19 @@ async function loadWfirmaInvoicesByMonth(
     if (currentMatch && !isDraftInvoiceNumber(currentMatch)) continue;
     const replacement = findMatchingFinalWfirmaInvoice(invoice, Array.from(invoicesById.values()), reservedIds);
     if (!replacement) {
+      if (recoveryCandidates) {
+        const possible = Array.from(invoicesById.values()).filter(candidate => isRecoveryCandidate(invoice, candidate) && !reservedIds.has(stringify(candidate.id)));
+        if (possible.length) {
+          const occupied = await admin.from("faktury").select("wfirma_id").in("wfirma_id", possible.map(candidate => stringify(candidate.id))).neq("id", invoice.id);
+          if (!occupied.error) {
+            const used = new Set((occupied.data || []).map(row => stringify(row.wfirma_id)));
+            recoveryCandidates.set(wfirmaId, possible.filter(candidate => !used.has(stringify(candidate.id))).map(candidate => ({
+              wfirmaId: stringify(candidate.id), number: stringify(candidate.fullnumber || candidate.number),
+              date: dateOnly(candidate.date), gross: numberValue(candidate.total_composed ?? candidate.total), nip: normalizeNip(wfirmaInvoiceContractorNip(candidate)),
+            })));
+          }
+        }
+      }
       if (!currentMatch && listingError) lookupErrors.set(wfirmaId, `Nie udało się przeszukać faktur w wFirmie: ${listingError}`);
       continue;
     }
@@ -289,6 +322,43 @@ async function loadWfirmaInvoicesByMonth(
   }
 
   return invoicesById;
+}
+
+
+async function retryWfirmaRead<T>(read: () => Promise<T>, pause = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms))): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try { return await read(); }
+    catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const httpStatus = Number((error as { httpStatus?: number } | null)?.httpStatus);
+      const transientStatus = httpStatus === 429 || httpStatus >= 500 && httpStatus <= 599;
+      if (attempt >= 2 || (!transientStatus && !/fetch failed|network|timed? ?out|timeout|ECONNRESET|EAI_AGAIN|wFirma (429|50[0234])\b/i.test(message))) throw error;
+      await pause(attempt === 0 ? 400 : 1200);
+    }
+  }
+}
+
+function isRecoveryCandidate(invoice: InvoiceRow, candidate: WfirmaInvoice) {
+  const nip = normalizeNip(invoice.kontrahent_nip);
+  const month = dateOnly(candidate.date)?.slice(0, 7);
+  return Boolean(nip && stringify(candidate.id) && stringify(candidate.fullnumber || candidate.number)
+    && normalizeNip(wfirmaInvoiceContractorNip(candidate)) === nip
+    && !isDraftInvoiceNumber(candidate) && !isCorrectionInvoice(candidate)
+    && month && syncSearchMonths([invoice], null).includes(month));
+}
+
+async function loadConfirmedReplacement(admin: SupabaseClient, config: Parameters<typeof getWfirmaInvoice>[0], invoice: InvoiceRow, confirmation: ConfirmedReplacement) {
+  if (confirmation.previousWfirmaId !== stringify(invoice.wfirma_id) || !/^\d+$/.test(confirmation.wfirmaId)) {
+    throw new Error("Powiązanie faktury zmieniło się. Odśwież listę i wybierz ponownie.");
+  }
+  const candidate = firstWfirmaInvoice(await retryWfirmaRead(() => getWfirmaInvoice(config, confirmation.wfirmaId)));
+  if (!candidate || stringify(candidate.id) !== confirmation.wfirmaId || !isRecoveryCandidate(invoice, candidate)) {
+    throw new Error("Wybrana faktura nie pasuje do kontrahenta lub okresu tego dokumentu.");
+  }
+  const occupied = await admin.from("faktury").select("id").eq("wfirma_id", confirmation.wfirmaId).neq("id", invoice.id).maybeSingle();
+  if (occupied.error) throw new Error("Nie udało się sprawdzić powiązania faktury. Spróbuj ponownie.");
+  if (occupied.data) throw new Error("Wybrana faktura jest już powiązana z innym dokumentem w aplikacji.");
+  return candidate;
 }
 
 function syncSearchMonths(invoices: InvoiceRow[], requestedMonth: string | null) {
@@ -304,8 +374,8 @@ function syncSearchMonths(invoices: InvoiceRow[], requestedMonth: string | null)
       if (issueMonth) addMonthWithNeighbours(months, issueMonth);
       if (periodMonth) addMonthWithNeighbours(months, periodMonth);
     } else {
-      if (issueMonth) months.add(issueMonth);
-      else if (periodMonth) months.add(periodMonth);
+      if (issueMonth) addMonthWithNeighbours(months, issueMonth);
+      else if (periodMonth) addMonthWithNeighbours(months, periodMonth);
     }
   }
 
@@ -399,13 +469,16 @@ async function syncWfirmaInvoiceSnapshot(
   const wfirmaId = stringify(invoice.wfirma_id);
   // Monthly listings are not a complete detail snapshot after external edits.
   const detailId = stringify(wfirmaInvoice.id) || wfirmaId;
-  const detail = firstWfirmaInvoice(await getWfirmaInvoice(config, detailId));
+  const detail = firstWfirmaInvoice(await retryWfirmaRead(() => getWfirmaInvoice(config, detailId)));
   if (!detail || stringify(detail.id) !== detailId) throw new Error("wFirma nie zwróciła szczegółów tej faktury. Zachowano dotychczasowe dane.");
   wfirmaInvoice = detail;
   if (isWfirmaDraft(wfirmaInvoice)) {
     wfirmaInvoice = await ensureDraftInvoiceBankAccount(config, stringify(wfirmaInvoice.id) || wfirmaId, await resolveBankAccount());
   }
   const nextWfirmaId = stringify(wfirmaInvoice.id) || wfirmaId;
+  if (nextWfirmaId !== wfirmaId && !isRecoveryCandidate(invoice, wfirmaInvoice)) {
+    throw new Error("Dane wybranej faktury zmieniły się. Odśwież listę i wybierz ponownie.");
+  }
   const invoiceNumber = stringify(wfirmaInvoice.fullnumber || wfirmaInvoice.number) || invoice.numer;
   const issueDate = dateOnly(wfirmaInvoice.date);
   const saleDate = dateOnly(wfirmaInvoice.disposaldate);
@@ -436,6 +509,7 @@ async function syncWfirmaInvoiceSnapshot(
   }
 
   const updatePayload: Record<string, unknown> = {
+    expected_wfirma_id: wfirmaId,
     wfirma_synced_at: new Date().toISOString(),
     opis: stringify(wfirmaInvoice.description) || null,
   };
@@ -490,7 +564,7 @@ async function saveWfirmaInvoicePdf(params: {
   config: Parameters<typeof downloadWfirmaInvoicePdf>[0];
 }) {
   try {
-    const pdf = await downloadWfirmaInvoicePdf(params.config, params.wfirmaId);
+    const pdf = await retryWfirmaRead(() => downloadWfirmaInvoicePdf(params.config, params.wfirmaId));
     const name = buildInvoicePdfName(params.invoiceNumber, params.wfirmaId);
     const path = `${params.invoiceId}/${Date.now()}-${name}`;
     const upload = await params.admin.storage.from(INVOICE_PDF_BUCKET).upload(path, pdf, {

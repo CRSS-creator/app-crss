@@ -311,6 +311,10 @@ test('confirmed remote removals preserve billing history and snapshot errors rol
   assert.equal((await db.query('select opis from faktury where id=$1',[inv])).rows[0].opis,null);
   const safeFile=readdirSync(join(__dirname,'../supabase/migrations')).find(n=>n.endsWith('_safe_external_invoice_edits.sql'));
   await db.exec(readFileSync(join(__dirname,'../supabase/migrations',safeFile),'utf8'));
+  const guardFile=readdirSync(join(__dirname,'../supabase/migrations')).find(n=>n.endsWith('_guard_confirmed_wfirma_relink.sql'));
+  await db.exec(readFileSync(join(__dirname,'../supabase/migrations',guardFile),'utf8'));
+  await assert.rejects(db.query('select sync_wfirma_invoice_snapshot($1,$2,$3)',[inv,JSON.stringify({expected_wfirma_id:'outdated-id',kwota_netto:400,kwota_vat:92,kwota_brutto:492}),JSON.stringify(remote)]),/Powiązanie faktury zmieniło/);
+  assert.equal((await db.query('select wfirma_id from faktury where id=$1',[inv])).rows[0].wfirma_id,'test-remote');
   const rpc=(header,lines)=>db.query('select sync_wfirma_invoice_snapshot($1,$2,$3)',[inv,JSON.stringify(header),JSON.stringify(lines)]);
   const header={kwota_netto:400,kwota_vat:92,kwota_brutto:492,opis:'Aktualny opis'};
   const stable=remote.map((p,i)=>({...p,source_key:'wfirma:'+ (100+i)}));

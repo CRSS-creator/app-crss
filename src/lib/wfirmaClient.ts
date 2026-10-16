@@ -172,7 +172,7 @@ export async function wfirmaRequest<T>(
   if (!response.ok || data?.status?.code !== "OK") {
     const code = data?.status?.code || response.status;
     const message = wfirmaErrorMessage(data, text);
-    throw new Error(`wFirma ${code}: ${message}`);
+    throw Object.assign(new Error(`wFirma ${code}: ${message}`), { httpStatus: response.status });
   }
 
   return data as T;

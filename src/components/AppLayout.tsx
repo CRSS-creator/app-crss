@@ -79,7 +79,7 @@ const menu = [
 ] as const;
 
 export default function AppLayout({ children, activePage }: AppLayoutProps) {
-  const { role, loading: roleLoading } = useCurrentUserRole();
+  const { role, userId, loading: roleLoading } = useCurrentUserRole();
   const pathname = usePathname();
   const [unreadCount, setUnreadCount] = useState(0);
   const knownNotificationIdsRef = useRef<Set<string>>(new Set());
@@ -172,7 +172,7 @@ export default function AppLayout({ children, activePage }: AppLayoutProps) {
   const visibleMenu = menu
     .map((section) => ({
       ...section,
-      items: roleLoading ? [] : section.items.filter((item) => canAccessModule(role, item.page)),
+      items: roleLoading ? [] : section.items.filter((item) => canAccessModule(role, item.page, userId)),
     }))
     .filter((section) => section.items.length > 0);
 

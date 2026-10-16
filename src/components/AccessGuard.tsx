@@ -21,7 +21,7 @@ export default function AccessGuard({ moduleName, children }: AccessGuardProps) 
     return <AccessState title="Ładowanie" description="Sprawdzamy dostęp do modułu." />;
   }
 
-  if (error || !canAccessModule(role, moduleName)) {
+  if (error || !canAccessModule(role, moduleName, userId)) {
     return <AccessState title="Brak dostępu" description="Nie masz uprawnień do tego modułu." />;
   }
 

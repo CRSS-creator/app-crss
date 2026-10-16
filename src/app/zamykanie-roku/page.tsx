@@ -8,9 +8,10 @@ import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
 import { fetchClients } from "@/lib/clientService";
 import { isYearClosingClient, type YearClosingClientPeriod } from "@/lib/yearClosing";
+import { canAccessYearClosingClient, type UserRole } from "@/lib/permissions";
 import { colors, radius } from "@/app/design";
 
-type Client = YearClosingClientPeriod & { id: string; nazwa: string | null; nip: string | null; forma_prawna: string | null; obsluga_kadrowa: boolean | null };
+type Client = YearClosingClientPeriod & { id: string; opiekun_id: string | null; nazwa: string | null; nip: string | null; forma_prawna: string | null; obsluga_kadrowa: boolean | null };
 const jdgColumns = [
   { key: "pit_roczny", label: "Sporządzony" },
   { key: "pit_us", label: "Wysłany do urzędu" },
@@ -67,10 +68,10 @@ function group(client: Client) {
 }
 
 export default function YearClosingPage() {
-  return <AppLayout activePage="zamykanie-roku"><AccessGuard moduleName="zamykanie-roku"><YearClosingList /></AccessGuard></AppLayout>;
+  return <AppLayout activePage="zamykanie-roku"><AccessGuard moduleName="zamykanie-roku">{(role, userId) => <YearClosingList role={role} userId={userId} />}</AccessGuard></AppLayout>;
 }
 
-function YearClosingList() {
+function YearClosingList({ role, userId }: { role: UserRole | null; userId: string | null }) {
   const [tab, setTab] = useState<"jdg" | "full" | "kadry">("jdg");
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
@@ -193,7 +194,7 @@ function YearClosingList() {
     void load();
     return () => { active = false; };
   }, []);
-  const rows = clients.filter(client => (tab === "kadry" ? client.obsluga_kadrowa === true : group(client) === tab) && isYearClosingClient(client, year)).sort((a, b) => (a.nazwa || "").localeCompare(b.nazwa || "", "pl"));
+  const rows = clients.filter(client => canAccessYearClosingClient(role, userId, client.opiekun_id) && (tab === "kadry" ? client.obsluga_kadrowa === true : group(client) === tab) && isYearClosingClient(client, year)).sort((a, b) => (a.nazwa || "").localeCompare(b.nazwa || "", "pl"));
   return <>
     <h1 style={{ color: colors.navy, fontSize: 30, fontWeight: 700, lineHeight: 1.25, margin: "0 0 24px" }}>Zamykanie roku</h1>
     <section style={{ background: colors.card, border: `1px solid ${colors.border}`, borderRadius: radius.card, overflow: "hidden" }}>

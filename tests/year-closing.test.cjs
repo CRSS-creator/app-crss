@@ -229,3 +229,60 @@ test('full accounting and expanded payroll tasks persist separately with role re
     }
   } finally { await db.close(); }
 });
+
+test('Ada alone can open year closing and only sees her assigned clients', () => {
+  const permissions = {};
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(root,'src/lib/permissions.ts'),'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+  }).outputText, { exports: permissions });
+  const ada='282ae06c-5d1f-4fe6-a5e9-8495b478c247', other='00000000-0000-0000-0000-000000000002';
+  assert.equal(permissions.canAccessModule('accountant','zamykanie-roku',ada),true);
+  assert.equal(permissions.canAccessModule('accountant','zamykanie-roku',other),false);
+  assert.equal(permissions.canAccessModule('handlowiec','zamykanie-roku',ada),false);
+  assert.equal(permissions.canAccessYearClosingClient('accountant',ada,ada),true);
+  assert.equal(permissions.canAccessYearClosingClient('accountant',ada,other),false);
+  assert.equal(permissions.canAccessYearClosingClient('accountant',ada,null),false);
+  assert.equal(permissions.canAccessYearClosingClient('manager',other,ada),true);
+});
+
+test('all year-closing tables restrict Ada to assigned clients for read, insert and update', async () => {
+  const db=new PGlite();
+  const ada='282ae06c-5d1f-4fe6-a5e9-8495b478c247', other='00000000-0000-0000-0000-000000000002';
+  const own='00000000-0000-0000-0000-000000000011', foreign='00000000-0000-0000-0000-000000000012';
+  try {
+    await db.exec(`create role authenticated; create schema auth;
+      create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('test.uid',true),'')::uuid$$;
+      grant usage on schema auth to authenticated;
+      create table profiles(id uuid primary key, role text, aktywne boolean);
+      create table klienci(id uuid primary key,opiekun_id uuid);
+      grant select on profiles,klienci to authenticated;
+      create function get_current_user_role() returns text language sql stable as $$select role from profiles where id=auth.uid()$$;
+      insert into profiles values ('${ada}','accountant',true),('${other}','accountant',true);
+      insert into klienci values ('${own}','${ada}'),('${foreign}','${other}');`);
+    for(const suffix of ['jpk_status','balance_confirmations','ift2r_status','payroll_checklist','jdg_checklist','declaration_stages','full_and_payroll_stages','ada_assigned_clients']) {
+      const file=fs.readdirSync(path.join(root,'supabase/migrations')).find(n=>n.endsWith('_year_closing_'+suffix+'.sql'));
+      await db.exec(fs.readFileSync(path.join(root,'supabase/migrations',file),'utf8'));
+    }
+    const cases=[['jpk','rodzaj,status',"'full','wyslane'",'status',"'do_wyslania'"],['ift2r','rodzaj,status',"'full','wyslane'",'sporzadzony','true'],['salda','zrobione','true','zrobione','false'],['jdg','zadanie,zrobione',"'pit_us',true",'zrobione','false'],['kadry','zadanie,zrobione',"'pit11_us',true",'zrobione','false'],['full','zadanie,zrobione',"'cit_us',true",'zrobione','false']];
+    for(const [suffix,columns,values] of cases) await db.exec(`insert into zamykanie_roku_${suffix}(klient_id,rok,${columns}) values ('${foreign}',2026,${values})`);
+    await db.exec(`set role authenticated; select set_config('test.uid','${ada}',false)`);
+    for(const [suffix,columns,values,field,changed] of cases) {
+      const table='zamykanie_roku_'+suffix;
+      await db.exec(`insert into ${table}(klient_id,rok,${columns}) values ('${own}',2026,${values})`);
+      assert.deepEqual((await db.query(`select klient_id from ${table}`)).rows.map(r=>r.klient_id),[own]);
+      assert.equal((await db.query(`update ${table} set ${field}=${changed} where klient_id='${own}' returning klient_id`)).rows.length,1);
+      assert.equal((await db.query(`update ${table} set ${field}=${changed} where klient_id='${foreign}' returning klient_id`)).rows.length,0);
+      await assert.rejects(db.exec(`insert into ${table}(klient_id,rok,${columns}) values ('${foreign}',2027,${values})`),/row-level security/);
+      await assert.rejects(db.exec(`update ${table} set klient_id='${foreign}',rok=2028 where klient_id='${own}'`),/row-level security/);
+      await db.exec(`select set_config('test.uid','${other}',false)`);
+      assert.equal((await db.query(`select * from ${table}`)).rows.length,0);
+      await db.exec(`select set_config('test.uid','${ada}',false)`);
+    }
+    await db.exec(`reset role; update klienci set opiekun_id='${other}' where id='${own}'; set role authenticated`);
+    for(const [suffix] of cases) assert.equal((await db.query('select * from zamykanie_roku_'+suffix)).rows.length,0);
+    await db.exec(`reset role; update klienci set opiekun_id='${ada}' where id='${own}'; update profiles set aktywne=false where id='${ada}'; set role authenticated`);
+    for(const [suffix] of cases) assert.equal((await db.query('select * from zamykanie_roku_'+suffix)).rows.length,0);
+    await db.exec(`reset role; update profiles set role='manager',aktywne=true where id='${other}'; set role authenticated; select set_config('test.uid','${other}',false)`);
+    for(const [suffix] of cases) assert.equal((await db.query('select * from zamykanie_roku_'+suffix)).rows.length,2);
+  } finally { await db.close(); }
+});

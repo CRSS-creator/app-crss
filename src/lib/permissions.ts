@@ -47,9 +47,10 @@ const moduleAccess: Record<AppModule, string[]> = {
   uzytkownicy: ["owner", "manager", "admin", ...accountingRoles],
 };
 
-export function canAccessModule(role: UserRole | null, moduleName: AppModule) {
+export function canAccessModule(role: UserRole | null, moduleName: AppModule, userId?: string | null) {
   if (!role) return false;
   if (role === "admin") return true;
+  if (moduleName === "zamykanie-roku" && userId === "282ae06c-5d1f-4fe6-a5e9-8495b478c247" && accountingRoles.includes(role)) return true;
   return moduleAccess[moduleName]?.includes(role) ?? false;
 }
 
@@ -67,4 +68,9 @@ export function canCreateClients(role: UserRole | null, userId?: string | null) 
 
 export function canEditClientAdministrative(role: UserRole | null, userId?: string | null) {
   return canManageClients(role) || canEditOwnClients(userId);
+}
+
+export function canAccessYearClosingClient(role: UserRole | null, userId: string | null, caregiverId: string | null) {
+  return canAccessModule(role, "zamykanie-roku", userId)
+    && (canManageClients(role) || Boolean(userId && caregiverId === userId));
 }

@@ -12,6 +12,37 @@ vm.runInNewContext(ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
 }).outputText, { exports: exportsForTest });
 const { isYearClosingClient } = exportsForTest;
+test('payroll checkboxes persist independently for each task, client and year', async () => {
+  const db = new PGlite();
+  try {
+    await db.exec(`create role authenticated;
+      create table klienci(id uuid primary key);
+      create function get_current_user_role() returns text language sql stable as
+        $$select current_setting('test.role',true)$$;
+      insert into klienci values ('00000000-0000-0000-0000-000000000001'),
+        ('00000000-0000-0000-0000-000000000002');`);
+    const file = fs.readdirSync(path.join(root,'supabase/migrations')).find(n => n.endsWith('_year_closing_payroll_checklist.sql'));
+    await db.exec(fs.readFileSync(path.join(root,'supabase/migrations',file),'utf8'));
+    await db.exec("set role authenticated; select set_config('test.role','manager',false)");
+    for (const task of ['pit11_us','pit11_klient','pit4r','zus_roczna']) {
+      await db.query(`insert into zamykanie_roku_kadry(klient_id,rok,zadanie,zrobione)
+        values ('00000000-0000-0000-0000-000000000001',2026,$1,true)`,[task]);
+    }
+    await db.exec(`insert into zamykanie_roku_kadry values
+      ('00000000-0000-0000-0000-000000000001',2027,'pit11_us',false),
+      ('00000000-0000-0000-0000-000000000002',2026,'pit11_us',false);
+      insert into zamykanie_roku_kadry values
+      ('00000000-0000-0000-0000-000000000001',2026,'pit11_us',false)
+      on conflict (klient_id,rok,zadanie) do update set zrobione=excluded.zrobione;`);
+    assert.equal((await db.query('select count(*)::int n from zamykanie_roku_kadry')).rows[0].n,6);
+    assert.equal((await db.query('select count(*)::int n from zamykanie_roku_kadry where zrobione')).rows[0].n,3);
+    await assert.rejects(db.exec("update zamykanie_roku_kadry set zadanie='invalid'"), /check constraint/);
+    await db.exec("select set_config('test.role','accountant',false)");
+    assert.equal((await db.query('select * from zamykanie_roku_kadry')).rows.length,0);
+    await assert.rejects(db.exec(`insert into zamykanie_roku_kadry values
+      ('00000000-0000-0000-0000-000000000002',2027,'pit4r',true)`), /row-level security/);
+  } finally { await db.close(); }
+});
 test('IFT-2R saves all statuses independently per year and accounting tab', async () => {
   const db = new PGlite();
   try {

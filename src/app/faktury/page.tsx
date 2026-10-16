@@ -1,7 +1,7 @@
 "use client";
 import NotificationDeliveryStatus from "@/components/NotificationDeliveryStatus";
 
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { CalendarClock, DownloadCloud, FileText, Mail, Pencil, RotateCw, Save, Send, Trash2, TriangleAlert, X } from "lucide-react";
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
@@ -13,6 +13,7 @@ import {
   deleteDraftInvoice,
   deleteDraftInvoiceLine,
   fetchInvoices,
+  fetchInvoiceDetails,
   getInvoicePdfUrl,
   importWfirmaInvoices,
   sendInvoiceMail,
@@ -80,6 +81,11 @@ function InvoicesContent() {
   const [invoiceMonth, setInvoiceMonth] = useState(() => currentMonthInput());
   const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<string[]>([]);
   const [detailsInvoice, setDetailsInvoice] = useState<Invoice | null>(null);
+  const [loadingDetails, setLoadingDetails] = useState(false);
+  const detailRequest = useRef(0);
+  const listRequest = useRef(0);
+  const detailsRef = useRef<Invoice | null>(null);
+  detailsRef.current = detailsInvoice;
   const [savingCategoryId, setSavingCategoryId] = useState<string | null>(null);
   const [savingPeriodId, setSavingPeriodId] = useState<string | null>(null);
   const [openingPdfId, setOpeningPdfId] = useState<string | null>(null);
@@ -189,17 +195,28 @@ function InvoicesContent() {
     selectableOverdueInvoices.length > 0 && selectableOverdueInvoices.every((invoice) => selectedOverdueInvoiceIds.includes(invoice.id));
 
   async function loadData(options?: { generateCurrentMonth?: boolean }) {
+    const request = ++listRequest.current;
     setLoading(true);
     if (options?.generateCurrentMonth) {
       await generateInvoices(monthToDate(currentMonthInput()), { silent: true });
     }
-    const result = await fetchInvoices();
-    if (result.error) console.error("Błąd pobierania faktur:", result.error);
-    const nextInvoices = (result.data || []) as Invoice[];
+    const openInvoiceId = detailsRef.current?.id;
+    const openDetailRequest = detailRequest.current;
+    const [result, detailResult] = await Promise.all([
+      fetchInvoices(),
+      openInvoiceId ? fetchInvoiceDetails(openInvoiceId) : Promise.resolve(null),
+    ]);
+    if (request !== listRequest.current) return;
+    if (result.error) {
+      console.error("Błąd pobierania faktur:", result.error);
+      alert("Nie udało się pobrać faktur. Spróbuj ponownie.");
+      setLoading(false);
+      return;
+    }
+    const nextInvoices = result.data || [];
     setInvoices(nextInvoices);
-    setDetailsInvoice((current) =>
-      current ? nextInvoices.find((invoice) => invoice.id === current.id) || current : current
-    );
+    if (detailResult?.error) alert("Nie udało się odświeżyć szczegółów faktury. Otwórz je ponownie.");
+    if (detailResult?.data && openDetailRequest === detailRequest.current) setDetailsInvoice(current => current?.id === openInvoiceId ? detailResult.data : current);
     setSelectedInvoiceIds((current) =>
       current.filter((invoiceId) => (result.data || []).some((invoice) => invoice.id === invoiceId && canSelectInvoice(invoice as Invoice)))
     );
@@ -207,6 +224,22 @@ function InvoicesContent() {
       current.filter((invoiceId) => (result.data || []).some((invoice) => invoice.id === invoiceId && canSendOverdueReminder(invoice as Invoice)))
     );
     setLoading(false);
+  }
+
+  async function openInvoiceDetails(invoice: Invoice) {
+    const request = ++detailRequest.current;
+    setLoadingDetails(true);
+    try {
+      const result = await fetchInvoiceDetails(invoice.id);
+      if (request !== detailRequest.current) return;
+      if (result.error || !result.data) {
+        alert("Nie udało się pobrać szczegółów faktury. Spróbuj ponownie.");
+        return;
+      }
+      setDetailsInvoice(result.data);
+    } finally {
+      if (request === detailRequest.current) setLoadingDetails(false);
+    }
   }
 
   function collectSyncErrors(failures: WfirmaSyncFailure[]) {
@@ -839,7 +872,7 @@ function InvoicesContent() {
                       </Badge>
                     </Td>
                     <Td>
-                      <button type="button" style={smallButtonStyle} onClick={() => setDetailsInvoice(invoice)}>
+                      <button type="button" style={smallButtonStyle} onClick={() => void openInvoiceDetails(invoice)}>
                         Szczegóły
                       </button>
                     </Td>
@@ -947,7 +980,7 @@ function InvoicesContent() {
                             <Td>
                               <button type="button" style={smallButtonStyle} onClick={() => {
                                 setOverdueModalOpen(false);
-                                setDetailsInvoice(invoice);
+                                void openInvoiceDetails(invoice);
                               }}>
                                 Szczegóły
                               </button>
@@ -986,6 +1019,17 @@ function InvoicesContent() {
         </div>
       )}
 
+      {loadingDetails && (
+        <div style={{ ...overlayStyle, zIndex: 80 }} role="status">
+          <aside style={detailsPanelStyle}>
+            <p>Pobieranie szczegółów faktury...</p>
+            <button type="button" style={secondaryButtonStyle} onClick={() => {
+              detailRequest.current += 1;
+              setLoadingDetails(false);
+            }}>Anuluj</button>
+          </aside>
+        </div>
+      )}
       {detailsInvoice && (
         <div style={overlayStyle} onClick={() => setDetailsInvoice(null)}>
           <aside style={detailsPanelStyle} onClick={(event) => event.stopPropagation()}>
@@ -1496,11 +1540,11 @@ function invoiceHistoryTitle(entry: InvoiceEmailHistory) {
 }
 
 function invoiceMailSent(invoice: Invoice) {
-  return invoiceMailHistory(invoice).some((entry) => entry.status === "wyslane" && entry.notification_type !== "overdue_notification");
+  return (invoice.delivery_summary ?? invoice.faktury_email_history ?? []).some((entry) => entry.status === "wyslane" && entry.notification_type !== "overdue_notification");
 }
 
 function overdueReminderSentCount(invoice: Invoice) {
-  return invoiceMailHistory(invoice).filter((entry) => entry.status === "wyslane" && entry.notification_type === "overdue_notification").length;
+  return (invoice.delivery_summary ?? invoice.faktury_email_history ?? []).filter((entry) => entry.status === "wyslane" && entry.notification_type === "overdue_notification").length;
 }
 
 function invoiceNumberLabel(invoice: Invoice) {

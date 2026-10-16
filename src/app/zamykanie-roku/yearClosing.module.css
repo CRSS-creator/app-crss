@@ -1,0 +1,68 @@
+.tableScroll {
+  width: 100%;
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+
+.table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  text-align: center;
+}
+
+.table th,
+.table td {
+  box-sizing: border-box;
+  padding: 20px 12px;
+  border-left: 1px solid #e1e7f0;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.table th {
+  background: #f1f5fa;
+  vertical-align: middle;
+}
+
+.table thead tr:nth-child(2) th {
+  background: #f8fafc;
+}
+
+.table th:first-child[rowspan],
+.table td:first-child {
+  border-left: 0;
+  text-align: left;
+  padding-left: 20px;
+}
+
+.table td {
+  vertical-align: top;
+  padding-top: 24px;
+  padding-bottom: 24px;
+}
+
+.table tbody tr:nth-child(even) {
+  background: #f8fafc;
+}
+
+.table tbody tr:hover {
+  background: #eef4fc;
+}
+
+.table td label {
+  justify-content: center;
+  font-size: 13px;
+}
+
+.table input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  flex-shrink: 0;
+  accent-color: #213d72;
+}
+
+.table .groupStart {
+  border-left: 2px solid #b7c7df;
+}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type CSSProperties } from "react";
+import styles from "./yearClosing.module.css";
 import AppSelect from "@/components/AppSelect";
 import { supabase } from "@/lib/supabaseClient";
 import AppLayout from "@/components/AppLayout";
@@ -175,33 +176,34 @@ function YearClosingList() {
         </select>
       </label>
       {statusError && <p role="alert" style={{ padding: "0 24px", color: colors.danger }}>{statusError}</p>}
-      {loading ? <p style={{ padding: 24 }}>Ładowanie klientów…</p> : error ? <p role="alert" style={{ padding: 24, color: colors.danger }}>{error}</p> : <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
+      {loading ? <p style={{ padding: 24 }}>Ładowanie klientów…</p> : error ? <p role="alert" style={{ padding: 24, color: colors.danger }}>{error}</p> : <div className={styles.tableScroll} tabIndex={0} role="region" aria-label="Tabela zamykania roku">
+        <table className={styles.table} style={{ minWidth: tab === "jdg" ? 1200 : 960 }}>
+          <colgroup>{(tab === "jdg" ? [18, 14, 9, 9, 9, 9, 9, 9, 14] : tab === "full" ? [25, 20, 16, 13, 13, 13] : [24, 19, 19, 19, 19]).map((width, index) => <col key={index} style={{ width: width + "%" }} />)}</colgroup>
           <thead><tr>
             <th scope="col" rowSpan={tab === "kadry" ? 1 : 2} style={cell}>Klient</th>
-            {tab === "kadry" ? payrollColumns.map(column => <th key={column.key} scope="col" style={{ ...cell, minWidth: 170 }}>{column.label}</th>) : <>
+            {tab === "kadry" ? payrollColumns.map(column => <th key={column.key} scope="col" style={cell}>{column.label}</th>) : <>
               <th scope="col" rowSpan={2} style={cell}>Czy {tab === "jdg" ? "JPK_PIT" : "JPK_CIT"}?</th>
               {tab === "full" && <th scope="col" rowSpan={2} style={cell}>Potwierdzenia sald</th>}
-              <th scope="colgroup" colSpan={3} style={{ ...cell, textAlign: "center" }}>IFT-2R</th>
-              {tab === "jdg" && <><th scope="colgroup" colSpan={3} style={{ ...cell, textAlign: "center" }}>PIT</th><th scope="col" rowSpan={2} style={{ ...cell, minWidth: 200 }}>Roczne rozliczenie składki zdrowotnej</th></>}
+              <th scope="colgroup" colSpan={3} className={styles.groupStart} style={{ ...cell, textAlign: "center" }}>IFT-2R</th>
+              {tab === "jdg" && <><th scope="colgroup" colSpan={3} className={styles.groupStart} style={{ ...cell, textAlign: "center" }}>PIT</th><th scope="col" rowSpan={2} className={styles.groupStart} style={cell}>Roczne rozliczenie składki zdrowotnej</th></>}
             </>}
           </tr>{tab !== "kadry" && <tr>
-            {iftColumns.map(column => <th key={column.key} scope="col" style={{ ...cell, minWidth: 170 }}>{column.label}</th>)}
-            {tab === "jdg" && jdgColumns.slice(0, 3).map(column => <th key={column.key} scope="col" style={{ ...cell, minWidth: 170 }}>{column.label}</th>)}
+            {iftColumns.map(column => <th key={column.key} className={column.key === "sporzadzony" ? styles.groupStart : undefined} scope="col" style={cell}>{column.label}</th>)}
+            {tab === "jdg" && jdgColumns.slice(0, 3).map(column => <th key={column.key} className={column.key === "pit_roczny" ? styles.groupStart : undefined} scope="col" style={cell}>{column.label}</th>)}
           </tr>}</thead>
           <tbody>{rows.map(client => <tr key={client.id}><td style={cell}>
             <strong>{client.nazwa || "Klient bez nazwy"}</strong>
             <div style={{ marginTop: 5, fontSize: 12, color: colors.muted }}>NIP: {client.nip || "—"} · {client.forma_prawna || "—"}</div>
           </td>{tab === "kadry" ? payrollColumns.map(column => <td key={column.key} style={cell}><label style={{ display: "flex", gap: 8, alignItems: "center", whiteSpace: "nowrap" }}>
             <input type="checkbox" aria-label={`${column.label} — ${client.nazwa || "Klient bez nazwy"} — Zrobione`} checked={payrollStatuses.find(item => item.klient_id === client.id && item.zadanie === column.key)?.zrobione ?? false} disabled={saving || statusLoading || Boolean(statusError)} onChange={event => void savePayroll(client.id, column.key, event.target.checked)} /> Zrobione
-          </label></td>) : <><td style={{ ...cell, width: 390 }}><AppSelect style={{ width: "100%", ...jpkStatusStyle(statuses.find(item => item.klient_id === client.id && item.rodzaj === tab)?.status) }} options={options} value={statuses.find(item => item.klient_id === client.id && item.rodzaj === tab)?.status || ""} disabled={saving || statusLoading || Boolean(statusError)} onChange={value => void saveStatus(client.id, value)} /></td>
-            {tab === "full" && <td style={{ ...cell, width: 200 }}><label style={{ display: "flex", gap: 8, alignItems: "center", whiteSpace: "nowrap" }}>
+          </label></td>) : <><td style={cell}><AppSelect style={{ width: "100%", ...jpkStatusStyle(statuses.find(item => item.klient_id === client.id && item.rodzaj === tab)?.status) }} options={options} value={statuses.find(item => item.klient_id === client.id && item.rodzaj === tab)?.status || ""} disabled={saving || statusLoading || Boolean(statusError)} onChange={value => void saveStatus(client.id, value)} /></td>
+            {tab === "full" && <td style={cell}><label style={{ display: "flex", gap: 8, alignItems: "center", whiteSpace: "nowrap" }}>
               <input type="checkbox" aria-label={`Potwierdzenia sald — ${client.nazwa || "Klient bez nazwy"} — Zrobione`} checked={balances.find(item => item.klient_id === client.id)?.zrobione ?? false} disabled={saving || statusLoading || Boolean(statusError)} onChange={event => void saveBalance(client.id, event.target.checked)} /> Zrobione
             </label></td>}
             {iftColumns.map(column => {
               const status = iftStatuses.find(item => item.klient_id === client.id && item.rodzaj === tab);
               const notApplicable = status?.status === "brak_wysylki";
-              return <td key={column.key} style={cell}>
+              return <td key={column.key} className={column.key === "sporzadzony" ? styles.groupStart : undefined} style={cell}>
                 <label style={{ display: "flex", gap: 8, alignItems: "center", whiteSpace: "nowrap" }}>
                   <input type="checkbox" aria-label={"IFT-2R — " + column.label + " — " + (client.nazwa || "Klient bez nazwy")} checked={status?.[column.key] ?? false} disabled={saving || statusLoading || Boolean(statusError) || notApplicable} onChange={event => void saveIftStatus(client.id, { [column.key]: event.target.checked })} /> Zrobione
                 </label>
@@ -210,7 +212,7 @@ function YearClosingList() {
                 </label>}
               </td>;
             })}
-            {tab === "jdg" && jdgColumns.map(column => <td key={column.key} style={cell}><label style={{ display: "flex", gap: 8, alignItems: "center", whiteSpace: "nowrap" }}>
+            {tab === "jdg" && jdgColumns.map(column => <td key={column.key} className={column.key === "pit_roczny" || column.key === "skladka_zdrowotna" ? styles.groupStart : undefined} style={cell}><label style={{ display: "flex", gap: 8, alignItems: "center", whiteSpace: "nowrap" }}>
               <input type="checkbox" aria-label={`${column.label} — ${client.nazwa || "Klient bez nazwy"} — Zrobione`} checked={jdgStatuses.find(item => item.klient_id === client.id && item.zadanie === column.key)?.zrobione ?? false} disabled={saving || statusLoading || Boolean(statusError)} onChange={event => void saveJdg(client.id, column.key, event.target.checked)} /> Zrobione
             </label></td>)}
           </>}
@@ -222,7 +224,7 @@ function YearClosingList() {
   </>;
 }
 
-const cell: CSSProperties = { padding: "16px 24px", borderTop: `1px solid ${colors.border}`, color: colors.navy, fontSize: 14 };
+const cell: CSSProperties = { borderTop: `1px solid ${colors.border}`, color: colors.navy, fontSize: 14 };
 
 function jpkStatusStyle(status?: string): CSSProperties {
   if (status === "wyslane" || status === "brak_wysylki") return { background: "rgba(22, 163, 74, 0.12)", borderColor: "rgba(22, 163, 74, 0.24)" };

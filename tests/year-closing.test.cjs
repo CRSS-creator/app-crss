@@ -168,3 +168,35 @@ test('balance checkbox persists both states per client and year, with existing r
     await assert.rejects(db.exec("insert into zamykanie_roku_salda values ('00000000-0000-0000-0000-000000000002',2027,true)"), /row-level security/);
   } finally { await db.close(); }
 });
+
+test('declaration stages save independently and preserve existing checklists and permissions', async () => {
+  const db = new PGlite();
+  try {
+    await db.exec(`create role authenticated;
+      create table klienci(id uuid primary key);
+      create function get_current_user_role() returns text language sql stable as
+        $$select current_setting('test.role',true)$$;
+      insert into klienci values ('00000000-0000-0000-0000-000000000001');`);
+    for (const suffix of ['jdg_checklist','ift2r_status','declaration_stages']) {
+      const file = fs.readdirSync(path.join(root,'supabase/migrations')).find(n => n.endsWith('_year_closing_' + suffix + '.sql'));
+      await db.exec(fs.readFileSync(path.join(root,'supabase/migrations',file),'utf8'));
+    }
+    await db.exec("set role authenticated; select set_config('test.role','manager',false)");
+    for (const task of ['pit_roczny','pit_us','pit_klient','skladka_zdrowotna']) {
+      await db.query(`insert into zamykanie_roku_jdg values ('00000000-0000-0000-0000-000000000001',2026,$1,true)`,[task]);
+    }
+    await db.exec("update zamykanie_roku_jdg set zrobione=false where zadanie='pit_us'");
+    assert.equal((await db.query('select count(*)::int n from zamykanie_roku_jdg where zrobione')).rows[0].n,3);
+    for (const [year,tab] of [[2026,'jdg'],[2027,'jdg'],[2026,'full']]) {
+      await db.query(`insert into zamykanie_roku_ift2r (klient_id,rok,rodzaj,status) values ('00000000-0000-0000-0000-000000000001',$1,$2,'do_wyslania')`,[year,tab]);
+    }
+    await db.exec("update zamykanie_roku_ift2r set sporzadzony=true,wyslany_us=true where rok=2026 and rodzaj='jdg'");
+    await db.exec("update zamykanie_roku_ift2r set status='brak_wysylki' where rok=2026 and rodzaj='jdg'");
+    const rows=(await db.query('select sporzadzony,wyslany_us,wyslany_klient from zamykanie_roku_ift2r order by rok,rodzaj')).rows;
+    assert.deepEqual(rows,[{sporzadzony:false,wyslany_us:false,wyslany_klient:false},{sporzadzony:true,wyslany_us:true,wyslany_klient:false},{sporzadzony:false,wyslany_us:false,wyslany_klient:false}]);
+    await db.exec("select set_config('test.role','accountant',false)");
+    assert.equal((await db.query('select * from zamykanie_roku_ift2r')).rows.length,0);
+    assert.equal((await db.query('select * from zamykanie_roku_jdg')).rows.length,0);
+    await assert.rejects(db.exec("insert into zamykanie_roku_jdg values ('00000000-0000-0000-0000-000000000001',2027,'pit_us',true)"),/row-level security/);
+  } finally { await db.close(); }
+});

@@ -135,6 +135,7 @@ const COST_OPTIONS: { value: CfoCostCategory; label: string }[] = [
 
 const MONTH_LABELS = ["styczeń", "luty", "marzec", "kwiecień", "maj", "czerwiec", "lipiec", "sierpień", "wrzesień", "październik", "listopad", "grudzień"];
 const DEFAULT_HORIZON = 12;
+const BUDGET_FIRST_MONTH = "2026-11";
 const EMPTY_SUBCATEGORY = "Bez podkategorii";
 const OPENING_CASH_STORAGE_KEY = "crss_budget_opening_cash";
 const SAFETY_THRESHOLD_STORAGE_KEY = "crss_budget_safety_threshold";
@@ -217,8 +218,10 @@ function BudgetContent() {
   }
 
   function changeStartMonth(value: string) {
-    setStartMonth(value);
-    setSelectedMonth(value);
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(value)) return;
+    const nextMonth = value < BUDGET_FIRST_MONTH ? BUDGET_FIRST_MONTH : value;
+    setStartMonth(nextMonth);
+    setSelectedMonth(nextMonth);
   }
 
   function changeOpeningCash(value: string) {
@@ -296,6 +299,7 @@ function BudgetContent() {
       <section style={panelStyle}>
         <p>Przepływy wynikają z dat zapłaty w Fakturach, kosztach i zobowiązaniach CFO. Średni czas zapłaty jest liczony osobno dla klienta i dostawcy z faktur wystawionych w ostatnich 6 miesiącach (lub z krótszej dostępnej historii). Bez historii stosowany jest termin dokumentu, a dla przyszłych dokumentów założenie 14 dni. Zaległości trafiają do pierwszego miesiąca prognozy.</p>
         <p>Koszty z harmonogramów rocznych obciążają wynik po 1/12 netto miesięcznie, a gotówkę jednorazowo kwotą brutto. Powiązana faktura zastępuje prognozę danego odnowienia.</p>
+        <p>Budżet jest dostępny od listopada 2026. Wcześniejsze miesiące służą do wyliczania średnich historycznych.</p>
         <p>Gotówka na start oznacza saldo na początek pierwszego miesiąca prognozy. Nie jest odczytywana z wyciągu.</p>
         {cashflow.invoices.some(i => i.status === "oplacona" && !i.data_zaplaty) && <p role="status">Część opłaconych faktur nie ma daty zapłaty. Są rozliczone, ale nie wchodzą do średnich ani wykonanego cash flow. Uzupełnij daty w Fakturach.</p>}
         {OBLIGATION_TYPES.some(kind => !cashflow.obligations.some(o => o.typ === kind.value && (Number(o.kwota) === 0 || o.termin_platnosci))) && <p role="status">Uzupełnij kwoty i terminy wynagrodzeń netto, ZUS, PIT-4, VAT i CIT w CFO → Cash flow. Brakujące rodzaje zobowiązań nie są uwzględnione w prognozie.</p>}
@@ -504,6 +508,7 @@ function MonthField({ value, onChange, compact = false }: { value: string; onCha
       <CalendarDays size={17} style={monthIconStyle} />
       <input
         type="month"
+        min={BUDGET_FIRST_MONTH}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         style={monthInputStyle}
@@ -1240,7 +1245,8 @@ function categoryLabel(type: CfoBudgetOverrideType, value: string) {
 }
 
 function currentForecastStartInput() {
-  return currentMonthInput();
+  const month = businessDate().slice(0, 7);
+  return month < BUDGET_FIRST_MONTH ? BUDGET_FIRST_MONTH : month;
 }
 
 function currentMonthInput() {

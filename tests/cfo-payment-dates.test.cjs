@@ -170,3 +170,31 @@ test('budget adds annual renewals to ordinary costs without treating the yearly 
  assert.equal(result[3].plannedCosts,1450);assert.equal(result[3].plannedCashFlow,-18696);
  assert.equal(result[4].plannedCosts,1450);assert.equal(result[4].plannedCashFlow,-246);
 });
+
+test('budget expense rows show annual gross cash only in the renewal payment month', () => {
+ const source={...cost,id:'office-old',podkategoria:'MS Office',harmonogram_id:'annual',data_dokumentu:'2026-01-15',data_zaplaty:'2026-01-18',okres_start:'2026-01-01',okres_end:'2026-12-31',kwota_netto_cfo:1377,kwota_brutto:1693.71,ujecie_zarzadcze:'rozliczenie_w_czasie'};
+ const schedule={...annualSchedule,nazwa:'MS Office',podkategoria:'MS Office',kwota_netto:1377,kwota_brutto:1693.71,termin_platnosci:'2027-01-18'};
+ const snapshot={invoices:[],costs:[source],obligations:[],annualSchedules:[schedule]};
+ const rows=budget.buildBudgetMonths('2026-11',5,[],[source],[],[],[],[],[],0,snapshot);
+ const expense=month=>month.costSubcategories.flatMap(g=>g.children).find(r=>r.key==='MS Office');
+ for(const month of rows){
+   assert.equal(expense(month)?.planned||0,month.period==='2027-01'?1693.71:0);
+   assert.equal(expense(month)?.actual||0,0);
+ }
+ const renewal={...source,id:'renewal',data_dokumentu:'2027-01-15',data_zaplaty:'2027-02-02',okres_start:'2027-01-01',okres_end:'2027-12-31',kwota_brutto:1800};
+ const paid=budget.buildBudgetMonths('2026-11',5,[],[source,renewal],[],[],[],[],[],0,{...snapshot,costs:[source,renewal]});
+ assert.equal(expense(paid[2])?.planned||0,0);
+ assert.equal(expense(paid[3]).planned,1800);assert.equal(expense(paid[3]).actual,1800);
+});
+
+test('expense cash groups reconcile with total cash forecast including payroll, taxes and cash-only adjustments', () => {
+ const overrides=[{id:'adjustment',typ:'koszt',kategoria:'systemy_technologia',podkategoria:'Other',okres:'2026-11-01',kwota_plan:0,kwota_cashflow:50,powtarzanie:'jednorazowo',aktywne:true}];
+ const snapshot={invoices:[],costs:[cost],obligations:[obligation,{...obligation,id:'vat',typ:'vat',kwota:300}],annualSchedules:[]};
+ const rows=budget.buildBudgetMonths('2026-11',3,[],[cost],[],[],overrides,[],[],0,snapshot);
+ for(const month of rows){
+   const total=month.costSubcategories.reduce((n,g)=>n+g.planned,0);
+   assert.ok(Math.abs(total+month.plannedCashFlow)<0.001);
+ }
+ assert.equal(rows[0].costSubcategories.flatMap(g=>g.children).find(r=>r.key==='Other').planned,50);
+ assert.equal(rows[1].costSubcategories.flatMap(g=>g.children).find(r=>r.key==='Other'),undefined);
+});

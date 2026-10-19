@@ -245,9 +245,9 @@ function BudgetContent() {
       kategoria: category,
       podkategoria: subcategory === EMPTY_SUBCATEGORY ? null : subcategory,
       opis: `Korekta budżetu: ${categoryLabel("koszt", category)} / ${subcategory}`,
-      kwota_plan: nextValue - plannedValue,
+      kwota_plan: 0,
       kwota_cashflow: nextValue - plannedValue,
-      powtarzanie: "od_miesiaca",
+      powtarzanie: "jednorazowo",
       aktywne: true,
     });
     setSaving(false);
@@ -365,8 +365,9 @@ function BudgetContent() {
           <article style={widePanelStyle}>
             <div style={panelHeaderStyle}>
               <Banknote size={21} style={panelIconStyle} />
-              <h2 style={panelTitleStyle}>Kategorie kosztów</h2>
+              <h2 style={panelTitleStyle}>Plan wydatków — przepływy pieniężne</h2>
             </div>
+            <p style={{ color: colors.muted, fontSize: "13px", margin: "0 0 16px" }}>Kwoty brutto według dat płatności. Harmonogramy roczne są ujmowane jednorazowo w miesiącu płatności. Wykonanie obejmuje tylko zapisane zapłaty. Korekta planu dotyczy wybranego miesiąca.</p>
             <CostCategoryEditor
               groups={selected?.costSubcategories || []}
               selectedMonth={selectedMonth}
@@ -617,7 +618,7 @@ function buildBudgetMonths(
       overrides: monthOverrides,
       revenueCategories: categoryRows("przychod", plannedRevenueCategories, actual.revenueByCategory),
       costCategories: categoryRows("koszt", plannedCostCategories, actual.costByCategory),
-      costSubcategories: costGroupRows(plannedCostSubcategories, actual.costBySubcategory),
+      costSubcategories: buildCostCashflowGroups(period, [...costHistoryMonths, ...months], baseline.costPlanEntries, planActualByMonth, budgetCostPayments, costPaymentProfile, snapshot, monthOverrides, startMonth),
     };
   });
 }
@@ -751,6 +752,41 @@ function plannedUnissuedRevenueCashFlowForMonth(
       return expectedMonth === cashFlowPeriod ? missingNet * 1.23 : 0;
     }));
   }));
+}
+
+function buildCostCashflowGroups(
+  period: string, forecastMonths: string[], entries: BudgetCostPlanEntry[],
+  actualByMonth: Map<string, ReturnType<typeof emptyActual>>, payments: BudgetCostPayment[],
+  profile: PaymentProfile, snapshot: CashflowSnapshot, overrides: CfoBudgetOverride[], startMonth: string,
+) {
+  const planned = new Map<string, Map<string, number>>();
+  const actual = new Map<string, Map<string, number>>();
+  const keys = new Map<string, { category: CfoCostCategory; subcategory: string }>();
+  const addKey = (category: CfoCostCategory, subcategory: string | null) => {
+    const sub = subcategory || EMPTY_SUBCATEGORY;
+    keys.set(JSON.stringify([category, sub]), { category, subcategory: sub });
+  };
+  entries.forEach(row => addKey(row.category, row.subcategory));
+  payments.forEach(row => addKey(row.category, row.subcategory));
+  (snapshot.annualSchedules || []).forEach(row => addKey(row.kategoria, row.podkategoria));
+  overrides.filter(row => row.typ === "koszt").forEach(row => addKey(row.kategoria as CfoCostCategory, row.podkategoria));
+  for (const { category, subcategory } of keys.values()) {
+    const rows = payments.filter(row => row.category === category && row.subcategory === subcategory);
+    const schedules = (snapshot.annualSchedules || []).filter(row => row.kategoria === category && (row.podkategoria || EMPTY_SUBCATEGORY) === subcategory);
+    const forecast = plannedCostCashFlowForMonth(period, rows, profile).amount
+      + plannedUnrecordedCostCashFlowForMonth(period, forecastMonths, entries.filter(row => row.category === category && row.subcategory === subcategory), actualByMonth, profile)
+      + annualCostForecast(period, schedules, snapshot.costs, profile.asOf).cash
+      + sum(overrides.filter(row => row.typ === "koszt" && row.kategoria === category && (row.podkategoria || EMPTY_SUBCATEGORY) === subcategory).map(row => Number(row.kwota_cashflow || 0)));
+    upsertSubcategoryAmount(planned, category, subcategory, forecast);
+    upsertSubcategoryAmount(actual, category, subcategory, sum(rows.filter(row => row.paymentDate?.slice(0, 7) === period).map(row => row.paidAmount)));
+  }
+  for (const kind of OBLIGATION_TYPES) {
+    const category: CfoCostCategory = kind.value === "vat" || kind.value === "cit" ? "administracja_ogolne" : "koszty_zespolu";
+    const rows = snapshot.obligations.filter(row => row.typ === kind.value);
+    upsertSubcategoryAmount(planned, category, kind.label, obligationCashflow(period, rows, startMonth, profile.asOf));
+    upsertSubcategoryAmount(actual, category, kind.label, sum(rows.filter(row => row.data_zaplaty?.slice(0, 7) === period).map(row => Number(row.kwota))));
+  }
+  return costGroupRows(planned, actual);
 }
 
 function buildBudgetCostPayments(costs: CfoCostItem[]): BudgetCostPayment[] {

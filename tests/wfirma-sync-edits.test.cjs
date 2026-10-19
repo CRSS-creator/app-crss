@@ -162,3 +162,20 @@ test('empty monthly results do not replace the helpful missing-document message 
  const result=await api.loadSelectedWfirmaInvoices({},{},[local],errors,new Map(),new Set());
  assert.equal(result.size,0);assert.match(errors.get('draft'),/Nie znaleziono dokumentu/);assert.doesNotMatch(errors.get('draft'),/wFirma NOT FOUND/);
 });
+
+test('an existing selected draft is refreshed directly without any recovery listings',async()=>{
+ let reads=0;const snapshots=new Set();
+ const draft={id:'draft',fullnumber:'WRF 173',type:'draft'};
+ const api=load({getWfirmaInvoice:async()=>{reads++;return draft;},findWfirmaInvoices:async()=>{throw Error('must not list any invoices')}});
+ const result=await api.loadSelectedWfirmaInvoices({},{},[local],new Map(),new Map(),snapshots);
+ assert.equal(result.get('draft'),draft);assert.equal(reads,1);assert.equal(snapshots.has(draft),true);
+});
+
+test('missing selected draft searches only its issue day and never rereads the missing ID',async()=>{
+ let reads=0;const searches=[];
+ const api=load({getWfirmaInvoice:async()=>{reads++;throw Error('wFirma NOT FOUND: missing')},findWfirmaInvoices:async args=>{searches.push(args);return [final]}});
+ const query={select(){return this},eq(){return this},neq(){return this},async maybeSingle(){return {data:null,error:null}}};
+ const result=await api.loadSelectedWfirmaInvoices({from:()=>query},{},[local],new Map(),new Map(),new Set());
+ assert.equal(result.get('draft').id,'final');assert.equal(reads,1);assert.equal(searches.length,1);
+ assert.equal(searches[0].dateFrom,'2026-10-16');assert.equal(searches[0].dateTo,'2026-10-16');
+});

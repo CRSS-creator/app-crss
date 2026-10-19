@@ -251,7 +251,7 @@ async function loadSelectedWfirmaInvoices(
     const id = stringify(invoice.wfirma_id);
     try {
       const detail = firstWfirmaInvoice(await retryWfirmaRead(() => getWfirmaInvoice(config, id)));
-      if (detail && stringify(detail.id) === id && !isDraftInvoiceNumber(detail)) {
+      if (detail && stringify(detail.id) === id) {
         resolved.set(id, detail);
         detailSnapshots.add(detail);
         continue;
@@ -261,12 +261,15 @@ async function loadSelectedWfirmaInvoices(
       const message = error instanceof Error ? error.message : "Nie udało się odczytać faktury z wFirmy.";
       // The API throws for a missing draft instead of returning an empty detail.
       // Only explicit NOT FOUND enters recovery, never auth/network errors.
-      if (/^wFirma NOT FOUND:/i.test(message)) unresolved.push(invoice);
+      if (/^wFirma NOT FOUND:/i.test(message)) {
+        unresolved.push(invoice);
+        lookupErrors.set(id, "Nie znaleziono dokumentu pod zapisanym identyfikatorem wFirmy ani jednoznacznego dokumentu zastępczego z dnia wystawienia. Sprawdź, czy szkic został wystawiony z inną datą lub usunięty.");
+      }
       else lookupErrors.set(id, message);
     }
   }
   if (unresolved.length) {
-    const recovered = await loadWfirmaInvoicesByMonth(admin, config, unresolved, null, lookupErrors, recoveryCandidates);
+    const recovered = await loadWfirmaInvoicesByMonth(admin, config, unresolved, null, lookupErrors, recoveryCandidates, true);
     for (const [id, invoice] of recovered) if (!resolved.has(id)) resolved.set(id, invoice);
   }
   return resolved;
@@ -278,16 +281,19 @@ async function loadWfirmaInvoicesByMonth(
   invoices: InvoiceRow[],
   requestedMonth: string | null,
   lookupErrors = new Map<string, string>(),
-  recoveryCandidates?: Map<string, RecoveryCandidate[]>
+  recoveryCandidates?: Map<string, RecoveryCandidate[]>,
+  selectedRecovery = false
 ) {
   let listingError: string | null = null;
-  const months = syncSearchMonths(invoices, requestedMonth);
+  // A selected refresh must not enumerate neighbouring months to find a removed draft.
+  const ranges = selectedRecovery
+    ? [...new Set(invoices.map(invoice => dateOnly(invoice.data_wystawienia)).filter((date): date is string => Boolean(date)))].map(date => ({ dateFrom: date, dateTo: date }))
+    : syncSearchMonths(invoices, requestedMonth).map(monthRange);
   const invoicesById = new Map<string, WfirmaInvoice>();
   const requestedWfirmaIds = new Set(invoices.map((invoice) => stringify(invoice.wfirma_id)).filter(Boolean));
 
-  for (const month of months) {
+  for (const range of ranges) {
     if (hasAllRequestedInvoices(invoicesById, requestedWfirmaIds)) break;
-    const range = monthRange(month);
     let page = 1;
     const limit = 100;
 
@@ -312,7 +318,7 @@ async function loadWfirmaInvoicesByMonth(
         if (error instanceof Error && /^wFirma NOT FOUND:/i.test(error.message)) break;
         listingError = error instanceof Error ? error.message : "Nieznany błąd odczytu listy faktur.";
         console.error("Nie udało się pobrać faktur z wFirmy dla miesiąca.", {
-          month,
+          range,
           page,
           error: error instanceof Error ? error.message : error,
         });
@@ -327,7 +333,7 @@ async function loadWfirmaInvoicesByMonth(
     const wfirmaId = stringify(invoice.wfirma_id);
     // Read this exact ID before resolving a formerly saved draft.
     let currentMatch = invoicesById.get(wfirmaId);
-    if (!currentMatch || isDraftInvoiceNumber(currentMatch)) {
+    if (!selectedRecovery && (!currentMatch || isDraftInvoiceNumber(currentMatch))) {
       try {
         const direct = firstWfirmaInvoice(await retryWfirmaRead(() => getWfirmaInvoice(config, wfirmaId)));
         if (direct && stringify(direct.id) === wfirmaId) {

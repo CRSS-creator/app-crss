@@ -5,11 +5,11 @@ const path=require('node:path');
 const vm=require('node:vm');
 const ts=require('typescript');
 const source=fs.readFileSync(path.join(__dirname,'../src/app/api/faktury/wfirma/sync-payments/route.ts'),'utf8')+'\nexport {loadSelectedWfirmaInvoices,findMatchingFinalWfirmaInvoice,loadWfirmaInvoicesByMonth,syncWfirmaInvoiceSnapshot,retryWfirmaRead,isRecoveryCandidate,loadConfirmedReplacement};';
-function load(overrides={}) {
+function load(overrides={}, dependencies={}) {
  const exports={};
  const wfirma={extractWfirmaInvoices:x=>x,firstWfirmaInvoice:x=>x,...overrides};
  vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText,{
-  exports,console,process,Error,setTimeout,require(name){if(name==='@/lib/wfirmaClient')return wfirma;if(name==='@/lib/invoiceBankAccount')return {isWfirmaDraft:()=>false};return {};}
+  exports,console,process:dependencies.process||process,Error,setTimeout,require(name){if(dependencies[name])return dependencies[name];if(name==='@/lib/wfirmaClient')return wfirma;if(name==='@/lib/invoiceBankAccount')return {isWfirmaDraft:()=>false,createInvoiceBankAccountResolver:()=>()=>{throw Error('bank lookup not needed')}};return {};}
  });
  return exports;
 }
@@ -178,4 +178,19 @@ test('missing selected draft searches only its issue day and never rereads the m
  const result=await api.loadSelectedWfirmaInvoices({from:()=>query},{},[local],new Map(),new Map(),new Set());
  assert.equal(result.get('draft').id,'final');assert.equal(reads,1);assert.equal(searches.length,1);
  assert.equal(searches[0].dateFrom,'2026-10-16');assert.equal(searches[0].dateTo,'2026-10-16');
+});
+
+test('payment-only refresh updates the paid status without PDF, storage or snapshot RPC calls',async()=>{
+ const writes=[];let pdfCalls=0;
+ const query={select(){return this},in(){return this},neq(){return this},not(){return this},order(){return this},async limit(){return {data:[{...local,wfirma_id:'final'}],error:null}}};
+ const admin={from:()=>({...query,update(payload){writes.push(payload);return {eq(){return {neq(){return {select(){return {async single(){return {data:{id:local.id},error:null}}}}}}}}}}})};
+ const api=load({getWfirmaConfig:()=>({config:{}}),getWfirmaInvoice:async()=>({...final,paymentstate:'paid'}),downloadWfirmaInvoicePdf:async()=>{pdfCalls++;throw Error('PDF unavailable')}},{'next/server':{NextResponse:{json:data=>data}},'@supabase/supabase-js':{createClient:()=>admin},'@/lib/serverAuth':{getAuthorizedServerUser:async()=>({error:null})},process:{env:{NEXT_PUBLIC_SUPABASE_URL:'https://example.test',SUPABASE_SERVICE_ROLE_KEY:'test-only'}}});
+ const result=await api.POST({method:'POST',headers:{get:()=>null},nextUrl:{searchParams:new URLSearchParams()},json:async()=>({invoiceIds:['00000000-0000-4000-8000-000000000001']})});
+ assert.equal(result.markedPaid,1);assert.equal(result.failed.length,0);assert.equal(pdfCalls,0);assert.equal(writes[0].status,'oplacona');
+});
+
+test('replacement snapshot can persist its new identity without downloading PDF',async()=>{
+ let header;const api=load({getWfirmaInvoice:async()=>final,downloadWfirmaInvoicePdf:async()=>{throw Error('must not download PDF')},wfirmaInvoiceAmounts:()=>({net:200,tax:46,gross:246}),extractWfirmaInvoiceLines:()=>[{id:1}],wfirmaLineAmounts:()=>({net:200,tax:46,gross:246})});
+ await api.syncWfirmaInvoiceSnapshot({async rpc(_,args){header=args.public_header;return {error:null}}},{},local,final,()=>{},false,false);
+ assert.equal(header.wfirma_id,'final');assert.equal(header.numer,final.fullnumber);assert.equal(header.wfirma_pdf_path,undefined);
 });

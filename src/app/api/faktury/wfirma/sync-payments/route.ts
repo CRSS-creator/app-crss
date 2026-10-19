@@ -88,6 +88,7 @@ type FailedInvoice = PaidInvoice & {
 };
 
 type SyncPayload = {
+  refreshDetails?: boolean;
   confirmedReplacement?: ConfirmedReplacement;
   month?: string;
   invoiceIds?: string[];
@@ -179,8 +180,8 @@ async function syncPayments(request: NextRequest) {
       }
       if (!wfirmaInvoice) throw new Error(lookupErrors.get(wfirmaId) || "Nie znaleziono faktury w wFirmie. Jeśli szkic został wystawiony pod nowym numerem, trzeba potwierdzić numer dokumentu docelowego.");
 
-      if (requestedMonth || requestedInvoiceIds.length > 0) {
-        const syncResult = await syncWfirmaInvoiceSnapshot(admin, wfirma.config, invoice, wfirmaInvoice, resolveBankAccount, detailSnapshots.has(wfirmaInvoice));
+      if (payload.refreshDetails === true || stringify(wfirmaInvoice.id) !== wfirmaId) {
+        const syncResult = await syncWfirmaInvoiceSnapshot(admin, wfirma.config, invoice, wfirmaInvoice, resolveBankAccount, detailSnapshots.has(wfirmaInvoice), payload.refreshDetails === true);
         wfirmaInvoice = syncResult.remoteInvoice;
         if (syncResult.updatedNumber || syncResult.savedPdf) {
           refreshed.push({ invoiceId: invoice.id, number: syncResult.invoiceNumber, pdf: syncResult.savedPdf });
@@ -516,7 +517,8 @@ async function syncWfirmaInvoiceSnapshot(
   invoice: InvoiceRow,
   wfirmaInvoice: WfirmaInvoice,
   resolveBankAccount: () => Promise<RequiredInvoiceBankAccount>,
-  hasDetailSnapshot = false
+  hasDetailSnapshot = false,
+  refreshPdf = true
 ) {
   const wfirmaId = stringify(invoice.wfirma_id);
   // Monthly listings are not a complete detail snapshot after external edits.
@@ -550,7 +552,7 @@ async function syncWfirmaInvoiceSnapshot(
   const updatedNumber = Boolean(invoiceNumber && invoiceNumber !== invoice.numer);
   let pdfResult: { path: string | null; name: string | null; error: string | null } | null = null;
 
-  if (nextWfirmaId && !isDraftInvoiceNumber(wfirmaInvoice)) {
+  if (refreshPdf && nextWfirmaId && !isDraftInvoiceNumber(wfirmaInvoice)) {
     pdfResult = await saveWfirmaInvoicePdf({
       admin,
       invoiceId: invoice.id,

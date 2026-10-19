@@ -1,5 +1,7 @@
 "use client";
 
+import { AppFormSelect } from "@/components/AppFormControls";
+
 import { useEffect, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import { useParams } from "next/navigation";
 import { colors, radius, shadow } from "@/app/design";
@@ -177,7 +179,7 @@ export default function ClientCardPage() {
             <span>Adres zamieszkania taki sam jak adres działalności</span>
           </label>
           <Field label="Forma opodatkowania">
-            <select
+            <AppFormSelect
               style={inputStyle}
               value={draft.formaOpodatkowania}
               onChange={(event) => {
@@ -186,44 +188,44 @@ export default function ClientCardPage() {
               }}
             >
               {TAX_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select>
+            </AppFormSelect>
           </Field>
           {draft.formaOpodatkowania === "Ryczałt" && (
             <Field label="Główna stawka ryczałtu">
-              <select style={inputStyle} value={draft.glownaStawkaRyczaltu} onChange={(event) => updateDraft("glownaStawkaRyczaltu", event.target.value)}>
+              <AppFormSelect style={inputStyle} value={draft.glownaStawkaRyczaltu} onChange={(event) => updateDraft("glownaStawkaRyczaltu", event.target.value)}>
                 {LUMP_SUM_RATE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </select>
+              </AppFormSelect>
             </Field>
           )}
           <Field label="Właściwy Urząd Skarbowy">
             <input style={inputStyle} value={draft.urzadSkarbowy} onChange={(event) => updateDraft("urzadSkarbowy", event.target.value)} />
           </Field>
           <Field label="Czy wykonuje Pan/Pani lub wykonywał Pan/Pani usługi na rzecz byłego pracodawcy?">
-            <select style={inputStyle} value={draft.uslugiBylyPracodawca} onChange={(event) => updateDraft("uslugiBylyPracodawca", event.target.value)}>
+            <AppFormSelect style={inputStyle} value={draft.uslugiBylyPracodawca} onChange={(event) => updateDraft("uslugiBylyPracodawca", event.target.value)}>
               {YES_NO_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select>
+            </AppFormSelect>
           </Field>
           <Field label="Czy prowadzi Pan/Pani sprzedaż na rzecz osób fizycznych z innych krajów UE?">
-            <select style={inputStyle} value={draft.sprzedazOsobyPrywatneUe} onChange={(event) => updateDraft("sprzedazOsobyPrywatneUe", event.target.value)}>
+            <AppFormSelect style={inputStyle} value={draft.sprzedazOsobyPrywatneUe} onChange={(event) => updateDraft("sprzedazOsobyPrywatneUe", event.target.value)}>
               {YES_NO_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select>
+            </AppFormSelect>
           </Field>
         </Section>
 
         <Section title="VAT">
           <Field label="Czy jest Pan/Pani czynnym podatnikiem VAT?">
-            <select style={inputStyle} value={draft.czynnyVat} onChange={(event) => updateDraft("czynnyVat", event.target.value)}>
+            <AppFormSelect style={inputStyle} value={draft.czynnyVat} onChange={(event) => updateDraft("czynnyVat", event.target.value)}>
               {YES_NO_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select>
+            </AppFormSelect>
           </Field>
           {draft.czynnyVat === "tak" && (
             <Field label="Forma rozliczenia VAT">
-              <select style={inputStyle} value={draft.vatFormaRozliczenia} onChange={(event) => updateDraft("vatFormaRozliczenia", event.target.value)}>
+              <AppFormSelect style={inputStyle} value={draft.vatFormaRozliczenia} onChange={(event) => updateDraft("vatFormaRozliczenia", event.target.value)}>
                 <option value="">Wybierz</option>
                 <option value="miesięczne">Miesięczne</option>
                 <option value="kwartalne">Kwartalne</option>
                 <option value="metoda kasowa">Metoda kasowa</option>
-              </select>
+              </AppFormSelect>
             </Field>
           )}
           {draft.czynnyVat === "nie" && (
@@ -235,9 +237,9 @@ export default function ClientCardPage() {
             />
           )}
           <Field label="VAT-UE">
-            <select style={inputStyle} value={draft.vatUe} onChange={(event) => updateDraft("vatUe", event.target.value)}>
+            <AppFormSelect style={inputStyle} value={draft.vatUe} onChange={(event) => updateDraft("vatUe", event.target.value)}>
               {YES_NO_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select>
+            </AppFormSelect>
           </Field>
           {draft.vatUe === "tak" && (
             <CheckboxGroup
@@ -251,58 +253,58 @@ export default function ClientCardPage() {
 
         <Section title="ZUS">
           <Field label="Czy korzysta Pan/Pani obecnie z ulg dotyczących opłacania składek ZUS?">
-            <select style={inputStyle} value={draft.zusUlga} onChange={(event) => updateDraft("zusUlga", event.target.value)}>
+            <AppFormSelect style={inputStyle} value={draft.zusUlga} onChange={(event) => updateDraft("zusUlga", event.target.value)}>
               {YES_NO_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select>
+            </AppFormSelect>
           </Field>
           {draft.zusUlga === "tak" && (
             <Field label="Z jakiej ulgi Pan/Pani obecnie korzysta?">
-              <select style={inputStyle} value={draft.zusUlgaTytul} onChange={(event) => updateDraft("zusUlgaTytul", event.target.value)}>
+              <AppFormSelect style={inputStyle} value={draft.zusUlgaTytul} onChange={(event) => updateDraft("zusUlgaTytul", event.target.value)}>
                 <option value="">Wybierz</option>
                 <option value="ulga na start">Ulga na start</option>
                 <option value="składki preferencyjne">Składki preferencyjne</option>
                 <option value="Mały ZUS Plus">Mały ZUS Plus</option>
-              </select>
+              </AppFormSelect>
             </Field>
           )}
           <Field label="Czy opłaca Pan/Pani tylko składkę zdrowotną ZUS z działalności?">
-            <select style={inputStyle} value={draft.tylkoZdrowotne} onChange={(event) => updateDraft("tylkoZdrowotne", event.target.value)}>
+            <AppFormSelect style={inputStyle} value={draft.tylkoZdrowotne} onChange={(event) => updateDraft("tylkoZdrowotne", event.target.value)}>
               {YES_NO_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select>
+            </AppFormSelect>
           </Field>
           {draft.tylkoZdrowotne === "tak" && <Field label="Jaki Pan/Pani posiada inny tytuł do składek społecznych zwalniający z opłacania tych składek z działalności?"><input style={inputStyle} value={draft.tylkoZdrowotneTytul} onChange={(event) => updateDraft("tylkoZdrowotneTytul", event.target.value)} /></Field>}
           <Field label="Czy jest Pan/Pani objęty dobrowolnym ubezpieczeniem chorobowym lub wnosi Pan/Pani o objęcie tym ubezpieczeniem w przyszłości?">
-            <select style={inputStyle} value={draft.chorobowe} onChange={(event) => updateDraft("chorobowe", event.target.value)}>
+            <AppFormSelect style={inputStyle} value={draft.chorobowe} onChange={(event) => updateDraft("chorobowe", event.target.value)}>
               {YES_NO_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select>
+            </AppFormSelect>
           </Field>
           <Field label="Czy posiada Pan/Pani orzeczenie o niepełnosprawności?">
-            <select style={inputStyle} value={draft.niepelnosprawnosc} onChange={(event) => updateDraft("niepelnosprawnosc", event.target.value)}>
+            <AppFormSelect style={inputStyle} value={draft.niepelnosprawnosc} onChange={(event) => updateDraft("niepelnosprawnosc", event.target.value)}>
               {YES_NO_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select>
+            </AppFormSelect>
           </Field>
           {draft.niepelnosprawnosc === "tak" && <Field label="Stopień niepełnosprawności"><input style={inputStyle} value={draft.stopienNiepelnosprawnosci} onChange={(event) => updateDraft("stopienNiepelnosprawnosci", event.target.value)} /></Field>}
           <Field label="Prawo do emerytury lub renty">
-            <select style={inputStyle} value={draft.emeryturaRenta} onChange={(event) => updateDraft("emeryturaRenta", event.target.value)}>
+            <AppFormSelect style={inputStyle} value={draft.emeryturaRenta} onChange={(event) => updateDraft("emeryturaRenta", event.target.value)}>
               {YES_NO_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select>
+            </AppFormSelect>
           </Field>
         </Section>
 
         <Section title="Kasa fiskalna">
           <Field label="Czy posiada Pan/Pani kasę fiskalną?">
-            <select style={inputStyle} value={draft.kasaFiskalna} onChange={(event) => updateDraft("kasaFiskalna", event.target.value)}>
+            <AppFormSelect style={inputStyle} value={draft.kasaFiskalna} onChange={(event) => updateDraft("kasaFiskalna", event.target.value)}>
               {YES_NO_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select>
+            </AppFormSelect>
           </Field>
           {draft.kasaFiskalna === "nie" && (
             <Field label="Jaki jest powód zwolnienia z kasy fiskalnej?">
-              <select style={inputStyle} value={draft.kasaFiskalnaZwolnienie} onChange={(event) => updateDraft("kasaFiskalnaZwolnienie", event.target.value)}>
+              <AppFormSelect style={inputStyle} value={draft.kasaFiskalnaZwolnienie} onChange={(event) => updateDraft("kasaFiskalnaZwolnienie", event.target.value)}>
                 <option value="">Wybierz</option>
                 <option value="brak transakcji z osobami fizycznymi">Brak transakcji z osobami fizycznymi</option>
                 <option value="sprzedaż zwolniona do limitu 20 tys.">Sprzedaż zwolniona do limitu 20 tys.</option>
                 <option value="transakcje bezgotówkowe z osobami fizycznymi">Transakcje bezgotówkowe z osobami fizycznymi</option>
-              </select>
+              </AppFormSelect>
             </Field>
           )}
         </Section>

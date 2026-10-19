@@ -1,5 +1,7 @@
 "use client";
 
+import { AppFormInput } from "@/components/AppFormControls";
+
 import { useEffect, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import { useParams } from "next/navigation";
 import { colors, radius, shadow } from "@/app/design";
@@ -112,7 +114,7 @@ export default function AmlRiskAssessmentPage() {
             <Field label="NIP, PESEL, KRS albo inny identyfikator" required><input style={inputStyle} value={draft.clientIdentifier} onChange={(event) => update("clientIdentifier", event.target.value)} /></Field>
           </div>
           <div style={twoColumnGridStyle}>
-            <Field label="Data sporządzenia oceny ryzyka" required><input type="date" style={inputStyle} value={draft.assessmentDate} onChange={(event) => update("assessmentDate", event.target.value)} /></Field>
+            <Field label="Data sporządzenia oceny ryzyka" required><AppFormInput type="date" style={inputStyle} value={draft.assessmentDate} onChange={(event) => update("assessmentDate", event.target.value)} /></Field>
             <Field label="Osoba sporządzająca ocenę ryzyka" required><input style={inputStyle} value={draft.assessedBy} onChange={(event) => update("assessedBy", event.target.value)} /></Field>
           </div>
           <Field label="Podstawa sporządzenia oceny" required>
@@ -195,11 +197,11 @@ export default function AmlRiskAssessmentPage() {
         <section style={sectionStyle}>
           <h2 style={sectionTitleStyle}>Termin kolejnej aktualizacji</h2>
           <div style={singleFieldGridStyle}>
-            <Field label="Termin kolejnej aktualizacji danych i oceny ryzyka" required><input type="date" style={inputStyle} value={draft.nextUpdateDate} onChange={(event) => update("nextUpdateDate", event.target.value)} /></Field>
+            <Field label="Termin kolejnej aktualizacji danych i oceny ryzyka" required><AppFormInput type="date" style={inputStyle} value={draft.nextUpdateDate} onChange={(event) => update("nextUpdateDate", event.target.value)} /></Field>
           </div>
           <div style={twoColumnGridStyle}>
             <Field label="Osoba zatwierdzająca ocenę" required><input style={inputStyle} value={draft.approvedBy} onChange={(event) => update("approvedBy", event.target.value)} /></Field>
-            <Field label="Data zatwierdzenia" required><input type="date" style={inputStyle} value={draft.approvalDate} onChange={(event) => update("approvalDate", event.target.value)} /></Field>
+            <Field label="Data zatwierdzenia" required><AppFormInput type="date" style={inputStyle} value={draft.approvalDate} onChange={(event) => update("approvalDate", event.target.value)} /></Field>
           </div>
           <label style={confirmationStyle}>
             <input type="checkbox" checked={draft.confirmation} onChange={(event) => update("confirmation", event.target.checked)} />

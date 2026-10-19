@@ -1,5 +1,7 @@
 "use client";
 
+import { AppFormSelect, AppFormInput } from "@/components/AppFormControls";
+
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Check, Plus, Save, X } from "lucide-react";
 import AccessGuard from "@/components/AccessGuard";
@@ -344,19 +346,19 @@ function BulkMonthlyEntryModal({ rows, year, type, onClose, onSaved }: { rows: L
           <div style={bulkControlsStyle}>
             <label style={fieldStyle}>
               <span style={fieldLabelStyle}>Opiekun</span>
-              <select value={caregiverKeyValue} onChange={(event) => setCaregiverKeyValue(event.target.value)} style={inputStyle}>
+              <AppFormSelect value={caregiverKeyValue} onChange={(event) => setCaregiverKeyValue(event.target.value)} style={inputStyle}>
                 {caregiverOptions.map((option) => (
                   <option key={option.key} value={option.key}>{option.label}</option>
                 ))}
-              </select>
+              </AppFormSelect>
             </label>
             <label style={fieldStyle}>
               <span style={fieldLabelStyle}>Miesiąc</span>
-              <select value={month} onChange={(event) => setMonth(Number(event.target.value))} style={inputStyle}>
+              <AppFormSelect value={month} onChange={(event) => setMonth(Number(event.target.value))} style={inputStyle}>
                 {MONTHS.map((monthName, index) => (
                   <option key={monthName} value={index + 1}>{monthName}</option>
                 ))}
-              </select>
+              </AppFormSelect>
             </label>
           </div>
 
@@ -472,10 +474,10 @@ function LimitDetailsModal({ row, year, onClose, onSaved }: { row: LimitRow; yea
           ) : hasExemptionStatus(row.register.typ) && (
             <label style={fieldStyle}>
               <span style={fieldLabelStyle}>Status zwolnienia</span>
-              <select value={exemptionStatus} onChange={(event) => setExemptionStatus(event.target.value)} style={inputStyle}>
+              <AppFormSelect value={exemptionStatus} onChange={(event) => setExemptionStatus(event.target.value)} style={inputStyle}>
                 <option value="podmiotowe">Podmiotowe</option>
                 <option value="przedmiotowe">Przedmiotowe</option>
-              </select>
+              </AppFormSelect>
             </label>
           )}
           <label style={fieldStyle}>
@@ -488,7 +490,7 @@ function LimitDetailsModal({ row, year, onClose, onSaved }: { row: LimitRow; yea
           <div style={proportionalBoxStyle}>
             <label style={fieldStyle}>
               <span style={fieldLabelStyle}>Rozpoczęcie działalności w roku</span>
-              <input type="date" value={businessStartDate} onChange={(event) => setBusinessStartDate(event.target.value)} style={inputStyle} />
+              <AppFormInput type="date" value={businessStartDate} onChange={(event) => setBusinessStartDate(event.target.value)} style={inputStyle} />
             </label>
             <div style={proportionalInfoStyle}>
               <strong>{formatMoney(proportionalResult.amount)}</strong>

@@ -1,4 +1,6 @@
 "use client";
+
+import { AppFormInput } from "@/components/AppFormControls";
 import NotificationDeliveryStatus from "@/components/NotificationDeliveryStatus";
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
@@ -1788,9 +1790,9 @@ function PayrollContractFormModal({
                 <AppSelect style={inputStyle} value={draft.typ_umowy} options={CONTRACT_TYPE_OPTIONS} onChange={(value) => onDraftChange("typ_umowy", value as PayrollContractType)} />
               </Field>
               <Field label="Numer umowy"><input style={inputStyle} value={draft.numer_umowy} onChange={(event) => onDraftChange("numer_umowy", event.target.value)} /></Field>
-              <Field label="Data początku"><input type="date" style={inputStyle} value={draft.data_poczatku} onChange={(event) => onDraftChange("data_poczatku", event.target.value)} /></Field>
+              <Field label="Data początku"><AppFormInput type="date" style={inputStyle} value={draft.data_poczatku} onChange={(event) => onDraftChange("data_poczatku", event.target.value)} /></Field>
               <Field label="Data końca">
-                <input
+                <AppFormInput
                   type="date"
                   style={draft.typ_umowy === "umowa_o_prace" && draft.umowa_na_czas_nieokreslony ? disabledInputStyle : inputStyle}
                   value={draft.data_konca}
@@ -1809,15 +1811,15 @@ function PayrollContractFormModal({
                     />
                     Umowa na czas nieokreślony
                   </label>
-                  <Field label="Badania lekarskie ważne do"><input type="date" style={inputStyle} value={draft.badania_lekarskie_wazne_do} onChange={(event) => onDraftChange("badania_lekarskie_wazne_do", event.target.value)} /></Field>
-                  <Field label="Szkolenie BHP ważne do"><input type="date" style={inputStyle} value={draft.szkolenie_bhp_wazne_do} onChange={(event) => onDraftChange("szkolenie_bhp_wazne_do", event.target.value)} /></Field>
+                  <Field label="Badania lekarskie ważne do"><AppFormInput type="date" style={inputStyle} value={draft.badania_lekarskie_wazne_do} onChange={(event) => onDraftChange("badania_lekarskie_wazne_do", event.target.value)} /></Field>
+                  <Field label="Szkolenie BHP ważne do"><AppFormInput type="date" style={inputStyle} value={draft.szkolenie_bhp_wazne_do} onChange={(event) => onDraftChange("szkolenie_bhp_wazne_do", event.target.value)} /></Field>
                 </>
               )}
               {draft.typ_umowy === "student" && (
-                <Field label="Data urodzenia studenta / ucznia"><input type="date" style={inputStyle} value={draft.data_urodzenia} onChange={(event) => onDraftChange("data_urodzenia", event.target.value)} /></Field>
+                <Field label="Data urodzenia studenta / ucznia"><AppFormInput type="date" style={inputStyle} value={draft.data_urodzenia} onChange={(event) => onDraftChange("data_urodzenia", event.target.value)} /></Field>
               )}
               {draft.typ_umowy === "student" && (
-                <Field label="Legitymacja studencka ważna do"><input type="date" style={inputStyle} value={draft.legitymacja_studencka_wazna_do} onChange={(event) => onDraftChange("legitymacja_studencka_wazna_do", event.target.value)} /></Field>
+                <Field label="Legitymacja studencka ważna do"><AppFormInput type="date" style={inputStyle} value={draft.legitymacja_studencka_wazna_do} onChange={(event) => onDraftChange("legitymacja_studencka_wazna_do", event.target.value)} /></Field>
               )}
             </div>
           </section>

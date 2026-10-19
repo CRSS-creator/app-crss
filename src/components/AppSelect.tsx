@@ -27,6 +27,7 @@ export default function AppSelect({
   style,
   menuStyle,
   labelStyle,
+  id, className, ariaLabel,
 }: {
   value: string;
   options: readonly SelectOption[];
@@ -37,6 +38,9 @@ export default function AppSelect({
   style?: CSSProperties;
   menuStyle?: CSSProperties;
   labelStyle?: CSSProperties;
+  id?: string;
+  className?: string;
+  ariaLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -97,6 +101,9 @@ export default function AppSelect({
     <>
       <button
         ref={buttonRef}
+        id={id}
+        className={className}
+        aria-label={ariaLabel}
         type="button"
         disabled={disabled}
         style={{ ...selectButtonStyle, ...(disabled ? disabledSelectStyle : null), ...style }}

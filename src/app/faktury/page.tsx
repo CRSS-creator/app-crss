@@ -1,4 +1,6 @@
 "use client";
+
+import { AppFormSelect, AppFormInput } from "@/components/AppFormControls";
 import NotificationDeliveryStatus from "@/components/NotificationDeliveryStatus";
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
@@ -1020,12 +1022,12 @@ function InvoicesContent() {
               {invoices.find(invoice => invoice.id === recoveryQueue[0].invoiceId)?.kontrahent_nazwa}</p>
             <p>Jeśli ten dokument został wystawiony pod innym numerem, wybierz właściwą fakturę. Po potwierdzeniu pobierzemy jej aktualne dane i zapamiętamy powiązanie.</p>
             <label htmlFor="replacement-invoice">Faktura docelowa</label>
-            <select id="replacement-invoice" value={replacementId} onChange={event => setReplacementId(event.target.value)} disabled={linkingInvoice} style={{ width: "100%", padding: 12, margin: "12px 0 24px" }}>
+            <AppFormSelect id="replacement-invoice" value={replacementId} onChange={event => setReplacementId(event.target.value)} disabled={linkingInvoice} style={{ width: "100%", padding: 12, margin: "12px 0 24px" }}>
               <option value="">Wybierz fakturę...</option>
               {recoveryQueue[0].candidates?.map(candidate => <option key={candidate.wfirmaId} value={candidate.wfirmaId}>
                 {candidate.number} · {candidate.date} · {candidate.gross.toLocaleString("pl-PL", { style: "currency", currency: "PLN" })} · NIP {candidate.nip}
               </option>)}
-            </select>
+            </AppFormSelect>
             <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
               <button type="button" style={secondaryButtonStyle} disabled={linkingInvoice} onClick={dismissRecovery}>Pomiń</button>
               <button type="button" style={secondaryButtonStyle} disabled={!recoveryQueue[0].candidates?.some(candidate => candidate.wfirmaId === replacementId) || linkingInvoice || refreshingSelected || syncingSelectedMonth || syncingPayments} onClick={confirmReplacement}>{linkingInvoice ? "Zapisywanie..." : "Potwierdź i odśwież"}</button>
@@ -1081,7 +1083,7 @@ function InvoicesContent() {
               <DetailStat label="Okres" value={formatMonth(detailsInvoice.okres || detailsInvoice.data_wystawienia)} />
               <DetailStat label="Data wystawienia" value={detailsInvoice.data_wystawienia ? formatDate(detailsInvoice.data_wystawienia) : "Po wysłaniu"} />
               <DetailStat label="Termin płatności" value={formatDate(paymentDueDate(detailsInvoice))} />
-              {!["szkic", "anulowana"].includes(detailsInvoice.status) && <DetailStat label="Faktyczna data zapłaty" value={<><input aria-label="Faktyczna data zapłaty" type="date" max={new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Warsaw" })} value={detailsInvoice.data_zaplaty || ""} disabled={savingPaymentId !== null} onChange={event => void changeInvoicePaymentDate(detailsInvoice, event.target.value)} /><small>Wpisanie daty oznacza pełną zapłatę. Brak daty przy statusie „Zapłacona” wymaga uzupełnienia do historii CFO.</small></>} />}
+              {!["szkic", "anulowana"].includes(detailsInvoice.status) && <DetailStat label="Faktyczna data zapłaty" value={<><AppFormInput aria-label="Faktyczna data zapłaty" type="date" max={new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Warsaw" })} value={detailsInvoice.data_zaplaty || ""} disabled={savingPaymentId !== null} onChange={event => void changeInvoicePaymentDate(detailsInvoice, event.target.value)} /><small>Wpisanie daty oznacza pełną zapłatę. Brak daty przy statusie „Zapłacona” wymaga uzupełnienia do historii CFO.</small></>} />}
               <DetailStat label="Status" value={<Badge tone={paymentStatusTone(detailsInvoice)}>{paymentStatusLabel(detailsInvoice)}</Badge>} />
               <DetailStat label="Netto" value={formatMoney(detailsInvoice.kwota_netto)} />
               <DetailStat label="Brutto" value={formatMoney(detailsInvoice.kwota_brutto)} />

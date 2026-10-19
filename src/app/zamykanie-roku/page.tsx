@@ -1,5 +1,7 @@
 "use client";
 
+import { AppFormSelect } from "@/components/AppFormControls";
+
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import styles from "./yearClosing.module.css";
 import AppSelect from "@/components/AppSelect";
@@ -202,9 +204,9 @@ function YearClosingList({ role, userId }: { role: UserRole | null; userId: stri
         {([{ value: "jdg", label: "JDG" }, { value: "full", label: "Pełna księgowość" }, { value: "kadry", label: "Kadry" }] as const).map(item => <button key={item.value} type="button" aria-pressed={tab === item.value} onClick={() => setTab(item.value)} style={{ padding: "10px 18px", borderRadius: 14, border: `1px solid ${colors.border}`, fontWeight: 700, cursor: "pointer", background: tab === item.value ? colors.navy : colors.white, color: tab === item.value ? colors.white : colors.navy }}>{item.label}</button>)}
       </nav>
       <label style={{ display: "flex", gap: 12, alignItems: "center", padding: "0 24px 20px" }}>Rok
-        <select value={year} disabled={saving} onChange={event => { setStatusLoading(true); setStatuses([]); setBalances([]); setIftStatuses([]); setPayrollStatuses([]); setJdgStatuses([]); setFullStatuses([]); setYear(Number(event.target.value)); }} style={{ padding: 10, borderRadius: 12, border: `1px solid ${colors.border}` }}>
+        <AppFormSelect value={year} disabled={saving} onChange={event => { setStatusLoading(true); setStatuses([]); setBalances([]); setIftStatuses([]); setPayrollStatuses([]); setJdgStatuses([]); setFullStatuses([]); setYear(Number(event.target.value)); }} style={{ padding: 10, borderRadius: 12, border: `1px solid ${colors.border}` }}>
           {Array.from({ length: 5 }, (_, index) => new Date().getFullYear() - 2 + index).map(value => <option key={value} value={value}>{value}</option>)}
-        </select>
+        </AppFormSelect>
       </label>
       {statusError && <p role="alert" style={{ padding: "0 24px", color: colors.danger }}>{statusError}</p>}
       {loading ? <p style={{ padding: 24 }}>Ładowanie klientów…</p> : error ? <p role="alert" style={{ padding: 24, color: colors.danger }}>{error}</p> : <div className={styles.tableScroll} tabIndex={0} role="region" aria-label="Tabela zamykania roku">
@@ -240,10 +242,10 @@ function YearClosingList({ role, userId }: { role: UserRole | null; userId: stri
               <input type="checkbox" aria-label={`Potwierdzenia sald — ${client.nazwa || "Klient bez nazwy"} — Zrobione`} checked={balances.find(item => item.klient_id === client.id)?.zrobione ?? false} disabled={saving || statusLoading || Boolean(statusError)} onChange={event => void saveBalance(client.id, event.target.checked)} />
             </label></td>}
             <td className={styles.groupStart} style={cell}>
-              <select className={styles.requiredSelect} aria-label={"IFT-2R — Wymagane sporządzenie? — " + (client.nazwa || "Klient bez nazwy")} value={(iftStatuses.find(item => item.klient_id === client.id && item.rodzaj === tab)?.status ?? "brak_wysylki") === "brak_wysylki" ? "nie" : "tak"} disabled={saving || statusLoading || Boolean(statusError)} onChange={event => void saveIftStatus(client.id, { status: event.target.value === "nie" ? "brak_wysylki" : "do_wyslania" })}>
+              <AppFormSelect className={styles.requiredSelect} aria-label={"IFT-2R — Wymagane sporządzenie? — " + (client.nazwa || "Klient bez nazwy")} value={(iftStatuses.find(item => item.klient_id === client.id && item.rodzaj === tab)?.status ?? "brak_wysylki") === "brak_wysylki" ? "nie" : "tak"} disabled={saving || statusLoading || Boolean(statusError)} onChange={event => void saveIftStatus(client.id, { status: event.target.value === "nie" ? "brak_wysylki" : "do_wyslania" })}>
                 <option value="tak">Tak</option>
                 <option value="nie">Nie</option>
-              </select>
+              </AppFormSelect>
             </td>
             {iftColumns.map(column => {
               const status = iftStatuses.find(item => item.klient_id === client.id && item.rodzaj === tab);

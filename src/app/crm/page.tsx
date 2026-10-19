@@ -1,5 +1,7 @@
 "use client";
 
+import { AppFormInput } from "@/components/AppFormControls";
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
@@ -307,7 +309,7 @@ function CrmContent() {
               <button type="button" style={statsTabStyle(statsPeriod === "all")} onClick={() => setStatsPeriod("all")}>Wszystkie</button>
               <button type="button" style={statsTabStyle(statsPeriod === "month")} onClick={() => setStatsPeriod("month")}>Miesiąc</button>
               <button type="button" style={statsTabStyle(statsPeriod === "year")} onClick={() => setStatsPeriod("year")}>Ten rok</button>
-              <input type="month" value={statsMonth} onChange={(event) => { setStatsMonth(event.target.value); setStatsPeriod("month"); }} style={statsMonthInputStyle} />
+              <AppFormInput type="month" aria-label="Miesiąc statystyk CRM" value={statsMonth} onChange={(event) => { setStatsMonth(event.target.value); setStatsPeriod("month"); }} style={statsMonthInputStyle} />
             </div>
             <div style={statsKpiGridStyle}>
               <StatTile label="Skuteczność" value={formatPercent(crmStats.successRate)} hint={`${crmStats.wonCount} wygranych / ${crmStats.closedCount} zamkniętych`} />

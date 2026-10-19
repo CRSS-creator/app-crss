@@ -19,9 +19,13 @@ type CommonInputProps = {
   disabled?: boolean;
   style?: CSSProperties;
   ariaLabel?: string;
+  min?: string;
+  max?: string;
+  id?: string;
+  className?: string;
 };
 
-export function AppMonthInput({ value, onChange, disabled = false, style, ariaLabel }: CommonInputProps) {
+export function AppMonthInput({ value, onChange, disabled = false, style, ariaLabel, min, max, id, className }: CommonInputProps) {
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState<PickerPosition | null>(null);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
@@ -38,6 +42,9 @@ export function AppMonthInput({ value, onChange, disabled = false, style, ariaLa
         type="button"
         disabled={disabled}
         aria-label={ariaLabel}
+        id={id}
+        className={className}
+        aria-expanded={open}
         style={{ ...inputButtonStyle, ...(disabled ? disabledStyle : null), ...style }}
         onClick={() => {
           setYear(parseMonth(value).year);
@@ -63,11 +70,13 @@ export function AppMonthInput({ value, onChange, disabled = false, style, ariaLa
             {MONTHS.map((month, index) => {
               const monthValue = `${year}-${String(index + 1).padStart(2, "0")}`;
               const active = monthValue === value;
+              const unavailable = Boolean((min && monthValue < min) || (max && monthValue > max));
               return (
                 <button
                   key={month}
+                  disabled={unavailable}
                   type="button"
-                  style={active ? activeCellStyle : cellStyle}
+                  style={{ ...(active ? activeCellStyle : cellStyle), ...(unavailable ? disabledStyle : null) }}
                   onClick={() => {
                     onChange(monthValue);
                     setOpen(false);
@@ -81,6 +90,7 @@ export function AppMonthInput({ value, onChange, disabled = false, style, ariaLa
           <button
             type="button"
             style={todayButtonStyle}
+            disabled={Boolean((min && currentMonthValue() < min) || (max && currentMonthValue() > max))}
             onClick={() => {
               onChange(currentMonthValue());
               setOpen(false);
@@ -94,7 +104,7 @@ export function AppMonthInput({ value, onChange, disabled = false, style, ariaLa
   );
 }
 
-export function AppDateInput({ value, onChange, disabled = false, style, ariaLabel }: CommonInputProps) {
+export function AppDateInput({ value, onChange, disabled = false, style, ariaLabel, min, max, id, className }: CommonInputProps) {
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState<PickerPosition | null>(null);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
@@ -113,6 +123,9 @@ export function AppDateInput({ value, onChange, disabled = false, style, ariaLab
         type="button"
         disabled={disabled}
         aria-label={ariaLabel}
+        id={id}
+        className={className}
+        aria-expanded={open}
         style={{ ...inputButtonStyle, ...(disabled ? disabledStyle : null), ...style }}
         onClick={() => {
           setViewDate(parseDate(value) || new Date());
@@ -141,13 +154,16 @@ export function AppDateInput({ value, onChange, disabled = false, style, ariaLab
             {days.map((day) => {
               const dayValue = toDateValue(day.date);
               const active = dayValue === value;
+              const unavailable = Boolean((min && dayValue < min) || (max && dayValue > max));
               return (
                 <button
                   key={dayValue}
+                  disabled={unavailable}
                   type="button"
                   style={{
                     ...(active ? activeCellStyle : cellStyle),
                     ...(day.inMonth ? null : outsideMonthStyle),
+                    ...(unavailable ? disabledStyle : null),
                   }}
                   onClick={() => {
                     onChange(dayValue);
@@ -162,6 +178,7 @@ export function AppDateInput({ value, onChange, disabled = false, style, ariaLab
           <button
             type="button"
             style={todayButtonStyle}
+            disabled={Boolean((min && toDateValue(new Date()) < min) || (max && toDateValue(new Date()) > max))}
             onClick={() => {
               onChange(toDateValue(new Date()));
               setOpen(false);

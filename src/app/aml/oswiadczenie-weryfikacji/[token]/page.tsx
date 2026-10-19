@@ -1,5 +1,7 @@
 "use client";
 
+import { AppFormInput } from "@/components/AppFormControls";
+
 import { useEffect, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import { useParams } from "next/navigation";
 import { colors, radius, shadow } from "@/app/design";
@@ -104,7 +106,7 @@ export default function AmlIdentificationStatementPage() {
             <Field label="NIP, PESEL, KRS albo inny identyfikator" required><input style={inputStyle} value={draft.clientIdentifier} onChange={(event) => update("clientIdentifier", event.target.value)} /></Field>
           </div>
           <div style={gridStyle}>
-            <Field label="Data weryfikacji" required><input type="date" style={inputStyle} value={draft.verificationDate} onChange={(event) => update("verificationDate", event.target.value)} /></Field>
+            <Field label="Data weryfikacji" required><AppFormInput type="date" style={inputStyle} value={draft.verificationDate} onChange={(event) => update("verificationDate", event.target.value)} /></Field>
             <Field label="Osoba dokonująca weryfikacji" required><input style={inputStyle} value={draft.verifiedBy} onChange={(event) => update("verifiedBy", event.target.value)} /></Field>
           </div>
           <Field label="Rodzaj czynności" required>

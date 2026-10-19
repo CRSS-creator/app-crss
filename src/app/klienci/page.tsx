@@ -1,6 +1,8 @@
 
 "use client";
 
+import { AppFormInput } from "@/components/AppFormControls";
+
 import { useEffect, useRef, useState } from "react";
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
@@ -1917,7 +1919,7 @@ function EditableInput({
       {type === "month" ? (
         <AppMonthInput value={value} onChange={onChange} style={inputStyle} />
       ) : (
-        <input
+        <AppFormInput
           type={type}
           value={value}
           placeholder={placeholder}

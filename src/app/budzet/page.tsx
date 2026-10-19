@@ -1,5 +1,7 @@
 "use client";
 
+import { AppFormInput } from "@/components/AppFormControls";
+
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Banknote, CalendarDays, RefreshCw, Save, TrendingUp, WalletCards } from "lucide-react";
 
@@ -508,7 +510,7 @@ function MonthField({ value, onChange, compact = false }: { value: string; onCha
   return (
     <label style={compact ? compactMonthFieldStyle : monthFieldStyle}>
       <CalendarDays size={17} style={monthIconStyle} />
-      <input
+      <AppFormInput
         type="month"
         min={BUDGET_FIRST_MONTH}
         value={value}

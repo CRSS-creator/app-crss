@@ -259,6 +259,38 @@ function CfoContent() {
     await loadData();
   }
 
+  async function copyPreviousTeamCosts() {
+    const version = loadVersion.current;
+    setSaving(true);
+    try {
+      const result = await fetchCfoEmployeeCosts(monthToDate(shiftMonth(period, -1)));
+      if (version !== loadVersion.current) return;
+      if (result.error) return alert("Nie udało się pobrać kosztów poprzedniego miesiąca.");
+      const previous = new Map((result.data as CfoEmployeeCost[] || []).filter(row => row.osoba_id).map(row => [row.osoba_id, row]));
+      if (!teamMembers.some(member => previous.has(member.id))) return alert("Brak kosztów zespołu z poprzedniego miesiąca do skopiowania.");
+      setEmployeeDrafts(current => {
+        const next = { ...current };
+        for (const member of teamMembers) {
+          const source = previous.get(member.id);
+          if (!source) continue;
+          next[member.id] = {
+            ...(current[member.id] || defaultEmployeeDraft(member, period)),
+            zespol: source.zespol, w_capacity: source.w_capacity,
+            wymiar_etatu: source.wymiar_etatu, podstawa: source.podstawa,
+            zus_pracodawcy: source.zus_pracodawcy, benefity: source.benefity,
+            premie: source.premie, szkolenia: source.szkolenia,
+            nieobecnosci_godziny: source.nieobecnosci_godziny, nadgodziny: source.nadgodziny,
+          };
+        }
+        return next;
+      });
+    } catch {
+      if (version === loadVersion.current) alert("Nie udało się pobrać kosztów poprzedniego miesiąca.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function saveTeamCosts() {
     setSaving(true);
     for (const row of Object.values(employeeDrafts)) {
@@ -325,7 +357,7 @@ function CfoContent() {
       {!loading && activeTab === "przychody" ? renderRevenueSection(view.revenueLines, changeRevenueCategory) : null}
       {!loading && activeTab === "koszty" ? renderCostSection(period, costs, cost => setCashflow(current => ({ ...current, costs: current.costs.map(row => row.id === cost.id ? cost : row) })), setCosts, manualCost, setManualCost, manualInterperiod, setManualInterperiod, expandedCostPeriods, setExpandedCostPeriods, addManualCost, importCostsFile, saving, costSearch, setCostSearch) : null}
       {!loading && activeTab === "cashflow" && !cashflowError ? <CfoCashflowPanel key={period} snapshot={cashflow} period={period} onUpdated={loadData} /> : null}
-      {!loading && activeTab === "zespol" ? renderTeamSectionTable(teamMembers, employeeDrafts, setEmployeeDrafts, saveTeamCosts, saving, period, clientTimeEntries) : null}
+      {!loading && activeTab === "zespol" ? renderTeamSectionTable(teamMembers, employeeDrafts, setEmployeeDrafts, saveTeamCosts, copyPreviousTeamCosts, saving, period, clientTimeEntries) : null}
       {!loading && activeTab === "klienci" ? clientAnalysis ? renderClientsSection(clientAnalysis) : <section style={infoNoticeStyle}>Rentowność wymaga kompletu danych.</section> : null}
     </main>
   );
@@ -847,6 +879,7 @@ function renderTeamSectionTable(
   employeeDrafts: Record<string, EmployeeCostDraft>,
   setEmployeeDrafts: (next: Record<string, EmployeeCostDraft> | ((current: Record<string, EmployeeCostDraft>) => Record<string, EmployeeCostDraft>)) => void,
   saveTeamCosts: () => void,
+  copyPreviousTeamCosts: () => void,
   saving: boolean,
   period: string,
   timeEntries: CfoClientTimeEntry[],
@@ -867,7 +900,7 @@ function renderTeamSectionTable(
       <article style={panelStyle}>
         <div style={panelHeaderStyle}>
           <Users size={21} style={panelIconStyle} />
-          <h2 style={panelTitleStyle}>Koszty zespołu</h2>
+          <h2 style={{ ...panelTitleStyle, flex: 1 }}>Koszty zespołu</h2><button type="button" style={secondaryButtonStyle} onClick={copyPreviousTeamCosts} disabled={saving || teamMembers.length === 0}>Kopiuj z poprzedniego miesiąca</button>
         </div>
         <div style={tableWrapperStyle}>
           <table style={tableStyle}>
@@ -917,7 +950,7 @@ function renderTeamSectionTable(
           </table>
         </div>
         <div style={formFooterStyle}>
-          <span style={smallStyle}>Norma dzienna: 8 h. Nieobecności wpisuj w dniach, każdy dzień zmniejsza dostępność o 8 h.</span>
+          <span style={smallStyle}>Norma dzienna: 8 h. Nieobecności wpisuj w dniach, każdy dzień zmniejsza dostępność o 8 h. Po skopiowaniu sprawdź premie, szkolenia, nieobecności i nadgodziny, następnie zapisz zespół.</span>
           <button type="button" style={primaryButtonStyle} onClick={saveTeamCosts} disabled={saving || teamMembers.length === 0}><Save size={17} />Zapisz zespół</button>
         </div>
       </article>

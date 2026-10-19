@@ -2,6 +2,7 @@
 
 import { useState, type CSSProperties } from "react";
 import Link from "next/link";
+import CfoAnnualSchedules from "./CfoAnnualSchedules";
 import { OBLIGATION_TYPES, businessDate, type CashflowSnapshot, type CfoObligation } from "@/lib/cfoCashflow";
 import { saveObligation } from "@/lib/cfoCashflowService";
 import { updateCfoCost } from "@/lib/cfoService";
@@ -48,6 +49,7 @@ export default function CfoCashflowPanel({ snapshot, period, onUpdated }: {
   const invoices = snapshot.invoices.filter(i => matches(`${i.numer || ""} ${i.kontrahent_nazwa || ""}`) && (showPaid || i.status !== "oplacona"));
   const costs = snapshot.costs.filter(c => !c.ignoruj && matches(`${c.numer_dokumentu || ""} ${c.kontrahent}`) && (showPaid || !c.data_zaplaty));
   return <div>
+    <CfoAnnualSchedules snapshot={snapshot} onUpdated={onUpdated} />
     <section style={box}>
       <h2>Wynagrodzenia i podatki — {period}</h2>
       <p>Wprowadź łączne kwoty za wybrany miesiąc. ZUS obejmuje całą płatność do ZUS. Termin oznacza plan, a data zapłaty potwierdza wykonanie. VAT i CIT wpisuj w wysokości rzeczywiście należnej — system nie wylicza deklaracji podatkowych.</p>

@@ -662,7 +662,7 @@ function renderCostSection(
   async function changeCost(cost: CfoCostItem, payload: Partial<CfoCostItem>) {
     const result = await updateCfoCost(cost.id, payload);
     if (result.error) return alert("Nie udało się zapisać kosztu: " + result.error.message);
-    const updated = { ...cost, ...payload };
+    const updated = (result.data || { ...cost, ...payload }) as CfoCostItem;
     setCosts((current) => current.map((item) => item.id === cost.id ? updated : item));
     onCostChanged(updated);
   }

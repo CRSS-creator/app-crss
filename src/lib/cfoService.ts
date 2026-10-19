@@ -122,6 +122,7 @@ export type CfoCashflowInvoice = {
 };
 
 export type CfoCostItem = {
+  harmonogram_id?: string | null;
   id: string;
   import_key?: string | null;
   data_dokumentu: string | null;

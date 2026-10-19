@@ -29,6 +29,7 @@ import {
 } from "@/lib/cfoBudgetService";
 
 import { actualInvoicePayment, actualCostPayment, paymentAverage, businessDate, cashflowTransactions, obligationCashflow, emptyCashflow, OBLIGATION_TYPES, type CashflowSnapshot } from "@/lib/cfoCashflow";
+import { annualCostForecast } from "@/lib/cfoAnnualCosts";
 import { fetchCashflowSnapshot } from "@/lib/cfoCashflowService";
 
 type BudgetMonth = {
@@ -294,6 +295,7 @@ function BudgetContent() {
 
       <section style={panelStyle}>
         <p>Przepływy wynikają z dat zapłaty w Fakturach, kosztach i zobowiązaniach CFO. Średni czas zapłaty jest liczony osobno dla klienta i dostawcy z faktur wystawionych w ostatnich 6 miesiącach (lub z krótszej dostępnej historii). Bez historii stosowany jest termin dokumentu, a dla przyszłych dokumentów założenie 14 dni. Zaległości trafiają do pierwszego miesiąca prognozy.</p>
+        <p>Koszty z harmonogramów rocznych obciążają wynik po 1/12 netto miesięcznie, a gotówkę jednorazowo kwotą brutto. Powiązana faktura zastępuje prognozę danego odnowienia.</p>
         <p>Gotówka na start oznacza saldo na początek pierwszego miesiąca prognozy. Nie jest odczytywana z wyciągu.</p>
         {cashflow.invoices.some(i => i.status === "oplacona" && !i.data_zaplaty) && <p role="status">Część opłaconych faktur nie ma daty zapłaty. Są rozliczone, ale nie wchodzą do średnich ani wykonanego cash flow. Uzupełnij daty w Fakturach.</p>}
         {OBLIGATION_TYPES.some(kind => !cashflow.obligations.some(o => o.typ === kind.value && (Number(o.kwota) === 0 || o.termin_platnosci))) && <p role="status">Uzupełnij kwoty i terminy wynagrodzeń netto, ZUS, PIT-4, VAT i CIT w CFO → Cash flow. Brakujące rodzaje zobowiązań nie są uwzględnione w prognozie.</p>}
@@ -527,10 +529,11 @@ function buildBudgetMonths(
   const costHistoryMonths = monthsForRange(shiftMonth(startMonth, -3), 3);
   const revenueHistoryMonths = monthsForRange(shiftMonth(startMonth, -6), 6);
   const actualByMonth = buildActualMonthMap([...revenueHistoryMonths, ...months], revenueLines, costs, employees, bankTransactions);
-  const baseline = buildBaseline(revenueHistoryMonths, costHistoryMonths, actualByMonth, overrides);
+  const planActualByMonth = buildActualMonthMap([...revenueHistoryMonths, ...months], revenueLines, costs.filter(cost => !cost.harmonogram_id), employees, bankTransactions);
+  const baseline = buildBaseline(revenueHistoryMonths, costHistoryMonths, planActualByMonth, overrides);
   const crmForecast = buildCrmRevenueGrowthForecast(costHistoryMonths, months, crmRevenues);
   for (const entry of baseline.costPlanEntries) {
-    const source = snapshot.costs.filter(cost => !cost.ignoruj && costHistoryMonths.includes(cost.okres_start.slice(0, 7)) && counterpartyKey(cost.kontrahent || cost.id) === entry.vendorKey && cost.kategoria === entry.category && (cost.podkategoria || EMPTY_SUBCATEGORY) === entry.subcategory);
+    const source = snapshot.costs.filter(cost => !cost.ignoruj && !cost.harmonogram_id && costHistoryMonths.includes(cost.okres_start.slice(0, 7)) && counterpartyKey(cost.kontrahent || cost.id) === entry.vendorKey && cost.kategoria === entry.category && (cost.podkategoria || EMPTY_SUBCATEGORY) === entry.subcategory);
     const net = sum(source.map(cost => Number(cost.kwota_netto_cfo)));
     const issueDays = source.filter(cost => cost.data_dokumentu).map(cost => Number(cost.data_dokumentu?.slice(8, 10)));
     entry.issueDay = issueDays.length ? Math.round(sum(issueDays) / issueDays.length) : 1;
@@ -556,7 +559,12 @@ function buildBudgetMonths(
     const monthOverrides = overrides.filter((override) => overrideApplies(override, period));
     const plannedRevenueEntries = plannedRevenueEntriesForMonth(period, baseline, clientRevenues, crmForecast);
     const plannedRevenueCategories = plannedRevenueForMonth(plannedRevenueEntries);
-    const plannedCostSubcategories = plannedCostSubcategoriesForMonth(baseline.costSubcategories, actual.costBySubcategory);
+    const plannedCostSubcategories = plannedCostSubcategoriesForMonth(baseline.costSubcategories, (planActualByMonth.get(period) || emptyActual()).costBySubcategory);
+    const annual = annualCostForecast(period, snapshot.annualSchedules || [], snapshot.costs, invoicePaymentProfile.asOf);
+    for (const cost of snapshot.costs.filter(cost => !cost.ignoruj && cost.harmonogram_id)) {
+      upsertSubcategoryAmount(plannedCostSubcategories, cost.kategoria, cost.podkategoria || EMPTY_SUBCATEGORY, costShareForMonth(cost, period));
+    }
+    for (const group of annual.groups) upsertSubcategoryAmount(plannedCostSubcategories, group.category, group.subcategory || EMPTY_SUBCATEGORY, group.net);
     const crmCumulativeRevenueGrowth = crmForecast.cumulativeRevenueGrowthByMonth.get(period) || 0;
     const invoiceCashFlow = plannedInvoiceCustomerCashFlowForMonth(period, budgetInvoices, invoicePaymentProfile);
     const plannedCustomerCashFlow = invoiceCashFlow.amount
@@ -582,7 +590,7 @@ function buildBudgetMonths(
     const costCashFlow = plannedCostCashFlowForMonth(period, budgetCostPayments, costPaymentProfile);
     const plannedEmployeeCashFlow = obligationCashflow(period, snapshot.obligations, startMonth, asOf > monthToDate(startMonth) ? asOf : monthToDate(startMonth));
     const plannedOtherCostCashFlow = costCashFlow.amount
-      + plannedUnrecordedCostCashFlowForMonth(period, [...costHistoryMonths, ...months], baseline.costPlanEntries, actualByMonth, costPaymentProfile);
+      + plannedUnrecordedCostCashFlowForMonth(period, [...costHistoryMonths, ...months], baseline.costPlanEntries, planActualByMonth, costPaymentProfile) + annual.cash;
     const plannedCostCashFlow = plannedEmployeeCashFlow + plannedOtherCostCashFlow + manualCostCashFlow;
     const plannedCashFlow = plannedCustomerCashFlow + manualRevenueCashFlow - plannedCostCashFlow;
     cash += plannedCashFlow;

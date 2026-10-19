@@ -1,3 +1,4 @@
+import type { AnnualCostSchedule } from "./cfoAnnualCosts";
 import type { CfoBankTransaction, CfoCostItem, CfoInvoiceParent } from "./cfoService";
 
 export const OBLIGATION_TYPES = [
@@ -17,8 +18,8 @@ export type CfoObligation = {
   data_zaplaty: string | null;
 };
 export type CashflowInvoice = CfoInvoiceParent & { waluta?: string; data_zaplaty?: string | null };
-export type CashflowSnapshot = { invoices: CashflowInvoice[]; costs: CfoCostItem[]; obligations: CfoObligation[] };
-export const emptyCashflow = (): CashflowSnapshot => ({ invoices: [], costs: [], obligations: [] });
+export type CashflowSnapshot = { invoices: CashflowInvoice[]; costs: CfoCostItem[]; obligations: CfoObligation[]; annualSchedules?: AnnualCostSchedule[] };
+export const emptyCashflow = (): CashflowSnapshot => ({ invoices: [], costs: [], obligations: [], annualSchedules: [] });
 
 export function businessDate() {
   return new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Warsaw" }).format(new Date());

@@ -11,7 +11,8 @@ function moduleFrom(file, dependencies = {}, extra = '') {
   return exports;
 }
 const cash = moduleFrom('src/lib/cfoCashflow.ts');
-const budget = moduleFrom('src/app/budzet/page.tsx', { '@/lib/cfoCashflow': cash, '@/app/design': { colors: new Proxy({}, { get: () => '#000' }), radius: {}, shadow: {} } },
+const annual = moduleFrom('src/lib/cfoAnnualCosts.ts', { './cfoCashflow': cash });
+const budget = moduleFrom('src/app/budzet/page.tsx', { '@/lib/cfoCashflow': cash, '@/lib/cfoAnnualCosts': annual, '@/app/design': { colors: new Proxy({}, { get: () => '#000' }), radius: {}, shadow: {} } },
   '\nexport { buildBudgetMonths, buildInvoicePaymentProfile, buildCostPaymentProfile, plannedInvoiceCustomerCashFlowForMonth, plannedCostCashFlowForMonth };');
 const invoice = { id: 'invoice', typ: 'sprzedaz', status: 'oplacona', kategoria: 'standardowa', klient_id: 'client', kontrahent_nazwa: 'Client', data_wystawienia: '2026-09-01', termin_platnosci: '2026-09-08', data_zaplaty: '2026-09-20', kwota_brutto: 123, okres: '2026-09-01', waluta: 'PLN' };
 const cost = { id: 'cost', kontrahent: 'Vendor', data_dokumentu: '2026-09-01', okres_start: '2026-09-01', okres_end: '2026-09-30', kwota_netto_cfo: 100, kwota_brutto: 123, kategoria: 'systemy_technologia', data_zaplaty: '2026-09-22', ignoruj: false };
@@ -95,6 +96,7 @@ test('cashflow reads every page without bank imports and excludes drafts, cancel
       { ...invoice, status: 'szkic' }, { ...invoice, status: 'anulowana' }, { ...invoice, typ: 'proforma' }],
     cfo_koszty: Array.from({ length: 601 }, (_, id) => ({ ...cost, id: String(id) })),
     cfo_zobowiazania: [obligation],
+    cfo_harmonogramy_roczne: [],
   };
   const supabase = { from(table) {
     assert.ok(datasets[table], 'must not query bank tables');
@@ -117,4 +119,53 @@ test('failed cashflow requests return an error instead of a misleading partial s
   const service = moduleFrom('src/lib/cfoCashflowService.ts', { './supabaseClient': { supabase } });
   const result = await service.fetchCashflowSnapshot();
   assert.equal(result.data, null); assert.equal(result.error.message, 'offline');
+});
+
+
+const annualSchedule = { id: 'annual', nazwa: 'Licencja', kontrahent: 'Vendor', kategoria: 'systemy_technologia', podkategoria: null, kwota_netto: 12000, kwota_brutto: 14760, pierwszy_okres: '2027-01-01', data_faktury: '2027-01-15', termin_platnosci: '2027-01-25', aktywny: true };
+test('annual renewal costs spread over twelve months but cash leaves once in the due month', () => {
+  let net=0,cashOut=0;
+  for(let month=1;month<=12;month++) {
+    const result=annual.annualCostForecast('2027-'+String(month).padStart(2,'0'),[annualSchedule],[],'2027-01-01');
+    assert.equal(result.groups[0].net,1000); net+=result.groups[0].net;cashOut+=result.cash;
+    assert.equal(result.cash,month===1?14760:0);
+  }
+  assert.equal(net,12000);assert.equal(cashOut,14760);
+  assert.equal(annual.annualCostForecast('2028-01',[annualSchedule],[],'2027-01-01').cash,14760);
+});
+test('a linked renewal replaces only its own annual cycle, including a different price',()=>{
+ const linked={...cost,harmonogram_id:'annual',okres_start:'2027-01-01',okres_end:'2027-12-31',kwota_netto_cfo:15000,kwota_brutto:18450};
+ const known=annual.annualCostForecast('2027-01',[annualSchedule],[linked],'2027-01-01');
+ assert.equal(known.cash,0);assert.equal(known.groups.length,0);
+ assert.equal(annual.nextAnnualRenewal(annualSchedule,[linked],'2027-03-01').due,'2028-01-25');
+ assert.equal(annual.annualCostForecast('2028-01',[annualSchedule],[linked],'2027-01-01').cash,14760);
+ const ignored=annual.annualCostForecast('2027-01',[annualSchedule],[{...linked,ignoruj:true}],'2027-01-01');
+ assert.equal(ignored.cash,14760);
+});
+test('annual coverage and payment can fall in different years, and leap dates do not drift',()=>{
+ const row={...annualSchedule,pierwszy_okres:'2028-01-01',data_faktury:'2027-12-10',termin_platnosci:'2027-12-20'};
+ assert.equal(annual.annualCostForecast('2027-12',[row],[],'2027-01-01').cash,14760);
+ assert.equal(annual.annualCostForecast('2027-12',[row],[],'2027-01-01').groups.length,0);
+ assert.equal(annual.annualCostForecast('2028-01',[row],[],'2027-01-01').groups[0].net,1000);
+ const leap={...row,pierwszy_okres:'2028-02-01',termin_platnosci:'2028-02-29'};
+ assert.equal(annual.annualCostForecast('2029-02',[leap],[],'2028-01-01').cash,14760);
+ assert.equal(annual.annualCostForecast('2029-03',[leap],[],'2028-01-01').cash,0);
+});
+test('disabling an annual schedule stops forecasts, while older linked documents do not replace a new renewal',()=>{
+ assert.equal(annual.annualCostForecast('2027-01',[{...annualSchedule,aktywny:false}],[],'2027-01-01').cash,0);
+ const old={...cost,harmonogram_id:'annual',okres_start:'2026-01-01',okres_end:'2026-12-31'};
+ assert.equal(annual.annualCostForecast('2027-01',[annualSchedule],[old],'2027-01-01').cash,14760);
+});
+test('budget adds annual renewals to ordinary costs without treating the yearly invoice as a monthly payment',()=>{
+ const source={...cost,id:'old',harmonogram_id:'annual',data_dokumentu:'2026-01-15',data_zaplaty:'2026-01-25',okres_start:'2026-01-01',okres_end:'2026-12-31',kwota_netto_cfo:12000,kwota_brutto:14760,ujecie_zarzadcze:'rozliczenie_w_czasie'};
+ const ordinary=['2026-08','2026-09'].map((period,index)=>({...cost,id:'ordinary'+index,kontrahent:'Other',data_dokumentu:period+'-01',data_zaplaty:period+'-10',okres_start:period+'-01',okres_end:period+'-28',kwota_netto_cfo:200,kwota_brutto:246}));
+ let rows=[source,...ordinary];let snapshot={invoices:[],costs:rows,obligations:[],annualSchedules:[annualSchedule]};
+ let result=budget.buildBudgetMonths('2026-10',15,[],rows,[],[],[],[],[],0,snapshot);
+ assert.equal(result[3].plannedCosts,1200);assert.equal(result[3].plannedCashFlow,-15006);
+ assert.equal(result[4].plannedCosts,1200);assert.equal(result[4].plannedCashFlow,-246);
+ const renewal={...source,id:'renewal',data_dokumentu:'2027-01-15',data_zaplaty:null,termin_platnosci:'2027-01-25',okres_start:'2027-01-01',okres_end:'2027-12-31',kwota_netto_cfo:15000,kwota_brutto:18450};
+ rows=[...rows,renewal];snapshot={...snapshot,costs:rows};
+ result=budget.buildBudgetMonths('2026-10',15,[],rows,[],[],[],[],[],0,snapshot);
+ assert.equal(result[3].plannedCosts,1450);assert.equal(result[3].plannedCashFlow,-18696);
+ assert.equal(result[4].plannedCosts,1450);assert.equal(result[4].plannedCashFlow,-246);
 });

@@ -36,6 +36,8 @@ import {
 } from "@/lib/cfoService";
 
 import CfoCashflowPanel from "@/components/CfoCashflowPanel";
+import CfoDateField from "@/components/CfoDateField";
+import * as cfoUi from "@/components/cfoStyles";
 import { cashflowTransactions, emptyCashflow, actualCostPayment, type CashflowSnapshot } from "@/lib/cfoCashflow";
 import { fetchCashflowSnapshot } from "@/lib/cfoCashflowService";
 
@@ -820,7 +822,7 @@ function renderCostSection(
                         <CostPaymentStatus cost={cost} paid={paid} compact />
                         <label style={costPaymentLabelStyle}>
                           Data zapłaty
-                          <input aria-label={"Zapłata " + (cost.numer_dokumentu || cost.kontrahent)} type="date" max={new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Warsaw" })} value={cost.data_zaplaty || ""} onChange={event => void changeCost(cost, { data_zaplaty: event.target.value || null })} style={costPaymentInputStyle} />
+                          <CfoDateField ariaLabel={"Zapłata " + (cost.numer_dokumentu || cost.kontrahent)} compact max={new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Warsaw" })} value={cost.data_zaplaty || ""} onChange={value => void changeCost(cost, { data_zaplaty: value || null })} style={costPaymentInputStyle} />
                         </label>
                       </div>
                     </Td>
@@ -1935,7 +1937,7 @@ const tabStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRa
 const activeTabStyle: CSSProperties = { ...tabStyle, background: colors.navy, color: colors.white, borderColor: colors.navy };
 const dashboardGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 0.95fr) minmax(0, 1.05fr)", gap: "18px", alignItems: "start" };
 const sectionStackStyle: CSSProperties = { display: "grid", gap: "18px" };
-const panelStyle: CSSProperties = { background: colors.card, border: `1px solid ${colors.border}`, borderRadius: radius.card, boxShadow: shadow.soft, padding: "20px", minWidth: 0 };
+const panelStyle: CSSProperties = cfoUi.panel;
 const widePanelStyle: CSSProperties = { ...panelStyle, gridColumn: "1 / -1" };
 const panelHeaderStyle: CSSProperties = { display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px" };
 const panelHeaderWithTotalStyle: CSSProperties = { ...panelHeaderStyle, justifyContent: "space-between", flexWrap: "wrap" };
@@ -1943,17 +1945,17 @@ const panelTitleGroupStyle: CSSProperties = { display: "inline-flex", alignItems
 const panelHeaderTotalStyle: CSSProperties = { color: colors.navy, fontSize: "15px", whiteSpace: "nowrap" };
 const dashboardScopeBadgeStyle: CSSProperties = { display: "inline-flex", borderRadius: radius.badge, background: "rgba(23, 59, 115, 0.10)", color: colors.navy, padding: "7px 10px", fontSize: "12px", fontWeight: 900, marginLeft: "auto" };
 const panelIconStyle: CSSProperties = { color: colors.red, display: "inline-flex" };
-const panelTitleStyle: CSSProperties = { margin: 0, color: colors.navy, fontSize: "21px" };
+const panelTitleStyle: CSSProperties = cfoUi.title;
 const recommendationStyle: CSSProperties = { display: "grid", gap: "6px", background: "#e9eef7", border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "16px", color: colors.navy };
 const ownerGoalBreakdownStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: "7px 14px", marginTop: "8px", maxWidth: "560px" };
 const dangerInlineStyle: CSSProperties = { color: colors.danger, fontWeight: 900 };
 const successInlineStyle: CSSProperties = { color: colors.success, fontWeight: 900 };
 const warningInlineStyle: CSSProperties = { color: colors.warning, fontWeight: 900 };
 const tableWrapperStyle: CSSProperties = { overflowX: "auto" };
-const tableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse" };
+const tableStyle: CSSProperties = cfoUi.table;
 const wideCostTableStyle: CSSProperties = { ...tableStyle, minWidth: "1240px", tableLayout: "fixed", fontSize: "13px", lineHeight: 1.4 };
-const thStyle: CSSProperties = { color: colors.muted, borderBottom: `1px solid ${colors.border}`, padding: "11px 9px", fontSize: "12px", textTransform: "uppercase", letterSpacing: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" };
-const tdStyle: CSSProperties = { color: colors.text, borderBottom: `1px solid ${colors.border}`, padding: "10px 9px", verticalAlign: "middle" };
+const thStyle: CSSProperties = cfoUi.th;
+const tdStyle: CSSProperties = cfoUi.td;
 const documentCostCellStyle: CSSProperties = { whiteSpace: "normal", overflowWrap: "anywhere", wordBreak: "break-word" };
 const contractorCostCellStyle: CSSProperties = { whiteSpace: "normal", overflowWrap: "anywhere", wordBreak: "break-word" };
 const invoiceGroupCellStyle: CSSProperties = { ...tdStyle, background: "#f1f5f9", color: colors.navy, paddingTop: "14px", paddingBottom: "14px" };
@@ -1977,7 +1979,7 @@ const checkboxLabelStyle: CSSProperties = { display: "inline-flex", alignItems: 
 const periodMonthBadgeStyle: CSSProperties = { display: "inline-flex", alignItems: "center", width: "fit-content", minHeight: "36px", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, color: colors.navy, padding: "7px 11px", fontWeight: 850 };
 const costPeriodCellStyle: CSSProperties = { display: "grid", gap: "8px", minWidth: 0 };
 const costDateRangeStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 150px)", gap: "8px" };
-const inputStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, minHeight: "42px", padding: "9px 12px", fontWeight: 750, width: "100%", boxSizing: "border-box" };
+const inputStyle: CSSProperties = cfoUi.input;
 const searchFieldWrapStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(260px, 1fr) auto", gap: "10px", alignItems: "center", margin: "12px 0 14px" };
 const searchFieldStyle: CSSProperties = { ...inputStyle, minHeight: "40px", padding: "8px 12px" };
 const searchClearButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.navy, minHeight: "40px", padding: "8px 12px", fontWeight: 850, cursor: "pointer" };
@@ -1995,8 +1997,8 @@ const dateMutedDayStyle: CSSProperties = { color: "#94a3b8" };
 const dateSelectedDayStyle: CSSProperties = { background: colors.navy, color: colors.white };
 const todayButtonStyle: CSSProperties = { border: 0, background: "transparent", color: colors.red, fontWeight: 850, marginTop: "10px", padding: "7px 8px", cursor: "pointer", justifySelf: "start" };
 const teamInputStyle: CSSProperties = { ...inputStyle, minHeight: "34px", padding: "6px 8px", width: "96px", textAlign: "right" };
-const primaryButtonStyle: CSSProperties = { border: `1px solid ${colors.red}`, borderRadius: radius.input, background: colors.red, color: colors.white, minHeight: "42px", padding: "9px 14px", fontWeight: 850, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "8px", cursor: "pointer", whiteSpace: "nowrap" };
-const secondaryButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.navy, minHeight: "42px", padding: "9px 14px", fontWeight: 850, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "8px", cursor: "pointer" };
+const primaryButtonStyle: CSSProperties = cfoUi.primaryButton;
+const secondaryButtonStyle: CSSProperties = cfoUi.secondaryButton;
 const moneyEditStyle: CSSProperties = { display: "inline-flex", alignItems: "center", justifyContent: "flex-end", gap: "6px", color: colors.navy, fontWeight: 850, whiteSpace: "nowrap" };
 const moneyInputStyle: CSSProperties = { ...inputStyle, minHeight: "36px", padding: "7px 9px", width: "102px" };
 const costMoneyEditStyle: CSSProperties = { ...moneyEditStyle, display: "flex", width: "100%", minWidth: 0, fontSize: "12px", fontWeight: 650 };

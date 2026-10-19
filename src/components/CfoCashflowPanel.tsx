@@ -1,6 +1,10 @@
 "use client";
 
-import { useState, type CSSProperties } from "react";
+import { useState } from "react";
+import { WalletCards, FileText, ReceiptText, Save, Search } from "lucide-react";
+import { colors } from "@/app/design";
+import CfoDateField from "./CfoDateField";
+import * as ui from "./cfoStyles";
 import Link from "next/link";
 import CfoAnnualSchedules from "./CfoAnnualSchedules";
 import { OBLIGATION_TYPES, businessDate, type CashflowSnapshot, type CfoObligation } from "@/lib/cfoCashflow";
@@ -8,10 +12,6 @@ import { saveObligation } from "@/lib/cfoCashflowService";
 import { updateCfoCost } from "@/lib/cfoService";
 
 const money = (n: number) => new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN" }).format(n);
-const box: CSSProperties = { background: "white", border: "1px solid #dce3eb", borderRadius: 18, padding: 20, marginBottom: 18 };
-const input: CSSProperties = { border: "1px solid #cbd5e1", borderRadius: 8, padding: 8, maxWidth: "100%" };
-const cell: CSSProperties = { padding: "10px 8px", textAlign: "left", borderBottom: "1px solid #e2e8f0" };
-
 function status(paid: string | null | undefined, due: string | null | undefined) {
   return paid ? "Zapłacone" : due && due < businessDate() ? "Zaległe" : "Do zapłaty";
 }
@@ -48,42 +48,45 @@ export default function CfoCashflowPanel({ snapshot, period, onUpdated }: {
   const matches = (label: string) => label.toLocaleLowerCase("pl").includes(search.toLocaleLowerCase("pl"));
   const invoices = snapshot.invoices.filter(i => matches(`${i.numer || ""} ${i.kontrahent_nazwa || ""}`) && (showPaid || i.status !== "oplacona"));
   const costs = snapshot.costs.filter(c => !c.ignoruj && matches(`${c.numer_dokumentu || ""} ${c.kontrahent}`) && (showPaid || !c.data_zaplaty));
-  return <div>
+  return <div style={{ display: "grid", gap: "18px" }}>
     <CfoAnnualSchedules snapshot={snapshot} onUpdated={onUpdated} />
-    <section style={box}>
-      <h2>Wynagrodzenia i podatki — {period}</h2>
-      <p>Wprowadź łączne kwoty za wybrany miesiąc. ZUS obejmuje całą płatność do ZUS. Termin oznacza plan, a data zapłaty potwierdza wykonanie. VAT i CIT wpisuj w wysokości rzeczywiście należnej — system nie wylicza deklaracji podatkowych.</p>
-      <p>Budżet powtarza ostatnią zapisaną kwotę i termin osobno dla każdego rodzaju. Zapis konkretnego miesiąca zastępuje tę prognozę. Kwota 0 oznacza brak zobowiązania. Nie dodawaj tych samych płatności ponownie jako faktur kosztowych.</p>
-      {error && <p role="alert" style={{ color: "#b91c1c" }}>{error}</p>}
-      <div style={{ overflowX: "auto" }}><table style={{ width: "100%" }}>
-        <thead><tr>{["Rodzaj", "Kwota", "Termin płatności", "Data zapłaty", "Status", ""].map((h, i) => <th key={i} style={cell}>{h}</th>)}</tr></thead>
+    {error && <div role="alert" style={ui.error}>{error}</div>}
+    <section style={ui.panel}>
+      <header style={ui.header}><div style={ui.titleGroup}><WalletCards size={21} color={colors.red} /><h2 style={ui.title}>Wynagrodzenia i podatki</h2></div><span style={ui.badge}>{period}</span></header>
+      <p style={ui.text}>Wprowadź kwoty za wybrany miesiąc. Termin wyznacza plan, a data zapłaty potwierdza wykonanie. ZUS obejmuje całą płatność; VAT i CIT wpisuj w kwocie należnej.</p>
+      <div style={{ overflowX: "auto" }}><table style={{ ...ui.table, minWidth: "900px" }}>
+        <thead><tr>{["Rodzaj", "Kwota (zł)", "Termin płatności", "Data zapłaty", "Status", ""].map((h, i) => <th key={i} style={ui.th}>{h}</th>)}</tr></thead>
         <tbody>{OBLIGATION_TYPES.map(kind => {
           const row = drafts[period + kind.value] || snapshot.obligations.find(o => o.okres.slice(0, 7) === period && o.typ === kind.value)
             || { okres: period + "-01", typ: kind.value, kwota: 0, termin_platnosci: null, data_zaplaty: null };
           const stored = snapshot.obligations.some(o => o.okres.slice(0, 7) === period && o.typ === kind.value);
+          const label = !stored ? "Brak danych" : Number(row.kwota) === 0 ? "Brak zobowiązania" : status(row.data_zaplaty, row.termin_platnosci);
           return <tr key={kind.value}>
-            <td style={cell}>{kind.label}</td>
-            <td style={cell}><input aria-label={`Kwota ${kind.label}`} style={{ ...input, width: 130 }} type="number" min="0" step="0.01" value={row.kwota} disabled={saving} onChange={e => change(row, { kwota: Number(e.target.value) })} /></td>
-            <td style={cell}><input aria-label={`Termin ${kind.label}`} style={input} type="date" value={row.termin_platnosci || ""} disabled={saving} onChange={e => change(row, { termin_platnosci: e.target.value || null })} /></td>
-            <td style={cell}><input aria-label={`Zapłata ${kind.label}`} style={input} type="date" max={businessDate()} value={row.data_zaplaty || ""} disabled={saving} onChange={e => change(row, { data_zaplaty: e.target.value || null })} /></td>
-            <td style={cell}>{!stored ? "Brak danych" : Number(row.kwota) === 0 ? "Brak zobowiązania" : status(row.data_zaplaty, row.termin_platnosci)}</td>
-            <td style={cell}><button disabled={saving} style={input} onClick={() => void save(row)}>Zapisz</button></td>
+            <td style={{ ...ui.td, fontWeight: 650, whiteSpace: "nowrap" }}>{kind.label}</td>
+            <td style={{ ...ui.td, width: "130px" }}><input aria-label={"Kwota " + kind.label} style={{ ...ui.compactInput, textAlign: "right" }} type="number" min="0" step="0.01" value={row.kwota} disabled={saving} onChange={e => change(row, { kwota: Number(e.target.value) })} /></td>
+            <td style={{ ...ui.td, minWidth: "175px" }}><CfoDateField ariaLabel={"Termin " + kind.label} compact value={row.termin_platnosci || ""} disabled={saving} onChange={value => change(row, { termin_platnosci: value || null })} /></td>
+            <td style={{ ...ui.td, minWidth: "175px" }}><CfoDateField ariaLabel={"Zapłata " + kind.label} compact max={businessDate()} value={row.data_zaplaty || ""} disabled={saving} onChange={value => change(row, { data_zaplaty: value || null })} /></td>
+            <td style={ui.td}><span style={{ ...ui.badge, ...(label === "Zapłacone" ? { color: colors.success, background: "rgba(22,163,74,0.08)" } : label === "Zaległe" ? { color: colors.danger, background: "rgba(220,38,38,0.06)" } : {}) }}>{label}</span></td>
+            <td style={ui.td}><button type="button" disabled={saving} style={ui.smallButton} onClick={() => void save(row)}><Save size={14} />Zapisz</button></td>
           </tr>;
         })}</tbody>
       </table></div>
+      <details style={ui.details}><summary style={ui.summary}>Jak te kwoty wpływają na Budżet?</summary><p style={{ ...ui.text, margin: "10px 0 0" }}>Budżet powtarza ostatnią zapisaną kwotę i termin osobno dla każdego rodzaju. Zapis konkretnego miesiąca zastępuje tę prognozę. Kwota 0 oznacza brak zobowiązania. Nie dodawaj tych samych płatności ponownie jako faktur kosztowych.</p></details>
     </section>
-    <section style={box}>
-      <input style={input} placeholder="Szukaj dokumentu lub kontrahenta" aria-label="Szukaj rozrachunków" value={search} onChange={e => setSearch(e.target.value)} />
-      <label style={{ marginLeft: 16 }}><input type="checkbox" checked={showPaid} onChange={e => setShowPaid(e.target.checked)} /> Pokaż również zapłacone</label>
-      <h2>Należności z zakładki Faktury</h2>
-      <p>Statusy, terminy i rzeczywiste daty wpłat pochodzą z <Link href="/faktury">Faktur</Link>. Opłacone dokumenty bez daty wpłaty wymagają jej uzupełnienia; nie są próbkami średniego czasu zapłaty.</p>
-      <div style={{ overflowX: "auto" }}><table style={{ width: "100%" }}><thead><tr>{["Faktura", "Klient", "Brutto", "Termin", "Zapłata", "Status"].map(h => <th key={h} style={cell}>{h}</th>)}</tr></thead>
-        <tbody>{invoices.map(i => <tr key={i.id}><td style={cell}>{i.numer || "—"}</td><td style={cell}>{i.kontrahent_nazwa}</td><td style={cell}>{new Intl.NumberFormat("pl-PL", { style: "currency", currency: i.waluta || "PLN" }).format(Number(i.kwota_brutto))}</td><td style={cell}>{i.termin_platnosci || "—"}</td><td style={cell}>{i.data_zaplaty || "—"}</td><td style={cell}>{i.status === "oplacona" ? "Zapłacona" : i.status === "przeterminowana" ? "Zaległa" : status(null, i.termin_platnosci)}</td></tr>)}</tbody>
+    <section style={ui.panel}>
+      <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "14px", marginBottom: "22px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", flex: "1 1 280px" }}><Search size={17} color={colors.muted} /><input style={ui.input} placeholder="Szukaj dokumentu lub kontrahenta…" aria-label="Szukaj rozrachunków" value={search} onChange={e => setSearch(e.target.value)} /></div>
+        <label style={{ display: "inline-flex", alignItems: "center", gap: "8px", color: colors.navy, fontSize: "13px", fontWeight: 650, cursor: "pointer" }}><input type="checkbox" checked={showPaid} onChange={e => setShowPaid(e.target.checked)} />Pokaż również zapłacone</label>
+      </div>
+      <header style={ui.header}><div style={ui.titleGroup}><FileText size={21} color={colors.red} /><h2 style={ui.title}>Należności z faktur</h2></div><Link href="/faktury" style={{ ...ui.smallButton, textDecoration: "none" }}>Przejdź do Faktur</Link></header>
+      <p style={ui.text}>Statusy i daty wpłat pochodzą z Faktur. Uzupełnij brakujące daty przy opłaconych dokumentach, aby uwzględnić je w historii płatności.</p>
+      <div style={{ overflowX: "auto" }}><table style={{ ...ui.table, minWidth: "620px" }}><thead><tr>{["Faktura", "Klient", "Brutto", "Termin", "Zapłata", "Status"].map(h => <th key={h} style={ui.th}>{h}</th>)}</tr></thead>
+        <tbody>{invoices.length === 0 && <tr><td colSpan={6} style={{ ...ui.td, textAlign: "center", color: colors.muted, padding: "24px" }}>Brak faktur dla wybranych filtrów.</td></tr>}{invoices.map(i => <tr key={i.id}><td style={{ ...ui.td, fontWeight: 650 }}>{i.numer || "—"}</td><td style={ui.td}>{i.kontrahent_nazwa}</td><td style={{ ...ui.td, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>{new Intl.NumberFormat("pl-PL", { style: "currency", currency: i.waluta || "PLN" }).format(Number(i.kwota_brutto))}</td><td style={ui.td}>{ui.dateLabel(i.termin_platnosci)}</td><td style={ui.td}>{ui.dateLabel(i.data_zaplaty)}</td><td style={ui.td}><span style={ui.badge}>{i.status === "oplacona" ? "Zapłacona" : i.status === "przeterminowana" ? "Zaległa" : status(null, i.termin_platnosci)}</span></td></tr>)}</tbody>
       </table></div>
-      <h2>Faktury kosztowe</h2>
-      <p>Datę zapłaty uzupełnij po opłaceniu całego dokumentu. Import i kategorie kosztów pozostają w zakładce Koszty.</p>
-      <div style={{ overflowX: "auto" }}><table style={{ width: "100%" }}><thead><tr>{["Dokument", "Dostawca", "Brutto", "Data zapłaty", "Status"].map(h => <th key={h} style={cell}>{h}</th>)}</tr></thead>
-        <tbody>{costs.map(c => <tr key={c.id}><td style={cell}>{c.numer_dokumentu || "—"}</td><td style={cell}>{c.kontrahent}</td><td style={cell}>{money(Number(c.kwota_brutto ?? c.kwota_netto_cfo))}</td><td style={cell}><input aria-label={`Zapłata ${c.numer_dokumentu || c.kontrahent}`} style={input} type="date" max={businessDate()} disabled={saving} value={c.data_zaplaty || ""} onChange={e => void costDate(c.id, "data_zaplaty", e.target.value)} /></td><td style={cell}>{c.data_zaplaty ? "Zapłacone" : "Brak daty zapłaty"}</td></tr>)}</tbody>
+      <header style={{ ...ui.header, marginTop: "28px" }}><div style={ui.titleGroup}><ReceiptText size={21} color={colors.red} /><h2 style={ui.title}>Faktury kosztowe</h2></div></header>
+      <p style={ui.text}>Wpisz faktyczną datę pełnej zapłaty. Dokumenty i kategorie edytujesz w zakładce Koszty.</p>
+      <div style={{ overflowX: "auto" }}><table style={{ ...ui.table, minWidth: "600px" }}><thead><tr>{["Dokument", "Dostawca", "Brutto", "Data zapłaty", "Status"].map(h => <th key={h} style={ui.th}>{h}</th>)}</tr></thead>
+        <tbody>{costs.length === 0 && <tr><td colSpan={5} style={{ ...ui.td, textAlign: "center", color: colors.muted, padding: "24px" }}>Brak kosztów dla wybranych filtrów.</td></tr>}{costs.map(c => <tr key={c.id}><td style={{ ...ui.td, fontWeight: 650 }}>{c.numer_dokumentu || "—"}</td><td style={ui.td}>{c.kontrahent}</td><td style={{ ...ui.td, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>{money(Number(c.kwota_brutto ?? c.kwota_netto_cfo))}</td><td style={{ ...ui.td, minWidth: "180px" }}><CfoDateField ariaLabel={"Zapłata " + (c.numer_dokumentu || c.kontrahent)} compact max={businessDate()} disabled={saving} value={c.data_zaplaty || ""} onChange={value => void costDate(c.id, "data_zaplaty", value)} /></td><td style={ui.td}><span style={ui.badge}>{c.data_zaplaty ? "Zapłacone" : "Brak daty zapłaty"}</span></td></tr>)}</tbody>
       </table></div>
     </section>
   </div>;

@@ -140,3 +140,25 @@ test('selected refresh still resolves a disappeared draft through guarded recove
  const result=await api.loadSelectedWfirmaInvoices({from:()=>query},{},[local],new Map(),new Map(),new Set());
  assert.equal(result.get('draft').id,'final');assert.ok(listings>0);
 });
+
+test('real API NOT FOUND exception enters selected draft recovery and isolates successful selected reads',async()=>{
+ const reads=[],snapshots=new Set(),errors=new Map();
+ const api=load({getWfirmaInvoice:async(_,id)=>{reads.push(id);if(id==='draft')throw Error('wFirma NOT FOUND: {"status":{"code":"NOT FOUND"}}');return {...final,id};},findWfirmaInvoices:async()=>[final]});
+ const query={select(){return this},eq(){return this},neq(){return this},async maybeSingle(){return {data:null,error:null}}};
+ const result=await api.loadSelectedWfirmaInvoices({from:()=>query},{},[local,{...local,id:'other',wfirma_id:'existing'}],errors,new Map(),snapshots);
+ assert.equal(result.get('draft').id,'final');assert.equal(result.get('existing').id,'existing');
+ assert.equal(reads.filter(id=>id==='existing').length,1);assert.equal(snapshots.has(result.get('existing')),true);
+});
+
+test('NOT FOUND recovery offers changed-amount candidates instead of auto-linking them',async()=>{
+ const choices=new Map();const api=load({getWfirmaInvoice:async()=>{throw Error('wFirma NOT FOUND: missing')},findWfirmaInvoices:async()=>[{...final,id:'123',total:999}]});
+ const query={select(){return this},in(){return this},async neq(){return {data:[],error:null}}};
+ const result=await api.loadSelectedWfirmaInvoices({from:()=>query},{},[local],new Map(),choices,new Set());
+ assert.equal(result.has('draft'),false);assert.equal(choices.get('draft')[0].wfirmaId,'123');
+});
+
+test('empty monthly results do not replace the helpful missing-document message with raw API JSON',async()=>{
+ const errors=new Map();const api=load({getWfirmaInvoice:async()=>{throw Error('wFirma NOT FOUND: missing')},findWfirmaInvoices:async()=>{throw Error('wFirma NOT FOUND: empty month')}});
+ const result=await api.loadSelectedWfirmaInvoices({},{},[local],errors,new Map(),new Set());
+ assert.equal(result.size,0);assert.match(errors.get('draft'),/Nie znaleziono dokumentu/);assert.doesNotMatch(errors.get('draft'),/wFirma NOT FOUND/);
+});

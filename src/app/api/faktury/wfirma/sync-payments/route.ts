@@ -258,7 +258,11 @@ async function loadSelectedWfirmaInvoices(
       }
       unresolved.push(invoice);
     } catch (error) {
-      lookupErrors.set(id, error instanceof Error ? error.message : "Nie udało się odczytać faktury z wFirmy.");
+      const message = error instanceof Error ? error.message : "Nie udało się odczytać faktury z wFirmy.";
+      // The API throws for a missing draft instead of returning an empty detail.
+      // Only explicit NOT FOUND enters recovery, never auth/network errors.
+      if (/^wFirma NOT FOUND:/i.test(message)) unresolved.push(invoice);
+      else lookupErrors.set(id, message);
     }
   }
   if (unresolved.length) {
@@ -305,6 +309,7 @@ async function loadWfirmaInvoicesByMonth(
         if (hasAllRequestedInvoices(invoicesById, requestedWfirmaIds)) break;
         if (wfirmaInvoices.length < limit) break;
       } catch (error) {
+        if (error instanceof Error && /^wFirma NOT FOUND:/i.test(error.message)) break;
         listingError = error instanceof Error ? error.message : "Nieznany błąd odczytu listy faktur.";
         console.error("Nie udało się pobrać faktur z wFirmy dla miesiąca.", {
           month,
@@ -330,7 +335,9 @@ async function loadWfirmaInvoicesByMonth(
           invoicesById.set(wfirmaId, direct);
         }
       } catch (error) {
-        lookupErrors.set(wfirmaId, `Nie udało się odczytać faktury z wFirmy: ${error instanceof Error ? error.message : "Nieznany błąd połączenia."}`);
+        lookupErrors.set(wfirmaId, error instanceof Error && /^wFirma NOT FOUND:/i.test(error.message)
+          ? "Nie znaleziono dokumentu pod zapisanym identyfikatorem wFirmy ani jednoznacznego dokumentu zastępczego. Sprawdź, czy szkic został wystawiony lub usunięty."
+          : `Nie udało się odczytać faktury z wFirmy: ${error instanceof Error ? error.message : "Nieznany błąd połączenia."}`);
       }
     }
     if (currentMatch && !isDraftInvoiceNumber(currentMatch)) continue;

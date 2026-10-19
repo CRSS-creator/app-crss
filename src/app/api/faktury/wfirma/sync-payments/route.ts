@@ -126,6 +126,9 @@ async function syncPayments(request: NextRequest) {
   const resolveBankAccount = createInvoiceBankAccountResolver(admin, wfirma.config);
   const requestedMonth = syncMonth(request, payload);
   const requestedInvoiceIds = syncInvoiceIds(payload);
+  if (payload.invoiceIds !== undefined && (!Array.isArray(payload.invoiceIds) || requestedInvoiceIds.length === 0 || requestedInvoiceIds.length !== payload.invoiceIds.length)) {
+    return NextResponse.json({ error: "Wybierz poprawne identyfikatory faktur do odświeżenia." }, { status: 400 });
+  }
   const requestedRange = requestedMonth ? monthRange(requestedMonth) : null;
   let query = admin
     .from("faktury")
@@ -154,8 +157,11 @@ async function syncPayments(request: NextRequest) {
   const invoices = ((data || []) as InvoiceRow[]).filter((invoice) => stringify(invoice.wfirma_id));
   const lookupErrors = new Map<string, string>();
   const recoveryCandidates = new Map<string, RecoveryCandidate[]>();
+  const detailSnapshots = new Set<WfirmaInvoice>();
   const wfirmaInvoicesById = payload.confirmedReplacement ? new Map<string, WfirmaInvoice>()
-    : await loadWfirmaInvoicesByMonth(admin, wfirma.config, invoices, requestedMonth, lookupErrors, recoveryCandidates);
+    : requestedInvoiceIds.length > 0 && !requestedMonth
+      ? await loadSelectedWfirmaInvoices(admin, wfirma.config, invoices, lookupErrors, recoveryCandidates, detailSnapshots)
+      : await loadWfirmaInvoicesByMonth(admin, wfirma.config, invoices, requestedMonth, lookupErrors, recoveryCandidates);
   const paid: PaidInvoice[] = [];
   const failed: FailedInvoice[] = [];
   const refreshed: { invoiceId: string; number: string | null; pdf: boolean }[] = [];
@@ -174,7 +180,7 @@ async function syncPayments(request: NextRequest) {
       if (!wfirmaInvoice) throw new Error(lookupErrors.get(wfirmaId) || "Nie znaleziono faktury w wFirmie. Jeśli szkic został wystawiony pod nowym numerem, trzeba potwierdzić numer dokumentu docelowego.");
 
       if (requestedMonth || requestedInvoiceIds.length > 0) {
-        const syncResult = await syncWfirmaInvoiceSnapshot(admin, wfirma.config, invoice, wfirmaInvoice, resolveBankAccount);
+        const syncResult = await syncWfirmaInvoiceSnapshot(admin, wfirma.config, invoice, wfirmaInvoice, resolveBankAccount, detailSnapshots.has(wfirmaInvoice));
         wfirmaInvoice = syncResult.remoteInvoice;
         if (syncResult.updatedNumber || syncResult.savedPdf) {
           refreshed.push({ invoiceId: invoice.id, number: syncResult.invoiceNumber, pdf: syncResult.savedPdf });
@@ -228,6 +234,38 @@ async function syncPayments(request: NextRequest) {
     paid,
     failed,
   });
+}
+
+// Read selected documents directly; month searches are only needed for draft recovery.
+async function loadSelectedWfirmaInvoices(
+  admin: SupabaseClient,
+  config: Parameters<typeof getWfirmaInvoice>[0],
+  invoices: InvoiceRow[],
+  lookupErrors: Map<string, string>,
+  recoveryCandidates: Map<string, RecoveryCandidate[]>,
+  detailSnapshots: Set<WfirmaInvoice>
+) {
+  const resolved = new Map<string, WfirmaInvoice>();
+  const unresolved: InvoiceRow[] = [];
+  for (const invoice of invoices) {
+    const id = stringify(invoice.wfirma_id);
+    try {
+      const detail = firstWfirmaInvoice(await retryWfirmaRead(() => getWfirmaInvoice(config, id)));
+      if (detail && stringify(detail.id) === id && !isDraftInvoiceNumber(detail)) {
+        resolved.set(id, detail);
+        detailSnapshots.add(detail);
+        continue;
+      }
+      unresolved.push(invoice);
+    } catch (error) {
+      lookupErrors.set(id, error instanceof Error ? error.message : "Nie udało się odczytać faktury z wFirmy.");
+    }
+  }
+  if (unresolved.length) {
+    const recovered = await loadWfirmaInvoicesByMonth(admin, config, unresolved, null, lookupErrors, recoveryCandidates);
+    for (const [id, invoice] of recovered) if (!resolved.has(id)) resolved.set(id, invoice);
+  }
+  return resolved;
 }
 
 async function loadWfirmaInvoicesByMonth(
@@ -464,12 +502,13 @@ async function syncWfirmaInvoiceSnapshot(
   config: Parameters<typeof findWfirmaInvoices>[0]["config"],
   invoice: InvoiceRow,
   wfirmaInvoice: WfirmaInvoice,
-  resolveBankAccount: () => Promise<RequiredInvoiceBankAccount>
+  resolveBankAccount: () => Promise<RequiredInvoiceBankAccount>,
+  hasDetailSnapshot = false
 ) {
   const wfirmaId = stringify(invoice.wfirma_id);
   // Monthly listings are not a complete detail snapshot after external edits.
   const detailId = stringify(wfirmaInvoice.id) || wfirmaId;
-  const detail = firstWfirmaInvoice(await retryWfirmaRead(() => getWfirmaInvoice(config, detailId)));
+  const detail = hasDetailSnapshot ? wfirmaInvoice : firstWfirmaInvoice(await retryWfirmaRead(() => getWfirmaInvoice(config, detailId)));
   if (!detail || stringify(detail.id) !== detailId) throw new Error("wFirma nie zwróciła szczegółów tej faktury. Zachowano dotychczasowe dane.");
   wfirmaInvoice = detail;
   if (isWfirmaDraft(wfirmaInvoice)) {

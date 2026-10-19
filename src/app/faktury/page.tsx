@@ -194,16 +194,17 @@ function InvoicesContent() {
   const allOverdueSelectableChecked =
     selectableOverdueInvoices.length > 0 && selectableOverdueInvoices.every((invoice) => selectedOverdueInvoiceIds.includes(invoice.id));
 
-  async function loadData(options?: { generateCurrentMonth?: boolean }) {
+  async function loadData(options?: { generateCurrentMonth?: boolean; invoiceIds?: string[] }) {
     const request = ++listRequest.current;
     setLoading(true);
     if (options?.generateCurrentMonth) {
       await generateInvoices(monthToDate(currentMonthInput()), { silent: true });
     }
-    const openInvoiceId = detailsRef.current?.id;
+    const detailId = detailsRef.current?.id;
+    const openInvoiceId = detailId && (!options?.invoiceIds || options.invoiceIds.includes(detailId)) ? detailId : undefined;
     const openDetailRequest = detailRequest.current;
     const [result, detailResult] = await Promise.all([
-      fetchInvoices(),
+      fetchInvoices(options?.invoiceIds),
       openInvoiceId ? fetchInvoiceDetails(openInvoiceId) : Promise.resolve(null),
     ]);
     if (request !== listRequest.current) return;
@@ -214,14 +215,16 @@ function InvoicesContent() {
       return;
     }
     const nextInvoices = result.data || [];
-    setInvoices(nextInvoices);
+    setInvoices(current => options?.invoiceIds
+      ? current.map(invoice => nextInvoices.find(updated => updated.id === invoice.id) || invoice)
+      : nextInvoices);
     if (detailResult?.error) alert("Nie udało się odświeżyć szczegółów faktury. Otwórz je ponownie.");
     if (detailResult?.data && openDetailRequest === detailRequest.current) setDetailsInvoice(current => current?.id === openInvoiceId ? detailResult.data : current);
     setSelectedInvoiceIds((current) =>
-      current.filter((invoiceId) => (result.data || []).some((invoice) => invoice.id === invoiceId && canSelectInvoice(invoice as Invoice)))
+      current.filter((invoiceId) => (options?.invoiceIds && !options.invoiceIds.includes(invoiceId)) || (result.data || []).some((invoice) => invoice.id === invoiceId && canSelectInvoice(invoice as Invoice)))
     );
     setSelectedOverdueInvoiceIds((current) =>
-      current.filter((invoiceId) => (result.data || []).some((invoice) => invoice.id === invoiceId && canSendOverdueReminder(invoice as Invoice)))
+      current.filter((invoiceId) => (options?.invoiceIds && !options.invoiceIds.includes(invoiceId)) || (result.data || []).some((invoice) => invoice.id === invoiceId && canSendOverdueReminder(invoice as Invoice)))
     );
     setLoading(false);
   }
@@ -311,7 +314,7 @@ function InvoicesContent() {
         }
         errors.push(...collectSyncErrors(result.data?.failed || []));
       }
-      await loadData();
+      await loadData({ invoiceIds });
       if (errors.length) alert("Nie udało się odświeżyć części zaznaczonych faktur:\n\n" + errors.join("\n"));
     } finally {
       setRefreshingSelected(false);

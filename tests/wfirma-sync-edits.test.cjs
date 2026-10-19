@@ -4,7 +4,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const vm=require('node:vm');
 const ts=require('typescript');
-const source=fs.readFileSync(path.join(__dirname,'../src/app/api/faktury/wfirma/sync-payments/route.ts'),'utf8')+'\nexport {findMatchingFinalWfirmaInvoice,loadWfirmaInvoicesByMonth,syncWfirmaInvoiceSnapshot,retryWfirmaRead,isRecoveryCandidate,loadConfirmedReplacement};';
+const source=fs.readFileSync(path.join(__dirname,'../src/app/api/faktury/wfirma/sync-payments/route.ts'),'utf8')+'\nexport {loadSelectedWfirmaInvoices,findMatchingFinalWfirmaInvoice,loadWfirmaInvoicesByMonth,syncWfirmaInvoiceSnapshot,retryWfirmaRead,isRecoveryCandidate,loadConfirmedReplacement};';
 function load(overrides={}) {
  const exports={};
  const wfirma={extractWfirmaInvoices:x=>x,firstWfirmaInvoice:x=>x,...overrides};
@@ -119,4 +119,24 @@ test('missing edited draft offers unoccupied same-client candidates without auto
  const query={select(){return this},in(){return this},async neq(){return {data:[],error:null}}};
  const choices=new Map();const result=await loadInvoices({from:()=>query},{},[local],null,new Map(),choices);
  assert.equal(result.has('draft'),false);assert.equal(choices.get('draft')[0].wfirmaId,'123');
+});
+
+
+test('selected refresh reads only selected IDs, without monthly listings or duplicate detail reads',async()=>{
+ const reads=[];let listings=0;const snapshots=new Set();
+ const api=load({getWfirmaInvoice:async(_,id)=>{reads.push(id);return {...final,id}},findWfirmaInvoices:async()=>{listings++;throw Error('unexpected listing')}});
+ const result=await api.loadSelectedWfirmaInvoices({}, {}, [{...local,wfirma_id:'selected-1'},{...local,wfirma_id:'selected-2'}],new Map(),new Map(),snapshots);
+ assert.deepEqual(reads,['selected-1','selected-2']);assert.equal(listings,0);
+ assert.equal(result.size,2);assert.equal(snapshots.has(result.get('selected-1')),true);
+});
+test('selected refresh connection failure does not scan unrelated months',async()=>{
+ let listings=0;const errors=new Map();const api=load({getWfirmaInvoice:async()=>{throw Error('AUTH unavailable')},findWfirmaInvoices:async()=>{listings++;return []}});
+ const result=await api.loadSelectedWfirmaInvoices({}, {}, [local],errors,new Map(),new Set());
+ assert.equal(result.size,0);assert.equal(listings,0);assert.match(errors.get('draft'),/AUTH unavailable/);
+});
+test('selected refresh still resolves a disappeared draft through guarded recovery',async()=>{
+ let listings=0;const api=load({getWfirmaInvoice:async()=>null,findWfirmaInvoices:async()=>{listings++;return [final]}});
+ const query={select(){return this},eq(){return this},neq(){return this},async maybeSingle(){return {data:null,error:null}}};
+ const result=await api.loadSelectedWfirmaInvoices({from:()=>query},{},[local],new Map(),new Map(),new Set());
+ assert.equal(result.get('draft').id,'final');assert.ok(listings>0);
 });

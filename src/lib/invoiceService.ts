@@ -164,7 +164,8 @@ const INVOICE_SELECT = `
 // Fetch document contents only when opening details.
 const INVOICE_LIST_SELECT = `*, klienci(nazwa,nip,email,telefon), delivery_summary:faktury_email_history(status,notification_type)`;
 
-export async function fetchInvoices() {
+export async function fetchInvoices(invoiceIds?: string[]) {
+  if (invoiceIds) return supabase.from("faktury").select(INVOICE_LIST_SELECT).in("id", invoiceIds).neq("typ", "korekta");
   const overdue = await supabase.rpc("mark_overdue_invoices");
   if (overdue.error) return { data: null, error: overdue.error };
   // Preserve the existing list range and ordering; only the payload is lighter.

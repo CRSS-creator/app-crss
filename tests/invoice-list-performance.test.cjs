@@ -8,7 +8,8 @@ function service(pages, detail, overdueError=null) {
   const calls=[];let index=0;
   const supabase={rpc:async name=>{calls.push(['rpc',name]);return {error:overdueError};},from:()=>{
     const builder={};
-    for(const method of ['select','neq','order','eq']) builder[method]=(...args)=>{calls.push([method,...args]);return builder;};
+    for(const method of ['select','neq','order','eq','in']) builder[method]=(...args)=>{calls.push([method,...args]);return builder;};
+    builder.then=(resolve,reject)=>Promise.resolve(pages[index++]).then(resolve,reject);
     builder.range=async (...args)=>{calls.push(['range',...args]);return pages[index++];};
     builder.single=async()=>detail;
     return builder;
@@ -42,4 +43,12 @@ test('details fetch current positions and full history for the selected ID',asyn
   assert.equal(await api.fetchInvoiceDetails('invoice'),detail);
   assert.deepEqual(calls.find(x=>x[0]==='eq'),['eq','id','invoice']);
   const select=calls.find(x=>x[0]==='select')[1];assert.ok(select.includes('faktury_pozycje'));assert.ok(select.includes('recipient_email'));
+});
+
+
+test('selected reload reads only requested IDs and skips global overdue status writes',async()=>{
+ const rows=[{id:'selected'}];const {api,calls}=service([{data:rows,error:null}]);
+ const result=await api.fetchInvoices(['selected']);assert.equal(result.data,rows);
+ assert.deepEqual(calls.find(x=>x[0]==='in'),['in','id',['selected']]);
+ assert.equal(calls.some(x=>x[0]==='rpc'||x[0]==='range'),false);
 });

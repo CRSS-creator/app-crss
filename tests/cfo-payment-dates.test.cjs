@@ -75,11 +75,12 @@ test('overdue receivables stay in the first forecast month and paid invoices are
   assert.equal(budget.plannedInvoiceCustomerCashFlowForMonth('2026-12', [unpaid], profile).amount, 0);
   assert.equal(budget.plannedInvoiceCustomerCashFlowForMonth('2026-11', [{ ...unpaid, paidAmount: 123, paymentDate: '2026-09-20' }], profile).amount, 0);
 });
-test('known cost deadlines override the historical estimate, without duplicating paid costs', () => {
+test('ordinary costs use supplier payment history while annual schedules keep their explicit deadlines', () => {
   const profile = { globalAverageDays: 14, averageDaysByCounterparty: new Map([['vendor', 21]]), asOf: '2026-10-01' };
   const row = { id: 'c', vendorKey: 'vendor', servicePeriod: '2026-09', documentDate: '2026-09-01', dueDate: '2026-11-15', amount: 123, paidAmount: 0, paymentDate: null };
-  assert.equal(budget.plannedCostCashFlowForMonth('2026-11', [row], profile).amount, 123);
-  assert.equal(budget.plannedCostCashFlowForMonth('2026-10', [row], profile).amount, 0);
+  assert.equal(budget.plannedCostCashFlowForMonth('2026-11', [row], profile).amount, 0);
+  assert.equal(budget.plannedCostCashFlowForMonth('2026-10', [row], profile).amount, 123);
+  assert.equal(budget.plannedCostCashFlowForMonth('2026-11', [{ ...row, annualScheduleId: 'annual' }], profile).amount, 123);
 });
 test('budget actual execution and opening cash stay independent from accounting wages', () => {
   const snapshot = { invoices: [invoice], costs: [cost], obligations: [obligation] };

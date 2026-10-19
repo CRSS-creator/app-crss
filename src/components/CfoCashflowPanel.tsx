@@ -37,7 +37,7 @@ export default function CfoCashflowPanel({ snapshot, period, onUpdated }: {
       await onUpdated();
     } finally { setSaving(false); }
   }
-  async function costDate(id: string, field: "data_zaplaty" | "termin_platnosci", date: string) {
+  async function costDate(id: string, field: "data_zaplaty", date: string) {
     setSaving(true); setError("");
     try {
       const result = await updateCfoCost(id, { [field]: date || null });
@@ -82,8 +82,8 @@ export default function CfoCashflowPanel({ snapshot, period, onUpdated }: {
       </table></div>
       <h2>Faktury kosztowe</h2>
       <p>Datę zapłaty uzupełnij po opłaceniu całego dokumentu. Import i kategorie kosztów pozostają w zakładce Koszty.</p>
-      <div style={{ overflowX: "auto" }}><table style={{ width: "100%" }}><thead><tr>{["Dokument", "Dostawca", "Brutto", "Termin", "Data zapłaty", "Status"].map(h => <th key={h} style={cell}>{h}</th>)}</tr></thead>
-        <tbody>{costs.map(c => <tr key={c.id}><td style={cell}>{c.numer_dokumentu || "—"}</td><td style={cell}>{c.kontrahent}</td><td style={cell}>{money(Number(c.kwota_brutto ?? c.kwota_netto_cfo))}</td><td style={cell}><input aria-label={`Termin ${c.numer_dokumentu || c.kontrahent}`} style={input} type="date" disabled={saving} value={c.termin_platnosci || ""} onChange={e => void costDate(c.id, "termin_platnosci", e.target.value)} /></td><td style={cell}><input aria-label={`Zapłata ${c.numer_dokumentu || c.kontrahent}`} style={input} type="date" max={businessDate()} disabled={saving} value={c.data_zaplaty || ""} onChange={e => void costDate(c.id, "data_zaplaty", e.target.value)} /></td><td style={cell}>{status(c.data_zaplaty, c.termin_platnosci)}</td></tr>)}</tbody>
+      <div style={{ overflowX: "auto" }}><table style={{ width: "100%" }}><thead><tr>{["Dokument", "Dostawca", "Brutto", "Data zapłaty", "Status"].map(h => <th key={h} style={cell}>{h}</th>)}</tr></thead>
+        <tbody>{costs.map(c => <tr key={c.id}><td style={cell}>{c.numer_dokumentu || "—"}</td><td style={cell}>{c.kontrahent}</td><td style={cell}>{money(Number(c.kwota_brutto ?? c.kwota_netto_cfo))}</td><td style={cell}><input aria-label={`Zapłata ${c.numer_dokumentu || c.kontrahent}`} style={input} type="date" max={businessDate()} disabled={saving} value={c.data_zaplaty || ""} onChange={e => void costDate(c.id, "data_zaplaty", e.target.value)} /></td><td style={cell}>{c.data_zaplaty ? "Zapłacone" : "Brak daty zapłaty"}</td></tr>)}</tbody>
       </table></div>
     </section>
   </div>;

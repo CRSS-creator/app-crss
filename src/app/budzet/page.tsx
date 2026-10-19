@@ -88,6 +88,7 @@ type BudgetInvoice = {
 };
 
 type BudgetCostPayment = {
+  annualScheduleId?: string | null;
   id: string;
   vendorKey: string;
   category: CfoCostCategory;
@@ -297,7 +298,7 @@ function BudgetContent() {
       </section>
 
       <section style={panelStyle}>
-        <p>Przepływy wynikają z dat zapłaty w Fakturach, kosztach i zobowiązaniach CFO. Średni czas zapłaty jest liczony osobno dla klienta i dostawcy z faktur wystawionych w ostatnich 6 miesiącach (lub z krótszej dostępnej historii). Bez historii stosowany jest termin dokumentu, a dla przyszłych dokumentów założenie 14 dni. Zaległości trafiają do pierwszego miesiąca prognozy.</p>
+        <p>Przepływy wynikają z dat zapłaty w Fakturach, kosztach i zobowiązaniach CFO. Średni czas zapłaty jest liczony osobno dla klienta i dostawcy z faktur wystawionych w ostatnich 6 miesiącach (lub z krótszej dostępnej historii). Dla sprzedaży bez historii stosowany jest termin dokumentu. Zwykłe koszty są planowane według średniego czasu zapłaty dostawcy, a bez historii — po 14 dniach od wystawienia. Zaległości trafiają do pierwszego miesiąca prognozy.</p>
         <p>Koszty z harmonogramów rocznych obciążają wynik po 1/12 netto miesięcznie, a gotówkę jednorazowo kwotą brutto. Powiązana faktura zastępuje prognozę danego odnowienia.</p>
         <p>Budżet jest dostępny od listopada 2026. Wcześniejsze miesiące służą do wyliczania średnich historycznych.</p>
         <p>Gotówka na start oznacza saldo na początek pierwszego miesiąca prognozy. Nie jest odczytywana z wyciągu.</p>
@@ -764,6 +765,7 @@ function buildBudgetCostPayments(costs: CfoCostItem[]): BudgetCostPayment[] {
         subcategory: cost.podkategoria || EMPTY_SUBCATEGORY,
         documentDate: cost.data_dokumentu,
         dueDate: cost.termin_platnosci || null,
+        annualScheduleId: cost.harmonogram_id || null,
         servicePeriod: cost.okres_start.slice(0, 7),
         amount: Number(cost.kwota_brutto ?? cost.kwota_netto_cfo ?? 0),
         paidAmount: payment.paidAmount,
@@ -790,7 +792,9 @@ function plannedCostCashFlowForMonth(period: string, costs: BudgetCostPayment[],
     if (unpaidAmount <= 0.01) return;
 
     const baseDate = cost.documentDate || monthEndDate(cost.servicePeriod);
-    const expectedDate = cost.dueDate || addDays(baseDate, averageDaysFor(profile, cost.vendorKey));
+    const expectedDate = cost.annualScheduleId && cost.dueDate
+      ? cost.dueDate
+      : addDays(baseDate, averageDaysFor(profile, cost.vendorKey));
     const expectedMonth = (expectedDate < profile.asOf ? profile.asOf : expectedDate).slice(0, 7);
     if (expectedMonth !== period) return;
 

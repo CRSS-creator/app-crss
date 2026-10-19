@@ -745,17 +745,17 @@ function renderCostSection(
         <div style={tableWrapperStyle}>
           <table style={wideCostTableStyle}>
             <colgroup>
-              <col style={{ width: "13%" }} />
+              <col style={{ width: "11%" }} />
               <col style={{ width: "17%" }} />
-              <col style={{ width: "13%" }} />
-              <col style={{ width: "13%" }} />
+              <col style={{ width: "12%" }} />
+              <col style={{ width: "12%" }} />
               <col style={{ width: "12%" }} />
               <col style={{ width: "9%" }} />
               <col style={{ width: "9%" }} />
-              <col style={{ width: "10%" }} />
+              <col style={{ width: "14%" }} />
               <col style={{ width: "4%" }} />
             </colgroup>
-            <thead><tr><Th>Dokument</Th><Th>Kontrahent</Th><Th>Kategoria</Th><Th>Podkategoria</Th><Th>Okres</Th><Th align="right">Netto CFO</Th><Th align="right">Brutto cash flow</Th><Th>Rozliczenie CF</Th><Th align="right"><span aria-hidden="true"> </span></Th></tr></thead>
+            <thead><tr><Th>Dokument</Th><Th>Kontrahent</Th><Th>Kategoria</Th><Th>Podkategoria</Th><Th>Okres</Th><Th align="right">Netto CFO</Th><Th align="right">Brutto cash flow</Th><Th>Płatność</Th><Th align="right"><span aria-hidden="true"> </span></Th></tr></thead>
             <tbody>
               {visibleCosts.length === 0 ? <EmptyRow colSpan={9} text={costs.length === 0 ? "Brak kosztów w tym okresie." : "Brak kosztów pasujących do wyszukiwania."} /> : visibleCosts.map((cost) => {
                 const rowSubcategoryOptions = SUBCATEGORIES[cost.kategoria].map((item) => ({ value: item, label: item }));
@@ -768,20 +768,20 @@ function renderCostSection(
                   <tr key={cost.id} style={cost.ignoruj ? mutedRowStyle : undefined}>
                     <Td style={{ ...documentCostCellStyle, ...settlementStyle }}>{cost.numer_dokumentu || "Brak numeru"}<small style={settlementSmallStyle}>{formatDate(cost.data_dokumentu)}</small></Td>
                     <Td style={{ ...contractorCostCellStyle, ...settlementStyle }}>{cost.kontrahent}</Td>
-                    <Td><AppSelect value={cost.kategoria} options={COST_OPTIONS} onChange={(value) => void changeCost(cost, { kategoria: value as CfoCostCategory, podkategoria: null })} style={compactSelectStyle} /></Td>
+                    <Td><AppSelect value={cost.kategoria} options={COST_OPTIONS} onChange={(value) => void changeCost(cost, { kategoria: value as CfoCostCategory, podkategoria: null })} style={costSelectStyle} /></Td>
                     <Td>
                       {rowSubcategoryOptions.length > 0 ? (
                         <AppSelect
                           value={cost.podkategoria || ""}
                           options={[{ value: "", label: "Wybierz podkategorię" }, ...rowSubcategoryOptions]}
                           onChange={(value) => void changeCost(cost, { podkategoria: emptyToNull(value) })}
-                          style={compactSelectStyle}
+                          style={costSelectStyle}
                         />
                       ) : <span style={smallStyle}>Bez podkategorii</span>}
                     </Td>
                     <Td>
                       <div style={costPeriodCellStyle}>
-                        <label style={checkboxLabelStyle}>
+                        <label style={{ ...checkboxLabelStyle, fontSize: "11px" }}>
                           <input type="checkbox" checked={isInterperiod} onChange={(event) => toggleCostInterperiod(cost, event.target.checked)} />
                           Międzyokresowe
                         </label>
@@ -790,13 +790,13 @@ function renderCostSection(
                             <DateField value={cost.okres_start} onChange={(value) => void changeCost(cost, { okres_start: value })} />
                             <DateField value={cost.okres_end} onChange={(value) => void changeCost(cost, { okres_end: value })} />
                           </div>
-                        ) : <span style={periodMonthBadgeStyle}>{formatCostPeriod(cost.okres_start, cost.okres_end)}</span>}
+                        ) : <span style={{ ...periodMonthBadgeStyle, fontSize: "12px", minHeight: "32px", padding: "6px 8px" }}>{formatCostPeriod(cost.okres_start, cost.okres_end)}</span>}
                       </div>
                     </Td>
                     <Td align="right">
-                      <span style={moneyEditStyle}>
+                      <span style={costMoneyEditStyle}>
                         <MoneyTextInput
-                          style={moneyInputStyle}
+                          style={costMoneyInputStyle}
                           value={cost.kwota_netto_cfo}
                           onValueChange={(value) => setCosts((current) => current.map((item) => item.id === cost.id ? { ...item, kwota_netto_cfo: value } : item))}
                           onCommit={(value) => void updateCost(cost.id, { kwota_netto_cfo: value })}
@@ -805,9 +805,9 @@ function renderCostSection(
                       </span>
                     </Td>
                     <Td align="right">
-                      <span style={{ ...moneyEditStyle, ...settlementStyle }}>
+                      <span style={{ ...costMoneyEditStyle, ...settlementStyle }}>
                         <MoneyTextInput
-                          style={moneyInputStyle}
+                          style={costMoneyInputStyle}
                           value={costGrossValue(cost)}
                           onValueChange={(value) => setCosts((current) => current.map((item) => item.id === cost.id ? { ...item, kwota_brutto: value } : item))}
                           onCommit={(value) => void updateCost(cost.id, { kwota_brutto: value })}
@@ -815,10 +815,18 @@ function renderCostSection(
                         zł
                       </span>
                     </Td>
-                    <Td><CostPaymentStatus cost={cost} paid={paid} compact /><label style={smallStyle}>Termin płatności<input aria-label={"Termin " + (cost.numer_dokumentu || cost.kontrahent)} type="date" value={cost.termin_platnosci || ""} onChange={event => void changeCost(cost, { termin_platnosci: event.target.value || null })} style={compactSelectStyle} /></label><label style={smallStyle}>Data zapłaty<input aria-label={"Zapłata " + (cost.numer_dokumentu || cost.kontrahent)} type="date" max={new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Warsaw" })} value={cost.data_zaplaty || ""} onChange={event => void changeCost(cost, { data_zaplaty: event.target.value || null })} style={compactSelectStyle} /></label></Td>
-                    <Td align="right">
-                      <button type="button" style={iconDangerButtonStyle} onClick={() => void removeCost(cost, paid)} title="UsuĹ„ koszt" aria-label="UsuĹ„ koszt">
-                        <Trash2 size={17} />
+                    <Td>
+                      <div style={costPaymentCellStyle}>
+                        <CostPaymentStatus cost={cost} paid={paid} compact />
+                        <label style={costPaymentLabelStyle}>
+                          Data zapłaty
+                          <input aria-label={"Zapłata " + (cost.numer_dokumentu || cost.kontrahent)} type="date" max={new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Warsaw" })} value={cost.data_zaplaty || ""} onChange={event => void changeCost(cost, { data_zaplaty: event.target.value || null })} style={costPaymentInputStyle} />
+                        </label>
+                      </div>
+                    </Td>
+                    <Td align="right" style={{ padding: "8px 4px" }}>
+                      <button type="button" style={{ ...iconDangerButtonStyle, width: "32px", minWidth: "32px", height: "32px", borderRadius: "9px" }} onClick={() => void removeCost(cost, paid)} title="Usuń koszt" aria-label="Usuń koszt">
+                        <Trash2 size={15} />
                       </button>
                     </Td>
                   </tr>
@@ -1083,6 +1091,11 @@ function CostPaymentStatus({ cost, paid, compact = false }: { cost: CfoCostItem 
   const remaining = gross - paid;
   const state = costPaymentState(cost, paid);
   const remainingStyle = state === "settled" ? successInlineStyle : state === "overpaid" ? warningInlineStyle : dangerInlineStyle;
+
+  if (compact) {
+    const label = state === "settled" ? "Zapłacono" : paid <= 0 ? "Brak daty zapłaty" : (remaining >= 0 ? "Pozostało: " : "Nadpłata: ") + formatMoney(Math.abs(remaining));
+    return <span style={{ ...costPaymentStatusStyle, ...(paid > 0 ? remainingStyle : { color: colors.muted }), fontSize: "11px", fontWeight: 650 }}>{label}</span>;
+  }
 
   return (
     <div style={costPaymentStatusStyle}>
@@ -1938,7 +1951,7 @@ const successInlineStyle: CSSProperties = { color: colors.success, fontWeight: 9
 const warningInlineStyle: CSSProperties = { color: colors.warning, fontWeight: 900 };
 const tableWrapperStyle: CSSProperties = { overflowX: "auto" };
 const tableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse" };
-const wideCostTableStyle: CSSProperties = { ...tableStyle, minWidth: "1380px", tableLayout: "fixed" };
+const wideCostTableStyle: CSSProperties = { ...tableStyle, minWidth: "1240px", tableLayout: "fixed", fontSize: "13px", lineHeight: 1.4 };
 const thStyle: CSSProperties = { color: colors.muted, borderBottom: `1px solid ${colors.border}`, padding: "11px 9px", fontSize: "12px", textTransform: "uppercase", letterSpacing: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" };
 const tdStyle: CSSProperties = { color: colors.text, borderBottom: `1px solid ${colors.border}`, padding: "10px 9px", verticalAlign: "middle" };
 const documentCostCellStyle: CSSProperties = { whiteSpace: "normal", overflowWrap: "anywhere", wordBreak: "break-word" };
@@ -1952,6 +1965,7 @@ const settledSmallStyle: CSSProperties = { ...smallStyle, color: colors.success 
 const overpaidTextStyle: CSSProperties = { color: colors.warning, fontWeight: 850 };
 const overpaidSmallStyle: CSSProperties = { ...smallStyle, color: colors.warning };
 const compactSelectStyle: CSSProperties = { minHeight: "36px", padding: "7px 10px", background: colors.white };
+const costSelectStyle: CSSProperties = { ...compactSelectStyle, fontSize: "12px", fontWeight: 650, minHeight: "32px", padding: "6px 8px" };
 const iconDangerButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: "12px", background: colors.white, color: colors.red, width: "38px", minWidth: "38px", height: "38px", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer" };
 const uploadBoxStyle: CSSProperties = { border: `1px dashed ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, cursor: "pointer", padding: "18px", color: colors.text, display: "grid", gap: "8px", justifyItems: "start" };
 const manualFormStyle: CSSProperties = { display: "grid", gap: "10px", marginTop: "14px", maxWidth: "1120px" };
@@ -1985,6 +1999,11 @@ const primaryButtonStyle: CSSProperties = { border: `1px solid ${colors.red}`, b
 const secondaryButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.navy, minHeight: "42px", padding: "9px 14px", fontWeight: 850, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "8px", cursor: "pointer" };
 const moneyEditStyle: CSSProperties = { display: "inline-flex", alignItems: "center", justifyContent: "flex-end", gap: "6px", color: colors.navy, fontWeight: 850, whiteSpace: "nowrap" };
 const moneyInputStyle: CSSProperties = { ...inputStyle, minHeight: "36px", padding: "7px 9px", width: "102px" };
+const costMoneyEditStyle: CSSProperties = { ...moneyEditStyle, display: "flex", width: "100%", minWidth: 0, fontSize: "12px", fontWeight: 650 };
+const costMoneyInputStyle: CSSProperties = { ...moneyInputStyle, fontSize: "12px", minHeight: "32px", padding: "6px 8px", width: "100%", minWidth: 0, flex: "1 1 0" };
+const costPaymentCellStyle: CSSProperties = { display: "grid", gap: "6px", minWidth: 0 };
+const costPaymentLabelStyle: CSSProperties = { display: "grid", gap: "4px", color: colors.muted, fontSize: "11px", fontWeight: 650 };
+const costPaymentInputStyle: CSSProperties = { ...inputStyle, fontFamily: "inherit", fontSize: "12px", fontWeight: 500, minHeight: "32px", padding: "5px 6px", minWidth: 0, maxWidth: "100%", borderRadius: "8px" };
 const mutedRowStyle: CSSProperties = { opacity: 0.58, background: "#f1f5f9" };
 const formFooterStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", marginTop: "14px", flexWrap: "wrap" };
 const miniListStyle: CSSProperties = { display: "grid", gap: "8px" };

@@ -140,6 +140,7 @@ function CfoContent() {
   const [expandedCostPeriods, setExpandedCostPeriods] = useState<Record<string, boolean>>({});
   const [employeeDrafts, setEmployeeDrafts] = useState<Record<string, EmployeeCostDraft>>({});
   const [costSearch, setCostSearch] = useState("");
+  const [clientSearch, setClientSearch] = useState("");
 
 
   useEffect(() => {
@@ -358,7 +359,7 @@ function CfoContent() {
       {!loading && activeTab === "koszty" ? renderCostSection(period, costs, cost => setCashflow(current => ({ ...current, costs: current.costs.map(row => row.id === cost.id ? cost : row) })), setCosts, manualCost, setManualCost, manualInterperiod, setManualInterperiod, expandedCostPeriods, setExpandedCostPeriods, addManualCost, importCostsFile, saving, costSearch, setCostSearch) : null}
       {!loading && activeTab === "cashflow" && !cashflowError ? <CfoCashflowPanel key={period} snapshot={cashflow} period={period} onUpdated={loadData} /> : null}
       {!loading && activeTab === "zespol" ? renderTeamSectionTable(teamMembers, employeeDrafts, setEmployeeDrafts, saveTeamCosts, copyPreviousTeamCosts, saving, period, clientTimeEntries) : null}
-      {!loading && activeTab === "klienci" ? clientAnalysis ? renderClientsSection(clientAnalysis) : <section style={infoNoticeStyle}>Rentowność wymaga kompletu danych.</section> : null}
+      {!loading && activeTab === "klienci" ? clientAnalysis ? renderClientsSection(clientAnalysis, clientSearch, setClientSearch) : <section style={infoNoticeStyle}>Rentowność wymaga kompletu danych.</section> : null}
     </main>
   );
 }
@@ -983,7 +984,9 @@ function renderTeamSectionTable(
   );
 }
 
-function renderClientsSection(report: ReturnType<typeof clientProfitability>) {
+function renderClientsSection(report: ReturnType<typeof clientProfitability>, search: string, setSearch: (value: string) => void) {
+  const query = normalizeSearchValue(search);
+  const clients = report.clients.filter(client => normalizeSearchValue(client.name).includes(query));
   const cashValue = (value: number | null) => value === null ? "—" : formatMoney(value);
   return (
     <section style={{ ...sectionStackStyle, minWidth: 0 }}>
@@ -994,11 +997,12 @@ function renderClientsSection(report: ReturnType<typeof clientProfitability>) {
       `}</style>
       <article style={panelStyle}>
         <div style={panelHeaderStyle}><BriefcaseBusiness size={21} style={panelIconStyle} /><h2 style={panelTitleStyle}>Rentowność klientów</h2></div>
+        <SearchField value={search} onChange={setSearch} placeholder="Szukaj klienta po nazwie…" />
         <div style={{ width: "100%", minWidth: 0 }}>
           <table className="cfo-client-table">
             <colgroup>{[23, 10, 9, 6, 10, 10, 6, 10, 10, 6].map((width, index) => <col key={index} style={{ width: `${width}%` }} />)}</colgroup>
             <thead><tr><Th>Klient</Th><Th align="right">Przychód</Th><Th align="right">MRR</Th><Th align="right">Godziny</Th><Th align="right">Koszt zespołu</Th><Th align="right">Wynik po zespole</Th><Th align="right">Marża zespołu</Th><Th align="right">Koszty wspólne</Th><Th align="right">Wynik pełny</Th><Th align="right">Marża pełna</Th></tr></thead>
-            <tbody>{report.clients.length === 0 ? <EmptyRow colSpan={10} text="Brak przychodów i pracy klientów dla tego okresu." /> : report.clients.map(client => {
+            <tbody>{clients.length === 0 ? <EmptyRow colSpan={10} text={query ? "Nie znaleziono klienta dla podanej nazwy." : "Brak przychodów i pracy klientów dla tego okresu."} /> : clients.map(client => {
               return <tr key={client.key}>
                 <Td>{client.name}</Td><Td align="right">{formatMoney(client.revenue)}</Td><Td align="right">{formatMoney(client.mrr)}</Td>
                 <Td align="right">{formatHours(client.hours)}</Td>

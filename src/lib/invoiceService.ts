@@ -19,6 +19,7 @@ export type Invoice = {
   data_wystawienia: string | null;
   data_sprzedazy: string | null;
   termin_platnosci: string | null;
+  data_zaplaty?: string | null;
   okres: string | null;
   automatyczna: boolean;
   kontrahent_nazwa: string;
@@ -86,6 +87,7 @@ export type InvoicePayload = {
   data_wystawienia?: string | null;
   data_sprzedazy?: string | null;
   termin_platnosci?: string | null;
+  data_zaplaty?: string | null;
   okres?: string | null;
   automatyczna?: boolean;
   kontrahent_nazwa: string;

@@ -87,6 +87,7 @@ function InvoicesContent() {
   const detailsRef = useRef<Invoice | null>(null);
   detailsRef.current = detailsInvoice;
   const [savingCategoryId, setSavingCategoryId] = useState<string | null>(null);
+  const [savingPaymentId, setSavingPaymentId] = useState<string | null>(null);
   const [savingPeriodId, setSavingPeriodId] = useState<string | null>(null);
   const [openingPdfId, setOpeningPdfId] = useState<string | null>(null);
   const [sendingMailId, setSendingMailId] = useState<string | null>(null);
@@ -489,6 +490,17 @@ function InvoicesContent() {
     }) as Invoice;
     setInvoices((current) => current.map((item) => (item.id === invoice.id ? updatedInvoice : item)));
     setDetailsInvoice((current) => (current?.id === invoice.id ? updatedInvoice : current));
+  }
+
+  async function changeInvoicePaymentDate(invoice: Invoice, date: string) {
+    if (savingPaymentId) return;
+    if (date && date > new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Warsaw" })) return alert("Data zapłaty nie może być przyszła.");
+    setSavingPaymentId(invoice.id);
+    try {
+      const result = await updateInvoice(invoice.id, { data_zaplaty: date || null, ...(date ? { status: "oplacona" as const } : {}) });
+      if (result.error) return alert("Nie udało się zapisać daty zapłaty: " + result.error.message);
+      await loadData({ invoiceIds: [invoice.id] });
+    } finally { setSavingPaymentId(null); }
   }
 
   async function changeInvoicePeriod(invoice: Invoice, periodMonth: string) {
@@ -1069,6 +1081,7 @@ function InvoicesContent() {
               <DetailStat label="Okres" value={formatMonth(detailsInvoice.okres || detailsInvoice.data_wystawienia)} />
               <DetailStat label="Data wystawienia" value={detailsInvoice.data_wystawienia ? formatDate(detailsInvoice.data_wystawienia) : "Po wysłaniu"} />
               <DetailStat label="Termin płatności" value={formatDate(paymentDueDate(detailsInvoice))} />
+              {!["szkic", "anulowana"].includes(detailsInvoice.status) && <DetailStat label="Faktyczna data zapłaty" value={<><input aria-label="Faktyczna data zapłaty" type="date" max={new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Warsaw" })} value={detailsInvoice.data_zaplaty || ""} disabled={savingPaymentId !== null} onChange={event => void changeInvoicePaymentDate(detailsInvoice, event.target.value)} /><small>Wpisanie daty oznacza pełną zapłatę. Brak daty przy statusie „Zapłacona” wymaga uzupełnienia do historii CFO.</small></>} />}
               <DetailStat label="Status" value={<Badge tone={paymentStatusTone(detailsInvoice)}>{paymentStatusLabel(detailsInvoice)}</Badge>} />
               <DetailStat label="Netto" value={formatMoney(detailsInvoice.kwota_netto)} />
               <DetailStat label="Brutto" value={formatMoney(detailsInvoice.kwota_brutto)} />

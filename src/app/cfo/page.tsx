@@ -4,17 +4,13 @@ import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } fr
 import { Banknote, BriefcaseBusiness, CalendarDays, FileSpreadsheet, LayoutDashboard, Plus, ReceiptText, RefreshCw, Save, Trash2, TrendingUp, Upload, Users } from "lucide-react";
 import * as XLSX from "xlsx";
 
-import { clientProfitability, closingCash, workMonth, type ClientRevenue } from "@/lib/cfoAnalytics";
+import { clientProfitability, workMonth, type ClientRevenue } from "@/lib/cfoAnalytics";
 import { colors, radius, shadow } from "@/app/design";
 import AccessGuard from "@/components/AccessGuard";
 import AppLayout from "@/components/AppLayout";
 import AppSelect from "@/components/AppSelect";
 import {
   fetchCfoAnalysis,
-  updateCfoAccountKind,
-  fetchCfoBankTransactions,
-  fetchCfoBankTransactionsRange,
-  fetchCfoCashflowInvoices,
   fetchCfoCosts,
   fetchCfoCostsRange,
   fetchCfoCostDuplicateCandidates,
@@ -22,20 +18,12 @@ import {
   fetchCfoEmployeeCostsRange,
   fetchCfoRevenueLinesRange,
   fetchCfoTeamMembers,
-  importBankTransactions,
   deleteCfoCost,
-  deletePaymentSplit,
   insertCfoCosts,
-  insertPaymentSplit,
-  updateBankTransaction,
   updateCfoCost,
   updateInvoiceLineCfoCategory,
-  updatePaymentSplit,
   upsertCfoEmployeeCost,
-  type CfoBankImportRow,
   type CfoBankTransaction,
-  type CfoBankTransactionType,
-  type CfoCashflowInvoice,
   type CfoClientTimeEntry,
   type CfoCostCategory,
   type CfoCostDuplicateCandidate,
@@ -43,11 +31,13 @@ import {
   type CfoCostItem,
   type CfoEmployeeCost,
   type CfoInvoiceLine,
-  type CfoPaymentSplit,
-  type CfoPaymentSplitType,
   type CfoRevenueCategory,
   type CfoTeamMember,
 } from "@/lib/cfoService";
+
+import CfoCashflowPanel from "@/components/CfoCashflowPanel";
+import { cashflowTransactions, emptyCashflow, actualCostPayment, type CashflowSnapshot } from "@/lib/cfoCashflow";
+import { fetchCashflowSnapshot } from "@/lib/cfoCashflowService";
 
 type CfoTab = "dashboard" | "przychody" | "koszty" | "cashflow" | "zespol" | "klienci";
 type CfoViewMode = "month" | "year";
@@ -81,33 +71,6 @@ const COST_OPTIONS: { value: CfoCostCategory; label: string }[] = [
   { value: "jednorazowe_nadzwyczajne", label: "Jednorazowe i nadzwyczajne" },
 ];
 const MANUAL_COST_OPTIONS: { value: string; label: string }[] = [{ value: "", label: "Wybierz kategorię" }, ...COST_OPTIONS];
-
-const BANK_TYPE_OPTIONS: { value: CfoBankTransactionType; label: string }[] = [
-  { value: "do_przypisania", label: "Do przypisania" },
-  { value: "koszt", label: "Koszt" },
-  { value: "wynagrodzenie_netto", label: "Wynagrodzenie netto" },
-  { value: "pit", label: "PIT" },
-  { value: "zus", label: "ZUS" },
-  { value: "cit", label: "CIT" },
-  { value: "vat", label: "VAT" },
-  { value: "faktura_sprzedazowa", label: "Faktura sprzedażowa" },
-  { value: "transfer_wewnetrzny", label: "Przelew wewnętrzny" },
-  { value: "inne", label: "Inne" },
-];
-
-const PAYMENT_SPLIT_TYPE_OPTIONS: { value: CfoPaymentSplitType; label: string }[] = [
-  { value: "koszt", label: "Koszt CFO" },
-  { value: "zus", label: "ZUS" },
-  { value: "pit", label: "PIT" },
-  { value: "cit", label: "CIT" },
-  { value: "vat", label: "VAT" },
-  { value: "wynagrodzenie_netto", label: "Wynagrodzenie netto" },
-  { value: "faktura_sprzedazowa", label: "Faktura sprzedażowa" },
-  { value: "transfer_wewnetrzny", label: "Przelew wewnętrzny" },
-  { value: "poza_kosztem_cfo", label: "Poza kosztem CFO" },
-  { value: "inne", label: "Inne" },
-  { value: "do_przypisania", label: "Do przypisania" },
-];
 
 const SUBCATEGORIES: Record<CfoCostCategory, string[]> = {
   koszty_zespolu: ["Wynagrodzenie podstawowe", "ZUS pracodawcy", "Benefity", "Premie", "Szkolenia"],
@@ -157,10 +120,14 @@ function CfoContent() {
   const [saving, setSaving] = useState(false);
   const [revenueLines, setRevenueLines] = useState<CfoInvoiceLine[]>([]);
   const [costs, setCosts] = useState<CfoCostItem[]>([]);
-  const [cashflowCosts, setCashflowCosts] = useState<CfoCostItem[]>([]);
+  const [cashflow, setCashflow] = useState<CashflowSnapshot>(emptyCashflow);
+  const [cashflowError, setCashflowError] = useState<string | null>(null);
   const [employeeCosts, setEmployeeCosts] = useState<CfoEmployeeCost[]>([]);
-  const [bankTransactions, setBankTransactions] = useState<CfoBankTransaction[]>([]);
-  const [cashflowInvoices, setCashflowInvoices] = useState<CfoCashflowInvoice[]>([]);
+  const bankTransactions = useMemo(() => {
+    const range = cfoPeriodRange(period, viewMode);
+    return cashflowTransactions(cashflow).filter(t => t.data_ksiegowania >= range.from && t.data_ksiegowania <= range.to);
+  }, [cashflow, period, viewMode]);
+
   const [clientTimeEntries, setClientTimeEntries] = useState<CfoClientTimeEntry[]>([]);
   const [analysis, setAnalysis] = useState<NonNullable<Awaited<ReturnType<typeof fetchCfoAnalysis>>["data"]> | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
@@ -171,7 +138,7 @@ function CfoContent() {
   const [expandedCostPeriods, setExpandedCostPeriods] = useState<Record<string, boolean>>({});
   const [employeeDrafts, setEmployeeDrafts] = useState<Record<string, EmployeeCostDraft>>({});
   const [costSearch, setCostSearch] = useState("");
-  const [cashflowSearch, setCashflowSearch] = useState("");
+
 
   useEffect(() => {
     void loadData();
@@ -195,26 +162,19 @@ function CfoContent() {
     });
     return clientProfitability(range.from, range.to, revenues, costs, analysis.employees, analysis.entries);
   }, [analysis, analysisError, period, viewMode, view.revenueLines, costs]);
-  const cash = useMemo(() => analysis && !analysisError
-    ? closingCash(analysis.accounts, analysis.bank, cfoPeriodRange(period, viewMode).to) : null,
-    [analysis, analysisError, period, viewMode]);
-
   async function loadData() {
     const version = ++loadVersion.current;
     setLoading(true);
     setAnalysisError(null);
     const range = cfoPeriodRange(period, viewMode);
     const revenueRange = revenueFetchRange(range.from, range.to);
-    const cashflowCostRange = cfoCashflowCostLinkRange(period);
-    const [revenueResult, costsResult, cashflowCostsResult, employeeResult, bankResult, invoicesResult, teamResult, analysisResult] = await Promise.all([
+    const [revenueResult, costsResult, employeeResult, cashflowResult, teamResult, analysisResult] = await Promise.all([
       fetchCfoRevenueLinesRange(revenueRange.from, revenueRange.to),
       viewMode === "year" ? fetchCfoCostsRange(range.from, range.to) : fetchCfoCosts(range.from),
-      fetchCfoCostsRange(cashflowCostRange.from, cashflowCostRange.to),
       viewMode === "year" ? fetchCfoEmployeeCostsRange(range.from, range.to) : fetchCfoEmployeeCosts(range.from),
-      viewMode === "year" ? fetchCfoBankTransactionsRange(range.from, range.to) : fetchCfoBankTransactions(range.from),
-      fetchCfoCashflowInvoices(period),
+      fetchCashflowSnapshot(),
       fetchCfoTeamMembers(),
-      fetchCfoAnalysis(range.from, range.to).catch((error: Error) => ({ data: null, error })),
+      fetchCfoAnalysis(range.from, range.to, false).catch((error: Error) => ({ data: null, error })),
     ]);
 
     if (version !== loadVersion.current) return;
@@ -227,22 +187,20 @@ function CfoContent() {
     };
     setAnalysis(analysisResult.data);
     const incomplete = analysisResult.error || revenueResult.error || costsResult.error || employeeResult.error;
-    setAnalysisError(incomplete ? "Nie udało się pobrać kompletu danych do rentowności i sald. Odśwież zakładkę." : null);
+    setAnalysisError(incomplete ? "Nie udało się pobrać kompletu danych do rentowności. Odśwież zakładkę." : null);
 
     if (revenueResult.error) console.error("Błąd pobierania przychodów CFO:", revenueResult.error);
     if (costsResult.error) console.error("Błąd pobierania kosztów CFO:", costsResult.error);
     if (employeeResult.error) console.error("Błąd pobierania kosztów pracowników CFO:", employeeResult.error);
-    if (bankResult.error) console.error("Błąd pobierania transakcji bankowych CFO:", bankResult.error);
-    if (invoicesResult.error) console.error("Błąd pobierania faktur do cash flow CFO:", invoicesResult.error);
+    setCashflowError(cashflowResult.error ? "Nie udało się pobrać rozrachunków. Odśwież CFO." : null);
     if (teamResult.error) console.error("Błąd pobierania zespołu CFO:", teamResult.error);
     if (timeResult.error) console.error("Błąd pobierania czasu pracy klientów CFO:", timeResult.error);
 
     setRevenueLines((revenueResult.data || []) as unknown as CfoInvoiceLine[]);
     setCosts((costsResult.data || []) as CfoCostItem[]);
-    setCashflowCosts((cashflowCostsResult.data || []) as CfoCostItem[]);
     setEmployeeCosts((employeeResult.data || []) as CfoEmployeeCost[]);
-    setBankTransactions((bankResult.data || []) as CfoBankTransaction[]);
-    setCashflowInvoices((invoicesResult.data || []) as CfoCashflowInvoice[]);
+    const snapshot = cashflowResult.data || emptyCashflow();
+    setCashflow(snapshot);
     setClientTimeEntries((timeResult.data || []) as CfoClientTimeEntry[]);
     setTeamMembers((teamResult.data || []) as CfoTeamMember[]);
     setManualCost(emptyManualCost(period));
@@ -283,23 +241,6 @@ function CfoContent() {
       }
       await loadData();
       alert(buildCostImportSummary(result.data?.length || 0, fileCheck.skipped.length, databaseCheck.skipped, rows.length));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function importBankFile(file: File) {
-    setSaving(true);
-    try {
-      const rows = await parseBankCsv(file);
-      if (rows.length === 0) return alert("Nie znaleziono transakcji bankowych w pliku.");
-      const result = await importBankTransactions(rows);
-      if (result.error) {
-        console.error(result.error);
-        return alert(`Nie udało się zaimportować historii rachunku: ${errorMessage(result.error)}`);
-      }
-      await loadData();
-      alert(`Zaimportowano transakcje: ${result.data?.length || 0}.`);
     } finally {
       setSaving(false);
     }
@@ -355,16 +296,13 @@ function CfoContent() {
         <Metric label="Koszty operacyjne" value={formatMoney(view.operatingCosts)} />
         <Metric label="Koszty zarządcze" value={formatMoney(view.managementCosts)} />
         <Metric label="Wynik operacyjny" value={formatMoney(view.operatingResult)} tone={view.operatingResult >= 0 ? "good" : "bad"} />
-        <Metric label="Cash flow" value={formatMoney(view.cashFlow)} tone={view.cashFlow >= 0 ? "good" : "bad"} />
+        <Metric label="Cash flow" value={cashflowError ? "Brak danych" : formatMoney(view.cashFlow)} tone={view.cashFlow >= 0 ? "good" : "bad"} />
         <Metric label="Cel właściciela" value={view.ownerGoalText} tone={view.ownerGoalGap <= 0 ? "good" : "bad"} />
       </section>
 
       {!loading && analysisError ? <section style={infoNoticeStyle}>{analysisError}</section> : null}
-      {!loading && cash && (activeTab === "dashboard" || activeTab === "cashflow") ? renderCashBalances(cash, cfoPeriodRange(period, viewMode).to, async (id, kind) => {
-        const result = await updateCfoAccountKind(id, kind);
-        if (result.error) return alert("Nie udało się zapisać rodzaju rachunku.");
-        setAnalysis(current => current ? { ...current, accounts: current.accounts.map(a => a.id === id ? { ...a, rodzaj_srodkow: kind } : a) } : current);
-      }) : null}
+      {!loading && cashflowError ? <section role="alert" style={infoNoticeStyle}>{cashflowError}</section> : null}
+      {!loading && !cashflowError && cashflow.invoices.some(invoice => invoice.status === "oplacona" && !invoice.data_zaplaty) ? <section role="status" style={infoNoticeStyle}>Część opłaconych faktur nie ma potwierdzonej daty zapłaty. Cash flow obejmuje tylko dokumenty z datą. Uzupełnij brakujące daty w Fakturach.</section> : null}
 
       <nav style={tabsStyle} aria-label="Sekcje CFO">
         {TABS.map((tab) => {
@@ -383,8 +321,8 @@ function CfoContent() {
       {loading ? <section style={panelStyle}>Ładowanie danych CFO...</section> : null}
       {!loading && activeTab === "dashboard" ? renderDashboard(view, viewMode, period) : null}
       {!loading && activeTab === "przychody" ? renderRevenueSection(view.revenueLines, changeRevenueCategory) : null}
-      {!loading && activeTab === "koszty" ? renderCostSection(period, costs, bankTransactions, setCosts, manualCost, setManualCost, manualInterperiod, setManualInterperiod, expandedCostPeriods, setExpandedCostPeriods, addManualCost, importCostsFile, saving, costSearch, setCostSearch) : null}
-      {!loading && activeTab === "cashflow" ? renderCashflowSection(period, bankTransactions, mergeCostLists(costs, cashflowCosts), cashflowInvoices, importBankFile, saving, setBankTransactions, cashflowSearch, setCashflowSearch) : null}
+      {!loading && activeTab === "koszty" ? renderCostSection(period, costs, cost => setCashflow(current => ({ ...current, costs: current.costs.map(row => row.id === cost.id ? cost : row) })), setCosts, manualCost, setManualCost, manualInterperiod, setManualInterperiod, expandedCostPeriods, setExpandedCostPeriods, addManualCost, importCostsFile, saving, costSearch, setCostSearch) : null}
+      {!loading && activeTab === "cashflow" && !cashflowError ? <CfoCashflowPanel key={period} snapshot={cashflow} period={period} onUpdated={loadData} /> : null}
       {!loading && activeTab === "zespol" ? renderTeamSectionTable(teamMembers, employeeDrafts, setEmployeeDrafts, saveTeamCosts, saving, period, clientTimeEntries) : null}
       {!loading && activeTab === "klienci" ? clientAnalysis ? renderClientsSection(clientAnalysis) : <section style={infoNoticeStyle}>Rentowność wymaga kompletu danych.</section> : null}
     </main>
@@ -703,7 +641,7 @@ function MonthField({ value, onChange }: { value: string; onChange: (value: stri
 function renderCostSection(
   period: string,
   costs: CfoCostItem[],
-  transactions: CfoBankTransaction[],
+  onCostChanged: (cost: CfoCostItem) => void,
   setCosts: (next: CfoCostItem[] | ((current: CfoCostItem[]) => CfoCostItem[])) => void,
   manualCost: ManualCostDraft,
   setManualCost: (next: ManualCostDraft | ((current: ManualCostDraft) => ManualCostDraft)) => void,
@@ -719,19 +657,20 @@ function renderCostSection(
 ) {
   const subcategoryOptions = manualCost.kategoria ? SUBCATEGORIES[manualCost.kategoria].map((item) => ({ value: item, label: item })) : [];
   const hasSubcategories = subcategoryOptions.length > 0;
-  const costPaymentMap = buildCostPaymentMap(transactions);
-  const currentTransactionIds = new Set(transactions.map((transaction) => transaction.id));
   const visibleCosts = filterCosts(costs, search);
 
   async function changeCost(cost: CfoCostItem, payload: Partial<CfoCostItem>) {
-    setCosts((current) => current.map((item) => item.id === cost.id ? { ...item, ...payload } : item));
-    await updateCost(cost.id, payload);
+    const result = await updateCfoCost(cost.id, payload);
+    if (result.error) return alert("Nie udało się zapisać kosztu: " + result.error.message);
+    const updated = { ...cost, ...payload };
+    setCosts((current) => current.map((item) => item.id === cost.id ? updated : item));
+    onCostChanged(updated);
   }
 
   async function removeCost(cost: CfoCostItem, paid: number) {
     const label = cost.numer_dokumentu || cost.kontrahent || "pozycję kosztową";
     const message = paid > 0
-      ? `Usunąć koszt ${label}? Do tej pozycji przypisano płatności na ${formatMoney(paid)}. Transakcje bankowe zostaną w cash flow, ale stracą to powiązanie.`
+      ? `Usunąć koszt ${label}? Ta pozycja jest oznaczona jako zapłacona na ${formatMoney(paid)}.`
       : `Usunąć koszt ${label}?`;
     if (!confirm(message)) return;
     const result = await deleteCfoCost(cost.id);
@@ -821,7 +760,7 @@ function renderCostSection(
               {visibleCosts.length === 0 ? <EmptyRow colSpan={9} text={costs.length === 0 ? "Brak kosztów w tym okresie." : "Brak kosztów pasujących do wyszukiwania."} /> : visibleCosts.map((cost) => {
                 const rowSubcategoryOptions = SUBCATEGORIES[cost.kategoria].map((item) => ({ value: item, label: item }));
                 const isInterperiod = expandedCostPeriods[cost.id] || !isFullMonthPeriod(cost.okres_start, cost.okres_end);
-                const paid = costPaidValue(cost, currentTransactionIds) + (costPaymentMap.get(cost.id) || 0);
+                const paid = actualCostPayment(cost).paidAmount;
                 const paymentState = costPaymentState(cost, paid);
                 const settlementStyle = paymentState === "settled" ? settledTextStyle : paymentState === "overpaid" ? overpaidTextStyle : null;
                 const settlementSmallStyle = paymentState === "settled" ? settledSmallStyle : paymentState === "overpaid" ? overpaidSmallStyle : smallStyle;
@@ -876,315 +815,13 @@ function renderCostSection(
                         zł
                       </span>
                     </Td>
-                    <Td><CostPaymentStatus cost={cost} paid={paid} compact /></Td>
+                    <Td><CostPaymentStatus cost={cost} paid={paid} compact /><label style={smallStyle}>Termin płatności<input aria-label={"Termin " + (cost.numer_dokumentu || cost.kontrahent)} type="date" value={cost.termin_platnosci || ""} onChange={event => void changeCost(cost, { termin_platnosci: event.target.value || null })} style={compactSelectStyle} /></label><label style={smallStyle}>Data zapłaty<input aria-label={"Zapłata " + (cost.numer_dokumentu || cost.kontrahent)} type="date" max={new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Warsaw" })} value={cost.data_zaplaty || ""} onChange={event => void changeCost(cost, { data_zaplaty: event.target.value || null })} style={compactSelectStyle} /></label></Td>
                     <Td align="right">
                       <button type="button" style={iconDangerButtonStyle} onClick={() => void removeCost(cost, paid)} title="UsuĹ„ koszt" aria-label="UsuĹ„ koszt">
                         <Trash2 size={17} />
                       </button>
                     </Td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </article>
-    </section>
-  );
-}
-
-function renderCashflowSection(
-  period: string,
-  transactions: CfoBankTransaction[],
-  costs: CfoCostItem[],
-  invoices: CfoCashflowInvoice[],
-  importBankFile: (file: File) => void,
-  saving: boolean,
-  setTransactions: (next: CfoBankTransaction[] | ((current: CfoBankTransaction[]) => CfoBankTransaction[])) => void,
-  search: string,
-  setSearch: (value: string) => void,
-) {
-  const costPaymentMap = buildCostPaymentMap(transactions);
-  const invoicePaymentMap = buildInvoicePaymentMap(transactions);
-  const currentTransactionIds = new Set(transactions.map((transaction) => transaction.id));
-  const costOptions = [
-    { value: "", label: "Nie przypisano do kosztu" },
-    ...costs.filter((cost) => !cost.ignoruj).map((cost) => ({
-      value: cost.id,
-      label: costOptionLabel(cost),
-      tone: costOptionTone(cost, costPaidValue(cost, currentTransactionIds) + (costPaymentMap.get(cost.id) || 0)),
-    })),
-  ];
-  const splitCostOptions = [
-    { value: "", label: "Nie przypisano do kosztu" },
-    ...costs.filter((cost) => !cost.ignoruj).map((cost) => ({
-      value: cost.id,
-      label: costOptionLabel(cost),
-      tone: costOptionTone(cost, costPaidValue(cost, currentTransactionIds) + (costPaymentMap.get(cost.id) || 0)),
-    })),
-  ];
-  const invoiceOptions = [
-    { value: "", label: "Nie przypisano do faktury" },
-    ...invoices.map((invoice) => ({
-      value: invoice.id,
-      label: invoiceOptionLabel(invoice, period),
-      tone: isInvoiceSettled(invoice, invoicePaidValue(invoice, currentTransactionIds) + (invoicePaymentMap.get(invoice.id) || 0)) ? "success" as const : undefined,
-    })),
-  ];
-  const visibleTransactions = filterBankTransactions(transactions, search, costs, invoices);
-  async function changeTransaction(transaction: CfoBankTransaction, payload: Partial<CfoBankTransaction>) {
-    const result = await updateBankTransaction(transaction.id, payload);
-    if (result.error) return alert("Nie udało się zapisać transakcji bankowej.");
-    setTransactions((current) => current.map((item) => item.id === transaction.id ? ((result.data || { ...item, ...payload }) as unknown as CfoBankTransaction) : item));
-  }
-
-  async function changeTransactionType(transaction: CfoBankTransaction, value: string) {
-    const typ = value as CfoBankTransactionType;
-    const payload: Partial<CfoBankTransaction> = {
-      typ,
-      ignoruj: typ === "transfer_wewnetrzny",
-    };
-    if (typ !== "koszt") payload.koszt_id = null;
-    if (typ !== "faktura_sprzedazowa") payload.faktura_id = null;
-    await changeTransaction(transaction, payload);
-  }
-
-  async function assignCost(transaction: CfoBankTransaction, costId: string) {
-    await changeTransaction(transaction, {
-      koszt_id: costId || null,
-      faktura_id: null,
-      typ: costId ? "koszt" : "do_przypisania",
-      ignoruj: false,
-      dopasowanie_status: costId ? "reczne" : "nieprzypisane",
-    });
-  }
-
-  async function assignInvoice(transaction: CfoBankTransaction, invoiceId: string) {
-    await changeTransaction(transaction, {
-      faktura_id: invoiceId || null,
-      koszt_id: null,
-      typ: invoiceId ? "faktura_sprzedazowa" : "do_przypisania",
-      ignoruj: false,
-      dopasowanie_status: invoiceId ? "reczne" : "nieprzypisane",
-    });
-  }
-
-  async function toggleSplitPayment(transaction: CfoBankTransaction, enabled: boolean) {
-    await changeTransaction(transaction, {
-      rozbita: enabled,
-      koszt_id: enabled ? null : transaction.koszt_id,
-      faktura_id: enabled ? null : transaction.faktura_id,
-      dopasowanie_status: enabled ? "reczne" : transaction.dopasowanie_status,
-    });
-  }
-
-  async function addPaymentSplit(transaction: CfoBankTransaction) {
-    const splits = paymentSplits(transaction);
-    const remaining = Math.max(0, Math.abs(Number(transaction.kwota || 0)) - sum(splits.map((split) => Number(split.kwota || 0))));
-    const isRevenue = transaction.typ === "faktura_sprzedazowa" || transaction.kwota > 0;
-    const result = await insertPaymentSplit({
-      transakcja_id: transaction.id,
-      koszt_id: null,
-      faktura_id: null,
-      typ: isRevenue ? "faktura_sprzedazowa" : "koszt",
-      opis: null,
-      kwota: remaining,
-      poza_kosztem_cfo: false,
-    });
-    if (result.error) return alert("Nie udało się dodać linii rozbicia.");
-    setTransactions((current) => current.map((item) => item.id === transaction.id ? {
-      ...item,
-      cfo_rozbicia_platnosci: [...paymentSplits(item), result.data as CfoPaymentSplit],
-    } : item));
-  }
-
-  async function changePaymentSplit(transaction: CfoBankTransaction, split: CfoPaymentSplit, payload: Partial<CfoPaymentSplit>) {
-    const result = await updatePaymentSplit(split.id, payload);
-    if (result.error) return alert("Nie udało się zapisać linii rozbicia.");
-    setTransactions((current) => current.map((item) => item.id === transaction.id ? {
-      ...item,
-      cfo_rozbicia_platnosci: paymentSplits(item).map((row) => row.id === split.id ? { ...row, ...payload, ...(result.data as CfoPaymentSplit) } : row),
-    } : item));
-  }
-
-  async function changePaymentSplitType(transaction: CfoBankTransaction, split: CfoPaymentSplit, typ: CfoPaymentSplitType) {
-    await changePaymentSplit(transaction, split, {
-      typ,
-      koszt_id: typ === "koszt" ? split.koszt_id : null,
-      faktura_id: typ === "faktura_sprzedazowa" ? split.faktura_id : null,
-      poza_kosztem_cfo: typ === "poza_kosztem_cfo",
-      opis: typ === "poza_kosztem_cfo" ? "Poza kosztem CFO" : null,
-    });
-  }
-
-  async function removePaymentSplit(transaction: CfoBankTransaction, split: CfoPaymentSplit) {
-    const result = await deletePaymentSplit(split.id);
-    if (result.error) return alert("Nie udało się usunąć linii rozbicia.");
-    setTransactions((current) => current.map((item) => item.id === transaction.id ? {
-      ...item,
-      cfo_rozbicia_platnosci: paymentSplits(item).filter((row) => row.id !== split.id),
-    } : item));
-  }
-
-  return (
-    <section style={sectionStackStyle}>
-      <article style={panelStyle}>
-        <div style={panelHeaderStyle}>
-          <Banknote size={21} style={panelIconStyle} />
-          <h2 style={panelTitleStyle}>Import historii rachunku</h2>
-        </div>
-        <label style={uploadBoxStyle}>
-          <Upload size={22} />
-          <strong>Wczytaj CSV z Erste Bank</strong>
-          <span>Obsługiwane są pliki z przecinkiem jako separatorem. Przelewy własne będą domyślnie oznaczane jako wewnętrzne. Wpływy możesz przypisać do faktur, a wypływy do kosztów.</span>
-          <input type="file" accept=".csv,.txt" hidden disabled={saving} onChange={(event) => event.target.files?.[0] && importBankFile(event.target.files[0])} />
-        </label>
-      </article>
-      <article style={panelStyle}>
-        <div style={panelHeaderStyle}>
-          <ReceiptText size={21} style={panelIconStyle} />
-          <h2 style={panelTitleStyle}>Transakcje bankowe</h2>
-        </div>
-        <SearchField value={search} onChange={setSearch} placeholder="Szukaj transakcji po dacie, kontrahencie, tytule, powiązaniu albo kwocie..." />
-        <div style={tableWrapperStyle}>
-          <table style={cashflowTableStyle}>
-            <colgroup>
-              <col style={{ width: "7%" }} />
-              <col style={{ width: "14%" }} />
-              <col style={{ width: "24%" }} />
-              <col style={{ width: "11%" }} />
-              <col style={{ width: "4%" }} />
-              <col style={{ width: "29%" }} />
-              <col style={{ width: "11%" }} />
-            </colgroup>
-            <thead><tr><Th>Data</Th><Th>Kontrahent</Th><Th>Tytuł</Th><Th>Typ</Th><Th>Uwzgl.</Th><Th>Powiązanie</Th><Th align="right">Kwota</Th></tr></thead>
-            <tbody>
-              {visibleTransactions.length === 0 ? <EmptyRow colSpan={7} text={transactions.length === 0 ? "Brak transakcji w tym okresie." : "Brak transakcji pasujących do wyszukiwania."} /> : visibleTransactions.map((transaction) => {
-                const linkMode = transaction.typ === "faktura_sprzedazowa" || (transaction.typ !== "koszt" && transaction.kwota > 0) ? "invoice" : "cost";
-                const splits = paymentSplits(transaction);
-                const isSplitMode = transaction.rozbita;
-                return (
-                  <Fragment key={transaction.id}>
-                    <tr style={bankTransactionRowStyle(transaction)}>
-                      <Td>{formatDate(transaction.data_ksiegowania)}</Td>
-                      <Td>{transaction.kontrahent || "Brak kontrahenta"}</Td>
-                      <Td>{transaction.tytul || "Brak tytułu"}</Td>
-                      <Td><AppSelect value={bankTypeSelectValue(transaction.typ)} options={BANK_TYPE_OPTIONS} onChange={(value) => void changeTransactionType(transaction, value)} style={compactSelectStyle} /></Td>
-                      <Td align="right"><input type="checkbox" checked={!transaction.ignoruj} onChange={(event) => void changeTransaction(transaction, { ignoruj: !event.target.checked })} /></Td>
-                      <Td style={cashflowLinkTdStyle}>
-                        <div style={cashflowLinkCellStyle}>
-                          {linkMode === "cost" ? (
-                            <>
-                              <label style={inlineCheckboxStyle}>
-                                <input type="checkbox" checked={transaction.rozbita} onChange={(event) => void toggleSplitPayment(transaction, event.target.checked)} />
-                                Rozbij płatność
-                              </label>
-                              {!isSplitMode ? (
-                                <AppSelect
-                                  value={transaction.koszt_id || ""}
-                                  options={costOptions}
-                                  onChange={(value) => void assignCost(transaction, value)}
-                                  searchable
-                                  searchPlaceholder="Szukaj kosztu..."
-                                  style={costLinkSelectStyle}
-                                  menuStyle={costLinkMenuStyle}
-                                />
-                              ) : <span style={smallStyle}>Rozliczenie w liniach poniżej</span>}
-                            </>
-                          ) : (
-                            <>
-                              <label style={inlineCheckboxStyle}>
-                                <input type="checkbox" checked={transaction.rozbita} onChange={(event) => void toggleSplitPayment(transaction, event.target.checked)} />
-                                Rozbij płatność
-                              </label>
-                              {!isSplitMode ? (
-                                <AppSelect
-                                  value={transaction.faktura_id || ""}
-                                  options={invoiceOptions}
-                                  onChange={(value) => void assignInvoice(transaction, value)}
-                                  searchable
-                                  searchPlaceholder="Szukaj faktury..."
-                                  style={costLinkSelectStyle}
-                                  menuStyle={costLinkMenuStyle}
-                                />
-                              ) : <span style={smallStyle}>Rozliczenie w liniach poniżej</span>}
-                            </>
-                          )}
-                        </div>
-                      </Td>
-                      <Td align="right" style={cashflowAmountCellStyle}>{formatMoney(transaction.kwota)}</Td>
-                    </tr>
-                    {isSplitMode ? (
-                      <tr style={bankTransactionRowStyle(transaction)}>
-                        <Td colSpan={7}>
-                          <div style={paymentSplitBoxStyle}>
-                            <div style={paymentSplitHeaderStyle}>
-                              <strong>Rozbicie płatności</strong>
-                              <button type="button" style={smallActionButtonStyle} onClick={() => void addPaymentSplit(transaction)}>+ Dodaj linię</button>
-                            </div>
-                            {splits.length === 0 ? <span style={smallStyle}>Dodaj linię, aby przypisać część płatności do kosztu CFO albo oznaczyć ją jako poza kosztem CFO.</span> : null}
-                            {splits.map((split) => (
-                              <div key={split.id} style={paymentSplitLineStyle}>
-                                <MoneyTextInput
-                                  value={Number(split.kwota || 0)}
-                                  onValueChange={(value) => setTransactions((current) => current.map((item) => item.id === transaction.id ? {
-                                    ...item,
-                                    cfo_rozbicia_platnosci: paymentSplits(item).map((row) => row.id === split.id ? { ...row, kwota: value } : row),
-                                  } : item))}
-                                  onCommit={(value) => void changePaymentSplit(transaction, split, { kwota: Math.max(0, value) })}
-                                  style={splitAmountInputStyle}
-                                />
-                                <span style={currencySuffixStyle}>zł</span>
-                                <AppSelect
-                                  value={split.typ || (split.poza_kosztem_cfo ? "poza_kosztem_cfo" : "koszt")}
-                                  options={PAYMENT_SPLIT_TYPE_OPTIONS}
-                                  onChange={(value) => void changePaymentSplitType(transaction, split, value as CfoPaymentSplitType)}
-                                  style={splitTypeSelectStyle}
-                                  menuStyle={costLinkMenuStyle}
-                                />
-                                {split.typ === "koszt" || (!split.typ && !split.poza_kosztem_cfo) ? (
-                                  <AppSelect
-                                    value={split.koszt_id || ""}
-                                    options={splitCostOptions}
-                                    onChange={(value) => void changePaymentSplit(transaction, split, {
-                                      typ: "koszt",
-                                      koszt_id: value || null,
-                                      faktura_id: null,
-                                      poza_kosztem_cfo: false,
-                                      opis: null,
-                                    })}
-                                    searchable
-                                    searchPlaceholder="Szukaj kosztu..."
-                                    style={splitCostSelectStyle}
-                                    menuStyle={costLinkMenuStyle}
-                                  />
-                                ) : split.typ === "faktura_sprzedazowa" ? (
-                                  <AppSelect
-                                    value={split.faktura_id || ""}
-                                    options={invoiceOptions}
-                                    onChange={(value) => void changePaymentSplit(transaction, split, {
-                                      typ: "faktura_sprzedazowa",
-                                      koszt_id: null,
-                                      faktura_id: value || null,
-                                      poza_kosztem_cfo: false,
-                                      opis: null,
-                                    })}
-                                    searchable
-                                    searchPlaceholder="Szukaj faktury..."
-                                    style={splitCostSelectStyle}
-                                    menuStyle={costLinkMenuStyle}
-                                  />
-                                ) : (
-                                  <span style={splitCategoryNoteStyle}>{paymentSplitTypeLabel(split.typ || "do_przypisania")}</span>
-                                )}
-                                <button type="button" style={smallGhostButtonStyle} onClick={() => void removePaymentSplit(transaction, split)}>Usuń</button>
-                              </div>
-                            ))}
-                          </div>
-                        </Td>
-                      </tr>
-                    ) : null}
-                  </Fragment>
                 );
               })}
             </tbody>
@@ -1346,23 +983,6 @@ function renderClientsSection(report: ReturnType<typeof clientProfitability>) {
       </article>
     </section>
   );
-}
-
-function renderCashBalances(cash: ReturnType<typeof closingCash>, to: string, changeKind: (id: string, kind: "operacyjne" | "vat" | "nieokreslone") => Promise<void>) {
-  return <section style={{ ...panelStyle, marginBottom: "18px" }}>
-    <div style={panelHeaderWithTotalStyle}><h2 style={panelTitleStyle}>Gotówka na {formatDate(to)}</h2><strong style={panelHeaderTotalStyle}>{cash.complete ? formatMoney(cash.available) : "Niepełne dane sald"}</strong></div>
-    <p style={smallStyle}>Ostatnie zaimportowane saldo każdego rachunku do wskazanej daty. Obejmuje wszystkie operacje, również transfery i ignorowane w CashFlow. Kwota do dyspozycji wyklucza rachunki VAT. Nie jest pomniejszona o przyszłe zobowiązania.</p>
-    <div style={tableWrapperStyle}><table style={tableStyle}>
-      <thead><tr><Th>Rachunek</Th><Th>Rodzaj środków</Th><Th>Data salda</Th><Th align="right">Saldo z wyciągu</Th><Th>Kompletność</Th></tr></thead>
-      <tbody>{cash.rows.length ? cash.rows.map(row => <tr key={row.account.id}>
-        <Td>•••• {row.account.numer_rachunku.slice(-4)}<small style={smallStyle}>{row.account.waluta}</small></Td>
-        <Td><AppSelect value={row.account.rodzaj_srodkow || "nieokreslone"} options={[{ value: "nieokreslone", label: "Wybierz rodzaj" }, { value: "operacyjne", label: "Do dyspozycji" }, { value: "vat", label: "Rachunek VAT" }]} onChange={value => void changeKind(row.account.id, value as "operacyjne" | "vat" | "nieokreslone")} style={compactSelectStyle} /></Td>
-        <Td>{row.date ? formatDate(row.date) : "Brak danych"}</Td><Td align="right">{row.balance === null ? "—" : new Intl.NumberFormat("pl-PL", { style: "currency", currency: row.account.waluta }).format(row.balance)}</Td>
-        <Td>{row.unknownOrder ? "Brak salda lub niejednoznaczna kolejność operacji" : row.balance === null ? "Brak wyciągu" : row.stale ? "Saldo ze starszego miesiąca — uzupełnij wyciąg" : "Saldo ostatniej operacji w miesiącu"}{!row.account.rodzaj_srodkow || row.account.rodzaj_srodkow === "nieokreslone" ? <small style={smallStyle}>Wybierz rodzaj rachunku.</small> : null}{row.account.waluta !== "PLN" ? <small style={smallStyle}>Waluta obca poza sumą PLN.</small> : null}</Td>
-      </tr>) : <EmptyRow colSpan={5} text="Brak zaimportowanych rachunków." />}</tbody>
-    </table></div>
-    <p style={smallStyle}>{cash.complete ? "Do dyspozycji" : "Suma częściowa oznaczonych rachunków z danymi z miesiąca"}: <strong>{cash.availableAccounts ? formatMoney(cash.available) : "brak danych"}</strong> · Rachunki VAT: <strong>{cash.vatAccounts ? formatMoney(cash.vat) : "brak oznaczonych sald"}</strong>. Kompletność wyciągu wymaga sprawdzenia z bankiem; data ostatniej operacji nie potwierdza braku późniejszych operacji.</p>
-  </section>;
 }
 
 function TeamInput({ value, onChange }: { value: number; onChange: (value: number) => void }) {
@@ -1601,109 +1221,12 @@ function buildTeamWorkTime(timeEntries: CfoClientTimeEntry[]) {
   return byPerson;
 }
 
-function buildCostPaymentMap(transactions: CfoBankTransaction[]) {
-  const byCost = new Map<string, number>();
-  transactions.forEach((transaction) => {
-    if (transaction.ignoruj || transaction.typ !== "koszt") return;
-    const splits = paymentSplits(transaction);
-    if (splits.length > 0 || transaction.rozbita) {
-      splits.forEach((split) => {
-        if (!split.koszt_id || split.poza_kosztem_cfo || split.typ !== "koszt") return;
-        const paid = Number(split.kwota || 0);
-        byCost.set(split.koszt_id, (byCost.get(split.koszt_id) || 0) + paid);
-      });
-      return;
-    }
-    if (!transaction.koszt_id) return;
-    byCost.set(transaction.koszt_id, (byCost.get(transaction.koszt_id) || 0) + Math.abs(Number(transaction.kwota || 0)));
-  });
-  return byCost;
-}
-
-function buildInvoicePaymentMap(transactions: CfoBankTransaction[]) {
-  const byInvoice = new Map<string, number>();
-  transactions.forEach((transaction) => {
-    if (transaction.ignoruj) return;
-    const splits = paymentSplits(transaction);
-    if (splits.length > 0 || transaction.rozbita) {
-      splits.forEach((split) => {
-        if (!split.faktura_id || split.poza_kosztem_cfo || split.typ !== "faktura_sprzedazowa") return;
-        byInvoice.set(split.faktura_id, (byInvoice.get(split.faktura_id) || 0) + Number(split.kwota || 0));
-      });
-      return;
-    }
-    if (!transaction.faktura_id || transaction.ignoruj || transaction.typ !== "faktura_sprzedazowa") return;
-    const paid = Math.abs(Number(transaction.kwota || 0));
-    byInvoice.set(transaction.faktura_id, (byInvoice.get(transaction.faktura_id) || 0) + paid);
-  });
-  return byInvoice;
-}
-
 function costPaymentState(cost: CfoCostItem, paid: number): "none" | "partial" | "settled" | "overpaid" {
   const gross = costGrossValue(cost);
   if (gross <= 0 || paid <= 0) return "none";
   const remaining = gross - paid;
   if (Math.abs(remaining) <= 0.01) return "settled";
   return remaining < 0 ? "overpaid" : "partial";
-}
-
-function costOptionTone(cost: CfoCostItem, paid: number): "success" | "warning" | undefined {
-  const state = costPaymentState(cost, paid);
-  if (state === "settled") return "success";
-  if (state === "overpaid") return "warning";
-  return undefined;
-}
-
-function costPaidValue(cost: CfoCostItem, excludeTransactionIds = new Set<string>()) {
-  const directRows = cost.cfo_transakcje_bankowe || [];
-  const directPaid = (Array.isArray(directRows) ? directRows : [directRows].filter(Boolean)).reduce((sum, transaction) => {
-    if (!transaction || excludeTransactionIds.has(transaction.id) || transaction.ignoruj || transaction.typ !== "koszt") return sum;
-    return sum + Math.abs(Number(transaction.kwota || 0));
-  }, 0);
-
-  const splitRows = cost.cfo_rozbicia_platnosci || [];
-  const splitPaid = (Array.isArray(splitRows) ? splitRows : [splitRows].filter(Boolean)).reduce((sum, split) => {
-    const transaction = split ? splitParentTransaction(split) : null;
-    if (!split || split.poza_kosztem_cfo || split.typ !== "koszt" || !split.koszt_id) return sum;
-    if (transaction && (excludeTransactionIds.has(transaction.id) || transaction.ignoruj || transaction.typ !== "koszt")) return sum;
-    return sum + Number(split.kwota || 0);
-  }, 0);
-
-  return directPaid + splitPaid;
-}
-
-function isInvoiceSettled(invoice: CfoCashflowInvoice, paid: number) {
-  const gross = Number(invoice.kwota_brutto || 0);
-  return gross > 0 && Math.abs(gross - paid) <= 0.01;
-}
-
-function invoicePaidValue(invoice: CfoCashflowInvoice, excludeTransactionIds = new Set<string>()) {
-  const rows = invoice.cfo_transakcje_bankowe || [];
-  const transactions = Array.isArray(rows) ? rows : [rows].filter(Boolean);
-  const directPaid = transactions.reduce((sum, transaction) => {
-    if (!transaction || excludeTransactionIds.has(transaction.id) || transaction.ignoruj || transaction.typ !== "faktura_sprzedazowa") return sum;
-    return sum + Math.abs(Number(transaction.kwota || 0));
-  }, 0);
-
-  const splitRows = invoice.cfo_rozbicia_platnosci || [];
-  const splitPaid = (Array.isArray(splitRows) ? splitRows : [splitRows].filter(Boolean)).reduce((sum, split) => {
-    const transaction = split ? splitParentTransaction(split) : null;
-    if (!split || split.poza_kosztem_cfo || split.typ !== "faktura_sprzedazowa" || !split.faktura_id) return sum;
-    if (transaction && (excludeTransactionIds.has(transaction.id) || transaction.ignoruj)) return sum;
-    return sum + Number(split.kwota || 0);
-  }, 0);
-
-  return directPaid + splitPaid;
-}
-
-function paymentSplits(transaction: CfoBankTransaction) {
-  const rows = transaction.cfo_rozbicia_platnosci || [];
-  return Array.isArray(rows) ? rows : [rows].filter(Boolean);
-}
-
-function splitParentTransaction(split: CfoPaymentSplit) {
-  const parent = split.cfo_transakcje_bankowe;
-  return Array.isArray(parent) ? parent[0] : parent;
 }
 
 function filterCosts(costs: CfoCostItem[], search: string) {
@@ -1722,33 +1245,6 @@ function filterCosts(costs: CfoCostItem[], search: string) {
   ].filter(Boolean).join(" ")).includes(query));
 }
 
-function filterBankTransactions(transactions: CfoBankTransaction[], search: string, costs: CfoCostItem[], invoices: CfoCashflowInvoice[]) {
-  const query = normalizeSearchValue(search);
-  if (!query) return transactions;
-  const costLabels = new Map(costs.map((cost) => [cost.id, costOptionLabel(cost)]));
-  const invoiceLabels = new Map(invoices.map((invoice) => [invoice.id, invoiceOptionLabel(invoice, "")]));
-
-  return transactions.filter((transaction) => {
-    const splitLabels = paymentSplits(transaction)
-      .map((split) => [
-        paymentSplitTypeLabel(split.typ),
-        split.koszt_id ? costLabels.get(split.koszt_id) : null,
-        split.faktura_id ? invoiceLabels.get(split.faktura_id) : null,
-      ].filter(Boolean).join(" "))
-      .join(" ");
-    return normalizeSearchValue([
-      formatDate(transaction.data_ksiegowania),
-      transaction.kontrahent,
-      transaction.tytul,
-      bankTypeLabel(transaction.typ),
-      transaction.koszt_id ? costLabels.get(transaction.koszt_id) : null,
-      transaction.faktura_id ? invoiceLabels.get(transaction.faktura_id) : null,
-      splitLabels,
-      formatMoney(transaction.kwota),
-    ].filter(Boolean).join(" ")).includes(query);
-  });
-}
-
 function normalizeSearchValue(value: string | number | null | undefined) {
   return String(value ?? "")
     .toLowerCase()
@@ -1759,44 +1255,10 @@ function normalizeSearchValue(value: string | number | null | undefined) {
     .trim();
 }
 
-function bankTypeSelectValue(type: CfoBankTransactionType) {
-  return type === "ignoruj" ? "do_przypisania" : type;
-}
-
-function bankTypeLabel(type: CfoBankTransactionType) {
-  return BANK_TYPE_OPTIONS.find((option) => option.value === bankTypeSelectValue(type))?.label || type;
-}
-
-function paymentSplitTypeLabel(type: CfoPaymentSplitType | null | undefined) {
-  return PAYMENT_SPLIT_TYPE_OPTIONS.find((option) => option.value === type)?.label || "Do przypisania";
-}
-
-function bankTransactionRowStyle(transaction: CfoBankTransaction): CSSProperties | undefined {
-  if (transaction.ignoruj) return mutedRowStyle;
-  if (transaction.typ === "do_przypisania") return unassignedRowStyle;
-  return undefined;
-}
-
 function costGrossValue(cost: CfoCostItem) {
   const gross = Number(cost.kwota_brutto || 0);
   if (gross > 0) return gross;
   return Number(cost.kwota_netto_cfo || 0);
-}
-
-function costOptionLabel(cost: CfoCostItem) {
-  const number = `${formatCostPeriod(cost.okres_start, cost.okres_end)} - ${cost.numer_dokumentu || "Bez numeru"}`;
-  const contractor = cost.kontrahent || "Bez kontrahenta";
-  return `${number} · ${contractor} · brutto: ${formatMoney(costGrossValue(cost))}`;
-}
-
-function invoiceOptionLabel(invoice: CfoCashflowInvoice, selectedPeriod: string) {
-  const issuePeriod = invoice.data_wystawienia?.slice(0, 7) || "";
-  const scope = issuePeriod === selectedPeriod.slice(0, 7)
-    ? formatMonthField(selectedPeriod)
-    : `Inne okresy · ${issuePeriod ? formatMonthField(issuePeriod) : "bez daty"}`;
-  const number = invoice.numer || "Faktura bez numeru";
-  const contractor = invoice.kontrahent_nazwa || "Bez kontrahenta";
-  return `${scope} · ${number} · ${contractor} · ${formatMoney(invoice.kwota_brutto)}`;
 }
 
 function buildCfoView(period: string, viewMode: CfoViewMode, revenueLines: CfoInvoiceLine[], costs: CfoCostItem[], employees: CfoEmployeeCost[], bank: CfoBankTransaction[]) {
@@ -2037,40 +1499,6 @@ function duplicateAmount(value: number | null | undefined) {
   return Number(value || 0).toFixed(2);
 }
 
-async function parseBankCsv(file: File): Promise<CfoBankImportRow[]> {
-  const rows = parseCsv(await file.text()).filter((row) => row.length >= 8);
-  const summary = rows[0];
-  const accountNumber = normalizeAccount(String(summary?.[2] || "").replace(/^'/, ""));
-  const accountName = String(summary?.[3] || "");
-  const currency = String(summary?.[4] || "PLN") || "PLN";
-  return rows.slice(1).map((row) => {
-    const title = String(row[2] || "");
-    const contractor = String(row[3] || "");
-    const amount = numberValue(row[5]);
-    const type = classifyBankTransaction(title, contractor);
-    return {
-      account: { numer_rachunku: accountNumber, nazwa: accountName, waluta: currency },
-      transaction: {
-        import_key: `bank:${accountNumber}:${row[0]}:${row[1]}:${row[7]}:${amount}:${title}`,
-        data_ksiegowania: parsePolishDate(row[0]),
-        data_operacji: parsePolishDate(row[1]),
-        tytul: title,
-        kontrahent: contractor || null,
-        rachunek_kontrahenta: normalizeAccount(row[4]),
-        kwota: amount,
-        saldo_po: numberValue(row[6]),
-        lp: row[7] ? Number(row[7]) : null,
-        typ: type,
-        ignoruj: type === "transfer_wewnetrzny",
-      },
-    };
-  });
-}
-
-function parseCsv(text: string) {
-  return parseDelimited(text, ",");
-}
-
 function parseDelimitedTable(text: string) {
   const firstLine = text.split(/\r?\n/).find((line) => line.trim()) || "";
   const delimiter = firstLine.includes(";") ? ";" : ",";
@@ -2131,17 +1559,6 @@ function classifyCost(contractor: string, description: string | null): { categor
   if (value.includes("biurow") || value.includes("papier")) return { category: "administracja_ogolne", subcategory: "Artykuły biurowe / spożywcze" };
   if (value.includes("siłown") || value.includes("silown") || value.includes("benefit")) return { category: "koszty_zespolu", subcategory: "Benefity" };
   return { category: "administracja_ogolne", subcategory: "Inne" };
-}
-
-function classifyBankTransaction(title: string, contractor: string): CfoBankTransactionType {
-  const value = `${title} ${contractor}`.toLowerCase();
-  if (value.includes("przelew własny") || value.includes("przelew wlasny")) return "transfer_wewnetrzny";
-  if (value.includes("/vat/")) return "vat";
-  if (value.includes("wynagrodzenie")) return "wynagrodzenie_netto";
-  if (value.includes("zus")) return "zus";
-  if (value.includes("pit")) return "pit";
-  if (value.includes("cit")) return "cit";
-  return "do_przypisania";
 }
 
 function costShareForRange(cost: CfoCostItem, rangeStart: string, rangeEnd: string) {
@@ -2262,23 +1679,6 @@ function revenueFetchRange(from: string, to: string) {
   const fromMonth = shiftMonth(from.slice(0, 7), -1);
   const toMonth = shiftMonth(to.slice(0, 7), 1);
   return { from: monthToDate(fromMonth), to: monthEndDate(toMonth) };
-}
-
-function cfoCashflowCostLinkRange(period: string) {
-  const fromMonth = shiftMonth(period, -12);
-  const toMonth = shiftMonth(period, 12);
-  return { from: monthToDate(fromMonth), to: monthEndDate(toMonth) };
-}
-
-function mergeCostLists(primary: CfoCostItem[], secondary: CfoCostItem[]) {
-  const byId = new Map<string, CfoCostItem>();
-  secondary.forEach((cost) => byId.set(cost.id, cost));
-  primary.forEach((cost) => byId.set(cost.id, cost));
-  return Array.from(byId.values()).sort((first, second) => {
-    const firstDate = first.data_dokumentu || first.okres_start || "";
-    const secondDate = second.data_dokumentu || second.okres_start || "";
-    return secondDate.localeCompare(firstDate);
-  });
 }
 
 function cfoPeriodLabel(period: string, viewMode: CfoViewMode) {
@@ -2469,10 +1869,6 @@ function parsePolishDate(value: unknown) {
   return `${year}-${month}-${day}`;
 }
 
-function normalizeAccount(value: unknown) {
-  return stringValue(value).replace(/^'/, "").replace(/\s/g, "");
-}
-
 function emptyToNull(value: string) {
   const trimmed = value.trim();
   return trimmed ? trimmed : null;
@@ -2543,7 +1939,6 @@ const warningInlineStyle: CSSProperties = { color: colors.warning, fontWeight: 9
 const tableWrapperStyle: CSSProperties = { overflowX: "auto" };
 const tableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse" };
 const wideCostTableStyle: CSSProperties = { ...tableStyle, minWidth: "1380px", tableLayout: "fixed" };
-const cashflowTableStyle: CSSProperties = { ...tableStyle, minWidth: "0", tableLayout: "fixed" };
 const thStyle: CSSProperties = { color: colors.muted, borderBottom: `1px solid ${colors.border}`, padding: "11px 9px", fontSize: "12px", textTransform: "uppercase", letterSpacing: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" };
 const tdStyle: CSSProperties = { color: colors.text, borderBottom: `1px solid ${colors.border}`, padding: "10px 9px", verticalAlign: "middle" };
 const documentCostCellStyle: CSSProperties = { whiteSpace: "normal", overflowWrap: "anywhere", wordBreak: "break-word" };
@@ -2557,21 +1952,6 @@ const settledSmallStyle: CSSProperties = { ...smallStyle, color: colors.success 
 const overpaidTextStyle: CSSProperties = { color: colors.warning, fontWeight: 850 };
 const overpaidSmallStyle: CSSProperties = { ...smallStyle, color: colors.warning };
 const compactSelectStyle: CSSProperties = { minHeight: "36px", padding: "7px 10px", background: colors.white };
-const costLinkSelectStyle: CSSProperties = { ...compactSelectStyle, width: "100%", minWidth: 0, maxWidth: "100%", paddingLeft: "9px", paddingRight: "8px", gap: "6px" };
-const costLinkMenuStyle: CSSProperties = { width: "560px", maxWidth: "min(560px, calc(100vw - 32px))" };
-const cashflowLinkTdStyle: CSSProperties = { minWidth: 0, overflow: "hidden" };
-const cashflowLinkCellStyle: CSSProperties = { display: "grid", gap: "8px", minWidth: 0, maxWidth: "100%", overflow: "hidden" };
-const inlineCheckboxStyle: CSSProperties = { display: "inline-flex", alignItems: "center", gap: "6px", color: colors.navy, fontWeight: 850, fontSize: "12px", cursor: "pointer" };
-const paymentSplitBoxStyle: CSSProperties = { display: "grid", gap: "10px", margin: "6px 0 10px 84px", padding: "12px", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, maxWidth: "940px" };
-const paymentSplitHeaderStyle: CSSProperties = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", color: colors.navy };
-const paymentSplitLineStyle: CSSProperties = { display: "grid", gridTemplateColumns: "130px auto minmax(180px, 220px) minmax(260px, 1fr) auto", gap: "8px", alignItems: "center" };
-const splitAmountInputStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, minHeight: "42px", padding: "9px 12px", fontWeight: 750, boxSizing: "border-box", width: "130px", minWidth: "130px", fontVariantNumeric: "tabular-nums" };
-const currencySuffixStyle: CSSProperties = { color: colors.navy, fontWeight: 850, whiteSpace: "nowrap" };
-const splitTypeSelectStyle: CSSProperties = { ...compactSelectStyle, width: "100%", minWidth: 0 };
-const splitCostSelectStyle: CSSProperties = { ...compactSelectStyle, width: "100%", minWidth: 0 };
-const splitCategoryNoteStyle: CSSProperties = { display: "inline-flex", alignItems: "center", minHeight: "42px", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, color: colors.navy, padding: "7px 11px", fontWeight: 850, boxSizing: "border-box", width: "100%", minWidth: 0 };
-const smallActionButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.navy, fontWeight: 900, padding: "8px 12px", cursor: "pointer" };
-const smallGhostButtonStyle: CSSProperties = { ...smallActionButtonStyle, color: colors.red };
 const iconDangerButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: "12px", background: colors.white, color: colors.red, width: "38px", minWidth: "38px", height: "38px", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer" };
 const uploadBoxStyle: CSSProperties = { border: `1px dashed ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, cursor: "pointer", padding: "18px", color: colors.text, display: "grid", gap: "8px", justifyItems: "start" };
 const manualFormStyle: CSSProperties = { display: "grid", gap: "10px", marginTop: "14px", maxWidth: "1120px" };
@@ -2605,10 +1985,7 @@ const primaryButtonStyle: CSSProperties = { border: `1px solid ${colors.red}`, b
 const secondaryButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.navy, minHeight: "42px", padding: "9px 14px", fontWeight: 850, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "8px", cursor: "pointer" };
 const moneyEditStyle: CSSProperties = { display: "inline-flex", alignItems: "center", justifyContent: "flex-end", gap: "6px", color: colors.navy, fontWeight: 850, whiteSpace: "nowrap" };
 const moneyInputStyle: CSSProperties = { ...inputStyle, minHeight: "36px", padding: "7px 9px", width: "102px" };
-const nowrapMoneyCellStyle: CSSProperties = { whiteSpace: "nowrap" };
-const cashflowAmountCellStyle: CSSProperties = { ...nowrapMoneyCellStyle, fontVariantNumeric: "tabular-nums" };
 const mutedRowStyle: CSSProperties = { opacity: 0.58, background: "#f1f5f9" };
-const unassignedRowStyle: CSSProperties = { background: "#fffbeb" };
 const formFooterStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", marginTop: "14px", flexWrap: "wrap" };
 const miniListStyle: CSSProperties = { display: "grid", gap: "8px" };
 const miniItemStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto auto", gap: "10px", border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "10px 12px", color: colors.text, alignItems: "center" };

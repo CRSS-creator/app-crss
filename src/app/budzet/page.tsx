@@ -7,7 +7,6 @@ import { colors, radius, shadow } from "@/app/design";
 import AccessGuard from "@/components/AccessGuard";
 import AppLayout from "@/components/AppLayout";
 import {
-  fetchCfoBankTransactionsRange,
   fetchCfoBudgetRevenueLinesRange,
   fetchCfoCostsRange,
   fetchCfoEmployeeCostsRange,
@@ -15,7 +14,6 @@ import {
   type CfoCostCategory,
   type CfoCostItem,
   type CfoEmployeeCost,
-  type CfoInvoiceParent,
   type CfoInvoiceLine,
   type CfoRevenueCategory,
 } from "@/lib/cfoService";
@@ -29,6 +27,9 @@ import {
   type CfoBudgetOverride,
   type CfoBudgetOverrideType,
 } from "@/lib/cfoBudgetService";
+
+import { actualInvoicePayment, actualCostPayment, paymentAverage, businessDate, cashflowTransactions, obligationCashflow, emptyCashflow, OBLIGATION_TYPES, type CashflowSnapshot } from "@/lib/cfoCashflow";
+import { fetchCashflowSnapshot } from "@/lib/cfoCashflowService";
 
 type BudgetMonth = {
   period: string;
@@ -91,6 +92,7 @@ type BudgetCostPayment = {
   category: CfoCostCategory;
   subcategory: string;
   documentDate: string | null;
+  dueDate: string | null;
   servicePeriod: string;
   amount: number;
   paidAmount: number;
@@ -108,6 +110,8 @@ type BudgetCostPlanEntry = {
   category: CfoCostCategory;
   subcategory: string;
   amount: number;
+  grossRatio?: number;
+  issueDay?: number;
 };
 
 const REVENUE_OPTIONS: { value: CfoRevenueCategory; label: string }[] = [
@@ -154,7 +158,8 @@ function BudgetContent() {
   const [revenueLines, setRevenueLines] = useState<CfoInvoiceLine[]>([]);
   const [costs, setCosts] = useState<CfoCostItem[]>([]);
   const [employeeCosts, setEmployeeCosts] = useState<CfoEmployeeCost[]>([]);
-  const [bankTransactions, setBankTransactions] = useState<CfoBankTransaction[]>([]);
+  const [cashflow, setCashflow] = useState<CashflowSnapshot>(emptyCashflow);
+  const [dataError, setDataError] = useState<string | null>(null);
   const [overrides, setOverrides] = useState<CfoBudgetOverride[]>([]);
   const [clientRevenues, setClientRevenues] = useState<CfoBudgetClientRevenue[]>([]);
   const [crmRevenues, setCrmRevenues] = useState<CfoBudgetCrmRevenue[]>([]);
@@ -166,8 +171,8 @@ function BudgetContent() {
   }, [startMonth]);
 
   const budget = useMemo(
-    () => buildBudgetMonths(startMonth, DEFAULT_HORIZON, revenueLines, costs, employeeCosts, bankTransactions, overrides, clientRevenues, crmRevenues, parsePolishNumber(openingCash)),
-    [startMonth, revenueLines, costs, employeeCosts, bankTransactions, overrides, clientRevenues, crmRevenues, openingCash],
+    () => buildBudgetMonths(startMonth, DEFAULT_HORIZON, revenueLines, costs, employeeCosts, cashflowTransactions(cashflow), overrides, clientRevenues, crmRevenues, parsePolishNumber(openingCash), cashflow),
+    [startMonth, revenueLines, costs, employeeCosts, cashflow, overrides, clientRevenues, crmRevenues, openingCash],
   );
 
   const selected = budget.find((month) => month.period === selectedMonth) || budget[0];
@@ -179,11 +184,11 @@ function BudgetContent() {
     setLoading(true);
     const historyStart = shiftMonth(startMonth, -6);
     const forecastEnd = shiftMonth(startMonth, DEFAULT_HORIZON - 1);
-    const [revenueResult, costsResult, employeeResult, bankResult, overridesResult, clientRevenueResult, crmRevenueResult] = await Promise.all([
+    const [revenueResult, costsResult, employeeResult, cashflowResult, overridesResult, clientRevenueResult, crmRevenueResult] = await Promise.all([
       fetchCfoBudgetRevenueLinesRange(monthToDate(historyStart), monthEndDate(forecastEnd)),
       fetchCfoCostsRange(monthToDate(historyStart), monthEndDate(forecastEnd)),
       fetchCfoEmployeeCostsRange(monthToDate(historyStart), monthEndDate(forecastEnd)),
-      fetchCfoBankTransactionsRange(monthToDate(historyStart), monthEndDate(forecastEnd)),
+      fetchCashflowSnapshot(),
       fetchCfoBudgetOverrides(monthToDate(historyStart), monthEndDate(forecastEnd)),
       fetchCfoBudgetClientRevenues(),
       fetchCfoBudgetCrmRevenues(),
@@ -192,15 +197,17 @@ function BudgetContent() {
     if (revenueResult.error) console.error("Błąd pobierania przychodów do budżetu:", revenueResult.error);
     if (costsResult.error) console.error("Błąd pobierania kosztów do budżetu:", costsResult.error);
     if (employeeResult.error) console.error("Błąd pobierania kosztów zespołu do budżetu:", employeeResult.error);
-    if (bankResult.error) console.error("Błąd pobierania cash flow do budżetu:", bankResult.error);
+
     if (overridesResult.error) console.error("Błąd pobierania korekt budżetu:", overridesResult.error);
     if (clientRevenueResult.error) console.error("Błąd pobierania abonamentów klientów do budżetu:", clientRevenueResult.error);
     if (crmRevenueResult.error) console.error("Błąd pobierania CRM do budżetu:", crmRevenueResult.error);
 
+    const failed = [revenueResult, costsResult, employeeResult, cashflowResult, overridesResult, clientRevenueResult, crmRevenueResult].some(result => result.error);
+    setDataError(failed ? "Nie udało się pobrać kompletu danych. Prognoza jest niedostępna — odśwież budżet." : null);
     setRevenueLines((revenueResult.data || []) as unknown as CfoInvoiceLine[]);
     setCosts((costsResult.data || []) as CfoCostItem[]);
     setEmployeeCosts((employeeResult.data || []) as CfoEmployeeCost[]);
-    setBankTransactions((bankResult.data || []) as CfoBankTransaction[]);
+    setCashflow(cashflowResult.data || emptyCashflow());
     setOverrides((overridesResult.data || []) as CfoBudgetOverride[]);
     setClientRevenues((clientRevenueResult.data || []) as CfoBudgetClientRevenue[]);
     setCrmRevenues((crmRevenueResult.data || []) as CfoBudgetCrmRevenue[]);
@@ -264,7 +271,8 @@ function BudgetContent() {
         </div>
       </header>
 
-      <section style={metricGridStyle}>
+      {!loading && dataError ? <section role="alert" style={panelStyle}>{dataError}</section> : null}
+      <section style={{ ...metricGridStyle, ...(dataError ? { display: "none" } : {}) }}>
         <Metric label={`Wynik plan ${formatMonthField(selectedMonth)}`} value={formatMoney(selected?.plannedResult || 0)} tone={(selected?.plannedResult || 0) >= 0 ? "good" : "bad"} />
         <Metric label="Przychody plan" value={formatMoney(selected?.plannedRevenue || 0)} />
         <Metric label="Koszty plan" value={formatMoney(selected?.plannedCosts || 0)} tone="bad" />
@@ -284,9 +292,15 @@ function BudgetContent() {
         </label>
       </section>
 
+      <section style={panelStyle}>
+        <p>Przepływy wynikają z dat zapłaty w Fakturach, kosztach i zobowiązaniach CFO. Średni czas zapłaty jest liczony osobno dla klienta i dostawcy z faktur wystawionych w ostatnich 6 miesiącach (lub z krótszej dostępnej historii). Bez historii stosowany jest termin dokumentu, a dla przyszłych dokumentów założenie 14 dni. Zaległości trafiają do pierwszego miesiąca prognozy.</p>
+        <p>Gotówka na start oznacza saldo na początek pierwszego miesiąca prognozy. Nie jest odczytywana z wyciągu.</p>
+        {cashflow.invoices.some(i => i.status === "oplacona" && !i.data_zaplaty) && <p role="status">Część opłaconych faktur nie ma daty zapłaty. Są rozliczone, ale nie wchodzą do średnich ani wykonanego cash flow. Uzupełnij daty w Fakturach.</p>}
+        {OBLIGATION_TYPES.some(kind => !cashflow.obligations.some(o => o.typ === kind.value && (Number(o.kwota) === 0 || o.termin_platnosci))) && <p role="status">Uzupełnij kwoty i terminy wynagrodzeń netto, ZUS, PIT-4, VAT i CIT w CFO → Cash flow. Brakujące rodzaje zobowiązań nie są uwzględnione w prognozie.</p>}
+      </section>
       {loading ? <section style={panelStyle}>Ładowanie budżetu...</section> : null}
 
-      {!loading ? (
+      {!loading && !dataError ? (
         <section style={sectionGridStyle}>
           <article style={widePanelStyle}>
             <div style={panelHeaderStyle}>
@@ -507,6 +521,7 @@ function buildBudgetMonths(
   clientRevenues: CfoBudgetClientRevenue[],
   crmRevenues: CfoBudgetCrmRevenue[],
   openingCash: number,
+  snapshot: CashflowSnapshot = emptyCashflow(),
 ): BudgetMonth[] {
   const months = monthsForRange(startMonth, horizon);
   const costHistoryMonths = monthsForRange(shiftMonth(startMonth, -3), 3);
@@ -514,12 +529,26 @@ function buildBudgetMonths(
   const actualByMonth = buildActualMonthMap([...revenueHistoryMonths, ...months], revenueLines, costs, employees, bankTransactions);
   const baseline = buildBaseline(revenueHistoryMonths, costHistoryMonths, actualByMonth, overrides);
   const crmForecast = buildCrmRevenueGrowthForecast(costHistoryMonths, months, crmRevenues);
-  const budgetInvoices = buildBudgetInvoices(revenueLines);
-  const invoiceIssueProfile = buildInvoiceIssueProfile(revenueLines);
-  const invoicePaymentProfile = buildInvoicePaymentProfile(budgetInvoices);
-  const budgetCostPayments = buildBudgetCostPayments(costs);
-  const costPaymentProfile = buildCostPaymentProfile(budgetCostPayments);
-  const employeeCashFlowBaseline = buildEmployeeCashFlowBaseline(costHistoryMonths, employees);
+  for (const entry of baseline.costPlanEntries) {
+    const source = snapshot.costs.filter(cost => !cost.ignoruj && costHistoryMonths.includes(cost.okres_start.slice(0, 7)) && counterpartyKey(cost.kontrahent || cost.id) === entry.vendorKey && cost.kategoria === entry.category && (cost.podkategoria || EMPTY_SUBCATEGORY) === entry.subcategory);
+    const net = sum(source.map(cost => Number(cost.kwota_netto_cfo)));
+    const issueDays = source.filter(cost => cost.data_dokumentu).map(cost => Number(cost.data_dokumentu?.slice(8, 10)));
+    entry.issueDay = issueDays.length ? Math.round(sum(issueDays) / issueDays.length) : 1;
+    entry.grossRatio = net > 0 ? sum(source.map(cost => Number(cost.kwota_brutto ?? cost.kwota_netto_cfo))) / net : 1;
+  }
+  const asOf = startMonth < businessDate().slice(0, 7) ? monthToDate(startMonth) : businessDate();
+  const budgetInvoices: BudgetInvoice[] = snapshot.invoices.filter(invoice => !invoice.waluta || invoice.waluta === "PLN").map(invoice => ({
+    id: invoice.id, payerKey: counterpartyKey(invoice.klient_id || invoice.kontrahent_nazwa || invoice.id),
+    servicePeriod: (invoice.okres || invoice.data_wystawienia || monthToDate(startMonth)).slice(0, 7),
+    issueDate: invoice.data_wystawienia, dueDate: invoice.termin_platnosci, gross: Number(invoice.kwota_brutto || 0), ...actualInvoicePayment(invoice),
+  }));
+  const invoiceIssueProfile = buildInvoiceIssueProfile(revenueLines.filter(line => { const invoice = firstRelation(line.faktury); return invoice?.data_wystawienia && invoice.data_wystawienia <= asOf && invoice.data_wystawienia >= shiftMonth(asOf.slice(0,7), -6) + "-01"; }));
+  const invoicePaymentProfile = buildInvoicePaymentProfile(budgetInvoices, asOf);
+  invoicePaymentProfile.asOf = asOf > monthToDate(startMonth) ? asOf : monthToDate(startMonth);
+  const budgetCostPayments = buildBudgetCostPayments(snapshot.costs);
+  const costPaymentProfile = buildCostPaymentProfile(budgetCostPayments, asOf);
+  costPaymentProfile.asOf = asOf > monthToDate(startMonth) ? asOf : monthToDate(startMonth);
+
   let cash = openingCash;
 
   return months.map((period) => {
@@ -531,7 +560,7 @@ function buildBudgetMonths(
     const crmCumulativeRevenueGrowth = crmForecast.cumulativeRevenueGrowthByMonth.get(period) || 0;
     const invoiceCashFlow = plannedInvoiceCustomerCashFlowForMonth(period, budgetInvoices, invoicePaymentProfile);
     const plannedCustomerCashFlow = invoiceCashFlow.amount
-      + plannedUnissuedRevenueCashFlowForMonth(period, months, baseline, clientRevenues, crmForecast, actualByMonth, invoiceIssueProfile, invoicePaymentProfile);
+      + plannedUnissuedRevenueCashFlowForMonth(period, [...revenueHistoryMonths, ...months], baseline, clientRevenues, crmForecast, actualByMonth, invoiceIssueProfile, invoicePaymentProfile);
     let manualRevenueCashFlow = 0;
     let manualCostCashFlow = 0;
 
@@ -551,9 +580,9 @@ function buildBudgetMonths(
     const plannedCosts = sum(Array.from(plannedCostCategories.values()));
     const plannedResult = plannedRevenue - plannedCosts;
     const costCashFlow = plannedCostCashFlowForMonth(period, budgetCostPayments, costPaymentProfile);
-    const plannedEmployeeCashFlow = employeeCashFlowForMonth(period, employees) || employeeCashFlowBaseline;
+    const plannedEmployeeCashFlow = obligationCashflow(period, snapshot.obligations, startMonth, asOf > monthToDate(startMonth) ? asOf : monthToDate(startMonth));
     const plannedOtherCostCashFlow = costCashFlow.amount
-      + plannedUnrecordedCostCashFlowForMonth(period, months, baseline.costPlanEntries, actualByMonth, costPaymentProfile);
+      + plannedUnrecordedCostCashFlowForMonth(period, [...costHistoryMonths, ...months], baseline.costPlanEntries, actualByMonth, costPaymentProfile);
     const plannedCostCashFlow = plannedEmployeeCashFlow + plannedOtherCostCashFlow + manualCostCashFlow;
     const plannedCashFlow = plannedCustomerCashFlow + manualRevenueCashFlow - plannedCostCashFlow;
     cash += plannedCashFlow;
@@ -658,76 +687,6 @@ function revenueCashFlowAmount(transaction: CfoBankTransaction) {
   return transaction.typ === "faktura_sprzedazowa" && amount > 0 ? amount : 0;
 }
 
-function buildBudgetInvoices(revenueLines: CfoInvoiceLine[]): BudgetInvoice[] {
-  const invoices = new Map<string, BudgetInvoice & { fallbackGross: number }>();
-
-  revenueLines.forEach((line) => {
-    const invoice = firstRelation(line.faktury);
-    if (!invoice || invoice.typ !== "sprzedaz" || invoice.status === "anulowana" || invoice.kategoria === "korekta") return;
-
-    const payment = invoicePaymentInfo(invoice);
-    const fallbackGross = Number(line.kwota_netto || 0) * 1.23;
-    const current = invoices.get(invoice.id);
-
-    if (current) {
-      current.fallbackGross += fallbackGross;
-      current.gross = Number(invoice.kwota_brutto || 0) > 0 ? Number(invoice.kwota_brutto || 0) : current.fallbackGross;
-      current.paidAmount = payment.paidAmount;
-      current.paymentDate = payment.paymentDate;
-      return;
-    }
-
-    invoices.set(invoice.id, {
-      id: invoice.id,
-      payerKey: counterpartyKey(invoice.klient_id || invoice.kontrahent_nazwa || invoice.id),
-      servicePeriod: revenueLineEffectivePeriod(line).slice(0, 7),
-      issueDate: invoice.data_wystawienia,
-      dueDate: invoice.termin_platnosci,
-      gross: Number(invoice.kwota_brutto || 0) > 0 ? Number(invoice.kwota_brutto || 0) : fallbackGross,
-      fallbackGross,
-      paidAmount: payment.paidAmount,
-      paymentDate: payment.paymentDate,
-    });
-  });
-
-  return Array.from(invoices.values()).map(({ fallbackGross, ...invoice }) => ({
-    ...invoice,
-    gross: invoice.gross > 0 ? invoice.gross : fallbackGross,
-  }));
-}
-
-function invoicePaymentInfo(invoice: CfoInvoiceParent) {
-  const directPayments = (invoice.cfo_transakcje_bankowe || [])
-    .filter((transaction) => !transaction.ignoruj && transaction.typ === "faktura_sprzedazowa" && Number(transaction.kwota || 0) > 0);
-  const splitPayments = (invoice.cfo_rozbicia_platnosci || [])
-    .filter((split) => !split.poza_kosztem_cfo && split.typ === "faktura_sprzedazowa")
-    .filter((split) => {
-      const transaction = firstRelation(split.cfo_transakcje_bankowe);
-      return !transaction || !transaction.ignoruj;
-    });
-
-  const directAmount = sum(directPayments.map((transaction) => Math.max(0, Number(transaction.kwota || 0))));
-  const splitAmount = sum(splitPayments.map((split) => Math.max(0, Number(split.kwota || 0))));
-  const dates = [
-    ...directPayments.map((transaction) => transaction.data_ksiegowania),
-    ...splitPayments.map((split) => firstRelation(split.cfo_transakcje_bankowe)?.data_ksiegowania),
-  ].filter(Boolean) as string[];
-
-  dates.sort();
-  const paidAmount = directAmount + splitAmount;
-  if (paidAmount <= 0.01 && invoice.status === "oplacona") {
-    return {
-      paidAmount: Number(invoice.kwota_brutto || 0),
-      paymentDate: invoice.termin_platnosci || invoice.data_wystawienia,
-    };
-  }
-
-  return {
-    paidAmount,
-    paymentDate: dates.length > 0 ? dates[dates.length - 1] : null,
-  };
-}
-
 function plannedInvoiceCustomerCashFlowForMonth(period: string, invoices: BudgetInvoice[], profile: PaymentProfile) {
   let amount = 0;
   let hasInvoiceSignal = false;
@@ -743,7 +702,9 @@ function plannedInvoiceCustomerCashFlowForMonth(period: string, invoices: Budget
     if (unpaidAmount <= 0.01) return;
 
     const baseDate = invoice.issueDate || invoice.dueDate || monthEndDate(invoice.servicePeriod);
-    const expectedMonth = addDays(baseDate, averageDaysFor(profile, invoice.payerKey)).slice(0, 7);
+    const average = profile.averageDaysByCounterparty.get(invoice.payerKey);
+    const expectedDate = average !== undefined ? addDays(baseDate, average) : invoice.dueDate || addDays(baseDate, 14);
+    const expectedMonth = (expectedDate < profile.asOf ? profile.asOf : expectedDate).slice(0, 7);
     if (expectedMonth !== period) return;
 
     amount += unpaidAmount;
@@ -789,6 +750,7 @@ function buildBudgetCostPayments(costs: CfoCostItem[]): BudgetCostPayment[] {
         category: cost.kategoria,
         subcategory: cost.podkategoria || EMPTY_SUBCATEGORY,
         documentDate: cost.data_dokumentu,
+        dueDate: cost.termin_platnosci || null,
         servicePeriod: cost.okres_start.slice(0, 7),
         amount: Number(cost.kwota_brutto ?? cost.kwota_netto_cfo ?? 0),
         paidAmount: payment.paidAmount,
@@ -798,29 +760,7 @@ function buildBudgetCostPayments(costs: CfoCostItem[]): BudgetCostPayment[] {
     .filter((cost) => cost.amount > 0);
 }
 
-function costPaymentInfo(cost: CfoCostItem) {
-  const directPayments = (cost.cfo_transakcje_bankowe || [])
-    .filter((transaction) => !transaction.ignoruj && Number(transaction.kwota || 0) < 0);
-  const splitPayments = (cost.cfo_rozbicia_platnosci || [])
-    .filter((split) => !split.poza_kosztem_cfo && split.typ !== "faktura_sprzedazowa")
-    .filter((split) => {
-      const transaction = firstRelation(split.cfo_transakcje_bankowe);
-      return !transaction || !transaction.ignoruj;
-    });
-
-  const directAmount = sum(directPayments.map((transaction) => Math.abs(Number(transaction.kwota || 0))));
-  const splitAmount = sum(splitPayments.map((split) => Math.abs(Number(split.kwota || 0))));
-  const dates = [
-    ...directPayments.map((transaction) => transaction.data_ksiegowania),
-    ...splitPayments.map((split) => firstRelation(split.cfo_transakcje_bankowe)?.data_ksiegowania),
-  ].filter(Boolean) as string[];
-
-  dates.sort();
-  return {
-    paidAmount: directAmount + splitAmount,
-    paymentDate: dates.length > 0 ? dates[dates.length - 1] : null,
-  };
-}
+function costPaymentInfo(cost: CfoCostItem) { return actualCostPayment(cost); }
 
 function plannedCostCashFlowForMonth(period: string, costs: BudgetCostPayment[], profile: PaymentProfile) {
   let amount = 0;
@@ -837,7 +777,8 @@ function plannedCostCashFlowForMonth(period: string, costs: BudgetCostPayment[],
     if (unpaidAmount <= 0.01) return;
 
     const baseDate = cost.documentDate || monthEndDate(cost.servicePeriod);
-    const expectedMonth = addDays(baseDate, averageDaysFor(profile, cost.vendorKey)).slice(0, 7);
+    const expectedDate = cost.dueDate || addDays(baseDate, averageDaysFor(profile, cost.vendorKey));
+    const expectedMonth = (expectedDate < profile.asOf ? profile.asOf : expectedDate).slice(0, 7);
     if (expectedMonth !== period) return;
 
     amount += unpaidAmount;
@@ -861,24 +802,14 @@ function plannedUnrecordedCostCashFlowForMonth(
       const missingAmount = Math.max(0, entry.amount - issuedAmount);
       if (missingAmount <= 0.01) return 0;
 
-      const expectedMonth = addDays(monthToDate(costPeriod), averageDaysFor(profile, entry.vendorKey)).slice(0, 7);
-      return expectedMonth === cashFlowPeriod ? missingAmount : 0;
+      const expectedMonth = addDays(dateInMonth(costPeriod, entry.issueDay ?? 1), averageDaysFor(profile, entry.vendorKey)).slice(0, 7);
+      return expectedMonth === cashFlowPeriod ? missingAmount * (entry.grossRatio ?? 1) : 0;
     }));
   }));
 }
 
-function buildEmployeeCashFlowBaseline(historyMonths: string[], employees: CfoEmployeeCost[]) {
-  const totals = historyMonths.map((period) => employeeCashFlowForMonth(period, employees)).filter((value) => value > 0);
-  return totals.length > 0 ? sum(totals) / totals.length : 0;
-}
-
-function employeeCashFlowForMonth(period: string, employees: CfoEmployeeCost[]) {
-  return sum(employees
-    .filter((employee) => employee.okres.slice(0, 7) === period)
-    .map(employeeCostTotal));
-}
-
 type PaymentProfile = {
+  asOf: string;
   globalAverageDays: number;
   averageDaysByCounterparty: Map<string, number>;
 };
@@ -925,42 +856,13 @@ function averageIssueDayMap(samples: { key: string; day: number }[]) {
   ]));
 }
 
-function buildInvoicePaymentProfile(invoices: BudgetInvoice[]): PaymentProfile {
-  return buildPaymentProfile(invoices
-    .filter((invoice) => invoice.paymentDate && invoice.issueDate && invoice.paidAmount >= invoice.gross * 0.8)
-    .map((invoice) => ({
-      key: invoice.payerKey,
-      days: daysBetween(invoice.issueDate as string, invoice.paymentDate as string),
-    })));
+function buildInvoicePaymentProfile(invoices: BudgetInvoice[], asOf = businessDate()): PaymentProfile {
+  const averages = paymentAverage(invoices.filter(i => i.paidAmount >= i.gross - 0.01 && i.gross > 0).map(i => ({ key: i.payerKey, issueDate: i.issueDate, paidDate: i.paymentDate })), asOf);
+  return { globalAverageDays: 14, averageDaysByCounterparty: averages, asOf };
 }
-
-function buildCostPaymentProfile(costs: BudgetCostPayment[]): PaymentProfile {
-  return buildPaymentProfile(costs
-    .filter((cost) => cost.paymentDate && cost.documentDate && cost.paidAmount >= cost.amount * 0.8)
-    .map((cost) => ({
-      key: cost.vendorKey,
-      days: daysBetween(cost.documentDate as string, cost.paymentDate as string),
-    })));
-}
-
-function buildPaymentProfile(samples: { key: string; days: number }[]): PaymentProfile {
-  const validSamples = samples.filter((sample) => Number.isFinite(sample.days));
-  const globalAverageDays = validSamples.length > 0
-    ? clamp(Math.round(sum(validSamples.map((sample) => sample.days)) / validSamples.length), 0, 60)
-    : 14;
-  const grouped = new Map<string, number[]>();
-
-  validSamples.forEach((sample) => {
-    grouped.set(sample.key, [...(grouped.get(sample.key) || []), sample.days]);
-  });
-
-  return {
-    globalAverageDays,
-    averageDaysByCounterparty: new Map(Array.from(grouped.entries()).map(([key, values]) => [
-      key,
-      clamp(Math.round(sum(values) / values.length), 0, 60),
-    ])),
-  };
+function buildCostPaymentProfile(costs: BudgetCostPayment[], asOf = businessDate()): PaymentProfile {
+  const averages = paymentAverage(costs.filter(c => c.paidAmount >= c.amount - 0.01 && c.amount > 0).map(c => ({ key: c.vendorKey, issueDate: c.documentDate, paidDate: c.paymentDate })), asOf);
+  return { globalAverageDays: 14, averageDaysByCounterparty: averages, asOf };
 }
 
 function averageDaysFor(profile: PaymentProfile, counterpartyKeyValue: string) {
@@ -1133,7 +1035,7 @@ function buildBaseline(
     revenueCashFlow += actual.revenueCashFlow / costHistoryMonths.length;
   });
 
-  const costPlanEntries = Array.from(costPlanEntryTotals.entries())
+  const costPlanEntries: BudgetCostPlanEntry[] = Array.from(costPlanEntryTotals.entries())
     .filter(([key]) => (costPlanEntryCounts.get(key) || 0) >= Math.min(2, costHistoryMonths.length))
     .map(([key, total]) => {
       const parsed = parseCostEntryKey(key);
@@ -1418,17 +1320,6 @@ function addDays(value: string, days: number) {
   const [year, month, day] = value.slice(0, 10).split("-").map(Number);
   const date = new Date(Date.UTC(year, month - 1, day + days));
   return date.toISOString().slice(0, 10);
-}
-
-function daysBetween(from: string, to: string) {
-  const fromDate = dateOnlyUtc(from);
-  const toDate = dateOnlyUtc(to);
-  return Math.round((toDate - fromDate) / 86400000);
-}
-
-function dateOnlyUtc(value: string) {
-  const [year, month, day] = value.slice(0, 10).split("-").map(Number);
-  return Date.UTC(year, month - 1, day);
 }
 
 function clamp(value: number, min: number, max: number) {

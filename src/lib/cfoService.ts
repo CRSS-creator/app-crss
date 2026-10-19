@@ -13,13 +13,13 @@ async function allPages<T>(query: (from: number, to: number) => PromiseLike<{ da
   }
 }
 
-export async function fetchCfoAnalysis(from: string, to: string) {
+export async function fetchCfoAnalysis(from: string, to: string, includeBank = true) {
   const [time, accounts, bank] = await Promise.all([
     fetchCfoAdjustedTimeEntries(),
-    allPages((a,b) => supabase.from("cfo_rachunki_bankowe").select("*").order("id").range(a,b)),
-    allPages((a,b) => supabase.from("cfo_transakcje_bankowe")
+    includeBank ? allPages((a,b) => supabase.from("cfo_rachunki_bankowe").select("*").order("id").range(a,b)) : Promise.resolve({ data: [], error: null }),
+    includeBank ? allPages((a,b) => supabase.from("cfo_transakcje_bankowe")
       .select("id,rachunek_id,data_ksiegowania,kwota,saldo_po,lp")
-      .lte("data_ksiegowania", to).order("id").range(a,b)),
+      .lte("data_ksiegowania", to).order("id").range(a,b)) : Promise.resolve({ data: [], error: null }),
   ]);
   const error = time.error || accounts.error || bank.error;
   if (error) return { data: null, error };
@@ -88,6 +88,7 @@ export type CfoInvoiceParent = {
     status: string;
     data_wystawienia: string | null;
     termin_platnosci: string | null;
+    data_zaplaty?: string | null;
     klient_id: string | null;
     kontrahent_nazwa: string | null;
     kwota_brutto: number | null;
@@ -124,6 +125,8 @@ export type CfoCostItem = {
   id: string;
   import_key?: string | null;
   data_dokumentu: string | null;
+  termin_platnosci?: string | null;
+  data_zaplaty?: string | null;
   numer_dokumentu: string | null;
   kontrahent: string;
   opis: string | null;
@@ -308,32 +311,10 @@ const INVOICE_LINE_SELECT = `
     status,
     data_wystawienia,
     termin_platnosci,
+    data_zaplaty,
     klient_id,
     kontrahent_nazwa,
     kwota_brutto,
-    cfo_transakcje_bankowe:cfo_transakcje_bankowe_faktura_id_fkey (
-      id,
-      kwota,
-      typ,
-      ignoruj,
-      data_ksiegowania
-    ),
-    cfo_rozbicia_platnosci:cfo_rozbicia_platnosci_faktura_id_fkey (
-      id,
-      transakcja_id,
-      koszt_id,
-      faktura_id,
-      typ,
-      opis,
-      kwota,
-      poza_kosztem_cfo,
-      cfo_transakcje_bankowe:cfo_rozbicia_platnosci_transakcja_id_fkey (
-        id,
-        typ,
-        ignoruj,
-        data_ksiegowania
-      )
-    ),
     klienci (
       nazwa
     )
@@ -360,31 +341,7 @@ const BANK_TRANSACTION_SELECT = `
   )
 `;
 
-const COST_SELECT = `
-  *,
-  cfo_transakcje_bankowe:cfo_transakcje_bankowe_koszt_id_fkey (
-      id,
-      kwota,
-      typ,
-      ignoruj,
-      data_ksiegowania
-  ),
-  cfo_rozbicia_platnosci:cfo_rozbicia_platnosci_koszt_id_fkey (
-    id,
-    transakcja_id,
-    koszt_id,
-    typ,
-    opis,
-    kwota,
-    poza_kosztem_cfo,
-      cfo_transakcje_bankowe:cfo_rozbicia_platnosci_transakcja_id_fkey (
-        id,
-        typ,
-        ignoruj,
-        data_ksiegowania
-      )
-  )
-`;
+const COST_SELECT = "*";
 
 export async function fetchCfoRevenueLines(period: string) {
   return supabase
@@ -410,7 +367,7 @@ export async function fetchCfoRevenueLinesRange(from: string, to: string) {
 }
 
 export async function fetchCfoBudgetRevenueLinesRange(from: string, to: string) {
-  return supabase
+  return allPages<CfoInvoiceLine>((offset, end) => supabase
     .from("faktury_pozycje")
     .select(INVOICE_LINE_SELECT)
     .gte("faktury.data_wystawienia", from)
@@ -418,7 +375,7 @@ export async function fetchCfoBudgetRevenueLinesRange(from: string, to: string) 
     .eq("faktury.typ", "sprzedaz")
     .neq("faktury.status", "anulowana")
     .neq("faktury.kategoria", "korekta")
-    .order("nazwa", { ascending: true });
+    .order("id", { ascending: true }).range(offset, end));
 }
 
 export async function updateInvoiceLineCfoCategory(lineId: string, category: CfoRevenueCategory) {

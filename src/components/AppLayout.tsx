@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { colors, radius } from "@/app/design";
 import { useCurrentUserRole } from "@/hooks/useCurrentUserRole";
@@ -79,8 +80,9 @@ const menu = [
 ] as const;
 
 export default function AppLayout({ children, activePage }: AppLayoutProps) {
-  const { role, userId, loading: roleLoading } = useCurrentUserRole();
+  const { role, userId, loading: roleLoading, mustChangePassword } = useCurrentUserRole();
   const pathname = usePathname();
+  const router = useRouter();
   const [unreadCount, setUnreadCount] = useState(0);
   const knownNotificationIdsRef = useRef<Set<string>>(new Set());
   const notificationsPrimedRef = useRef(false);
@@ -160,17 +162,8 @@ export default function AppLayout({ children, activePage }: AppLayoutProps) {
   }, [loadUnreadCount, roleLoading, role]);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      const mustChangePassword = Boolean(
-        data.user?.app_metadata?.must_change_password ||
-        data.user?.user_metadata?.must_change_password
-      );
-
-      if (mustChangePassword && pathname !== "/zmiana-hasla") {
-        window.location.href = "/zmiana-hasla";
-      }
-    });
-  }, [pathname]);
+    if (mustChangePassword && pathname !== "/zmiana-hasla") router.replace("/zmiana-hasla");
+  }, [mustChangePassword, pathname, router]);
 
   const visibleMenu = menu
     .map((section) => ({
@@ -269,12 +262,12 @@ function NavItem({
   const itemStyle = active ? activeNavItem : highlighted ? unreadNavItem : navItem;
 
   return (
-    <a href={href} style={itemStyle}>
+    <Link href={href} prefetch={false} style={itemStyle}>
       <Icon size={18} strokeWidth={2.2} />
       <span style={navLabelStyle}>{label}</span>
       {highlighted && !active && <span style={unreadDotStyle} />}
       {Boolean(badge) && <span style={active ? activeBadgeStyle : badgeStyle}>{badge}</span>}
-    </a>
+    </Link>
   );
 }
 

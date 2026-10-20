@@ -461,7 +461,7 @@ function getVisibleTasks(tasks: Task[], role: UserRole, userId: string | null, v
 
 function MetricCard({ title, value, href }: { title: string; value: number; href: string }) {
   return (
-    <Link href={href} style={metricCardStyle}>
+    <Link href={href} prefetch={false} style={metricCardStyle}>
       <span style={cardLabelStyle}>{title}</span>
       <strong style={cardValueStyle}>{value}</strong>
     </Link>
@@ -474,7 +474,7 @@ function Panel({ title, href, children }: { title: string; href?: string; childr
       <header style={panelHeaderStyle}>
         <h2 style={panelTitleStyle}>{title}</h2>
         {href && (
-          <Link href={href} style={panelLinkStyle}>
+          <Link href={href} prefetch={false} style={panelLinkStyle}>
             Przejdź
           </Link>
         )}

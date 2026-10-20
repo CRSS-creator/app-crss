@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { fetchAccessProfile } from "@/lib/accessProfile";
 import type { UserRole } from "@/lib/permissions";
 
 const ACCESS_CHECK_TIMEOUT_MS = 12000;
@@ -37,11 +38,7 @@ export function useCurrentUserRole() {
         setUserId(currentUserId);
 
         const { data, error: profileError } = await withAccessCheckTimeout(
-          supabase
-            .from("profiles")
-            .select("role, aktywne")
-            .eq("id", currentUserId)
-            .single()
+          fetchAccessProfile(currentUserId)
         );
 
         if (!active) return;

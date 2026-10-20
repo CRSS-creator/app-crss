@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { colors, radius } from "@/app/design";
@@ -269,12 +270,12 @@ function NavItem({
   const itemStyle = active ? activeNavItem : highlighted ? unreadNavItem : navItem;
 
   return (
-    <a href={href} style={itemStyle}>
+    <Link href={href} prefetch={false} style={itemStyle}>
       <Icon size={18} strokeWidth={2.2} />
       <span style={navLabelStyle}>{label}</span>
       {highlighted && !active && <span style={unreadDotStyle} />}
       {Boolean(badge) && <span style={active ? activeBadgeStyle : badgeStyle}>{badge}</span>}
-    </a>
+    </Link>
   );
 }
 

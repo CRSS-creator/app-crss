@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -11,19 +11,16 @@ export default function SessionTimeout() {
   const router = useRouter();  
   const pathname = usePathname();
 
-  if (pathname === "/login") {
-    return null;
-  }
   const warningRef = useRef<NodeJS.Timeout | null>(null);
   const logoutRef = useRef<NodeJS.Timeout | null>(null);
   const [showWarning, setShowWarning] = useState(false);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     await supabase.auth.signOut();
     router.push("/login");
-  };
+  }, [router]);
 
-  const resetTimer = () => {
+  const resetTimer = useCallback(() => {
     setShowWarning(false);
 
     if (warningRef.current) clearTimeout(warningRef.current);
@@ -36,41 +33,27 @@ export default function SessionTimeout() {
     logoutRef.current = setTimeout(() => {
       logout();
     }, INACTIVITY_TIME);
-  };
+  }, [logout]);
 
   useEffect(() => {
+    if (pathname === "/login") return;
+
     const events = ["mousemove", "keydown", "click", "scroll", "touchstart"];
 
     events.forEach((event) => window.addEventListener(event, resetTimer));
 
     resetTimer();
 
-  const handleBeforeUnload = () => {
-    Object.keys(window.sessionStorage).forEach((key) => {
-      if (key.startsWith("sb-")) {
-        window.sessionStorage.removeItem(key);
-      }
-    });
-
-    Object.keys(window.localStorage).forEach((key) => {
-      if (key.startsWith("sb-")) {
-        window.localStorage.removeItem(key);
-      }
-    });
-  };
-
-  window.addEventListener("beforeunload", handleBeforeUnload);
 
     return () => {
       events.forEach((event) => window.removeEventListener(event, resetTimer));
-      window.removeEventListener("beforeunload", handleBeforeUnload);
       
       if (warningRef.current) clearTimeout(warningRef.current);
       if (logoutRef.current) clearTimeout(logoutRef.current);
     };
-  }, []);
+  }, [pathname, resetTimer]);
 
-  if (!showWarning) return null;
+  if (pathname === "/login" || !showWarning) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">

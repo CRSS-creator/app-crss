@@ -336,26 +336,23 @@ const filteredClients = [...clients].filter((client) => {
 
     void (async () => {
       setLoading(true);
-      const [caregiversResult, clientsResult] = await Promise.all([
-        fetchClientCaregivers(),
-        fetchClients(),
-      ]);
-
-      if (cancelled) return;
-
-      if (caregiversResult.error) {
-        console.error("Błąd pobierania opiekunów:", caregiversResult.error);
-      } else {
-        setOpiekunowie(caregiversResult.data || []);
+      const caregiversRequest = fetchClientCaregivers();
+      void caregiversRequest.then(result => {
+        if (cancelled) return;
+        if (result.error) console.error("Błąd pobierania opiekunów:", result.error);
+        else setOpiekunowie(result.data || []);
+      });
+      try {
+        const clientsResult = await fetchClients(caregiversRequest);
+        if (cancelled) return;
+        if (clientsResult.error) console.error("Błąd pobierania klientów:", clientsResult.error);
+        else setClients(clientsResult.data || []);
+      } catch (error) {
+        if (!cancelled) console.error("Błąd pobierania klientów:", error);
+      } finally {
+        if (!cancelled) setLoading(false);
       }
 
-      if (clientsResult.error) {
-        console.error("Błąd pobierania klientów:", clientsResult.error);
-      } else {
-        setClients(clientsResult.data || []);
-      }
-
-      setLoading(false);
     })();
 
     return () => {

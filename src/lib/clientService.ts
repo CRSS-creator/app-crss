@@ -107,11 +107,12 @@ type ClientRow = {
 };
 
 async function hydrateClientsWithCaregivers<T extends ClientRow>(
-  clients: T[] | null
+  clients: T[] | null,
+  caregiversRequest?: Promise<ClientCaregiversResult>
 ): Promise<T[] | null> {
-  if (!clients?.length) return clients;
+  if (!clients?.some(client => client.opiekun_id && !(Array.isArray(client.profiles) ? client.profiles[0] : client.profiles))) return clients;
 
-  const { data: caregivers, error } = await fetchClientCaregivers();
+  const { data: caregivers, error } = await (caregiversRequest || fetchClientCaregivers());
   if (error || !caregivers.length) return clients;
 
   return clients.map((client) => {
@@ -137,32 +138,36 @@ async function hydrateClientsWithCaregivers<T extends ClientRow>(
 }
 
 export async function fetchClientCaregivers(): Promise<ClientCaregiversResult> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
 
-  if (!token) {
-    return { data: [], error: new Error("Brak aktywnej sesji użytkownika.") };
+    if (!token) {
+      return { data: [], error: new Error("Brak aktywnej sesji użytkownika.") };
+    }
+
+    const response = await fetch("/api/onboarding/caregivers", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      return {
+        data: [],
+        error: new Error(body?.error || "Nie udało się pobrać listy opiekunów."),
+      };
+    }
+
+    const body = (await response.json()) as { caregivers?: ClientCaregiver[] };
+    return { data: body.caregivers || [], error: null };
+  } catch (error) {
+    return { data: [], error: error instanceof Error ? error : new Error("Nie udało się pobrać listy opiekunów.") };
   }
-
-  const response = await fetch("/api/onboarding/caregivers", {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-
-  if (!response.ok) {
-    const body = await response.json().catch(() => null);
-    return {
-      data: [],
-      error: new Error(body?.error || "Nie udało się pobrać listy opiekunów."),
-    };
-  }
-
-  const body = (await response.json()) as { caregivers?: ClientCaregiver[] };
-  return { data: body.caregivers || [], error: null };
 }
 
-export async function fetchClients() {
+export async function fetchClients(caregiversRequest?: Promise<ClientCaregiversResult>) {
   let result: Awaited<ReturnType<typeof supabase.from>> | any = await supabase
     .from("klienci")
     .select(CLIENT_SELECT)
@@ -180,7 +185,7 @@ export async function fetchClients() {
   return {
     ...result,
     data: (await hydrateClientsWithCaregivers(
-      result.data as unknown as ClientRow[] | null
+      result.data as unknown as ClientRow[] | null, caregiversRequest
     )) as unknown as typeof result.data,
   };
 }

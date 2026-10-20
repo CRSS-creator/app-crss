@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -8,72 +8,69 @@ const INACTIVITY_TIME = 60 * 60 * 1000; // 60 minut
 const WARNING_TIME = 60 * 1000; // 1 minuta przed wylogowaniem
 
 export default function SessionTimeout() {
-  const router = useRouter();
+  const router = useRouter();  
   const pathname = usePathname();
-  const isLogin = pathname === "/login";
+
+  if (pathname === "/login") {
+    return null;
+  }
+  const warningRef = useRef<NodeJS.Timeout | null>(null);
+  const logoutRef = useRef<NodeJS.Timeout | null>(null);
   const [showWarning, setShowWarning] = useState(false);
-  const activityHandler = useRef<(() => void) | null>(null);
-  const logout = useCallback(async () => {
+
+  const logout = async () => {
     await supabase.auth.signOut();
-    try { window.sessionStorage.removeItem("crss-last-activity"); } catch { /* Storage may be unavailable. */ }
-    router.replace("/login");
-  }, [router]);
-  const resetTimer = () => activityHandler.current?.();
+    router.push("/login");
+  };
+
+  const resetTimer = () => {
+    setShowWarning(false);
+
+    if (warningRef.current) clearTimeout(warningRef.current);
+    if (logoutRef.current) clearTimeout(logoutRef.current);
+
+    warningRef.current = setTimeout(() => {
+      setShowWarning(true);
+    }, INACTIVITY_TIME - WARNING_TIME);
+
+    logoutRef.current = setTimeout(() => {
+      logout();
+    }, INACTIVITY_TIME);
+  };
 
   useEffect(() => {
-    if (isLogin) {
-      try { window.sessionStorage.removeItem("crss-last-activity"); } catch { /* Storage may be unavailable. */ }
-      return;
-    }
-    let lastActivity = Date.now();
-    try {
-      const stored = Number(window.sessionStorage.getItem("crss-last-activity"));
-      if (stored > 0 && stored <= lastActivity) lastActivity = stored;
-    } catch { /* Keep the in-memory inactivity timer if storage is unavailable. */ }
-    let warningTimer: ReturnType<typeof setTimeout> | undefined;
-    let logoutTimer: ReturnType<typeof setTimeout> | undefined;
-    let expired = false;
-    const clearTimers = () => { clearTimeout(warningTimer); clearTimeout(logoutTimer); };
-    const expire = () => {
-      if (expired) return;
-      expired = true;
-      clearTimers();
-      void logout();
-    };
-    const armTimers = () => {
-      clearTimers();
-      const remaining = INACTIVITY_TIME - (Date.now() - lastActivity);
-      if (remaining <= 0) { expire(); return; }
-      setShowWarning(remaining <= WARNING_TIME);
-      if (remaining > WARNING_TIME) warningTimer = setTimeout(() => setShowWarning(true), remaining - WARNING_TIME);
-      logoutTimer = setTimeout(expire, remaining);
-    };
-    const recordActivity = () => {
-      if (expired) return;
-      const now = Date.now();
-      if (now - lastActivity >= INACTIVITY_TIME) { expire(); return; }
-      // Mouse movement and scroll can fire hundreds of times per second.
-      if (now - lastActivity < 1000) return;
-      lastActivity = now;
-      try { window.sessionStorage.setItem("crss-last-activity", String(now)); } catch { /* In-memory fallback. */ }
-      armTimers();
-    };
-    const checkWhenVisible = () => { if (document.visibilityState === "visible") armTimers(); };
     const events = ["mousemove", "keydown", "click", "scroll", "touchstart"];
-    activityHandler.current = recordActivity;
-    events.forEach(event => window.addEventListener(event, recordActivity, { passive: true }));
-    document.addEventListener("visibilitychange", checkWhenVisible);
-    try { window.sessionStorage.setItem("crss-last-activity", String(lastActivity)); } catch { /* In-memory fallback. */ }
-    armTimers();
-    return () => {
-      activityHandler.current = null;
-      clearTimers();
-      events.forEach(event => window.removeEventListener(event, recordActivity));
-      document.removeEventListener("visibilitychange", checkWhenVisible);
-    };
-  }, [isLogin, logout]);
 
-  if (isLogin || !showWarning) return null;
+    events.forEach((event) => window.addEventListener(event, resetTimer));
+
+    resetTimer();
+
+  const handleBeforeUnload = () => {
+    Object.keys(window.sessionStorage).forEach((key) => {
+      if (key.startsWith("sb-")) {
+        window.sessionStorage.removeItem(key);
+      }
+    });
+
+    Object.keys(window.localStorage).forEach((key) => {
+      if (key.startsWith("sb-")) {
+        window.localStorage.removeItem(key);
+      }
+    });
+  };
+
+  window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      events.forEach((event) => window.removeEventListener(event, resetTimer));
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      
+      if (warningRef.current) clearTimeout(warningRef.current);
+      if (logoutRef.current) clearTimeout(logoutRef.current);
+    };
+  }, []);
+
+  if (!showWarning) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">

@@ -15,13 +15,11 @@ type AccessGuardProps = {
 };
 
 export default function AccessGuard({ moduleName, children }: AccessGuardProps) {
-  const { role, userId, loading, error, mustChangePassword } = useCurrentUserRole();
+  const { role, userId, loading, error } = useCurrentUserRole();
 
   if (loading) {
     return <AccessState title="Ładowanie" description="Sprawdzamy dostęp do modułu." />;
   }
-
-  if (mustChangePassword) return <AccessState title="Zmień hasło" description="Przekierowujemy do ustawienia nowego hasła." />;
 
   if (error || !canAccessModule(role, moduleName, userId)) {
     return <AccessState title="Brak dostępu" description="Nie masz uprawnień do tego modułu." />;

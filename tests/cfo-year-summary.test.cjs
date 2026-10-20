@@ -24,3 +24,11 @@ test('monthly rows reconcile with range totals and flag gaps without inventing a
  assert.equal(rows.length,3);assert.equal(rows[0].missing.length,0);assert.equal(rows[2].missing.length,3);assert.equal(rows[2].hasCash,false);
  const year=api.buildCfoView('2026-11','year',revenues,costs,employees,[],'2026-09');assert.equal(rows.reduce((n,r)=>n+r.result.operatingResult,0),year.operatingResult);
 });
+
+test('manual revenue is included once in monthly and yearly CFO results, not in MRR',()=>{
+ const manual={};vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/lib/cfoManualRevenue.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports:manual,require:()=>({})});
+ const lines=manual.manualRevenueLines([{id:'grant',opis:'Grant',zrodlo:'Institution',rodzaj:'dotacja',okres:'2026-09-01',data_dokumentu:'2026-08-01',kwota_netto:5000,kwota_brutto:5000,data_wplywu:null,termin_wplywu:null,numer_dokumentu:null}]);
+ const month=api.buildCfoView('2026-09','month',lines,[],[],[]);assert.equal(month.revenue,5000);assert.equal(month.mrr,0);
+ const year=api.buildCfoView('2026-10','year',lines,[],[],[],'2026-09');assert.equal(year.revenue,5000);assert.equal(year.mrr,0);
+ const rows=api.buildYearSummaryRows('2026-09','2026-10',lines,[],[],[]);assert.equal(rows[0].result.revenue,5000);assert.equal(rows[1].result.revenue,0);
+});

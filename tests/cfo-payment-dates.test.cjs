@@ -12,7 +12,7 @@ function moduleFrom(file, dependencies = {}, extra = '') {
 }
 const cash = moduleFrom('src/lib/cfoCashflow.ts');
 const annual = moduleFrom('src/lib/cfoAnnualCosts.ts', { './cfoCashflow': cash });
-const budget = moduleFrom('src/app/budzet/page.tsx', { '@/lib/cfoCashflow': cash, '@/lib/cfoAnnualCosts': annual, '@/app/design': { colors: new Proxy({}, { get: () => '#000' }), radius: {}, shadow: {} } },
+const budget = moduleFrom('src/app/budzet/page.tsx', { '@/lib/cfoCashflow': cash, '@/lib/cfoAnnualCosts': annual, '@/lib/cfoManualRevenue': moduleFrom('src/lib/cfoManualRevenue.ts'), '@/app/design': { colors: new Proxy({}, { get: () => '#000' }), radius: {}, shadow: {} } },
   '\nexport { buildBudgetMonths, buildInvoicePaymentProfile, buildCostPaymentProfile, plannedInvoiceCustomerCashFlowForMonth, plannedCostCashFlowForMonth };');
 const invoice = { id: 'invoice', typ: 'sprzedaz', status: 'oplacona', kategoria: 'standardowa', klient_id: 'client', kontrahent_nazwa: 'Client', data_wystawienia: '2026-09-01', termin_platnosci: '2026-09-08', data_zaplaty: '2026-09-20', kwota_brutto: 123, okres: '2026-09-01', waluta: 'PLN' };
 const cost = { id: 'cost', kontrahent: 'Vendor', data_dokumentu: '2026-09-01', okres_start: '2026-09-01', okres_end: '2026-09-30', kwota_netto_cfo: 100, kwota_brutto: 123, kategoria: 'systemy_technologia', data_zaplaty: '2026-09-22', ignoruj: false };
@@ -98,6 +98,7 @@ test('cashflow reads every page without bank imports and excludes drafts, cancel
     cfo_koszty: Array.from({ length: 601 }, (_, id) => ({ ...cost, id: String(id) })),
     cfo_zobowiazania: [obligation],
     cfo_harmonogramy_roczne: [],
+    cfo_przychody_reczne: [],
   };
   const supabase = { from(table) {
     assert.ok(datasets[table], 'must not query bank tables');
@@ -197,4 +198,22 @@ test('expense cash groups reconcile with total cash forecast including payroll, 
  }
  assert.equal(rows[0].costSubcategories.flatMap(g=>g.children).find(r=>r.key==='Other').planned,50);
  assert.equal(rows[1].costSubcategories.flatMap(g=>g.children).find(r=>r.key==='Other'),undefined);
+});
+test('manual grant is recognized once in its chosen period, paid on its own date and never recurs',()=>{
+ const grant={id:'grant',opis:'Grant',zrodlo:'Institution',rodzaj:'dotacja',okres:'2026-11-01',data_dokumentu:'2026-10-20',numer_dokumentu:null,kwota_netto:5000,kwota_brutto:5000,termin_wplywu:'2026-12-10',data_wplywu:null};
+ const snapshot={invoices:[],costs:[],obligations:[],manualRevenues:[grant]};
+ const months=budget.buildBudgetMonths('2026-11',14,[],[],[],[],[],[],[],0,snapshot);
+ assert.equal(months[0].plannedRevenue,5000);assert.equal(months[0].actualRevenue,5000);assert.equal(months[0].plannedCashFlow,0);
+ assert.equal(months[1].plannedRevenue,0);assert.equal(months[1].plannedCashFlow,5000);
+ assert.equal(months[12].plannedRevenue,0);assert.equal(months[13].plannedCashFlow,0);
+ assert.equal(cash.cashflowTransactions(snapshot).length,0);
+ const received={...grant,okres:'2026-09-01',data_dokumentu:'2026-09-01',data_wplywu:'2026-09-22',termin_wplywu:'2026-09-10'};
+ const transactions=cash.cashflowTransactions({...snapshot,manualRevenues:[received]});assert.equal(transactions.length,1);assert.equal(transactions[0].kwota,5000);assert.equal(transactions[0].data_ksiegowania,'2026-09-22');
+});
+
+test('manual reporting row carries its own period and stays outside invoice identifiers and MRR',()=>{
+ const manual=moduleFrom('src/lib/cfoManualRevenue.ts');
+ const [row]=manual.manualRevenueLines([{id:'grant',opis:'Grant',zrodlo:'Institution',rodzaj:'dotacja',okres:'2026-09-01',data_dokumentu:'2026-08-01',kwota_netto:5000,kwota_brutto:5000,data_wplywu:null,termin_wplywu:null,numer_dokumentu:'DEC-1'}]);
+ assert.equal(row.kwota_netto,5000);assert.equal(row.cfo_przychod_kategoria,'pozostale');assert.equal(row.source_key,'cfo_manual_revenue');assert.equal(row.faktury.typ,'reczny');assert.equal(row.faktury.okres,'2026-09-01');assert.equal(row.faktury.klient_id,null);
+ assert.equal(manual.manualRevenueCashflow('2026-11',[{kwota_brutto:5000,termin_wplywu:'2026-09-10',data_wplywu:null}],'2026-11-01'),5000);
 });

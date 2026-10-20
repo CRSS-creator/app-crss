@@ -1,4 +1,7 @@
 "use client";
+import CfoManualRevenues from "@/components/CfoManualRevenues";
+import { manualRevenueLines, MANUAL_REVENUE_SOURCE } from "@/lib/cfoManualRevenue";
+
 
 import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Banknote, BriefcaseBusiness, CalendarDays, FileSpreadsheet, LayoutDashboard, Plus, ReceiptText, RefreshCw, Save, Trash2, TrendingUp, Upload, Users } from "lucide-react";
@@ -159,7 +162,7 @@ function CfoContent() {
   const clientAnalysis = useMemo(() => {
     if (!analysis || analysisError) return null;
     const range = view.range;
-    const revenues: ClientRevenue[] = view.revenueLines.map(line => {
+    const revenues: ClientRevenue[] = view.revenueLines.filter(line => line.source_key !== MANUAL_REVENUE_SOURCE).map(line => {
       const id = invoiceClientId(line), name = invoiceClientName(line);
       return { key: id || name, id, name, period: revenueLineEffectivePeriod(line),
         revenue: Number(line.kwota_netto || 0),
@@ -197,11 +200,11 @@ function CfoContent() {
     if (revenueResult.error) console.error("Błąd pobierania przychodów CFO:", revenueResult.error);
     if (costsResult.error) console.error("Błąd pobierania kosztów CFO:", costsResult.error);
     if (employeeResult.error) console.error("Błąd pobierania kosztów pracowników CFO:", employeeResult.error);
-    setCashflowError(cashflowResult.error ? "Nie udało się pobrać rozrachunków. Odśwież CFO." : null);
+    setCashflowError(cashflowResult.error ? "Nie udało się pobrać rozrachunków lub ręcznych przychodów. Odśwież CFO." : null);
     if (teamResult.error) console.error("Błąd pobierania zespołu CFO:", teamResult.error);
     if (timeResult.error) console.error("Błąd pobierania czasu pracy klientów CFO:", timeResult.error);
 
-    setRevenueLines((revenueResult.data || []) as unknown as CfoInvoiceLine[]);
+    setRevenueLines([...(revenueResult.data || []) as unknown as CfoInvoiceLine[], ...manualRevenueLines(cashflowResult.data?.manualRevenues || [])]);
     setCosts((costsResult.data || []) as CfoCostItem[]);
     setEmployeeCosts((employeeResult.data || []) as CfoEmployeeCost[]);
     const snapshot = cashflowResult.data || emptyCashflow();
@@ -357,7 +360,7 @@ function CfoContent() {
 
       {loading ? <section style={panelStyle}>Ładowanie danych CFO...</section> : null}
       {!loading && activeTab === "dashboard" ? renderDashboard(view, viewMode, period, revenueLines, costs, employeeCosts, bankTransactions, value => setYearStarts(current => ({ ...current, [period.slice(0, 4)]: value }))) : null}
-      {!loading && activeTab === "przychody" ? renderRevenueSection(view.revenueLines, changeRevenueCategory) : null}
+      {!loading && activeTab === "przychody" ? <div style={sectionStackStyle}><CfoManualRevenues rows={(cashflow.manualRevenues || []).filter(row => row.okres >= view.range.from && row.okres <= view.range.to)} period={period} onUpdated={loadData} />{renderRevenueSection(view.revenueLines.filter(line => line.source_key !== MANUAL_REVENUE_SOURCE), changeRevenueCategory)}</div> : null}
       {!loading && activeTab === "koszty" ? renderCostSection(period, costs, cost => setCashflow(current => ({ ...current, costs: current.costs.map(row => row.id === cost.id ? cost : row) })), setCosts, manualCost, setManualCost, manualInterperiod, setManualInterperiod, expandedCostPeriods, setExpandedCostPeriods, addManualCost, importCostsFile, saving, costSearch, setCostSearch) : null}
       {!loading && activeTab === "cashflow" && !cashflowError ? <CfoCashflowPanel key={period} snapshot={cashflow} period={period} onUpdated={loadData} /> : null}
       {!loading && activeTab === "zespol" ? renderTeamSectionTable(teamMembers, employeeDrafts, setEmployeeDrafts, saveTeamCosts, copyPreviousTeamCosts, saving, period, clientTimeEntries) : null}

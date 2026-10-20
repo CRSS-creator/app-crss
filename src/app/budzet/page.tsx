@@ -1,4 +1,6 @@
 "use client";
+import { manualRevenueCashflow } from "@/lib/cfoManualRevenue";
+
 
 import { AppFormInput } from "@/components/AppFormControls";
 
@@ -574,6 +576,14 @@ function buildBudgetMonths(
       upsertSubcategoryAmount(plannedCostSubcategories, cost.kategoria, cost.podkategoria || EMPTY_SUBCATEGORY, costShareForMonth(cost, period));
     }
     for (const group of annual.groups) upsertSubcategoryAmount(plannedCostSubcategories, group.category, group.subcategory || EMPTY_SUBCATEGORY, group.net);
+    const manualRevenueRows = (snapshot.manualRevenues || []).filter(row => row.okres.slice(0, 7) === period);
+    const manualRevenueNet = sum(manualRevenueRows.map(row => Number(row.kwota_netto)));
+    if (manualRevenueRows.length) {
+      plannedRevenueCategories.set("pozostale", (plannedRevenueCategories.get("pozostale") || 0) + manualRevenueNet);
+      actual.revenue += manualRevenueNet;
+      actual.revenueByCategory.set("pozostale", (actual.revenueByCategory.get("pozostale") || 0) + manualRevenueNet);
+    }
+    const manualRevenueReceipts = manualRevenueCashflow(period, snapshot.manualRevenues || [], invoicePaymentProfile.asOf);
     const crmCumulativeRevenueGrowth = crmForecast.cumulativeRevenueGrowthByMonth.get(period) || 0;
     const invoiceCashFlow = plannedInvoiceCustomerCashFlowForMonth(period, budgetInvoices, invoicePaymentProfile);
     const plannedCustomerCashFlow = invoiceCashFlow.amount
@@ -601,7 +611,7 @@ function buildBudgetMonths(
     const plannedOtherCostCashFlow = costCashFlow.amount
       + plannedUnrecordedCostCashFlowForMonth(period, [...costHistoryMonths, ...months], baseline.costPlanEntries, planActualByMonth, costPaymentProfile) + annual.cash;
     const plannedCostCashFlow = plannedEmployeeCashFlow + plannedOtherCostCashFlow + manualCostCashFlow;
-    const plannedCashFlow = plannedCustomerCashFlow + manualRevenueCashFlow - plannedCostCashFlow;
+    const plannedCashFlow = plannedCustomerCashFlow + manualRevenueCashFlow + manualRevenueReceipts - plannedCostCashFlow;
     cash += plannedCashFlow;
 
     return {

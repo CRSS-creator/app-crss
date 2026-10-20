@@ -118,6 +118,7 @@ function CfoContent() {
   const [activeTab, setActiveTab] = useState<CfoTab>("dashboard");
   const [period, setPeriod] = useState(currentMonthInput());
   const [viewMode, setViewMode] = useState<CfoViewMode>("month");
+  const [yearStarts, setYearStarts] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [revenueLines, setRevenueLines] = useState<CfoInvoiceLine[]>([]);
@@ -149,14 +150,15 @@ function CfoContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [period, viewMode]);
 
+  const yearStart = yearStarts[period.slice(0, 4)] || firstCfoSummaryMonth(period, revenueLines, costs, employeeCosts);
   const view = useMemo(
-    () => buildCfoView(period, viewMode, revenueLines, costs, employeeCosts, bankTransactions),
-    [period, viewMode, revenueLines, costs, employeeCosts, bankTransactions],
+    () => buildCfoView(period, viewMode, revenueLines, costs, employeeCosts, bankTransactions, yearStart),
+    [period, viewMode, revenueLines, costs, employeeCosts, bankTransactions, yearStart],
   );
 
   const clientAnalysis = useMemo(() => {
     if (!analysis || analysisError) return null;
-    const range = cfoPeriodRange(period, viewMode);
+    const range = view.range;
     const revenues: ClientRevenue[] = view.revenueLines.map(line => {
       const id = invoiceClientId(line), name = invoiceClientName(line);
       return { key: id || name, id, name, period: revenueLineEffectivePeriod(line),
@@ -164,7 +166,7 @@ function CfoContent() {
         mrr: line.cfo_przychod_kategoria === "abonamenty" ? Number(line.kwota_netto || 0) : 0 };
     });
     return clientProfitability(range.from, range.to, revenues, costs, analysis.employees, analysis.entries);
-  }, [analysis, analysisError, period, viewMode, view.revenueLines, costs]);
+  }, [analysis, analysisError, period, viewMode, view.revenueLines, view.range, costs]);
   async function loadData() {
     const version = ++loadVersion.current;
     setLoading(true);
@@ -354,7 +356,7 @@ function CfoContent() {
       </nav>
 
       {loading ? <section style={panelStyle}>Ładowanie danych CFO...</section> : null}
-      {!loading && activeTab === "dashboard" ? renderDashboard(view, viewMode, period) : null}
+      {!loading && activeTab === "dashboard" ? renderDashboard(view, viewMode, period, revenueLines, costs, employeeCosts, bankTransactions, value => setYearStarts(current => ({ ...current, [period.slice(0, 4)]: value }))) : null}
       {!loading && activeTab === "przychody" ? renderRevenueSection(view.revenueLines, changeRevenueCategory) : null}
       {!loading && activeTab === "koszty" ? renderCostSection(period, costs, cost => setCashflow(current => ({ ...current, costs: current.costs.map(row => row.id === cost.id ? cost : row) })), setCosts, manualCost, setManualCost, manualInterperiod, setManualInterperiod, expandedCostPeriods, setExpandedCostPeriods, addManualCost, importCostsFile, saving, costSearch, setCostSearch) : null}
       {!loading && activeTab === "cashflow" && !cashflowError ? <CfoCashflowPanel key={period} snapshot={cashflow} period={period} onUpdated={loadData} /> : null}
@@ -374,14 +376,15 @@ function Metric({ label, value, tone }: { label: string; value: string; tone?: "
   );
 }
 
-function renderDashboard(view: CfoView, viewMode: CfoViewMode, period: string) {
+function renderDashboard(view: CfoView, viewMode: CfoViewMode, period: string, revenues: CfoInvoiceLine[], costs: CfoCostItem[], employees: CfoEmployeeCost[], bank: CfoBankTransaction[], onStartChange: (value: string) => void) {
   return (
     <section style={dashboardGridStyle}>
+      {viewMode === "year" ? renderYearSummary(view, period, revenues, costs, employees, bank, onStartChange) : null}
       <article style={widePanelStyle}>
         <div style={panelHeaderStyle}>
           <TrendingUp size={21} style={panelIconStyle} />
           <h2 style={panelTitleStyle}>Dashboard właścicielski</h2>
-          <span style={dashboardScopeBadgeStyle}>{cfoPeriodLabel(period, viewMode)}</span>
+          <span style={dashboardScopeBadgeStyle}>{viewMode === "year" ? `${formatMonthField(view.range.from.slice(0, 7))} – ${formatMonthField(view.range.to.slice(0, 7))}` : cfoPeriodLabel(period, viewMode)}</span>
         </div>
         <div style={recommendationStyle}>
           <strong>{view.ownerGoalGap <= 0 ? "Nadwyżka ponad ideał właścicielski" : "Brakuje do ideału właścicielskiego"}</strong>
@@ -419,6 +422,53 @@ function renderDashboard(view: CfoView, viewMode: CfoViewMode, period: string) {
       </article>
     </section>
   );
+}
+
+function firstCfoSummaryMonth(period: string, revenues: CfoInvoiceLine[], costs: CfoCostItem[], employees: CfoEmployeeCost[]) {
+  const year = period.slice(0, 4);
+  const first = (months: string[]) => months.filter(month => month.startsWith(year + "-") && month <= period).sort()[0];
+  const starts = [
+    first(revenues.map(line => revenueLineEffectivePeriod(line).slice(0, 7))),
+    first(costs.filter(row => !row.ignoruj && row.ujecie_zarzadcze !== "rozliczenie_w_czasie").map(row => (row.data_dokumentu || row.okres_start).slice(0, 7))),
+    first(employees.map(row => row.okres.slice(0, 7))),
+  ].filter((value): value is string => Boolean(value));
+  return starts.sort().at(-1) || period;
+}
+
+function buildYearSummaryRows(start: string, end: string, revenues: CfoInvoiceLine[], costs: CfoCostItem[], employees: CfoEmployeeCost[], bank: CfoBankTransaction[]) {
+  return Array.from({ length: monthsBetween(monthToDate(start), monthEndDate(end)) }, (_, index) => {
+    const month = shiftMonth(start, index);
+    const result = buildCfoView(month, "month", revenues, costs, employees, bank);
+    const hasCosts = costs.some(row => !row.ignoruj && row.okres_start <= result.range.to && row.okres_end >= result.range.from);
+    const hasTeam = employees.some(row => row.okres.slice(0, 7) === month);
+    const hasRevenue = result.revenueLines.length > 0;
+    const hasCash = bank.some(row => row.data_ksiegowania.slice(0, 7) === month && !row.ignoruj && row.typ !== "transfer_wewnetrzny");
+    return { month, result, hasCosts, hasTeam, hasRevenue, hasCash, missing: [!hasRevenue && "przychody", !hasCosts && "koszty", !hasTeam && "zespół"].filter(Boolean) };
+  });
+}
+
+function renderYearSummary(view: CfoView, period: string, revenues: CfoInvoiceLine[], costs: CfoCostItem[], employees: CfoEmployeeCost[], bank: CfoBankTransaction[], onStartChange: (value: string) => void) {
+  const start = view.range.from.slice(0, 7);
+  const rows = buildYearSummaryRows(start, period, revenues, costs, employees, bank);
+  return <article style={widePanelStyle}>
+    <div style={panelHeaderStyle}><CalendarDays size={21} style={panelIconStyle} /><h2 style={panelTitleStyle}>Podsumowanie roku {period.slice(0, 4)}</h2></div>
+    <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
+      <label htmlFor="cfo-year-start" style={smallStyle}>Pierwszy miesiąc danych</label>
+      <AppSelect id="cfo-year-start" ariaLabel="Pierwszy miesiąc podsumowania roku" value={start} onChange={onStartChange} options={Array.from({ length: Number(period.slice(5, 7)) }, (_, index) => { const month = period.slice(0, 4) + "-" + String(index + 1).padStart(2, "0"); return { value: month, label: formatMonthField(month) }; })} style={{ ...compactSelectStyle, width: 220 }} />
+      <span style={smallStyle}>Zakres: {formatMonthField(start)} – {formatMonthField(period)}</span>
+    </div>
+    <p style={smallStyle}>Początek jest podpowiadany na podstawie zapisanych przychodów, kosztów i zespołu; możesz go zmienić. Sumy obejmują wyłącznie wybrany zakres, bez szacowania reszty roku. Obecność zapisów nie potwierdza ich kompletności. Cash flow obejmuje tylko płatności z potwierdzoną datą.</p>
+    <div style={tableWrapperStyle}><table style={tableStyle}>
+      <thead><tr><Th>Miesiąc</Th><Th align="right">Przychody netto</Th><Th align="right">Koszty łącznie</Th><Th align="right">Wynik</Th><Th align="right">Cash flow</Th><Th>Dane</Th></tr></thead>
+      <tbody>{rows.map(row => <tr key={row.month}>
+        <Td>{formatMonthField(row.month)}</Td><Td align="right">{row.hasRevenue ? formatMoney(row.result.revenue) : "—"}</Td>
+        <Td align="right">{row.hasCosts || row.hasTeam ? formatMoney(row.result.operatingCosts + row.result.managementCosts) : "—"}</Td>
+        <Td align="right">{row.missing.length ? "—" : formatMoney(row.result.operatingResult)}</Td><Td align="right">{row.hasCash ? formatMoney(row.result.cashFlow) : "—"}</Td>
+        <Td>{row.missing.length ? "Brak zapisów: " + row.missing.join(", ") : "Przychody, koszty i zespół zapisane"}</Td>
+      </tr>)}</tbody>
+      <tfoot><tr><Td><strong>Suma zakresu</strong></Td><Td align="right"><strong>{formatMoney(view.revenue)}</strong></Td><Td align="right"><strong>{formatMoney(view.operatingCosts + view.managementCosts)}</strong></Td><Td align="right"><strong>{rows.some(row => row.missing.length) ? "Niepełne dane" : formatMoney(view.operatingResult)}</strong></Td><Td align="right"><strong>{rows.some(row => row.hasCash) ? formatMoney(view.cashFlow) : "—"}</strong></Td><Td>{rows.length} mies.</Td></tr></tfoot>
+    </table></div>
+  </article>;
 }
 
 function renderRevenueSection(lines: CfoInvoiceLine[], onChange: (line: CfoInvoiceLine, category: CfoRevenueCategory) => void) {
@@ -1313,8 +1363,11 @@ function costGrossValue(cost: CfoCostItem) {
   return Number(cost.kwota_netto_cfo || 0);
 }
 
-function buildCfoView(period: string, viewMode: CfoViewMode, revenueLines: CfoInvoiceLine[], costs: CfoCostItem[], employees: CfoEmployeeCost[], bank: CfoBankTransaction[]) {
-  const range = cfoPeriodRange(period, viewMode);
+function buildCfoView(period: string, viewMode: CfoViewMode, revenueLines: CfoInvoiceLine[], costs: CfoCostItem[], employees: CfoEmployeeCost[], bank: CfoBankTransaction[], yearStart?: string) {
+  const calendar = cfoPeriodRange(period, viewMode);
+  const range = viewMode === "year" && yearStart && yearStart >= calendar.from.slice(0, 7) && yearStart <= calendar.to.slice(0, 7) ? { ...calendar, from: monthToDate(yearStart) } : calendar;
+  employees = employees.filter(employee => employee.okres >= range.from && employee.okres <= range.to);
+  bank = bank.filter(transaction => transaction.data_ksiegowania >= range.from && transaction.data_ksiegowania <= range.to);
   const periodMonths = monthsBetween(range.from, range.to);
   const activeRevenueLines = filterRevenueLinesForRange(revenueLines, range.from, range.to);
   const ownerPayoutTarget = OWNER_MONTHLY_PAYOUT * periodMonths;
@@ -1369,6 +1422,7 @@ function buildCfoView(period: string, viewMode: CfoViewMode, revenueLines: CfoIn
   });
 
   return {
+    range,
     revenue,
     mrr,
     operatingCosts,
@@ -1719,10 +1773,7 @@ function currentMonthDate() {
 
 function cfoPeriodRange(period: string, viewMode: CfoViewMode) {
   if (viewMode === "year") {
-    const { year, month } = parseMonthValue(period);
-    const lastClosedMonth = Math.max(1, month - 1);
-    const lastClosedPeriod = `${year}-${String(lastClosedMonth).padStart(2, "0")}`;
-    return { from: `${year}-01-01`, to: monthEndDate(lastClosedPeriod) };
+    return { from: `${period.slice(0, 4)}-01-01`, to: monthEndDate(period) };
   }
   return { from: monthToDate(period), to: monthEndDate(period) };
 }

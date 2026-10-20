@@ -263,12 +263,11 @@ export async function sendInvoicesToWfirma(invoiceIds: string[]) {
   );
 }
 
-export async function syncWfirmaPayments(month?: string, invoiceIds?: string[], confirmedReplacement?: WfirmaConfirmedReplacement, refreshDetails = false): Promise<{ data: WfirmaPaymentSyncResult | null; error: Error | null }> {
+export async function syncWfirmaPayments(month?: string, invoiceIds?: string[], confirmedReplacement?: WfirmaConfirmedReplacement): Promise<{ data: WfirmaPaymentSyncResult | null; error: Error | null }> {
   return callWfirmaEndpoint<WfirmaPaymentSyncResult>(
     "/api/faktury/wfirma/sync-payments",
     {
       ...(confirmedReplacement ? { confirmedReplacement } : {}),
-      ...(refreshDetails ? { refreshDetails: true } : {}),
       ...(month ? { month } : {}),
       ...(invoiceIds?.length ? { invoiceIds } : {}),
     }

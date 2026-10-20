@@ -88,7 +88,6 @@ type FailedInvoice = PaidInvoice & {
 };
 
 type SyncPayload = {
-  refreshDetails?: boolean;
   confirmedReplacement?: ConfirmedReplacement;
   month?: string;
   invoiceIds?: string[];
@@ -180,8 +179,9 @@ async function syncPayments(request: NextRequest) {
       }
       if (!wfirmaInvoice) throw new Error(lookupErrors.get(wfirmaId) || "Nie znaleziono faktury w wFirmie. Jeśli szkic został wystawiony pod nowym numerem, trzeba potwierdzić numer dokumentu docelowego.");
 
-      if (payload.refreshDetails === true || stringify(wfirmaInvoice.id) !== wfirmaId) {
-        const syncResult = await syncWfirmaInvoiceSnapshot(admin, wfirma.config, invoice, wfirmaInvoice, resolveBankAccount, detailSnapshots.has(wfirmaInvoice), payload.refreshDetails === true);
+      const refreshDraft = /^WRF\b/i.test(stringify(invoice.numer));
+      if (refreshDraft || stringify(wfirmaInvoice.id) !== wfirmaId) {
+        const syncResult = await syncWfirmaInvoiceSnapshot(admin, wfirma.config, invoice, wfirmaInvoice, resolveBankAccount, detailSnapshots.has(wfirmaInvoice), refreshDraft);
         wfirmaInvoice = syncResult.remoteInvoice;
         if (syncResult.updatedNumber || syncResult.savedPdf) {
           refreshed.push({ invoiceId: invoice.id, number: syncResult.invoiceNumber, pdf: syncResult.savedPdf });

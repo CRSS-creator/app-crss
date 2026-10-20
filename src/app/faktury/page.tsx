@@ -296,7 +296,7 @@ function InvoicesContent() {
     if (!detailsInvoice?.wfirma_id || refreshingSelected) return;
     setRefreshingSelected(true);
     try {
-      const result = await syncWfirmaPayments(undefined, [detailsInvoice.id], undefined, true);
+      const result = await syncWfirmaPayments(undefined, [detailsInvoice.id]);
       await loadData();
       const errors = result.error?.message || collectSyncErrors(result.data?.failed || []).join("\n");
       if (errors) alert("Nie udało się odświeżyć szczegółów faktury:\n\n" + errors);

@@ -182,7 +182,7 @@ test('missing selected draft searches only its issue day and never rereads the m
 
 test('payment-only refresh updates the paid status without PDF, storage or snapshot RPC calls',async()=>{
  const writes=[];let pdfCalls=0;
- const query={select(){return this},in(){return this},neq(){return this},not(){return this},order(){return this},async limit(){return {data:[{...local,numer:final.fullnumber,wfirma_id:'final'}],error:null}}};
+ const query={select(){return this},in(){return this},neq(){return this},not(){return this},order(){return this},async limit(){return {data:[{...local,numer:final.fullnumber,wfirma_id:'final',wfirma_pdf_path:'existing/invoice.pdf'}],error:null}}};
  const admin={from:()=>({...query,update(payload){writes.push(payload);return {eq(){return {neq(){return {select(){return {async single(){return {data:{id:local.id},error:null}}}}}}}}}}})};
  const api=load({getWfirmaConfig:()=>({config:{}}),getWfirmaInvoice:async()=>({...final,paymentstate:'paid'}),downloadWfirmaInvoicePdf:async()=>{pdfCalls++;throw Error('PDF unavailable')}},{'next/server':{NextResponse:{json:data=>data}},'@supabase/supabase-js':{createClient:()=>admin},'@/lib/serverAuth':{getAuthorizedServerUser:async()=>({error:null})},process:{env:{NEXT_PUBLIC_SUPABASE_URL:'https://example.test',SUPABASE_SERVICE_ROLE_KEY:'test-only'}}});
  const result=await api.POST({method:'POST',headers:{get:()=>null},nextUrl:{searchParams:new URLSearchParams()},json:async()=>({invoiceIds:['00000000-0000-4000-8000-000000000001']})});
@@ -202,4 +202,14 @@ test('refreshing local WRF downloads PDF even when the final invoice keeps the s
  const api=load({getWfirmaConfig:()=>({config:{}}),getWfirmaInvoice:async()=>({...final,paymentstate:'unpaid'}),downloadWfirmaInvoicePdf:async()=>{pdfCalls++;return new Uint8Array([1]);},wfirmaInvoiceAmounts:()=>({net:200,tax:46,gross:246}),extractWfirmaInvoiceLines:()=>[{id:1}],wfirmaLineAmounts:()=>({net:200,tax:46,gross:246})},{'next/server':{NextResponse:{json:data=>data}},'@supabase/supabase-js':{createClient:()=>admin},'@/lib/serverAuth':{getAuthorizedServerUser:async()=>({error:null})},process:{env:{NEXT_PUBLIC_SUPABASE_URL:'https://example.test',SUPABASE_SERVICE_ROLE_KEY:'test-only'}}});
  const result=await api.POST({method:'POST',headers:{get:()=>null},nextUrl:{searchParams:new URLSearchParams()},json:async()=>({invoiceIds:['00000000-0000-4000-8000-000000000001']})});
  assert.equal(result.failed.length,0);assert.equal(pdfCalls,1);assert.equal(snapshot.numer,final.fullnumber);assert.ok(snapshot.wfirma_pdf_path);assert.equal(result.refreshed[0].pdf,true);
+});
+
+
+test('final invoice without a stored PDF downloads and saves it on refresh',async()=>{
+ let pdfCalls=0,snapshot;
+ const query={select(){return this},in(){return this},neq(){return this},not(){return this},order(){return this},async limit(){return {data:[{...local,numer:final.fullnumber,wfirma_id:'final',wfirma_pdf_path:null}],error:null}}};
+ const admin={storage:{from:()=>({upload:async()=>({error:null})})},async rpc(_,args){snapshot=args.public_header;return {error:null}},from:()=>({...query,update(){return {async eq(){return {error:null}}}}})};
+ const api=load({getWfirmaConfig:()=>({config:{}}),getWfirmaInvoice:async()=>({...final,paymentstate:'unpaid'}),downloadWfirmaInvoicePdf:async()=>{pdfCalls++;return new Uint8Array([1]);},wfirmaInvoiceAmounts:()=>({net:200,tax:46,gross:246}),extractWfirmaInvoiceLines:()=>[{id:1}],wfirmaLineAmounts:()=>({net:200,tax:46,gross:246})},{'next/server':{NextResponse:{json:data=>data}},'@supabase/supabase-js':{createClient:()=>admin},'@/lib/serverAuth':{getAuthorizedServerUser:async()=>({error:null})},process:{env:{NEXT_PUBLIC_SUPABASE_URL:'https://example.test',SUPABASE_SERVICE_ROLE_KEY:'test-only'}}});
+ const result=await api.POST({method:'POST',headers:{get:()=>null},nextUrl:{searchParams:new URLSearchParams()},json:async()=>({invoiceIds:['00000000-0000-4000-8000-000000000001']})});
+ assert.equal(result.failed.length,0);assert.equal(pdfCalls,1);assert.equal(snapshot.numer,undefined);assert.ok(snapshot.wfirma_pdf_path);assert.equal(result.refreshed[0].pdf,true);
 });

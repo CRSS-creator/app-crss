@@ -18,6 +18,44 @@ const invoice = { id: 'invoice', typ: 'sprzedaz', status: 'oplacona', kategoria:
 const cost = { id: 'cost', kontrahent: 'Vendor', data_dokumentu: '2026-09-01', okres_start: '2026-09-01', okres_end: '2026-09-30', kwota_netto_cfo: 100, kwota_brutto: 123, kategoria: 'systemy_technologia', data_zaplaty: '2026-09-22', ignoruj: false };
 const obligation = { id: 'salary', typ: 'wynagrodzenia_netto', okres: '2026-08-01', termin_platnosci: '2026-09-10', data_zaplaty: '2026-09-10', kwota: 6000 };
 
+test('linked payroll costs remain accounting costs while only net, ZUS and PIT payments enter cashflow', () => {
+  const salary = { ...cost, id: 'payroll', kwota_netto_cfo: 10000, kwota_brutto: 10000, rozliczenie_wynagrodzen_okres: '2026-09-01' };
+  const payments = ['wynagrodzenia_netto', 'zus', 'pit4'].map((typ, i) => ({ ...obligation, id: typ, typ, okres: '2026-09-01', kwota: [7000, 2500, 500][i] }));
+  const snapshot = { invoices: [], costs: [salary, cost], obligations: payments };
+  const rows = cash.cashflowTransactions(snapshot);
+  assert.equal(rows.reduce((n, r) => n + r.kwota, 0), -10123);
+  assert.equal(rows.some(r => r.id === 'cost:payroll'), false);
+  assert.equal(cash.actualCostPayment(salary).paymentDate, null);
+  assert.equal(salary.data_zaplaty, '2026-09-22'); // Keep the original evidence, without counting it twice.
+  const state = cash.payrollSettlement(snapshot, '2026-09');
+  assert.equal(state.costTotal, 10000); assert.equal(state.difference, 0); assert.equal(state.missing.length, 0);
+  assert.equal(cash.cashflowTransactions({ ...snapshot, costs: [{ ...salary, rozliczenie_wynagrodzen_okres: null }] }).some(r => r.id === 'cost:payroll'), true);
+});
+
+test('payroll reconciliation ignores VAT, CIT, other periods and ignored documents, and exposes missing splits', () => {
+  const salary = { ...cost, kwota_netto_cfo: 10000, kwota_brutto: 10000, rozliczenie_wynagrodzen_okres: '2026-09-01' };
+  const state = cash.payrollSettlement({ invoices: [], costs: [salary, { ...salary, id: 'ignored', ignoruj: true }, { ...salary, id: 'other', rozliczenie_wynagrodzen_okres: '2026-08-01' }], obligations: [
+    { ...obligation, okres: '2026-09-01', kwota: 7000 },
+    { ...obligation, typ: 'vat', okres: '2026-09-01', kwota: 3000 },
+    { ...obligation, typ: 'cit', okres: '2026-09-01', kwota: 4000 }, obligation,
+  ] }, '2026-09');
+  assert.equal(state.costTotal, 10000); assert.equal(state.paymentTotal, 7000); assert.equal(state.difference, 3000);
+  assert.equal(state.missing.join(','), 'ZUS,PIT-4 od wynagrodzeń');
+});
+
+test('budget never forecasts linked documents again alongside payroll settlements', () => {
+  const salary = { ...cost, id: 'salary', kategoria: 'koszty_zespolu', kwota_netto_cfo: 10000, kwota_brutto: 10000, rozliczenie_wynagrodzen_okres: '2026-09-01' };
+  const november = { ...salary, id: 'nov', data_dokumentu: '2026-11-01', data_zaplaty: null, okres_start: '2026-11-01', okres_end: '2026-11-30', rozliczenie_wynagrodzen_okres: '2026-11-01' };
+  const payments = ['wynagrodzenia_netto', 'zus', 'pit4'].map((typ, i) => ({ ...obligation, id: typ, typ, okres: '2026-09-01', kwota: [7000, 2500, 500][i], termin_platnosci: '2026-10-10', data_zaplaty: '2026-10-10' }));
+  const snapshot = { invoices: [], costs: [salary, november], obligations: payments };
+  const rows = budget.buildBudgetMonths('2026-11', 3, [], snapshot.costs, [], [], [], [], [], 0, snapshot);
+  assert.equal(rows[0].actualCosts, 10000);
+  for (const month of rows) {
+    assert.equal(month.plannedCashFlow, -10000);
+    assert.equal(month.costSubcategories.reduce((n, g) => n + g.planned, 0), 10000);
+  }
+});
+
 test('paid status settles the invoice without fabricating a receipt date from its due date', () => {
   const paid = cash.actualInvoicePayment({ ...invoice, data_zaplaty: null });
   assert.equal(paid.paidAmount, 123); assert.equal(paid.paymentDate, null);

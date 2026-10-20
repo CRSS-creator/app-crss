@@ -544,7 +544,7 @@ function buildBudgetMonths(
   const baseline = buildBaseline(revenueHistoryMonths, costHistoryMonths, planActualByMonth, overrides);
   const crmForecast = buildCrmRevenueGrowthForecast(costHistoryMonths, months, crmRevenues);
   for (const entry of baseline.costPlanEntries) {
-    const source = snapshot.costs.filter(cost => !cost.ignoruj && !cost.harmonogram_id && costHistoryMonths.includes(cost.okres_start.slice(0, 7)) && counterpartyKey(cost.kontrahent || cost.id) === entry.vendorKey && cost.kategoria === entry.category && (cost.podkategoria || EMPTY_SUBCATEGORY) === entry.subcategory);
+    const source = snapshot.costs.filter(cost => !cost.ignoruj && !cost.harmonogram_id && !cost.rozliczenie_wynagrodzen_okres && costHistoryMonths.includes(cost.okres_start.slice(0, 7)) && counterpartyKey(cost.kontrahent || cost.id) === entry.vendorKey && cost.kategoria === entry.category && (cost.podkategoria || EMPTY_SUBCATEGORY) === entry.subcategory);
     const net = sum(source.map(cost => Number(cost.kwota_netto_cfo)));
     const issueDays = source.filter(cost => cost.data_dokumentu).map(cost => Number(cost.data_dokumentu?.slice(8, 10)));
     entry.issueDay = issueDays.length ? Math.round(sum(issueDays) / issueDays.length) : 1;
@@ -803,7 +803,7 @@ function buildCostCashflowGroups(
 
 function buildBudgetCostPayments(costs: CfoCostItem[]): BudgetCostPayment[] {
   return costs
-    .filter((cost) => !cost.ignoruj)
+    .filter((cost) => !cost.ignoruj && !cost.rozliczenie_wynagrodzen_okres)
     .map((cost) => {
       const payment = costPaymentInfo(cost);
       return {
@@ -1274,7 +1274,7 @@ function costShareForMonth(cost: CfoCostItem, period: string) {
 }
 
 function isCostCashFlowForecastable(cost: CfoCostItem) {
-  return cost.kategoria !== "jednorazowe_nadzwyczajne" && cost.ujecie_zarzadcze !== "rozliczenie_w_czasie";
+  return !cost.rozliczenie_wynagrodzen_okres && cost.kategoria !== "jednorazowe_nadzwyczajne" && cost.ujecie_zarzadcze !== "rozliczenie_w_czasie";
 }
 
 function revenueLineEffectivePeriod(line: CfoInvoiceLine) {

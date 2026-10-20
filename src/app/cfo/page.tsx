@@ -40,6 +40,7 @@ import {
 
 import CfoCashflowPanel from "@/components/CfoCashflowPanel";
 import CfoDateField from "@/components/CfoDateField";
+import { AppMonthInput } from "@/components/AppDateInputs";
 import * as cfoUi from "@/components/cfoStyles";
 import { cashflowTransactions, emptyCashflow, actualCostPayment, type CashflowSnapshot } from "@/lib/cfoCashflow";
 import { fetchCashflowSnapshot } from "@/lib/cfoCashflowService";
@@ -822,6 +823,10 @@ function renderCostSection(
             </div>
             <button type="button" style={primaryButtonStyle} onClick={addManualCost} disabled={saving}><Plus size={17} />Dodaj</button>
           </div>
+            <label style={{ ...checkboxLabelStyle, marginTop: "12px" }}>
+              <input type="checkbox" checked={Boolean(manualCost.rozliczenie_wynagrodzen_okres)} onChange={event => setManualCost(current => ({ ...current, rozliczenie_wynagrodzen_okres: event.target.checked ? monthToDate(period) : null }))} />
+              Rozlicz przez netto, ZUS i PIT za {formatMonthField(period)}
+            </label>
         </div>
       </article>
       <article style={panelStyle}>
@@ -887,7 +892,7 @@ function renderCostSection(
                           style={costMoneyInputStyle}
                           value={cost.kwota_netto_cfo}
                           onValueChange={(value) => setCosts((current) => current.map((item) => item.id === cost.id ? { ...item, kwota_netto_cfo: value } : item))}
-                          onCommit={(value) => void updateCost(cost.id, { kwota_netto_cfo: value })}
+                          onCommit={(value) => void changeCost(cost, { kwota_netto_cfo: value })}
                         />
                         zł
                       </span>
@@ -898,18 +903,27 @@ function renderCostSection(
                           style={costMoneyInputStyle}
                           value={costGrossValue(cost)}
                           onValueChange={(value) => setCosts((current) => current.map((item) => item.id === cost.id ? { ...item, kwota_brutto: value } : item))}
-                          onCommit={(value) => void updateCost(cost.id, { kwota_brutto: value })}
+                          onCommit={(value) => void changeCost(cost, { kwota_brutto: value })}
                         />
                         zł
                       </span>
                     </Td>
                     <Td>
                       <div style={costPaymentCellStyle}>
+                        {!cost.harmonogram_id && <label style={{ ...checkboxLabelStyle, fontSize: "11px" }}>
+                          <input type="checkbox" checked={Boolean(cost.rozliczenie_wynagrodzen_okres)} onChange={event => void changeCost(cost, { rozliczenie_wynagrodzen_okres: event.target.checked ? cost.okres_start.slice(0, 7) + "-01" : null })} />
+                          Netto / ZUS / PIT
+                        </label>}
+                        {cost.rozliczenie_wynagrodzen_okres ? <>
+                          <AppMonthInput ariaLabel="Miesiąc rozliczenia wynagrodzenia" style={costPaymentInputStyle} value={cost.rozliczenie_wynagrodzen_okres.slice(0, 7)} onChange={value => void changeCost(cost, { rozliczenie_wynagrodzen_okres: value + "-01" })} />
+                          <span style={{ ...smallStyle, fontSize: "11px" }}>Płatności w Cash flow → Rozliczenie wynagrodzeń</span>
+                        </> : <>
                         <CostPaymentStatus cost={cost} paid={paid} compact />
                         <label style={costPaymentLabelStyle}>
                           Data zapłaty
                           <CfoDateField ariaLabel={"Zapłata " + (cost.numer_dokumentu || cost.kontrahent)} compact max={new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Warsaw" })} value={cost.data_zaplaty || ""} onChange={value => void changeCost(cost, { data_zaplaty: value || null })} style={costPaymentInputStyle} />
                         </label>
+                        </>}
                       </div>
                     </Td>
                     <Td align="right" style={{ padding: "8px 4px" }}>

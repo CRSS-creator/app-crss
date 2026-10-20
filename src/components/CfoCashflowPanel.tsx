@@ -6,6 +6,7 @@ import { colors } from "@/app/design";
 import CfoDateField from "./CfoDateField";
 import * as ui from "./cfoStyles";
 import Link from "next/link";
+import CfoPayrollSettlement from "./CfoPayrollSettlement";
 import CfoAnnualSchedules from "./CfoAnnualSchedules";
 import { OBLIGATION_TYPES, businessDate, type CashflowSnapshot, type CfoObligation } from "@/lib/cfoCashflow";
 import { saveObligation } from "@/lib/cfoCashflowService";
@@ -47,13 +48,14 @@ export default function CfoCashflowPanel({ snapshot, period, onUpdated }: {
   }
   const matches = (label: string) => label.toLocaleLowerCase("pl").includes(search.toLocaleLowerCase("pl"));
   const invoices = snapshot.invoices.filter(i => matches(`${i.numer || ""} ${i.kontrahent_nazwa || ""}`) && (showPaid || i.status !== "oplacona"));
-  const costs = snapshot.costs.filter(c => !c.ignoruj && matches(`${c.numer_dokumentu || ""} ${c.kontrahent}`) && (showPaid || !c.data_zaplaty));
+  const costs = snapshot.costs.filter(c => !c.ignoruj && !c.rozliczenie_wynagrodzen_okres && matches(`${c.numer_dokumentu || ""} ${c.kontrahent}`) && (showPaid || !c.data_zaplaty));
   return <div style={{ display: "grid", gap: "18px" }}>
     <CfoAnnualSchedules snapshot={snapshot} onUpdated={onUpdated} />
     {error && <div role="alert" style={ui.error}>{error}</div>}
     <section style={ui.panel}>
-      <header style={ui.header}><div style={ui.titleGroup}><WalletCards size={21} color={colors.red} /><h2 style={ui.title}>Wynagrodzenia i podatki</h2></div><span style={ui.badge}>{period}</span></header>
-      <p style={ui.text}>Wprowadź kwoty za wybrany miesiąc. Termin wyznacza plan, a data zapłaty potwierdza wykonanie. ZUS obejmuje całą płatność; VAT i CIT wpisuj w kwocie należnej.</p>
+      <header style={ui.header}><div style={ui.titleGroup}><WalletCards size={21} color={colors.red} /><h2 style={ui.title}>Rozliczenie wynagrodzeń i podatków</h2></div><span style={ui.badge}>{period}</span></header>
+      <p style={ui.text}>Wybierz miesiąc, którego dotyczą wynagrodzenia. Podaj rzeczywisty podział na przelewy netto, ZUS i PIT oraz ich terminy i daty zapłaty. ZUS obejmuje całą płatność. VAT i CIT rozliczasz osobno.</p>
+      <CfoPayrollSettlement snapshot={snapshot} period={period} onUpdated={onUpdated} />
       <div style={{ overflowX: "auto" }}><table style={{ ...ui.table, minWidth: "900px" }}>
         <thead><tr>{["Rodzaj", "Kwota (zł)", "Termin płatności", "Data zapłaty", "Status", ""].map((h, i) => <th key={i} style={ui.th}>{h}</th>)}</tr></thead>
         <tbody>{OBLIGATION_TYPES.map(kind => {
@@ -71,7 +73,7 @@ export default function CfoCashflowPanel({ snapshot, period, onUpdated }: {
           </tr>;
         })}</tbody>
       </table></div>
-      <details style={ui.details}><summary style={ui.summary}>Jak te kwoty wpływają na Budżet?</summary><p style={{ ...ui.text, margin: "10px 0 0" }}>Budżet powtarza ostatnią zapisaną kwotę i termin osobno dla każdego rodzaju. Zapis konkretnego miesiąca zastępuje tę prognozę. Kwota 0 oznacza brak zobowiązania. Nie dodawaj tych samych płatności ponownie jako faktur kosztowych.</p></details>
+      <details style={ui.details}><summary style={ui.summary}>Jak te kwoty wpływają na Budżet?</summary><p style={{ ...ui.text, margin: "10px 0 0" }}>Budżet powtarza ostatnią zapisaną kwotę i termin osobno dla każdego rodzaju. Zapis konkretnego miesiąca zastępuje tę prognozę. Kwota 0 oznacza brak zobowiązania. Powiązane koszty wynagrodzeń są uwzględniane w wyniku CFO, a ich przepływy pochodzą wyłącznie z tego rozliczenia. Pełny koszt dokumentu nie jest ponownie dodawany do płatności.</p></details>
     </section>
     <section style={ui.panel}>
       <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "14px", marginBottom: "22px" }}>

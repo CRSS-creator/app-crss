@@ -122,6 +122,7 @@ export type CfoCashflowInvoice = {
 };
 
 export type CfoCostItem = {
+  rozliczenie_wynagrodzen_okres?: string | null;
   harmonogram_id?: string | null;
   id: string;
   import_key?: string | null;
@@ -247,6 +248,7 @@ export type CfoPaymentSplit = {
 };
 
 export type CfoCostImportRow = {
+  rozliczenie_wynagrodzen_okres?: string | null;
   import_key: string;
   data_dokumentu: string | null;
   numer_dokumentu: string | null;

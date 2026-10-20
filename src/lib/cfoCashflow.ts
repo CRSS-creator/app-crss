@@ -40,8 +40,19 @@ export function actualInvoicePayment(invoice: CashflowInvoice | CfoInvoiceParent
   };
 }
 export function actualCostPayment(cost: CfoCostItem) {
+  if (cost.rozliczenie_wynagrodzen_okres) return { paidAmount: 0, paymentDate: null };
   return { paidAmount: cost.data_zaplaty ? Number(cost.kwota_brutto ?? cost.kwota_netto_cfo ?? 0) : 0,
     paymentDate: cost.data_zaplaty || null };
+}
+
+export function payrollSettlement(snapshot: CashflowSnapshot, period: string) {
+  const costs = snapshot.costs.filter(c => !c.ignoruj && c.rozliczenie_wynagrodzen_okres?.slice(0, 7) === period);
+  const payments = snapshot.obligations.filter(o => o.okres.slice(0, 7) === period && ["wynagrodzenia_netto", "zus", "pit4"].includes(o.typ));
+  const round = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
+  const costTotal = round(costs.reduce((sum, c) => sum + Number(c.kwota_brutto ?? c.kwota_netto_cfo), 0));
+  const paymentTotal = round(payments.reduce((sum, p) => sum + Number(p.kwota), 0));
+  return { costs, costTotal, paymentTotal, difference: round(costTotal - paymentTotal),
+    missing: OBLIGATION_TYPES.slice(0, 3).filter(kind => !payments.some(p => p.typ === kind.value)).map(kind => kind.label) };
 }
 export function paymentAverage(samples: { key: string; issueDate: string | null; paidDate: string | null }[], asOf: string) {
   const cutoff = shiftDateMonth(asOf, -6);

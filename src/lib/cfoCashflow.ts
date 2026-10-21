@@ -63,7 +63,7 @@ export function actualCostPayment(cost: CfoCostItem) {
 
 export function payrollSettlement(snapshot: CashflowSnapshot, period: string) {
   const costs = snapshot.costs.filter(c => !c.ignoruj && c.rozliczenie_wynagrodzen_okres?.slice(0, 7) === period);
-  const payments = snapshot.obligations.filter(o => o.okres.slice(0, 7) === period && ["wynagrodzenia_netto", "wynagrodzenie_prezesa_netto", "potracenia", "ppk", "zus", "pit4"].includes(o.typ));
+  const payments = snapshot.obligations.filter(o => o.okres.slice(0, 7) === period && ["wynagrodzenia_netto", "potracenia", "ppk", "zus", "pit4"].includes(o.typ));
   const round = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
   const costTotal = round(costs.reduce((sum, c) => sum + Number(c.kwota_brutto ?? c.kwota_netto_cfo), 0));
   const employees = (snapshot.employeeCosts || []).filter(employee => employee.okres.slice(0, 7) === period);

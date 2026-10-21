@@ -28,7 +28,8 @@
 .table th:nth-child(3) { width: 25%; }
 .table td { overflow-wrap: anywhere; min-width: 160px; }
 .table td strong { font-weight: 600; }
-.table th:last-child, .table td:last-child { text-align: center; min-width: 120px; white-space: nowrap; }
+.table th:nth-child(4), .table td:nth-child(4) { text-align: center; min-width: 120px; white-space: nowrap; }
+.table th:last-child, .table td:last-child { width: 48px; min-width: 48px; padding: 12px; text-align: center; }
 .table tbody tr:nth-child(even) { background: #f8fafc; }
 .table tbody tr:hover { background: #eef4fc; }
 .table input[type="checkbox"] {
@@ -48,3 +49,8 @@
 }
 .table input[type="checkbox"]:focus-visible { outline: 2px solid #213d72; outline-offset: 3px; }
 .table input[type="checkbox"]:disabled { opacity: 0.55; cursor: wait; }
+
+.removeButton { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 8px; background: transparent; color: #64748b; cursor: pointer; }
+.removeButton:hover { color: #dc2626; background: #fff0f0; }
+.removeButton:focus-visible { outline: 2px solid #213d72; outline-offset: 2px; }
+.removeButton:disabled { opacity: 0.5; cursor: wait; }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Trash2 } from "lucide-react";
 import { colors } from "@/app/design";
 import { supabase } from "@/lib/supabaseClient";
 import styles from "./CsoGoogleReviews.module.css";
@@ -27,12 +28,13 @@ export default function CsoGoogleReviews() {
       try {
         const [clientResult, statusResult] = await Promise.all([
           supabase.from("klienci").select("id,nazwa,email,osoba_kontaktowa").order("nazwa"),
-          supabase.from("cso_google_reviews").select("klient_id,opinia_dodana"),
+          supabase.from("cso_google_reviews").select("klient_id,opinia_dodana,ukryty"),
         ]);
         if (clientResult.error) throw clientResult.error;
         if (statusResult.error) throw statusResult.error;
         const statuses = new Map((statusResult.data || []).map(row => [row.klient_id, row.opinia_dodana]));
-        if (active) setClients((clientResult.data || []).map(row => ({ ...row, opinia_dodana: statuses.get(row.id) ?? false })));
+        const hidden = new Set((statusResult.data || []).filter(row => row.ukryty).map(row => row.klient_id));
+        if (active) setClients((clientResult.data || []).filter(row => !hidden.has(row.id)).map(row => ({ ...row, opinia_dodana: statuses.get(row.id) ?? false })));
       } catch {
         if (active) setLoadError("Nie udało się pobrać klientów i statusów opinii. Odśwież stronę.");
       } finally {
@@ -61,6 +63,26 @@ export default function CsoGoogleReviews() {
     }
   }
 
+  async function remove(client: Client) {
+    if (pending.current.has(client.id)) return;
+    if (!window.confirm("Czy na pewno chcesz usunąć klienta „" + (client.nazwa || "Klient bez nazwy") + "” z listy Opinie Google? Klient pozostanie w aplikacji.")) return;
+    pending.current.add(client.id);
+    setSaving(current => [...current, client.id]);
+    setSaveError("");
+    try {
+      const { error } = await supabase.from("cso_google_reviews")
+        .upsert({ klient_id: client.id, opinia_dodana: client.opinia_dodana, ukryty: true }, { onConflict: "klient_id" })
+        .select("klient_id").single();
+      if (error) throw error;
+      setClients(current => current.filter(row => row.id !== client.id));
+    } catch {
+      setSaveError("Nie udało się usunąć klienta z listy. Spróbuj ponownie.");
+    } finally {
+      pending.current.delete(client.id);
+      setSaving(current => current.filter(id => id !== client.id));
+    }
+  }
+
   return (
     <section className={styles.panel} aria-labelledby="google-reviews-title">
       <header className={styles.header}>
@@ -81,6 +103,7 @@ export default function CsoGoogleReviews() {
               <th scope="col">E-mail kontaktowy</th>
               <th scope="col">Osoba kontaktowa</th>
               <th scope="col">Opinia dodana</th>
+              <th scope="col" aria-label="Akcje" />
             </tr></thead>
             <tbody>{clients.map(client => <tr key={client.id}>
               <td><strong>{client.nazwa || "Klient bez nazwy"}</strong></td>
@@ -92,6 +115,12 @@ export default function CsoGoogleReviews() {
                 disabled={saving.includes(client.id)}
                 onChange={event => void save(client, event.target.checked)}
               /></td>
+              <td><button type="button" className={styles.removeButton}
+                aria-label={"Usuń z listy Opinie Google — " + (client.nazwa || "Klient bez nazwy")}
+                title="Usuń z listy"
+                disabled={saving.includes(client.id)}
+                onClick={() => void remove(client)}
+              ><Trash2 size={16} aria-hidden="true" /></button></td>
             </tr>)}</tbody>
           </table>
         </div>

@@ -37,7 +37,7 @@ export default function CfoManualRevenues({ rows, period, onUpdated }: { rows: M
     catch { setError("Nie udało się usunąć przychodu."); } finally { setSaving(false); }
   }
   return <section style={ui.panel}>
-    <header style={ui.header}><h2 style={ui.title}>Przychody ręczne</h2><button type="button" style={ui.smallButton} disabled={saving} onClick={() => { setDraft(empty(period)); setError(""); setOpen(true); }}><Plus size={16} />Dodaj przychód</button></header>
+    <header style={ui.header}><h2 style={ui.title}>Przychody ręczne</h2><button type="button" style={{ ...ui.smallButton, background: "#ff1f4b", borderColor: "#ff1f4b", color: "#ffffff" }} disabled={saving} onClick={() => { setDraft(empty(period)); setError(""); setOpen(true); }}><Plus size={16} />Dodaj przychód</button></header>
     <p style={ui.text}>Dotacje i inne przychody bez faktury. Wpisz miesiąc ujęcia w wyniku i osobno datę wpływu pieniędzy. Nie dodawaj tu przychodu, który jest już w Fakturach. Kwoty w PLN; przy dotacji bez VAT netto i wpływ są takie same.</p>
     {error && <p role="alert" style={ui.error}>{error}</p>}
     {open && <div style={ui.form}>

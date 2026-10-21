@@ -1,3 +1,4 @@
+import { manualCashflowAmount, type ManualCashflow } from "./cfoManualCashflow";
 import type { ManualRevenue } from "./cfoManualRevenue";
 import type { AnnualCostSchedule } from "./cfoAnnualCosts";
 import type { CfoBankTransaction, CfoCostItem, CfoInvoiceParent } from "./cfoService";
@@ -19,8 +20,8 @@ export type CfoObligation = {
   data_zaplaty: string | null;
 };
 export type CashflowInvoice = CfoInvoiceParent & { waluta?: string; data_zaplaty?: string | null };
-export type CashflowSnapshot = { invoices: CashflowInvoice[]; costs: CfoCostItem[]; obligations: CfoObligation[]; annualSchedules?: AnnualCostSchedule[]; manualRevenues?: ManualRevenue[] };
-export const emptyCashflow = (): CashflowSnapshot => ({ invoices: [], costs: [], obligations: [], annualSchedules: [], manualRevenues: [] });
+export type CashflowSnapshot = { invoices: CashflowInvoice[]; costs: CfoCostItem[]; obligations: CfoObligation[]; annualSchedules?: AnnualCostSchedule[]; manualRevenues?: ManualRevenue[]; manualFlows?: ManualCashflow[] };
+export const emptyCashflow = (): CashflowSnapshot => ({ invoices: [], costs: [], obligations: [], annualSchedules: [], manualRevenues: [], manualFlows: [] });
 
 export function businessDate() {
   return new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Warsaw" }).format(new Date());
@@ -84,6 +85,7 @@ export function cashflowTransactions(snapshot: CashflowSnapshot): CfoBankTransac
   });
   snapshot.obligations.forEach(o => append("obligation:" + o.id, o.data_zaplaty, -Number(o.kwota), o.typ === "pit4" ? "pit" : o.typ === "wynagrodzenia_netto" ? "wynagrodzenie_netto" : o.typ));
   (snapshot.manualRevenues || []).forEach(row => append("manual-revenue:" + row.id, row.data_wplywu, Number(row.kwota_brutto), "inne"));
+  (snapshot.manualFlows || []).forEach(row => append("manual-flow:" + row.id, row.data_realizacji, manualCashflowAmount(row), "inne"));
   return result;
 }
 

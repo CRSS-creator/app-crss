@@ -1,3 +1,4 @@
+import type { ManualCashflow, ManualCashflowInput } from "./cfoManualCashflow";
 import type { ManualRevenue, ManualRevenueInput } from "./cfoManualRevenue";
 import type { AnnualCostSchedule, AnnualCostInput } from "./cfoAnnualCosts";
 import { supabase } from "./supabaseClient";
@@ -15,17 +16,18 @@ async function readAll<T>(table: string, select: string) {
   }
 }
 export async function fetchCashflowSnapshot(): Promise<{ data: CashflowSnapshot | null; error: { message: string } | null }> {
-  const [invoices, costs, obligations, annualSchedules, manualRevenues] = await Promise.all([
+  const [invoices, costs, obligations, annualSchedules, manualRevenues, manualFlows] = await Promise.all([
     readAll<CashflowInvoice>("faktury", "id,numer,typ,kategoria,status,okres,klient_id,kontrahent_nazwa,data_wystawienia,termin_platnosci,data_zaplaty,kwota_brutto,waluta"),
     readAll<CfoCostItem>("cfo_koszty", "*"),
     readAll<CfoObligation>("cfo_zobowiazania", "id,okres,typ,kwota,termin_platnosci,data_zaplaty"),
     readAll<AnnualCostSchedule>("cfo_harmonogramy_roczne", "*"),
     readAll<ManualRevenue>("cfo_przychody_reczne", "id,opis,zrodlo,rodzaj,okres,data_dokumentu,numer_dokumentu,kwota_netto,kwota_brutto,termin_wplywu,data_wplywu"),
+    readAll<ManualCashflow>("cfo_przeplywy_reczne", "id,opis,kierunek,kwota,termin,data_realizacji"),
   ]);
-  const error = invoices.error || costs.error || obligations.error || annualSchedules.error || manualRevenues.error;
+  const error = invoices.error || costs.error || obligations.error || annualSchedules.error || manualRevenues.error || manualFlows.error;
   if (error) return { data: null, error };
   return { data: { invoices: (invoices.data || []).filter(i => i.typ === "sprzedaz" && i.kategoria !== "korekta" && !["szkic", "anulowana"].includes(i.status)),
-    costs: costs.data || [], obligations: obligations.data || [], annualSchedules: annualSchedules.data || [], manualRevenues: manualRevenues.data || [] }, error: null };
+    costs: costs.data || [], obligations: obligations.data || [], annualSchedules: annualSchedules.data || [], manualRevenues: manualRevenues.data || [], manualFlows: manualFlows.data || [] }, error: null };
 }
 export async function saveObligation(row: Omit<CfoObligation, "id"> & { id?: string }) {
   return supabase.from("cfo_zobowiazania").upsert(row, { onConflict: "okres,typ" })
@@ -43,4 +45,14 @@ export async function saveManualRevenue(row: ManualRevenueInput) {
 }
 export async function deleteManualRevenue(id: string) {
   return supabase.from("cfo_przychody_reczne").delete().eq("id", id).select("id").single();
+}
+
+export async function saveManualCashflow(row: ManualCashflowInput) {
+  const { id, ...payload } = row;
+  const query = id ? supabase.from("cfo_przeplywy_reczne").update(payload).eq("id", id)
+    : supabase.from("cfo_przeplywy_reczne").insert(payload);
+  return query.select("id").single();
+}
+export async function deleteManualCashflow(id: string) {
+  return supabase.from("cfo_przeplywy_reczne").delete().eq("id", id).select("id").single();
 }

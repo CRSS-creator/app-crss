@@ -1,4 +1,6 @@
 "use client";
+
+import { manualCashflowForecast } from "@/lib/cfoManualCashflow";
 import { manualRevenueCashflow } from "@/lib/cfoManualRevenue";
 
 
@@ -611,7 +613,8 @@ function buildBudgetMonths(
     const plannedOtherCostCashFlow = costCashFlow.amount
       + plannedUnrecordedCostCashFlowForMonth(period, [...costHistoryMonths, ...months], baseline.costPlanEntries, planActualByMonth, costPaymentProfile) + annual.cash;
     const plannedCostCashFlow = plannedEmployeeCashFlow + plannedOtherCostCashFlow + manualCostCashFlow;
-    const plannedCashFlow = plannedCustomerCashFlow + manualRevenueCashFlow + manualRevenueReceipts - plannedCostCashFlow;
+    const plannedCashFlow = plannedCustomerCashFlow + manualRevenueCashFlow + manualRevenueReceipts - plannedCostCashFlow
+      + manualCashflowForecast(period, snapshot.manualFlows || [], invoicePaymentProfile.asOf);
     cash += plannedCashFlow;
 
     return {

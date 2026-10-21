@@ -7,6 +7,7 @@ export const OBLIGATION_TYPES = [
   { value: "wynagrodzenia_netto", label: "Wynagrodzenia netto" },
   { value: "wynagrodzenie_prezesa_netto", label: "Wynagrodzenie netto Prezesa" },
   { value: "potracenia", label: "Potrącenia" },
+  { value: "ppk", label: "PPK" },
   { value: "zus", label: "ZUS" },
   { value: "pit4", label: "PIT-4 od wynagrodzeń" },
   { value: "vat", label: "VAT" },
@@ -62,7 +63,7 @@ export function actualCostPayment(cost: CfoCostItem) {
 
 export function payrollSettlement(snapshot: CashflowSnapshot, period: string) {
   const costs = snapshot.costs.filter(c => !c.ignoruj && c.rozliczenie_wynagrodzen_okres?.slice(0, 7) === period);
-  const payments = snapshot.obligations.filter(o => o.okres.slice(0, 7) === period && ["wynagrodzenia_netto", "wynagrodzenie_prezesa_netto", "potracenia", "zus", "pit4"].includes(o.typ));
+  const payments = snapshot.obligations.filter(o => o.okres.slice(0, 7) === period && ["wynagrodzenia_netto", "wynagrodzenie_prezesa_netto", "potracenia", "ppk", "zus", "pit4"].includes(o.typ));
   const round = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
   const costTotal = round(costs.reduce((sum, c) => sum + Number(c.kwota_brutto ?? c.kwota_netto_cfo), 0));
   const employees = (snapshot.employeeCosts || []).filter(employee => employee.okres.slice(0, 7) === period);
@@ -102,7 +103,7 @@ export function cashflowTransactions(snapshot: CashflowSnapshot): CfoBankTransac
     const payment = actualCostPayment(c);
     append("cost:" + c.id, payment.paymentDate, -payment.paidAmount, "koszt");
   });
-  snapshot.obligations.forEach(o => append("obligation:" + o.id, o.data_zaplaty, -Number(o.kwota), o.typ === "pit4" ? "pit" : o.typ === "wynagrodzenia_netto" || o.typ === "wynagrodzenie_prezesa_netto" ? "wynagrodzenie_netto" : o.typ === "potracenia" ? "inne" : o.typ));
+  snapshot.obligations.forEach(o => append("obligation:" + o.id, o.data_zaplaty, -Number(o.kwota), o.typ === "pit4" ? "pit" : o.typ === "wynagrodzenia_netto" || o.typ === "wynagrodzenie_prezesa_netto" ? "wynagrodzenie_netto" : o.typ === "potracenia" || o.typ === "ppk" ? "inne" : o.typ));
   (snapshot.manualRevenues || []).forEach(row => append("manual-revenue:" + row.id, row.data_wplywu, Number(row.kwota_brutto), "inne"));
   (snapshot.manualFlows || []).forEach(row => append("manual-flow:" + row.id, row.data_realizacji, manualCashflowAmount(row), "inne"));
   return result;

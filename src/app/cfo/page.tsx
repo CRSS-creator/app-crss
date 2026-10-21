@@ -335,12 +335,12 @@ function CfoContent() {
 
       <section style={metricGridStyle}>
         <Metric label="Przychody" value={formatMoney(view.revenue)} />
-        <Metric label="Należności" value={cashflowError ? "Brak danych" : formatMoney(outstandingReceivables(cashflow.invoices))} description="Nieopłacone faktury sprzedaży brutto w PLN ze wszystkich okresów" />
         <Metric label="Koszty operacyjne" value={formatMoney(view.operatingCosts)} />
         <Metric label="Koszty zarządcze" value={formatMoney(view.managementCosts)} />
         <Metric label="Wynik operacyjny" value={formatMoney(view.operatingResult)} tone={view.operatingResult >= 0 ? "good" : "bad"} />
         <Metric label="Cash flow" value={cashflowError ? "Brak danych" : formatMoney(view.cashFlow)} tone={view.cashFlow >= 0 ? "good" : "bad"} />
         <Metric label="Cel właściciela" value={view.ownerGoalText} tone={view.ownerGoalGap <= 0 ? "good" : "bad"} />
+        <Metric label="Należności" value={cashflowError ? "Brak danych" : formatMoney(outstandingReceivables(cashflow.invoices))} description="Nieopłacone faktury sprzedaży brutto w PLN ze wszystkich okresów" />
       </section>
 
       {!loading && analysisError ? <section style={infoNoticeStyle}>{analysisError}</section> : null}

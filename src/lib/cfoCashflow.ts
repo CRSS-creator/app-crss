@@ -1,7 +1,7 @@
 import { manualCashflowAmount, type ManualCashflow } from "./cfoManualCashflow";
 import type { ManualRevenue } from "./cfoManualRevenue";
 import type { AnnualCostSchedule } from "./cfoAnnualCosts";
-import type { CfoBankTransaction, CfoCostItem, CfoInvoiceParent } from "./cfoService";
+import type { CfoBankTransaction, CfoCostItem, CfoEmployeeCost, CfoInvoiceParent } from "./cfoService";
 
 export const OBLIGATION_TYPES = [
   { value: "wynagrodzenia_netto", label: "Wynagrodzenia netto" },
@@ -20,8 +20,8 @@ export type CfoObligation = {
   data_zaplaty: string | null;
 };
 export type CashflowInvoice = CfoInvoiceParent & { waluta?: string; data_zaplaty?: string | null };
-export type CashflowSnapshot = { invoices: CashflowInvoice[]; costs: CfoCostItem[]; obligations: CfoObligation[]; annualSchedules?: AnnualCostSchedule[]; manualRevenues?: ManualRevenue[]; manualFlows?: ManualCashflow[] };
-export const emptyCashflow = (): CashflowSnapshot => ({ invoices: [], costs: [], obligations: [], annualSchedules: [], manualRevenues: [], manualFlows: [] });
+export type CashflowSnapshot = { invoices: CashflowInvoice[]; costs: CfoCostItem[]; obligations: CfoObligation[]; annualSchedules?: AnnualCostSchedule[]; manualRevenues?: ManualRevenue[]; manualFlows?: ManualCashflow[]; employeeCosts?: CfoEmployeeCost[] };
+export const emptyCashflow = (): CashflowSnapshot => ({ invoices: [], costs: [], obligations: [], annualSchedules: [], manualRevenues: [], manualFlows: [], employeeCosts: [] });
 
 export function businessDate() {
   return new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Warsaw" }).format(new Date());
@@ -51,8 +51,13 @@ export function payrollSettlement(snapshot: CashflowSnapshot, period: string) {
   const payments = snapshot.obligations.filter(o => o.okres.slice(0, 7) === period && ["wynagrodzenia_netto", "zus", "pit4"].includes(o.typ));
   const round = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
   const costTotal = round(costs.reduce((sum, c) => sum + Number(c.kwota_brutto ?? c.kwota_netto_cfo), 0));
+  const employees = (snapshot.employeeCosts || []).filter(employee => employee.okres.slice(0, 7) === period);
+  const employeeTotal = round(employees.reduce((sum, employee) => sum
+    + Number(employee.podstawa || 0) + Number(employee.zus_pracodawcy || 0)
+    + Number(employee.benefity || 0) + Number(employee.premie || 0) + Number(employee.szkolenia || 0), 0));
+  const total = round(costTotal + employeeTotal);
   const paymentTotal = round(payments.reduce((sum, p) => sum + Number(p.kwota), 0));
-  return { costs, costTotal, paymentTotal, difference: round(costTotal - paymentTotal),
+  return { costs, costTotal, employees, employeeTotal, total, paymentTotal, difference: round(total - paymentTotal),
     missing: OBLIGATION_TYPES.slice(0, 3).filter(kind => !payments.some(p => p.typ === kind.value)).map(kind => kind.label) };
 }
 export function paymentAverage(samples: { key: string; issueDate: string | null; paidDate: string | null }[], asOf: string) {

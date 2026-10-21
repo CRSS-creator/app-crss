@@ -7,17 +7,29 @@ import CfoDateField from "./CfoDateField";
 import * as ui from "./cfoStyles";
 import { businessDate } from "@/lib/cfoCashflow";
 import type { ManualCashflow, ManualCashflowInput } from "@/lib/cfoManualCashflow";
-import { saveManualCashflow, deleteManualCashflow } from "@/lib/cfoCashflowService";
+import { saveManualCashflow, deleteManualCashflow, copyPreviousMonthCashflows } from "@/lib/cfoCashflowService";
 
 const empty = (): ManualCashflowInput => ({ opis: "", kierunek: "wydatek", kwota: 0, termin: businessDate(), data_realizacji: null });
 const money = (value: number) => new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN" }).format(value);
 
-export default function CfoManualCashflows({ rows, onUpdated }: { rows: ManualCashflow[]; onUpdated: () => Promise<void> }) {
+export default function CfoManualCashflows({ rows, period, onUpdated }: { rows: ManualCashflow[]; period: string; onUpdated: () => Promise<void> }) {
   const [draft, setDraft] = useState<ManualCashflowInput>(empty);
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const lock = useRef(false);
+  const [notice, setNotice] = useState("");
+  async function copyPrevious() {
+    if (lock.current) return;
+    lock.current = true; setSaving(true); setError(""); setNotice("");
+    try {
+      const result = await copyPreviousMonthCashflows(period);
+      if (result.error) throw result.error;
+      setNotice(result.count ? "Skopiowano przepływy: " + result.count + ". Miesiąc docelowy: " + period + "." : "Brak nowych przepływów do skopiowania — poprzedni miesiąc jest pusty lub wpisy już istnieją.");
+      if (result.count) await onUpdated();
+    } catch { setError("Nie udało się skopiować przepływów. Spróbuj ponownie."); }
+    finally { lock.current = false; setSaving(false); }
+  }
   async function save() {
     if (lock.current) return;
     if (!draft.opis.trim() || !draft.termin) return setError("Uzupełnij opis i planowany termin.");
@@ -44,9 +56,11 @@ export default function CfoManualCashflows({ rows, onUpdated }: { rows: ManualCa
   }
   return <section style={ui.panel}>
     <header style={ui.header}><h2 style={ui.title}>Przepływy poza wynikiem</h2>
-      <button type="button" style={ui.primaryButton} disabled={saving} onClick={() => { setDraft(empty()); setError(""); setOpen(true); }}><Plus size={16} />Dodaj przepływ</button>
+      <div style={ui.actions}><button type="button" style={ui.secondaryButton} disabled={saving} onClick={() => void copyPrevious()}>Kopiuj z poprzedniego miesiąca</button>
+      <button type="button" style={ui.primaryButton} disabled={saving} onClick={() => { setDraft(empty()); setError(""); setOpen(true); }}><Plus size={16} />Dodaj przepływ</button></div>
     </header>
     <p style={ui.text}>Wpływy i wydatki, które nie są przychodem ani kosztem CFO, np. kapitał pożyczki lub wypłata dla właściciela. Kwoty w PLN. Termin uwzględniamy w prognozie, a datę realizacji w historii cashflow. Ten sam przelew wpisz tylko raz — nie dodawaj tu płatności już ujętej przy fakturze, koszcie lub przychodzie ręcznym.</p>
+    {notice && <p role="status" style={ui.text}>{notice}</p>}
     {error && <p role="alert" style={ui.error}>{error}</p>}
     {open && <div style={ui.form}>
       <div style={ui.fieldGrid}>

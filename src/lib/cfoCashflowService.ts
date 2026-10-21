@@ -1,3 +1,4 @@
+import { previousMonthCashflows } from "./cfoManualCashflow";
 import type { ManualCashflow, ManualCashflowInput } from "./cfoManualCashflow";
 import type { ManualRevenue, ManualRevenueInput } from "./cfoManualRevenue";
 import type { AnnualCostSchedule, AnnualCostInput } from "./cfoAnnualCosts";
@@ -56,4 +57,13 @@ export async function saveManualCashflow(row: ManualCashflowInput) {
 }
 export async function deleteManualCashflow(id: string) {
   return supabase.from("cfo_przeplywy_reczne").delete().eq("id", id).select("id").single();
+}
+
+export async function copyPreviousMonthCashflows(period: string) {
+  const current = await readAll<ManualCashflow>("cfo_przeplywy_reczne", "id,opis,kierunek,kwota,termin,data_realizacji");
+  if (current.error) return { count: 0, error: current.error };
+  const copies = previousMonthCashflows(current.data || [], period);
+  if (!copies.length) return { count: 0, error: null };
+  const result = await supabase.from("cfo_przeplywy_reczne").insert(copies).select("id");
+  return { count: result.data?.length || 0, error: result.error };
 }

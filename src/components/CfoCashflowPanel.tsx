@@ -55,7 +55,7 @@ export default function CfoCashflowPanel({ snapshot, period, onUpdated }: {
   const invoices = snapshot.invoices.filter(i => matches(`${i.numer || ""} ${i.kontrahent_nazwa || ""}`) && (showPaid || i.status !== "oplacona"));
   const costs = snapshot.costs.filter(c => !c.ignoruj && !c.rozliczenie_wynagrodzen_okres && matches(`${c.numer_dokumentu || ""} ${c.kontrahent}`) && (showPaid || !c.data_zaplaty));
   return <div style={{ display: "grid", gap: "18px" }}>
-    <CfoManualCashflows rows={snapshot.manualFlows || []} onUpdated={onUpdated} />
+    <CfoManualCashflows key={period} period={period} rows={snapshot.manualFlows || []} onUpdated={onUpdated} />
     <CfoAnnualSchedules snapshot={snapshot} onUpdated={onUpdated} />
     {error && <div role="alert" style={ui.error}>{error}</div>}
     <section style={ui.panel}>

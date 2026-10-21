@@ -283,14 +283,16 @@ export default function CsoPage() {
   return (
     <AppLayout activePage="cso">
       <AccessGuard moduleName="cso">
+        {(role) => <>
         <nav aria-label="Zakładki CSO" style={tabsStyle}>
-          {(["facebook", "linkedin", "google"] as const).map((channel) => (
+          {(["facebook", "linkedin", "google"] as const).filter(channel => channel !== "google" || role === "owner").map((channel) => (
             <button key={channel} type="button" aria-pressed={platform === channel} onClick={() => setPlatform(channel)} style={platform === channel ? activeTabStyle : tabStyle}>
               {channel === "facebook" ? "Facebook" : channel === "linkedin" ? "LinkedIn" : "Opinie Google"}
             </button>
           ))}
         </nav>
-        {platform === "google" ? <CsoGoogleReviews /> : <CsoContent key={platform} platform={platform} />}
+        {platform === "google" ? (role === "owner" ? <CsoGoogleReviews /> : null) : <CsoContent key={platform} platform={platform} />}
+        </>}
       </AccessGuard>
     </AppLayout>
   );

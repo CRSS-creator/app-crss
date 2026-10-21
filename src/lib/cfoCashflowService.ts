@@ -1,3 +1,4 @@
+import { isCustomerInvoice } from "./cfoCashflow";
 import { previousMonthCashflows } from "./cfoManualCashflow";
 import type { ManualCashflow, ManualCashflowInput } from "./cfoManualCashflow";
 import type { ManualRevenue, ManualRevenueInput } from "./cfoManualRevenue";
@@ -28,7 +29,7 @@ export async function fetchCashflowSnapshot(): Promise<{ data: CashflowSnapshot 
   ]);
   const error = invoices.error || costs.error || obligations.error || annualSchedules.error || manualRevenues.error || manualFlows.error || employeeCosts.error;
   if (error) return { data: null, error };
-  return { data: { invoices: (invoices.data || []).filter(i => i.typ === "sprzedaz" && i.kategoria !== "korekta" && !["szkic", "anulowana"].includes(i.status)),
+  return { data: { invoices: (invoices.data || []).filter(isCustomerInvoice),
     costs: costs.data || [], obligations: obligations.data || [], annualSchedules: annualSchedules.data || [], manualRevenues: manualRevenues.data || [], manualFlows: manualFlows.data || [], employeeCosts: employeeCosts.data || [] }, error: null };
 }
 export async function saveObligation(row: Omit<CfoObligation, "id"> & { id?: string }) {

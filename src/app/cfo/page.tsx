@@ -1,4 +1,5 @@
 "use client";
+import typography from "./cfo.module.css";
 import CfoManualRevenues from "@/components/CfoManualRevenues";
 import { manualRevenueLines, MANUAL_REVENUE_SOURCE } from "@/lib/cfoManualRevenue";
 
@@ -42,7 +43,7 @@ import CfoCashflowPanel from "@/components/CfoCashflowPanel";
 import CfoDateField from "@/components/CfoDateField";
 import { AppMonthInput } from "@/components/AppDateInputs";
 import * as cfoUi from "@/components/cfoStyles";
-import { cashflowTransactions, emptyCashflow, actualCostPayment, type CashflowSnapshot } from "@/lib/cfoCashflow";
+import { cashflowTransactions, emptyCashflow, actualCostPayment, outstandingReceivables, type CashflowSnapshot } from "@/lib/cfoCashflow";
 import { fetchCashflowSnapshot } from "@/lib/cfoCashflowService";
 
 type CfoTab = "dashboard" | "przychody" | "koszty" | "cashflow" | "zespol" | "klienci";
@@ -313,7 +314,7 @@ function CfoContent() {
   }
 
   return (
-    <main style={contentStyle}>
+    <main className={typography.content} style={contentStyle}>
       <header style={headerStyle}>
         <div>
           <p style={eyebrowStyle}>Moduł zarządczy</p>
@@ -334,6 +335,7 @@ function CfoContent() {
 
       <section style={metricGridStyle}>
         <Metric label="Przychody" value={formatMoney(view.revenue)} />
+        <Metric label="Należności" value={cashflowError ? "Brak danych" : formatMoney(outstandingReceivables(cashflow.invoices))} description="Nieopłacone faktury sprzedaży brutto w PLN ze wszystkich okresów" />
         <Metric label="Koszty operacyjne" value={formatMoney(view.operatingCosts)} />
         <Metric label="Koszty zarządcze" value={formatMoney(view.managementCosts)} />
         <Metric label="Wynik operacyjny" value={formatMoney(view.operatingResult)} tone={view.operatingResult >= 0 ? "good" : "bad"} />
@@ -370,10 +372,10 @@ function CfoContent() {
   );
 }
 
-function Metric({ label, value, tone }: { label: string; value: string; tone?: "good" | "bad" | "warn" }) {
+function Metric({ label, value, tone, description }: { label: string; value: string; description?: string; tone?: "good" | "bad" | "warn" }) {
   const valueStyle = tone === "good" ? goodMetricValueStyle : tone === "bad" ? badMetricValueStyle : tone === "warn" ? warnMetricValueStyle : metricValueStyle;
   return (
-    <article style={metricStyle}>
+    <article style={metricStyle} title={description}>
       <span>{label}</span>
       <strong style={valueStyle}>{value}</strong>
     </article>
@@ -1074,8 +1076,8 @@ function renderClientsSection(report: ReturnType<typeof clientProfitability>, se
                 <Td>{client.name}</Td><Td align="right">{formatMoney(client.revenue)}</Td><Td align="right">{formatMoney(client.mrr)}</Td>
                 <Td align="right">{formatHours(client.hours)}</Td>
                 <Td align="right">{formatMoney(client.knownLaborCost)}</Td>
-                <Td align="right" style={{ color: client.directResult === null || client.directResult === 0 ? colors.text : client.directResult < 0 ? colors.danger : colors.success }}><strong>{cashValue(client.directResult)}</strong></Td><Td align="right" style={{ color: client.directMargin === null || client.directMargin === 0 ? colors.text : client.directMargin < 0 ? colors.danger : colors.success, fontWeight: 700 }}>{client.directMargin === null ? "—" : formatPercent(client.directMargin)}</Td>
-                <Td align="right">{formatMoney(client.overhead)}</Td><Td align="right" style={{ color: client.fullResult === null || client.fullResult === 0 ? colors.text : client.fullResult < 0 ? colors.danger : colors.success }}><strong>{cashValue(client.fullResult)}</strong></Td><Td align="right" style={{ color: client.fullMargin === null || client.fullMargin === 0 ? colors.text : client.fullMargin < 0 ? colors.danger : colors.success, fontWeight: 700 }}>{client.fullMargin === null ? "—" : formatPercent(client.fullMargin)}</Td>
+                <Td align="right" style={{ color: client.directResult === null || client.directResult === 0 ? colors.text : client.directResult < 0 ? colors.danger : colors.success }}><strong>{cashValue(client.directResult)}</strong></Td><Td align="right" style={{ color: client.directMargin === null || client.directMargin === 0 ? colors.text : client.directMargin < 0 ? colors.danger : colors.success, fontWeight: 600 }}>{client.directMargin === null ? "—" : formatPercent(client.directMargin)}</Td>
+                <Td align="right">{formatMoney(client.overhead)}</Td><Td align="right" style={{ color: client.fullResult === null || client.fullResult === 0 ? colors.text : client.fullResult < 0 ? colors.danger : colors.success }}><strong>{cashValue(client.fullResult)}</strong></Td><Td align="right" style={{ color: client.fullMargin === null || client.fullMargin === 0 ? colors.text : client.fullMargin < 0 ? colors.danger : colors.success, fontWeight: 600 }}>{client.fullMargin === null ? "—" : formatPercent(client.fullMargin)}</Td>
               </tr>;
             })}</tbody>
           </table>
@@ -2019,26 +2021,26 @@ const contentStyle: CSSProperties = { padding: "32px", display: "grid", gap: "20
 const headerStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "18px", alignItems: "flex-start", flexWrap: "wrap" };
 const headerActionsStyle: CSSProperties = { display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" };
 const viewModeToggleStyle: CSSProperties = { display: "inline-flex", border: `1px solid ${colors.border}`, borderRadius: radius.input, overflow: "hidden", background: colors.white, minHeight: "42px" };
-const viewModeButtonStyle: CSSProperties = { border: 0, background: "transparent", color: colors.navy, padding: "9px 13px", fontWeight: 850, cursor: "pointer" };
+const viewModeButtonStyle: CSSProperties = { border: 0, background: "transparent", color: colors.navy, padding: "9px 13px", fontWeight: 600, cursor: "pointer" };
 const viewModeActiveButtonStyle: CSSProperties = { ...viewModeButtonStyle, background: colors.navy, color: colors.white };
-const eyebrowStyle: CSSProperties = { color: colors.red, fontWeight: 850, margin: "0 0 8px" };
+const eyebrowStyle: CSSProperties = { color: colors.red, fontWeight: 600, margin: "0 0 8px" };
 const titleStyle: CSSProperties = { color: colors.navy, fontSize: "42px", margin: 0, lineHeight: 1.05 };
 const monthFieldWrapperStyle: CSSProperties = { position: "relative", width: "235px" };
 const monthControlStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, minHeight: "42px", display: "grid", gridTemplateColumns: "32px minmax(0, 1fr) 38px", alignItems: "center", overflow: "hidden" };
 const monthIconStyle: CSSProperties = { color: colors.navy, justifySelf: "center" };
-const monthTextInputStyle: CSSProperties = { border: 0, outline: "none", background: "transparent", color: colors.text, minHeight: "40px", padding: "9px 0", fontWeight: 850, width: "100%", boxSizing: "border-box", fontSize: "15px" };
+const monthTextInputStyle: CSSProperties = { border: 0, outline: "none", background: "transparent", color: colors.text, minHeight: "40px", padding: "9px 0", fontWeight: 600, width: "100%", boxSizing: "border-box", fontSize: "15px" };
 const monthPickerStyle: CSSProperties = { position: "absolute", top: "48px", right: 0, zIndex: 1100, width: "285px", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.card, boxShadow: shadow.card, padding: "12px", color: colors.text };
 const monthGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "7px", alignItems: "stretch" };
-const monthButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: "10px", background: colors.inputBackground, color: colors.text, height: "38px", padding: "0 6px", fontSize: "13px", fontWeight: 850, cursor: "pointer", textAlign: "center", display: "inline-flex", alignItems: "center", justifyContent: "center", lineHeight: 1, boxSizing: "border-box", width: "100%" };
+const monthButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: "10px", background: colors.inputBackground, color: colors.text, height: "38px", padding: "0 6px", fontSize: "13px", fontWeight: 600, cursor: "pointer", textAlign: "center", display: "inline-flex", alignItems: "center", justifyContent: "center", lineHeight: 1, boxSizing: "border-box", width: "100%" };
 const monthSelectedButtonStyle: CSSProperties = { background: colors.navy, borderColor: colors.navy, color: colors.white };
 const metricGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: "12px" };
-const metricStyle: CSSProperties = { background: colors.card, border: `1px solid ${colors.border}`, borderRadius: radius.input, boxShadow: shadow.soft, display: "grid", gap: "9px", padding: "16px", color: colors.muted, fontWeight: 800 };
+const metricStyle: CSSProperties = { background: colors.card, border: `1px solid ${colors.border}`, borderRadius: radius.input, boxShadow: shadow.soft, display: "grid", gap: "9px", padding: "16px", color: colors.muted, fontWeight: 600 };
 const metricValueStyle: CSSProperties = { color: colors.navy, fontSize: "21px", lineHeight: 1.1 };
 const goodMetricValueStyle: CSSProperties = { ...metricValueStyle, color: colors.success };
 const badMetricValueStyle: CSSProperties = { ...metricValueStyle, color: colors.danger };
 const warnMetricValueStyle: CSSProperties = { ...metricValueStyle, color: colors.warning };
 const tabsStyle: CSSProperties = { display: "flex", gap: "8px", flexWrap: "wrap", borderBottom: `1px solid ${colors.border}`, paddingBottom: "10px" };
-const tabStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.navy, minHeight: "40px", padding: "8px 12px", fontWeight: 850, display: "inline-flex", alignItems: "center", gap: "8px", cursor: "pointer" };
+const tabStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.navy, minHeight: "40px", padding: "8px 12px", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: "8px", cursor: "pointer" };
 const activeTabStyle: CSSProperties = { ...tabStyle, background: colors.navy, color: colors.white, borderColor: colors.navy };
 const dashboardGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 0.95fr) minmax(0, 1.05fr)", gap: "18px", alignItems: "start" };
 const sectionStackStyle: CSSProperties = { display: "grid", gap: "18px" };
@@ -2048,14 +2050,14 @@ const panelHeaderStyle: CSSProperties = { display: "flex", alignItems: "center",
 const panelHeaderWithTotalStyle: CSSProperties = { ...panelHeaderStyle, justifyContent: "space-between", flexWrap: "wrap" };
 const panelTitleGroupStyle: CSSProperties = { display: "inline-flex", alignItems: "center", gap: "10px", minWidth: 0 };
 const panelHeaderTotalStyle: CSSProperties = { color: colors.navy, fontSize: "15px", whiteSpace: "nowrap" };
-const dashboardScopeBadgeStyle: CSSProperties = { display: "inline-flex", borderRadius: radius.badge, background: "rgba(23, 59, 115, 0.10)", color: colors.navy, padding: "7px 10px", fontSize: "12px", fontWeight: 900, marginLeft: "auto" };
+const dashboardScopeBadgeStyle: CSSProperties = { display: "inline-flex", borderRadius: radius.badge, background: "rgba(23, 59, 115, 0.10)", color: colors.navy, padding: "7px 10px", fontSize: "12px", fontWeight: 600, marginLeft: "auto" };
 const panelIconStyle: CSSProperties = { color: colors.red, display: "inline-flex" };
 const panelTitleStyle: CSSProperties = cfoUi.title;
 const recommendationStyle: CSSProperties = { display: "grid", gap: "6px", background: "#e9eef7", border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "16px", color: colors.navy };
 const ownerGoalBreakdownStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: "7px 14px", marginTop: "8px", maxWidth: "560px" };
-const dangerInlineStyle: CSSProperties = { color: colors.danger, fontWeight: 900 };
-const successInlineStyle: CSSProperties = { color: colors.success, fontWeight: 900 };
-const warningInlineStyle: CSSProperties = { color: colors.warning, fontWeight: 900 };
+const dangerInlineStyle: CSSProperties = { color: colors.danger, fontWeight: 600 };
+const successInlineStyle: CSSProperties = { color: colors.success, fontWeight: 600 };
+const warningInlineStyle: CSSProperties = { color: colors.warning, fontWeight: 600 };
 const tableWrapperStyle: CSSProperties = { overflowX: "auto" };
 const tableStyle: CSSProperties = cfoUi.table;
 const wideCostTableStyle: CSSProperties = { ...tableStyle, minWidth: "1240px", tableLayout: "fixed", fontSize: "13px", lineHeight: 1.4 };
@@ -2067,9 +2069,9 @@ const invoiceGroupCellStyle: CSSProperties = { ...tdStyle, background: "#f1f5f9"
 const invoiceLineIndentStyle: CSSProperties = { display: "inline-flex", paddingLeft: "18px" };
 const smallStyle: CSSProperties = { display: "block", color: colors.muted, marginTop: "4px", fontSize: "12px", fontWeight: 650 };
 const invoiceLinePeriodStyle: CSSProperties = { ...smallStyle, paddingLeft: "18px", color: colors.navy };
-const settledTextStyle: CSSProperties = { color: colors.success, fontWeight: 850 };
+const settledTextStyle: CSSProperties = { color: colors.success, fontWeight: 600 };
 const settledSmallStyle: CSSProperties = { ...smallStyle, color: colors.success };
-const overpaidTextStyle: CSSProperties = { color: colors.warning, fontWeight: 850 };
+const overpaidTextStyle: CSSProperties = { color: colors.warning, fontWeight: 600 };
 const overpaidSmallStyle: CSSProperties = { ...smallStyle, color: colors.warning };
 const compactSelectStyle: CSSProperties = { minHeight: "36px", padding: "7px 10px", background: colors.white };
 const costSelectStyle: CSSProperties = { ...compactSelectStyle, fontSize: "12px", fontWeight: 650, minHeight: "32px", padding: "6px 8px" };
@@ -2080,31 +2082,31 @@ const manualTopRowStyle: CSSProperties = { display: "grid", gridTemplateColumns:
 const manualBottomRowStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(220px, 1fr) minmax(210px, 1fr) minmax(330px, 1.2fr) auto", gap: "10px", alignItems: "start" };
 const dateRangeStyle: CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" };
 const manualPeriodStyle: CSSProperties = { display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap", minHeight: "42px" };
-const checkboxLabelStyle: CSSProperties = { display: "inline-flex", alignItems: "center", gap: "8px", color: colors.navy, fontSize: "13px", fontWeight: 850, cursor: "pointer", whiteSpace: "nowrap" };
-const periodMonthBadgeStyle: CSSProperties = { display: "inline-flex", alignItems: "center", width: "fit-content", minHeight: "36px", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, color: colors.navy, padding: "7px 11px", fontWeight: 850 };
+const checkboxLabelStyle: CSSProperties = { display: "inline-flex", alignItems: "center", gap: "8px", color: colors.navy, fontSize: "13px", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" };
+const periodMonthBadgeStyle: CSSProperties = { display: "inline-flex", alignItems: "center", width: "fit-content", minHeight: "36px", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, color: colors.navy, padding: "7px 11px", fontWeight: 600 };
 const costPeriodCellStyle: CSSProperties = { display: "grid", gap: "8px", minWidth: 0 };
 const costDateRangeStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 150px)", gap: "8px" };
 const inputStyle: CSSProperties = cfoUi.input;
 const searchFieldWrapStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(260px, 1fr) auto", gap: "10px", alignItems: "center", margin: "12px 0 14px" };
 const searchFieldStyle: CSSProperties = { ...inputStyle, minHeight: "40px", padding: "8px 12px" };
-const searchClearButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.navy, minHeight: "40px", padding: "8px 12px", fontWeight: 850, cursor: "pointer" };
+const searchClearButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.navy, minHeight: "40px", padding: "8px 12px", fontWeight: 600, cursor: "pointer" };
 const dateFieldStyle: CSSProperties = { position: "relative", minWidth: 0 };
 const dateControlStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.text, minHeight: "42px", display: "grid", gridTemplateColumns: "minmax(0, 1fr) 38px", alignItems: "center", overflow: "hidden" };
-const dateTextInputStyle: CSSProperties = { border: 0, outline: "none", background: "transparent", color: colors.text, minHeight: "40px", padding: "9px 0 9px 12px", fontWeight: 750, width: "100%", boxSizing: "border-box" };
+const dateTextInputStyle: CSSProperties = { border: 0, outline: "none", background: "transparent", color: colors.text, minHeight: "40px", padding: "9px 0 9px 12px", fontWeight: 600, width: "100%", boxSizing: "border-box" };
 const dateIconButtonStyle: CSSProperties = { border: 0, background: "transparent", color: colors.navy, width: "38px", minHeight: "40px", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer" };
 const datePickerStyle: CSSProperties = { position: "absolute", top: "48px", right: 0, zIndex: 1100, width: "270px", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.card, boxShadow: shadow.card, padding: "12px", color: colors.text };
 const datePickerHeaderStyle: CSSProperties = { display: "grid", gridTemplateColumns: "34px minmax(0, 1fr) 34px", alignItems: "center", gap: "8px", color: colors.navy, marginBottom: "10px", textAlign: "center" };
-const dateNavButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: "10px", background: colors.inputBackground, color: colors.navy, minHeight: "32px", fontSize: "20px", fontWeight: 850, cursor: "pointer" };
+const dateNavButtonStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: "10px", background: colors.inputBackground, color: colors.navy, minHeight: "32px", fontSize: "20px", fontWeight: 600, cursor: "pointer" };
 const dateWeekGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "4px" };
-const dateWeekdayStyle: CSSProperties = { color: colors.muted, fontSize: "11px", fontWeight: 900, textAlign: "center", padding: "4px 0", textTransform: "uppercase" };
-const dateDayStyle: CSSProperties = { border: 0, borderRadius: "9px", background: "transparent", color: colors.text, minHeight: "30px", fontSize: "13px", fontWeight: 800, cursor: "pointer" };
+const dateWeekdayStyle: CSSProperties = { color: colors.muted, fontSize: "11px", fontWeight: 600, textAlign: "center", padding: "4px 0", textTransform: "uppercase" };
+const dateDayStyle: CSSProperties = { border: 0, borderRadius: "9px", background: "transparent", color: colors.text, minHeight: "30px", fontSize: "13px", fontWeight: 600, cursor: "pointer" };
 const dateMutedDayStyle: CSSProperties = { color: "#94a3b8" };
 const dateSelectedDayStyle: CSSProperties = { background: colors.navy, color: colors.white };
-const todayButtonStyle: CSSProperties = { border: 0, background: "transparent", color: colors.red, fontWeight: 850, marginTop: "10px", padding: "7px 8px", cursor: "pointer", justifySelf: "start" };
+const todayButtonStyle: CSSProperties = { border: 0, background: "transparent", color: colors.red, fontWeight: 600, marginTop: "10px", padding: "7px 8px", cursor: "pointer", justifySelf: "start" };
 const teamInputStyle: CSSProperties = { ...inputStyle, minHeight: "34px", padding: "6px 8px", width: "96px", textAlign: "right" };
 const primaryButtonStyle: CSSProperties = cfoUi.primaryButton;
 const secondaryButtonStyle: CSSProperties = cfoUi.secondaryButton;
-const moneyEditStyle: CSSProperties = { display: "inline-flex", alignItems: "center", justifyContent: "flex-end", gap: "6px", color: colors.navy, fontWeight: 850, whiteSpace: "nowrap" };
+const moneyEditStyle: CSSProperties = { display: "inline-flex", alignItems: "center", justifyContent: "flex-end", gap: "6px", color: colors.navy, fontWeight: 600, whiteSpace: "nowrap" };
 const moneyInputStyle: CSSProperties = { ...inputStyle, minHeight: "36px", padding: "7px 9px", width: "102px" };
 const costMoneyEditStyle: CSSProperties = { ...moneyEditStyle, display: "flex", width: "100%", minWidth: 0, fontSize: "12px", fontWeight: 650 };
 const costMoneyInputStyle: CSSProperties = { ...moneyInputStyle, fontSize: "12px", minHeight: "32px", padding: "6px 8px", width: "100%", minWidth: 0, flex: "1 1 0" };
@@ -2116,7 +2118,7 @@ const formFooterStyle: CSSProperties = { display: "flex", justifyContent: "space
 const miniListStyle: CSSProperties = { display: "grid", gap: "8px" };
 const miniItemStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto auto", gap: "10px", border: `1px solid ${colors.border}`, borderRadius: radius.input, padding: "10px 12px", color: colors.text, alignItems: "center" };
 const teamCapacityItemStyle: CSSProperties = { ...miniItemStyle, gridTemplateColumns: "minmax(220px, 1.4fr) repeat(5, minmax(120px, auto))", alignItems: "center" };
-const infoNoticeStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: "#e9eef7", color: colors.navy, padding: "12px", fontWeight: 800 };
+const infoNoticeStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: "#e9eef7", color: colors.navy, padding: "12px", fontWeight: 600 };
 const costBreakdownGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(310px, 1fr))", gap: "12px" };
 const costBreakdownItemStyle: CSSProperties = { border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.inputBackground, padding: "14px", display: "grid", gap: "11px", minWidth: 0 };
 const costBreakdownHeaderStyle: CSSProperties = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: "14px", color: colors.navy, alignItems: "start" };

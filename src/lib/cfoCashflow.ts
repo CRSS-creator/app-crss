@@ -23,6 +23,18 @@ export type CashflowInvoice = CfoInvoiceParent & { waluta?: string; data_zaplaty
 export type CashflowSnapshot = { invoices: CashflowInvoice[]; costs: CfoCostItem[]; obligations: CfoObligation[]; annualSchedules?: AnnualCostSchedule[]; manualRevenues?: ManualRevenue[]; manualFlows?: ManualCashflow[]; employeeCosts?: CfoEmployeeCost[] };
 export const emptyCashflow = (): CashflowSnapshot => ({ invoices: [], costs: [], obligations: [], annualSchedules: [], manualRevenues: [], manualFlows: [], employeeCosts: [] });
 
+// PK is an accounting journal entry, not a customer invoice.
+export function isCustomerInvoice(invoice: CashflowInvoice) {
+  return invoice.typ === "sprzedaz" && invoice.kategoria !== "korekta"
+    && !["szkic", "anulowana"].includes(invoice.status)
+    && !/^PK(?:\s|$)/i.test((invoice.numer || "").trim());
+}
+export function outstandingReceivables(invoices: CashflowInvoice[]) {
+  return invoices.filter(invoice => isCustomerInvoice(invoice) && invoice.status !== "oplacona"
+    && (!invoice.waluta || invoice.waluta === "PLN"))
+    .reduce((sum, invoice) => sum + Math.max(0, Number(invoice.kwota_brutto || 0)), 0);
+}
+
 export function businessDate() {
   return new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Warsaw" }).format(new Date());
 }

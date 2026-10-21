@@ -1,0 +1,6 @@
+.content strong, .content b, .content h1, .content h2, .content h3 { font-weight: 600; }
+.content [style*="font-weight: 700"], .content [style*="font-weight:700"],
+.content [style*="font-weight: 750"], .content [style*="font-weight:750"],
+.content [style*="font-weight: 800"], .content [style*="font-weight:800"],
+.content [style*="font-weight: 850"], .content [style*="font-weight:850"],
+.content [style*="font-weight: 900"], .content [style*="font-weight:900"] { font-weight: 600 !important; }

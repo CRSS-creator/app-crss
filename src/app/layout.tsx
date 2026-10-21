@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import SessionTimeout from "@/components/SessionTimeout";
+import { CurrentUserRoleProvider } from "@/hooks/useCurrentUserRole";
 import NumberInputGuard from "@/components/NumberInputGuard";
 
 const geistSans = Geist({
@@ -33,9 +34,11 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
+        <CurrentUserRoleProvider>
 	<SessionTimeout />
         <NumberInputGuard />
         {children}
+        </CurrentUserRoleProvider>
       </body>
     </html>
   );

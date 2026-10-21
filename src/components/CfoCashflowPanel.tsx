@@ -14,6 +14,10 @@ import { saveObligation } from "@/lib/cfoCashflowService";
 import { updateCfoCost } from "@/lib/cfoService";
 
 const money = (n: number) => new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN" }).format(n);
+function costMonthLabel(date: string) {
+  const [year, month] = date.slice(0, 7).split("-");
+  return year && month ? month + "." + year : "—";
+}
 function status(paid: string | null | undefined, due: string | null | undefined) {
   return paid ? "Zapłacone" : due && due < businessDate() ? "Zaległe" : "Do zapłaty";
 }
@@ -89,8 +93,8 @@ export default function CfoCashflowPanel({ snapshot, period, onUpdated }: {
       </table></div>
       <header style={{ ...ui.header, marginTop: "28px" }}><div style={ui.titleGroup}><ReceiptText size={21} color={colors.red} /><h2 style={ui.title}>Faktury kosztowe</h2></div></header>
       <p style={ui.text}>Wpisz faktyczną datę pełnej zapłaty. Dokumenty i kategorie edytujesz w zakładce Koszty.</p>
-      <div style={{ overflowX: "auto" }}><table style={{ ...ui.table, minWidth: "720px" }}><thead><tr>{["Dokument", "Data dokumentu", "Dostawca", "Brutto", "Data zapłaty", "Status"].map(h => <th key={h} style={ui.th}>{h}</th>)}</tr></thead>
-        <tbody>{costs.length === 0 && <tr><td colSpan={6} style={{ ...ui.td, textAlign: "center", color: colors.muted, padding: "24px" }}>Brak kosztów dla wybranych filtrów.</td></tr>}{costs.map(c => <tr key={c.id}><td style={{ ...ui.td, fontWeight: 650 }}>{c.numer_dokumentu || "—"}</td><td style={{ ...ui.td, whiteSpace: "nowrap" }}>{ui.dateLabel(c.data_dokumentu)}</td><td style={ui.td}>{c.kontrahent}</td><td style={{ ...ui.td, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>{money(Number(c.kwota_brutto ?? c.kwota_netto_cfo))}</td><td style={{ ...ui.td, minWidth: "180px" }}><CfoDateField ariaLabel={"Zapłata " + (c.numer_dokumentu || c.kontrahent)} compact max={businessDate()} disabled={saving} value={c.data_zaplaty || ""} onChange={value => void costDate(c.id, "data_zaplaty", value)} /></td><td style={ui.td}><span style={ui.badge}>{c.data_zaplaty ? "Zapłacone" : "Brak daty zapłaty"}</span></td></tr>)}</tbody>
+      <div style={{ overflowX: "auto" }}><table style={{ ...ui.table, minWidth: "900px" }}><thead><tr>{["Dokument", "Data dokumentu", "Miesiąc przypisania kosztu", "Dostawca", "Brutto", "Data zapłaty", "Status"].map(h => <th key={h} style={ui.th}>{h}</th>)}</tr></thead>
+        <tbody>{costs.length === 0 && <tr><td colSpan={7} style={{ ...ui.td, textAlign: "center", color: colors.muted, padding: "24px" }}>Brak kosztów dla wybranych filtrów.</td></tr>}{costs.map(c => <tr key={c.id}><td style={{ ...ui.td, fontWeight: 650 }}>{c.numer_dokumentu || "—"}</td><td style={{ ...ui.td, whiteSpace: "nowrap" }}>{ui.dateLabel(c.data_dokumentu)}</td><td style={{ ...ui.td, whiteSpace: "nowrap" }}>{costMonthLabel(c.okres_start)}{c.okres_end.slice(0, 7) !== c.okres_start.slice(0, 7) ? " – " + costMonthLabel(c.okres_end) : ""}</td><td style={ui.td}>{c.kontrahent}</td><td style={{ ...ui.td, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>{money(Number(c.kwota_brutto ?? c.kwota_netto_cfo))}</td><td style={{ ...ui.td, minWidth: "180px" }}><CfoDateField ariaLabel={"Zapłata " + (c.numer_dokumentu || c.kontrahent)} compact max={businessDate()} disabled={saving} value={c.data_zaplaty || ""} onChange={value => void costDate(c.id, "data_zaplaty", value)} /></td><td style={ui.td}><span style={ui.badge}>{c.data_zaplaty ? "Zapłacone" : "Brak daty zapłaty"}</span></td></tr>)}</tbody>
       </table></div>
     </section>
   </div>;

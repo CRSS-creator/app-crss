@@ -59,13 +59,13 @@ export default function CfoManualCashflows({ rows, period, onUpdated }: { rows: 
       <div style={ui.actions}><button type="button" style={ui.secondaryButton} disabled={saving} onClick={() => void copyPrevious()}>Kopiuj z poprzedniego miesiąca</button>
       <button type="button" style={ui.primaryButton} disabled={saving} onClick={() => { setDraft(empty()); setError(""); setOpen(true); }}><Plus size={16} />Dodaj przepływ</button></div>
     </header>
-    <p style={ui.text}>Wpływy i wydatki, które nie są przychodem ani kosztem CFO, np. kapitał pożyczki lub wypłata dla właściciela. Kwoty w PLN. Termin uwzględniamy w prognozie, a datę realizacji w historii cashflow. Ten sam przelew wpisz tylko raz — nie dodawaj tu płatności już ujętej przy fakturze, koszcie lub przychodzie ręcznym.</p>
+    <p style={ui.text}>Wpływy i wypływy, które nie są przychodem ani kosztem CFO, np. kapitał pożyczki lub wypłata dla właściciela. Kwoty w PLN. Termin uwzględniamy w prognozie, a datę realizacji w historii cashflow. Ten sam przelew wpisz tylko raz — nie dodawaj tu płatności już ujętej przy fakturze, koszcie lub przychodzie ręcznym.</p>
     {notice && <p role="status" style={ui.text}>{notice}</p>}
     {error && <p role="alert" style={ui.error}>{error}</p>}
     {open && <div style={ui.form}>
       <div style={ui.fieldGrid}>
         <label style={ui.field}>Opis<input style={ui.input} disabled={saving} value={draft.opis} onChange={e => setDraft({ ...draft, opis: e.target.value })} placeholder="Np. spłata kapitału pożyczki" /></label>
-        <label style={ui.field}>Kierunek<AppSelect disabled={saving} value={draft.kierunek} options={[{ value: "wydatek", label: "Wydatek" }, { value: "wplyw", label: "Wpływ" }]} onChange={value => setDraft({ ...draft, kierunek: value as ManualCashflow["kierunek"] })} /></label>
+        <label style={ui.field}>Kierunek<AppSelect disabled={saving} value={draft.kierunek} options={[{ value: "wydatek", label: "Wypływ" }, { value: "wplyw", label: "Wpływ" }]} onChange={value => setDraft({ ...draft, kierunek: value as ManualCashflow["kierunek"] })} /></label>
         <label style={ui.field}>Kwota (PLN)<input style={ui.input} type="number" min="0.01" step="0.01" disabled={saving} value={draft.kwota} onChange={e => setDraft({ ...draft, kwota: Number(e.target.value) })} /></label>
       </div>
       <div style={ui.dateGrid}>
@@ -78,7 +78,7 @@ export default function CfoManualCashflows({ rows, period, onUpdated }: { rows: 
       <thead><tr>{["Opis", "Kierunek", "Kwota", "Planowany termin", "Realizacja", "Status", ""].map((label, i) => <th key={i} style={ui.th}>{label}</th>)}</tr></thead>
       <tbody>{!rows.length && <tr><td colSpan={7} style={ui.td}>Brak ręcznych przepływów.</td></tr>}
         {[...rows].sort((a, b) => (b.data_realizacji || b.termin).localeCompare(a.data_realizacji || a.termin)).map(row => <tr key={row.id}>
-          <td style={ui.td}>{row.opis}</td><td style={ui.td}>{row.kierunek === "wplyw" ? "Wpływ" : "Wydatek"}</td>
+          <td style={ui.td}>{row.opis}</td><td style={ui.td}>{row.kierunek === "wplyw" ? "Wpływ" : "Wypływ"}</td>
           <td style={ui.td}>{money(Number(row.kwota))}</td><td style={ui.td}>{ui.dateLabel(row.termin)}</td><td style={ui.td}>{ui.dateLabel(row.data_realizacji)}</td>
           <td style={ui.td}>{row.data_realizacji ? "Zrealizowany" : row.termin < businessDate() ? "Po terminie" : "Planowany"}</td>
           <td style={ui.td}><div style={ui.actions}><button type="button" style={ui.smallButton} disabled={saving} onClick={() => { setDraft({ id: row.id, opis: row.opis, kierunek: row.kierunek, kwota: Number(row.kwota), termin: row.termin, data_realizacji: row.data_realizacji }); setError(""); setOpen(true); }}>Edytuj</button>

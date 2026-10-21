@@ -27,7 +27,7 @@ export default function CsoGoogleReviews() {
     void (async () => {
       try {
         const [clientResult, statusResult] = await Promise.all([
-          supabase.from("klienci").select("id,nazwa,email,osoba_kontaktowa").order("nazwa"),
+          supabase.from("klienci").select("id,nazwa,email,osoba_kontaktowa").or("aktywny.eq.true,status_klienta.ilike.onboarding").order("nazwa"),
           supabase.from("cso_google_reviews").select("klient_id,opinia_dodana,ukryty"),
         ]);
         if (clientResult.error) throw clientResult.error;

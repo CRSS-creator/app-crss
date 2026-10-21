@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
 import AppSelect from "@/components/AppSelect";
+import CsoGoogleReviews from "@/components/CsoGoogleReviews";
 import { colors, radius, shadow } from "@/app/design";
 import { supabase } from "@/lib/supabaseClient";
 import linkedinTopics from "@/lib/csoLinkedinTopics.json";
@@ -278,18 +279,18 @@ async function persistTopic(topic: ContentTopic, socialPublished: boolean, blogP
 }
 
 export default function CsoPage() {
-  const [platform, setPlatform] = useState<ContentPlatform>("facebook");
+  const [platform, setPlatform] = useState<ContentPlatform | "google">("facebook");
   return (
     <AppLayout activePage="cso">
       <AccessGuard moduleName="cso">
-        <nav aria-label="Kanał planu contentowego" style={tabsStyle}>
-          {(["facebook", "linkedin"] as const).map((channel) => (
+        <nav aria-label="Zakładki CSO" style={tabsStyle}>
+          {(["facebook", "linkedin", "google"] as const).map((channel) => (
             <button key={channel} type="button" aria-pressed={platform === channel} onClick={() => setPlatform(channel)} style={platform === channel ? activeTabStyle : tabStyle}>
-              {channel === "facebook" ? "Facebook" : "LinkedIn"}
+              {channel === "facebook" ? "Facebook" : channel === "linkedin" ? "LinkedIn" : "Opinie Google"}
             </button>
           ))}
         </nav>
-        <CsoContent key={platform} platform={platform} />
+        {platform === "google" ? <CsoGoogleReviews /> : <CsoContent key={platform} platform={platform} />}
       </AccessGuard>
     </AppLayout>
   );

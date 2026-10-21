@@ -1,0 +1,50 @@
+.panel {
+  width: 100%;
+  max-width: 1120px;
+  overflow: hidden;
+  border: 1px solid #cbd5e1;
+  border-radius: 24px;
+  background: #fff;
+  box-shadow: 0 14px 35px rgba(23, 59, 115, 0.06);
+}
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 24px;
+}
+.header h1 { margin: 0; color: #173b73; font-size: 26px; font-weight: 700; }
+.header p { margin: 8px 0 0; color: #43516a; font-size: 14px; line-height: 1.5; }
+.counter { border-radius: 999px; background: #f1f5fa; color: #173b73; padding: 8px 12px; font-size: 13px; font-weight: 600; }
+.message { padding: 0 24px 24px; margin: 0; }
+.scroll { overflow-x: auto; }
+.table { width: 100%; border-collapse: collapse; font-size: 14px; text-align: left; }
+.table th, .table td { padding: 16px 20px; border-top: 1px solid #e1e7f0; color: #26364f; }
+.table th { background: #f1f5fa; font-size: 12px; font-weight: 700; color: #43516a; }
+.table th:first-child { width: 34%; }
+.table th:nth-child(2) { width: 27%; }
+.table th:nth-child(3) { width: 25%; }
+.table td { overflow-wrap: anywhere; min-width: 160px; }
+.table td strong { font-weight: 600; }
+.table th:last-child, .table td:last-child { text-align: center; min-width: 120px; white-space: nowrap; }
+.table tbody tr:nth-child(even) { background: #f8fafc; }
+.table tbody tr:hover { background: #eef4fc; }
+.table input[type="checkbox"] {
+  display: block;
+  appearance: none;
+  width: 24px;
+  height: 24px;
+  margin: 0 auto;
+  border: 1px solid #efb4b4;
+  border-radius: 5px;
+  background: #fff0f0;
+  cursor: pointer;
+}
+.table input[type="checkbox"]:checked {
+  border-color: #86c99b;
+  background: #edf9f0 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m5 12 4 4 10-10' fill='none' stroke='%2315803d' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 22px 22px no-repeat;
+}
+.table input[type="checkbox"]:focus-visible { outline: 2px solid #213d72; outline-offset: 3px; }
+.table input[type="checkbox"]:disabled { opacity: 0.55; cursor: wait; }

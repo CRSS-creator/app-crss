@@ -345,7 +345,6 @@ function CfoContent() {
 
       {!loading && analysisError ? <section style={infoNoticeStyle}>{analysisError}</section> : null}
       {!loading && cashflowError ? <section role="alert" style={infoNoticeStyle}>{cashflowError}</section> : null}
-      {!loading && !cashflowError && cashflow.invoices.some(invoice => invoice.status === "oplacona" && !invoice.data_zaplaty) ? <section role="status" style={infoNoticeStyle}>Część opłaconych faktur nie ma potwierdzonej daty zapłaty. Cash flow obejmuje tylko dokumenty z datą. Uzupełnij brakujące daty w Fakturach.</section> : null}
 
       <nav style={tabsStyle} aria-label="Sekcje CFO">
         {TABS.map((tab) => {

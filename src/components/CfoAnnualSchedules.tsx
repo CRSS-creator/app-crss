@@ -12,7 +12,7 @@ import { nextAnnualRenewal } from "@/lib/cfoAnnualCosts";
 import type { CashflowSnapshot } from "@/lib/cfoCashflow";
 import { businessDate, shiftDateMonth } from "@/lib/cfoCashflow";
 import { saveAnnualSchedule } from "@/lib/cfoCashflowService";
-import { updateCfoCost, type CfoCostCategory } from "@/lib/cfoService";
+import { type CfoCostCategory } from "@/lib/cfoService";
 
 const categories: [CfoCostCategory, string][] = [
   ["koszty_zespolu", "Koszty zespołu"], ["lokal_infrastruktura", "Lokal i infrastruktura"],
@@ -61,14 +61,6 @@ export default function CfoAnnualSchedules({ snapshot, onUpdated }: { snapshot: 
       setDraft(null); setSourceId(""); await onUpdated();
     } finally { setBusy(false); }
   }
-  async function link(costId: string, scheduleId: string) {
-    setBusy(true); setError("");
-    try {
-      const result = await updateCfoCost(costId, { harmonogram_id: scheduleId || null });
-      if (result.error) { setError("Nie udało się powiązać faktury: " + result.error.message); return; }
-      await onUpdated();
-    } finally { setBusy(false); }
-  }
   return <section style={ui.panel}>
     <header style={ui.header}>
       <div style={ui.titleGroup}><CalendarClock size={21} color={colors.red} /><h2 style={ui.title}>Harmonogram kosztów rocznych</h2></div>
@@ -104,11 +96,5 @@ export default function CfoAnnualSchedules({ snapshot, onUpdated }: { snapshot: 
       <p style={{ ...ui.text, margin: 0 }}>Daty powtarzają się co rok. Dokument źródłowy zostanie rozliczony w kosztach przez 12 miesięcy.</p>
       <footer style={ui.footer}><button style={{ ...ui.primaryButton, opacity: busy ? 0.6 : 1 }} disabled={busy} type="submit"><Save size={16} />{busy ? "Zapisywanie…" : "Zapisz harmonogram"}</button><button type="button" style={ui.secondaryButton} disabled={busy} onClick={() => setDraft(null)}><X size={16} />Anuluj</button></footer>
     </form>}
-    <details style={ui.details}><summary style={ui.summary}>Jak działa dopasowanie faktur?</summary><p style={{ ...ui.text, margin: "10px 0 0" }}>Nowa faktura zastępuje prognozę, gdy zgadzają się dostawca, kategoria, podkategoria, kwota brutto (różnica do 1%) i data wystawienia (do 45 dni). Przy zmianie ceny lub kilku możliwych dopasowaniach wskaż harmonogram ręcznie. Wyłączenie harmonogramu zatrzymuje prognozę kolejnych odnowień.</p></details>
-    {schedules.length > 0 && <details style={ui.details}><summary style={ui.summary}>Powiązania faktur kosztowych</summary>
-      <div style={{ overflowX: "auto", maxHeight: 400, marginTop: "12px" }}><table style={ui.table}><thead><tr><th style={ui.th}>Dokument</th><th style={ui.th}>Dostawca</th><th style={ui.th}>Harmonogram</th></tr></thead>
-        <tbody>{snapshot.costs.filter(c => !c.ignoruj && !c.rozliczenie_wynagrodzen_okres).map(c => <tr key={c.id}><td style={ui.td}>{c.numer_dokumentu || c.opis || "Bez numeru"}<br /><small>{c.okres_start} — {c.okres_end}</small></td><td style={ui.td}>{c.kontrahent}</td><td style={ui.td}><AppSelect style={ui.compactInput} labelStyle={{ fontSize: "12px" }} value={c.harmonogram_id || ""} disabled={busy} onChange={value => void link(c.id, value)} options={[{ value: "", label: "Bez harmonogramu" }, ...schedules.filter(s => s.aktywny || s.id === c.harmonogram_id).map(s => ({ value: s.id, label: s.nazwa }))]} /></td></tr>)}</tbody>
-      </table></div>
-    </details>}
   </section>;
 }

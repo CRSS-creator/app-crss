@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react";
+import { createPortal } from "react-dom";
 import { Calendar, ChevronLeft, ChevronRight } from "lucide-react";
 import { colors, radius, shadow } from "@/app/design";
 
@@ -55,8 +56,8 @@ export function AppMonthInput({ value, onChange, disabled = false, style, ariaLa
         <Calendar size={16} />
       </button>
 
-      {open && position && (
-        <div ref={menuRef} style={{ ...pickerStyle, top: position.top, left: position.left, width: Math.max(position.width, 260) }}>
+      {open && position && createPortal(
+        <div ref={menuRef} style={{ ...pickerStyle, top: position.top, left: position.left, width: position.width }}>
           <div style={pickerHeaderStyle}>
             <button type="button" style={iconButtonStyle} onClick={() => setYear((current) => current - 1)} aria-label="Poprzedni rok">
               <ChevronLeft size={16} />
@@ -98,7 +99,7 @@ export function AppMonthInput({ value, onChange, disabled = false, style, ariaLa
           >
             Ten miesiąc
           </button>
-        </div>
+        </div>, document.body
       )}
     </>
   );
@@ -136,8 +137,8 @@ export function AppDateInput({ value, onChange, disabled = false, style, ariaLab
         <Calendar size={16} />
       </button>
 
-      {open && position && (
-        <div ref={menuRef} style={{ ...pickerStyle, top: position.top, left: position.left, width: Math.max(position.width, 292) }}>
+      {open && position && createPortal(
+        <div ref={menuRef} style={{ ...pickerStyle, top: position.top, left: position.left, width: position.width }}>
           <div style={pickerHeaderStyle}>
             <button type="button" style={iconButtonStyle} onClick={() => setViewDate(addMonths(viewDate, -1))} aria-label="Poprzedni miesiąc">
               <ChevronLeft size={16} />
@@ -186,7 +187,7 @@ export function AppDateInput({ value, onChange, disabled = false, style, ariaLab
           >
             Dzisiaj
           </button>
-        </div>
+        </div>, document.body
       )}
     </>
   );
@@ -206,9 +207,14 @@ function usePickerPosition(
     function placeMenu() {
       const rect = buttonRef.current?.getBoundingClientRect();
       if (!rect) return;
-      const width = Math.max(rect.width, minWidth);
-      const left = Math.min(rect.left, window.innerWidth - width - 12);
-      setPosition({ top: rect.bottom + 6, left: Math.max(12, left), width: rect.width });
+      const width = Math.min(Math.max(rect.width, minWidth), Math.max(0, window.innerWidth - 24));
+      const height = Math.min(menuRef.current?.getBoundingClientRect().height || (minWidth === 292 ? 360 : 250), Math.max(0, window.innerHeight - 24));
+      const left = Math.max(12, Math.min(rect.left, window.innerWidth - width - 12));
+      const below = rect.bottom + 6;
+      const top = below + height <= window.innerHeight - 12
+        ? below
+        : Math.max(12, Math.min(rect.top - height - 6, window.innerHeight - height - 12));
+      setPosition({ top, left, width });
     }
 
     function closeOnOutside(event: MouseEvent) {
@@ -219,11 +225,13 @@ function usePickerPosition(
     }
 
     placeMenu();
+    const frame = window.requestAnimationFrame(placeMenu);
     document.addEventListener("mousedown", closeOnOutside);
     window.addEventListener("resize", placeMenu);
     window.addEventListener("scroll", placeMenu, true);
 
     return () => {
+      window.cancelAnimationFrame(frame);
       document.removeEventListener("mousedown", closeOnOutside);
       window.removeEventListener("resize", placeMenu);
       window.removeEventListener("scroll", placeMenu, true);
@@ -311,6 +319,9 @@ const disabledStyle: CSSProperties = {
 
 const pickerStyle: CSSProperties = {
   position: "fixed",
+  maxHeight: "calc(100vh - 24px)",
+  overflowY: "auto",
+  boxSizing: "border-box",
   zIndex: 1200,
   padding: "12px",
   border: `1px solid ${colors.border}`,

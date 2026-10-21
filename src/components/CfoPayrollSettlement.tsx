@@ -49,7 +49,7 @@ export default function CfoPayrollSettlement({ snapshot, period, onUpdated }: {
           <button type="button" style={ui.smallButton} disabled={saving} onClick={() => void link(cost.id, false)}>Odłącz</button>
         </div>)}
       </div>
-      <p style={{ ...ui.text, margin: "14px 0 0" }}>Zespół: <strong>{money(settlement.employeeTotal)}</strong> · Powiązane dokumenty: <strong>{money(settlement.costTotal)}</strong> · Razem do rozliczenia: <strong>{money(settlement.total)}</strong> · Podział netto + ZUS + PIT: <strong>{money(settlement.paymentTotal)}</strong> · Różnica: <strong>{money(settlement.difference)}</strong></p>
+      <p style={{ ...ui.text, margin: "14px 0 0" }}>Zespół: <strong>{money(settlement.employeeTotal)}</strong> · Powiązane dokumenty: <strong>{money(settlement.costTotal)}</strong> · Razem do rozliczenia: <strong>{money(settlement.total)}</strong> · Podział netto + ZUS + PIT + potrącenia: <strong>{money(settlement.paymentTotal)}</strong> · Różnica: <strong>{money(settlement.difference)}</strong></p>
       <p style={{ ...ui.text, margin: "8px 0 0" }}>{settlement.missing.length ? `Uzupełnij podział: ${settlement.missing.join(", ")}. Kwota 0 oznacza brak danej płatności.` : Math.abs(settlement.difference) < 0.01 ? "Podział płatności zgadza się z sumą kosztów Zespołu i powiązanych dokumentów." : "Sprawdź podział płatności i kompletność powiązanych kosztów. VAT i CIT nie należą do tego rozliczenia."}</p>
       <p style={{ ...ui.text, margin: "8px 0 0" }}>Po odłączeniu dokument będzie ponownie rozliczany według własnej daty zapłaty.</p>
     </>}

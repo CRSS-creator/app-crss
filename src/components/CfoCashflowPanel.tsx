@@ -64,7 +64,7 @@ export default function CfoCashflowPanel({ snapshot, period, onUpdated }: {
       <CfoPayrollSettlement snapshot={snapshot} period={period} onUpdated={onUpdated} />
       <div style={{ overflowX: "auto" }}><table style={{ ...ui.table, minWidth: "900px" }}>
         <thead><tr>{["Rodzaj", "Kwota (zł)", "Termin płatności", "Data zapłaty", "Status", ""].map((h, i) => <th key={i} style={ui.th}>{h}</th>)}</tr></thead>
-        <tbody>{OBLIGATION_TYPES.filter(kind => kind.value !== "wynagrodzenie_prezesa_netto").map(kind => {
+        <tbody>{OBLIGATION_TYPES.filter(kind => kind.value !== "wynagrodzenie_prezesa_netto" && kind.value !== "potracenia").map(kind => {
           const row = drafts[period + kind.value] || snapshot.obligations.find(o => o.okres.slice(0, 7) === period && o.typ === kind.value)
             || { okres: period + "-01", typ: kind.value, kwota: 0, termin_platnosci: null, data_zaplaty: null };
           const stored = snapshot.obligations.some(o => o.okres.slice(0, 7) === period && o.typ === kind.value);

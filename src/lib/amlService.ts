@@ -153,7 +153,12 @@ export async function verifyClientAml(clientId: string) {
 
   const body = await response.json().catch(() => null);
   if (!response.ok) {
-    return { data: null, error: new Error(body?.error || "Nie udało się wykonać weryfikacji AML.") };
+    const message = response.status === 504 || response.status === 408
+      ? "Przekroczono czas oczekiwania na weryfikację AML. Odśwież rejestr i sprawdź, czy raport został zapisany."
+      : response.status === 502 || response.status === 503
+        ? "Serwer weryfikacji AML jest chwilowo niedostępny. Odśwież rejestr i sprawdź, czy raport został zapisany."
+        : "Nie udało się wykonać weryfikacji AML (HTTP " + response.status + ").";
+    return { data: null, error: new Error(body?.error || message) };
   }
 
   return { data: body?.verification || null, error: null };

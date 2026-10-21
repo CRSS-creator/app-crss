@@ -47,6 +47,15 @@ type PkdCode = {
 };
 
 export async function POST(request: NextRequest) {
+  try {
+    return await verifyClient(request);
+  } catch (error) {
+    console.error("[AML verify] Nieobsłużony błąd weryfikacji", error);
+    return NextResponse.json({ error: "Weryfikacja AML została przerwana przez błąd serwera. Odśwież rejestr i sprawdź, czy raport został zapisany. Jeśli problem się powtórzy, sprawdź logi serwera aplikacji." }, { status: 500 });
+  }
+}
+
+async function verifyClient(request: NextRequest) {
   const auth = await getAuthorizedUser(request);
   if ("error" in auth) return auth.error;
 
@@ -78,18 +87,20 @@ export async function POST(request: NextRequest) {
 
   const checksVat = Boolean(client.czynny_vat);
   const checksVies = Boolean(client.vat_ue);
-  const vatCheck = checksVat
-    ? await verifyVatWhitelist(nip)
-    : skippedCheck("Biała Lista VAT", "Nie odpytano Białej Listy VAT, ponieważ klient nie jest oznaczony w aplikacji jako czynny podatnik VAT.");
-  checks.push(vatCheck);
+  const [vatCheck, viesCheck, gusCheck, sanctionsCheck] = await Promise.all([
+    checksVat
+      ? verifyVatWhitelist(nip)
+      : skippedCheck("Biała Lista VAT", "Nie odpytano Białej Listy VAT, ponieważ klient nie jest oznaczony w aplikacji jako czynny podatnik VAT."),
+    checksVies
+      ? verifyVies(nip)
+      : confirmedCheck("VAT-UE", "Weryfikacja potwierdzona: klient nie jest oznaczony jako podatnik VAT-UE."),
+    verifyRegon(nip),
+    verifySanctionsLists(client.nazwa || "", nip),
+  ]);
+  checks.push(vatCheck, viesCheck);
 
   const vatSubject = getVatSubject(vatCheck);
   const requestId = String((vatCheck.details as { requestId?: unknown }).requestId || "").trim() || null;
-
-  checks.push(checksVies
-    ? await verifyVies(nip)
-    : confirmedCheck("VAT-UE", "Weryfikacja potwierdzona: klient nie jest oznaczony jako podatnik VAT-UE.")
-  );
 
   let ceidgCheck: OfficialCheck | null = null;
   let crbrCheck: OfficialCheck;
@@ -129,7 +140,6 @@ export async function POST(request: NextRequest) {
   }
 
   const krsIdentity = getKrsIdentity(krsCheck);
-  const gusCheck = await verifyRegon(nip);
   checks.push(gusCheck);
   const savedIdentifiers = (register.dane_rejestrowe as { identyfikatory?: { regon?: string } } | null)?.identyfikatory;
   const regonNumber = String(gusCheck.details.regon || vatSubject?.regon || krsIdentity.regon || ceidgIdentity.regon || register.numer_regon || savedIdentifiers?.regon || "").trim() || null;
@@ -137,7 +147,6 @@ export async function POST(request: NextRequest) {
   checks.push(krsCheck);
   checks.push(crbrCheck);
 
-  const sanctionsCheck = await verifySanctionsLists(client.nazwa || "", nip);
   checks.push(sanctionsCheck);
   const now = new Date();
   const pkdCodes = collectPkdCodes(ceidgCheck, krsCheck);
@@ -317,12 +326,18 @@ async function ensureAmlRegister(admin: SupabaseClient, clientId: string) {
   return data;
 }
 
+// Bound registry requests, including response body reads, so a stalled source
+// becomes an explicit error in the report instead of blocking the whole verification.
+function fetchOfficialSource(input: string, init: RequestInit = {}) {
+  return fetch(input, { ...init, signal: AbortSignal.timeout(10000) });
+}
+
 async function verifyVatWhitelist(nip: string): Promise<OfficialCheck> {
   const date = new Date().toISOString().slice(0, 10);
   const url = `https://wl-api.mf.gov.pl/api/search/nip/${nip}?date=${date}`;
   const queryId = createSourceQueryId("VAT");
   try {
-    const response = await fetch(url, { headers: { accept: "application/json" } });
+    const response = await fetchOfficialSource(url, { headers: { accept: "application/json" } });
     const data = await response.json().catch(() => null);
     if (!response.ok) {
       return { source: "Biała Lista VAT MF", status: "error", label: "Nie udało się pobrać danych VAT.", details: { identyfikatorZapytania: queryId, httpStatus: response.status, data, checkedAt: new Date().toISOString(), url } };
@@ -354,7 +369,7 @@ async function verifyVies(nip: string): Promise<OfficialCheck> {
 
   const url = "https://ec.europa.eu/taxation_customs/vies/services/checkVatService";
   try {
-    const response = await fetch(url, {
+    const response = await fetchOfficialSource(url, {
       method: "POST",
       headers: { "content-type": "text/xml;charset=UTF-8", soapaction: "" },
       body,
@@ -395,7 +410,7 @@ async function verifyKrs(krs: string): Promise<OfficialCheck> {
   for (const register of ["P", "S"]) {
     const url = `${baseUrl}?rejestr=${register}&format=json`;
     try {
-      const response = await fetch(url, { headers: { accept: "application/json" } });
+      const response = await fetchOfficialSource(url, { headers: { accept: "application/json" } });
       if (response.status === 404) continue;
       const data = await response.json().catch(() => null);
       if (!response.ok) {
@@ -423,7 +438,7 @@ async function verifyCeidg(nip: string): Promise<OfficialCheck> {
   const url = `${CEIDG_API_URL}?nip=${encodeURIComponent(nip)}`;
   const queryId = createSourceQueryId("CEIDG");
   try {
-    const response = await fetch(url, {
+    const response = await fetchOfficialSource(url, {
       headers: {
         accept: "application/json",
         authorization: `Bearer ${CEIDG_API_TOKEN}`,
@@ -455,7 +470,7 @@ async function enrichCeidgCompanies(companies: Array<Record<string, unknown>>) {
     if (!link || !/^https?:\/\//.test(link)) return company;
 
     try {
-      const response = await fetch(link, {
+      const response = await fetchOfficialSource(link, {
         headers: {
           accept: "application/json",
           authorization: `Bearer ${token}`,
@@ -486,7 +501,7 @@ async function verifySanctionsLists(name: string, nip: string): Promise<Official
 
   for (const source of sources) {
     try {
-      const response = await fetch(source.url, { headers: { accept: "application/xml,text/xml,*/*" } });
+      const response = await fetchOfficialSource(source.url, { headers: { accept: "application/xml,text/xml,*/*" } });
       const text = await response.text();
       if (!response.ok) {
         errors.push({ source: source.label, message: `HTTP ${response.status}` });
@@ -622,7 +637,7 @@ async function verifyCrbr(nip: string, krs: string | null): Promise<OfficialChec
 </soap:Envelope>`;
 
   try {
-    const response = await fetch(CRBR_API_URL, {
+    const response = await fetchOfficialSource(CRBR_API_URL, {
       method: "POST",
       headers: {
         "content-type": "application/soap+xml; charset=utf-8",

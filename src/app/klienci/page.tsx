@@ -14,7 +14,7 @@ import {
   fetchClients,
   updateClient,
 } from "@/lib/clientService";
-import { ZUS_SCHEME_OPTIONS, normalizeZusScheme } from "@/lib/clientDictionaries";
+import { LEGAL_FORM_OPTIONS as CLIENT_LEGAL_FORM_OPTIONS, normalizeLegalForm, ZUS_SCHEME_OPTIONS, normalizeZusScheme } from "@/lib/clientDictionaries";
 import { normalizeContactList } from "@/lib/contactFields";
 import {
   createClientDocumentSignedUrl,
@@ -156,10 +156,7 @@ const DOCUMENT_TABS: Array<{ key: DocumentTabKey; label: string }> = [
 
 const LEGAL_FORM_OPTIONS = [
   { value: "", label: "Wybierz" },
-  { value: "JDG", label: "JDG" },
-  { value: "sp. z o.o.", label: "sp. z o.o." },
-  { value: "prosta spółka akcyjna", label: "prosta spółka akcyjna" },
-  { value: "organizacja", label: "organizacja" },
+  ...CLIENT_LEGAL_FORM_OPTIONS,
 ];
 
 const TAXATION_FORM_OPTIONS = [
@@ -290,7 +287,7 @@ const filteredClients = [...clients].filter((client) => {
 
   const matchesFormaPrawna =
     formaPrawnaFilter === EMPTY_FILTER ||
-    client.forma_prawna === formaPrawnaFilter;
+    normalizeLegalForm(client.forma_prawna) === formaPrawnaFilter;
 
   const matchesOpodatkowanie =
     opodatkowanieFilter === EMPTY_FILTER ||
@@ -493,7 +490,7 @@ return (
                   <tr key={client.id} style={rowStyle}>
                     <Td strong>{client.nazwa || "—"}</Td>
                     <Td>{client.nip || "—"}</Td>
-                    <Td>{client.forma_prawna || "—"}</Td>
+                    <Td>{normalizeLegalForm(client.forma_prawna) || "—"}</Td>
                     <Td>{client.forma_opodatkowania || "—"}</Td>
                     <Td>
                       {getClientCaregiverName(client)}
@@ -749,7 +746,7 @@ function ClientDrawer({
       ? {
           nazwa: draft.nazwa.trim() || null,
           nip: draft.nip.trim() || null,
-          forma_prawna: draft.forma_prawna.trim() || null,
+          forma_prawna: normalizeLegalForm(draft.forma_prawna) || null,
           forma_opodatkowania: draft.forma_opodatkowania.trim() || null,
           glowna_stawka_ryczaltu: draft.forma_opodatkowania === "Ryczałt" ? draft.glowna_stawka_ryczaltu.trim() || null : null,
           obsluga_kadrowa: draft.obsluga_kadrowa,
@@ -967,7 +964,7 @@ function ClientDrawer({
               </>
             ) : (
               <>
-                <InfoRow label="Forma prawna" value={client.forma_prawna} />
+                <InfoRow label="Forma prawna" value={normalizeLegalForm(client.forma_prawna)} />
                 <InfoRow
                   label="Forma opodatkowania"
                   value={client.forma_opodatkowania}
@@ -1376,7 +1373,7 @@ function CreateClientDrawer({
       email: normalizeContactList(draft.email),
       adres_dzialalnosci: draft.adres_dzialalnosci.trim() || null,
       osoba_kontaktowa: draft.osoba_kontaktowa.trim() || null,
-      forma_prawna: draft.forma_prawna.trim() || null,
+      forma_prawna: normalizeLegalForm(draft.forma_prawna) || null,
       forma_opodatkowania: draft.forma_opodatkowania.trim() || null,
       glowna_stawka_ryczaltu: draft.forma_opodatkowania === "Ryczałt" ? draft.glowna_stawka_ryczaltu.trim() || null : null,
       obsluga_kadrowa: draft.obsluga_kadrowa,
@@ -1800,7 +1797,7 @@ function createDraft(client: Client): ClientDraft {
     email: client.email || "",
     adres_dzialalnosci: client.adres_dzialalnosci || "",
     osoba_kontaktowa: client.osoba_kontaktowa || "",
-    forma_prawna: client.forma_prawna || "",
+    forma_prawna: normalizeLegalForm(client.forma_prawna),
     forma_opodatkowania: client.forma_opodatkowania || "",
     glowna_stawka_ryczaltu: client.glowna_stawka_ryczaltu || "",
     obsluga_kadrowa: Boolean(client.obsluga_kadrowa),

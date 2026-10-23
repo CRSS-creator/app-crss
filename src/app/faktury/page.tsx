@@ -107,7 +107,7 @@ function InvoicesContent() {
   const [lineDrafts, setLineDrafts] = useState<Record<string, DraftInvoiceLinePayload>>({});
 
   useEffect(() => {
-    void loadData({ generateCurrentMonth: true });
+    void loadData();
   }, []);
 
   const filteredInvoices = useMemo(() => {
@@ -201,12 +201,9 @@ function InvoicesContent() {
   const allOverdueSelectableChecked =
     selectableOverdueInvoices.length > 0 && selectableOverdueInvoices.every((invoice) => selectedOverdueInvoiceIds.includes(invoice.id));
 
-  async function loadData(options?: { generateCurrentMonth?: boolean; invoiceIds?: string[] }) {
+  async function loadData(options?: { invoiceIds?: string[] }) {
     const request = ++listRequest.current;
     setLoading(true);
-    if (options?.generateCurrentMonth) {
-      await generateInvoices(monthToDate(currentMonthInput()), { silent: true });
-    }
     const detailId = detailsRef.current?.id;
     const openInvoiceId = detailId && (!options?.invoiceIds || options.invoiceIds.includes(detailId)) ? detailId : undefined;
     const openDetailRequest = detailRequest.current;

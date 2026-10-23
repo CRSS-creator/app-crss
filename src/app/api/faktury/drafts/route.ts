@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Nieprawidłowy opis faktury." }, { status: 400 });
     }
     const updated = await auth.admin.from("faktury")
-      .update({ opis: payload.opis.trim() || null })
+      .update({ opis: payload.opis.trim() || null, opis_reczny: true })
       .eq("id", invoice.data.id)
       .eq("status", "szkic")
       .eq("zrodlo", "aplikacja")
@@ -198,6 +198,7 @@ async function updateLine(
     .from("faktury_pozycje")
     .update({
       nazwa: name,
+      reczna_edycja: true,
       ilosc: quantity,
       jednostka: unit,
       cena_netto: netPrice,

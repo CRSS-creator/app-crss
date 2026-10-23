@@ -6,9 +6,10 @@ const ALLOWED_ROLES = new Set(["owner", "admin"]);
 const INVOICE_PDF_BUCKET = "faktury-pdf";
 
 type DraftActionPayload = {
-  action?: "deleteInvoice" | "deleteLine" | "updateLine";
+  action?: "deleteInvoice" | "deleteLine" | "updateLine" | "updateDescription";
   invoiceId?: string;
   lineId?: string;
+  opis?: unknown;
   line?: {
     nazwa?: unknown;
     ilosc?: unknown;
@@ -89,6 +90,31 @@ export async function POST(request: NextRequest) {
     const deleted = await deleteDraft(auth.admin, invoice.data);
     if (deleted) return deleted;
     return NextResponse.json({ deleted: true });
+  }
+
+  if (payload.action === "updateDescription") {
+    if (!isEditableDraft(invoice.data)) {
+      return NextResponse.json({ error: "Można edytować opis tylko w szkicu przed wysłaniem do wFirmy." }, { status: 400 });
+    }
+    if (typeof payload.opis !== "string") {
+      return NextResponse.json({ error: "Nieprawidłowy opis faktury." }, { status: 400 });
+    }
+    const updated = await auth.admin.from("faktury")
+      .update({ opis: payload.opis.trim() || null })
+      .eq("id", invoice.data.id)
+      .eq("status", "szkic")
+      .eq("zrodlo", "aplikacja")
+      .is("wfirma_id", null)
+      .in("wfirma_sync_status", ["nie_wyslano", "blad"])
+      .select(INVOICE_SELECT)
+      .maybeSingle();
+    if (updated.error) {
+      return NextResponse.json({ error: "Nie udało się zapisać opisu faktury." }, { status: 500 });
+    }
+    if (!updated.data) {
+      return NextResponse.json({ error: "Szkic został zmieniony lub przekazany do wFirmy. Odśwież fakturę." }, { status: 409 });
+    }
+    return NextResponse.json({ invoice: updated.data });
   }
 
   if (payload.action === "updateLine") {

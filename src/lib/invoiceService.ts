@@ -199,6 +199,13 @@ export async function updateInvoice(invoiceId: string, payload: Partial<InvoiceP
     .single<Invoice>();
 }
 
+export async function updateDraftInvoiceDescription(invoiceId: string, opis: string) {
+  return callInvoiceEndpoint<{ invoice: Invoice }>(
+    "/api/faktury/drafts",
+    { action: "updateDescription", invoiceId, opis }
+  );
+}
+
 export async function updateDraftInvoiceLine(invoiceId: string, lineId: string, payload: DraftInvoiceLinePayload) {
   return callInvoiceEndpoint<{ invoice: Invoice }>(
     "/api/faktury/drafts",

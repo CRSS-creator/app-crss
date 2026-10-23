@@ -24,6 +24,7 @@ import {
   sendInvoicesToWfirma,
   syncWfirmaPayments,
   updateDraftInvoiceLine,
+  updateDraftInvoiceDescription,
   updateInvoice,
   type WfirmaSyncFailure,
   type DraftInvoiceLinePayload,
@@ -97,6 +98,9 @@ function InvoicesContent() {
   const [recoveryQueue, setRecoveryQueue] = useState<WfirmaSyncFailure[]>([]);
   const [replacementId, setReplacementId] = useState("");
   const [linkingInvoice, setLinkingInvoice] = useState(false);
+  const [descriptionEdit, setDescriptionEdit] = useState<{ invoiceId: string; value: string } | null>(null);
+  const [savingDescription, setSavingDescription] = useState(false);
+  const descriptionSaveLock = useRef(false);
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
   const [savingLineId, setSavingLineId] = useState<string | null>(null);
   const [deletingLineId, setDeletingLineId] = useState<string | null>(null);
@@ -562,6 +566,28 @@ function InvoicesContent() {
     const recipientEmail = result.data?.recipients[0]?.recipientEmail || "klienta";
     alert(`Faktura została przekazana do wysyłki na adres: ${recipientEmail}.`);
     await loadData();
+  }
+
+  async function saveDescription(invoice: Invoice) {
+    if (!canEditDraftInvoice(invoice) || descriptionSaveLock.current || descriptionEdit?.invoiceId !== invoice.id) return;
+    descriptionSaveLock.current = true;
+    setSavingDescription(true);
+    try {
+      const result = await updateDraftInvoiceDescription(invoice.id, descriptionEdit.value);
+      if (result.error || !result.data?.invoice) {
+        alert("Nie udało się zapisać opisu faktury: " + (result.error?.message || "Brak odpowiedzi serwera."));
+        return;
+      }
+      const updated = result.data.invoice;
+      setInvoices(current => current.map(item => item.id === updated.id ? updated : item));
+      setDetailsInvoice(current => current?.id === updated.id ? updated : current);
+      setDescriptionEdit(current => current?.invoiceId === invoice.id ? null : current);
+    } catch {
+      alert("Nie udało się zapisać opisu faktury. Spróbuj ponownie.");
+    } finally {
+      descriptionSaveLock.current = false;
+      setSavingDescription(false);
+    }
   }
 
   function startLineEdit(line: InvoiceLine) {
@@ -1286,8 +1312,17 @@ function InvoicesContent() {
             </div>
 
             <section style={invoiceDescriptionStyle}>
-              <h3 style={descriptionTitleStyle}>Opis faktury</h3>
-              <p style={descriptionTextStyle}>{detailsInvoice.opis || "Brak opisu."}</p>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                <h3 style={descriptionTitleStyle}>Opis faktury</h3>
+                {detailsDraftEditable && descriptionEdit?.invoiceId !== detailsInvoice.id && <button type="button" style={secondaryButtonStyle} disabled={savingDescription} onClick={() => setDescriptionEdit({ invoiceId: detailsInvoice.id, value: detailsInvoice.opis || "" })}><Pencil size={16} />Edytuj opis</button>}
+              </div>
+              {detailsDraftEditable && descriptionEdit?.invoiceId === detailsInvoice.id ? <>
+                <textarea aria-label="Opis faktury" style={{ ...inputStyle, width: "100%", minHeight: 160, resize: "vertical", boxSizing: "border-box", fontFamily: "inherit", lineHeight: 1.6 }} value={descriptionEdit.value} disabled={savingDescription} onChange={event => setDescriptionEdit({ invoiceId: detailsInvoice.id, value: event.target.value })} />
+                <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                  <button type="button" style={primaryButtonStyle} disabled={savingDescription} onClick={() => void saveDescription(detailsInvoice)}><Save size={16} />{savingDescription ? "Zapisywanie…" : "Zapisz opis"}</button>
+                  <button type="button" style={secondaryButtonStyle} disabled={savingDescription} onClick={() => setDescriptionEdit(null)}>Anuluj</button>
+                </div>
+              </> : <p style={descriptionTextStyle}>{detailsInvoice.opis || "Brak opisu."}</p>}
             </section>
 
             <section style={invoiceDescriptionStyle}>

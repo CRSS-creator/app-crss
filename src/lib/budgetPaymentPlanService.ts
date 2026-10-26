@@ -21,3 +21,15 @@ export async function saveBudgetPaymentPlan(input: BudgetPaymentPlanInput) {
 export async function archiveBudgetPaymentPlan(id: string) {
   return supabase.from("cfo_budget_payment_plans").update({ aktywny: false, updated_at: new Date().toISOString() }).eq("id", id).select("id").single();
 }
+
+/** One request/transaction for all months; no partially saved future assumption. */
+export async function saveBudgetAssumptions(rows: BudgetPaymentPlanInput[]) {
+  if(!rows.length)return {data:[],error:null};
+  const payload=rows.map(row=>({...row,id:row.id||crypto.randomUUID(),updated_at:new Date().toISOString()}));
+  return supabase.from("cfo_budget_payment_plans").upsert(payload,{onConflict:"id"}).select("*");
+}
+export async function resetBudgetAssumptions(rows: BudgetPaymentPlanInput[]) {
+  if(!rows.length)return {data:[],error:null};
+  // Updating complete rows retains the assumption for the other dimension.
+  return saveBudgetAssumptions(rows);
+}

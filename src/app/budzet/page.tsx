@@ -1,13 +1,13 @@
 "use client";
-import BudgetPaymentPlans from "@/components/BudgetPaymentPlans";
-import { explicitPaymentMonth, plannedNetAmounts, unresolvedBudgetCosts, historyPaymentSuggestions, payrollPlanSuggestions, planKey, type BudgetPaymentPlan } from "@/lib/budgetPaymentPlan";
-import { fetchBudgetPaymentPlans, saveBudgetPaymentPlan } from "@/lib/budgetPaymentPlanService";
+import { explicitPaymentMonth, plannedNetAmounts, unresolvedBudgetCosts, planKey, planApplies, type BudgetPaymentPlan, type BudgetPaymentPlanInput } from "@/lib/budgetPaymentPlan";
+import { mergeForecastPlans, netAssumptions } from "@/lib/budgetAutomaticForecast";
+import { fetchBudgetPaymentPlans, saveBudgetAssumptions } from "@/lib/budgetPaymentPlanService";
 
 import { manualCashflowForecast } from "@/lib/cfoManualCashflow";
 import { manualRevenueCashflow } from "@/lib/cfoManualRevenue";
 
 
-import { AppFormInput } from "@/components/AppFormControls";
+import { AppFormInput, AppFormSelect } from "@/components/AppFormControls";
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Banknote, CalendarDays, RefreshCw, Save, TrendingUp, WalletCards } from "lucide-react";
@@ -59,6 +59,7 @@ type BudgetMonth = {
   revenueCategories: BudgetCategoryRow[];
   costCategories: BudgetCategoryRow[];
   costSubcategories: BudgetCostGroup[];
+  netCostSubcategories: BudgetCostGroup[];
 };
 
 type BudgetCategoryRow = {
@@ -179,6 +180,9 @@ function BudgetContent() {
   const [crmRevenues, setCrmRevenues] = useState<CfoBudgetCrmRevenue[]>([]);
   const [paymentPlans, setPaymentPlans] = useState<BudgetPaymentPlan[]>([]);
   const [includeCrmGrowth, setIncludeCrmGrowth] = useState(false);
+  const [costDimension,setCostDimension] = useState<"cash"|"net">("cash");
+  const [assumptionScope,setAssumptionScope] = useState<"month"|"future">("month");
+  const [newAssumption,setNewAssumption] = useState({category:"koszty_zespolu" as CfoCostCategory,subcategory:"",amount:""});
   const [costEditDrafts, setCostEditDrafts] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -192,9 +196,8 @@ function BudgetContent() {
   );
 
   const selected = budget.find((month) => month.period === selectedMonth) || budget[0];
-  const pendingSuggestions = [...historyPaymentSuggestions(costs,startMonth),...payrollPlanSuggestions(cashflow,startMonth)].filter(s=>!paymentPlans.some(p=>p.aktywny && p.rodzaj==="monthly" && planKey(p.kategoria,p.podkategoria)===planKey(s.category,s.subcategory)));
-  const planIncomplete = !paymentPlans.some(p=>p.aktywny && p.rodzaj!=="target") || pendingSuggestions.length>0 || unresolvedBudgetCosts(cashflow,startMonth,paymentPlans).length>0
-    || cashflow.obligations.some(o=>!o.data_zaplaty && Number(o.kwota)>0 && (!o.termin_platnosci || o.termin_platnosci<startMonth+"-01"));
+  const unresolvedCount = unresolvedBudgetCosts(cashflow,startMonth,paymentPlans).length;
+  const planIncomplete = !cashflow.costs.length && !(cashflow.employeeCosts||[]).length;
   const firstShortfall = budget.find((month) => month.closingCash < parsePolishNumber(safetyThreshold));
   const selectedRevenueDiff = selected ? selected.actualRevenue - selected.plannedRevenue : 0;
   const selectedCostDiff = selected ? selected.plannedCosts - selected.actualCosts : 0;
@@ -253,33 +256,43 @@ function BudgetContent() {
     writeStoredBudgetSetting(SAFETY_THRESHOLD_STORAGE_KEY, value);
   }
 
-  async function saveCostPlan(category: CfoCostCategory, subcategory: string, plannedValue: number) {
-    const editKey = costEditKey(selectedMonth, category, subcategory);
-    if (saving) return;
-    const raw = costEditDrafts[editKey] ?? formatPlainNumber(plannedValue);
-    if (!/^\d+(?:[.,]\d{1,2})?$/.test(raw.replace(/\s/g,""))) return alert("Podaj nieujemną kwotę z maksymalnie dwoma miejscami po przecinku.");
-    const nextValue = parsePolishNumber(raw);
-    if (!Number.isFinite(nextValue) || nextValue < 0) return alert("Plan wydatków nie może być ujemny.");
-    const existing = paymentPlans.find(p => p.aktywny && p.rodzaj === "target" && p.pierwszy_miesiac.slice(0,7) === selectedMonth && p.kategoria === category && (p.podkategoria || EMPTY_SUBCATEGORY) === subcategory);
+  function assumptionMonths() {
+    return assumptionScope==="future" ? budget.filter(m=>m.period>=selectedMonth).map(m=>m.period) : [selectedMonth];
+  }
+  async function saveCostPlan(category: CfoCostCategory, subcategory: string, plannedValue: number, overrideRaw?: string) {
+    if(saving)return;
+    const editKey=costEditKey(selectedMonth,category,subcategory);
+    const raw=overrideRaw??costEditDrafts[editKey]??formatPlainNumber(plannedValue);
+    if(!/^\d+(?:[.,]\d{1,2})?$/.test(raw.replace(/\s/g,"")))return alert("Podaj nieujemną kwotę z maksymalnie dwoma miejscami po przecinku.");
+    const value=parsePolishNumber(raw);
+    const rows:BudgetPaymentPlanInput[]=assumptionMonths().map(month=>{
+      const existing=paymentPlans.find(p=>p.aktywny&&p.rodzaj==="target"&&p.pierwszy_miesiac.slice(0,7)===month&&planKey(p.kategoria,p.podkategoria)===planKey(category,subcategory));
+      return {id:existing?.id,nazwa:"Założenie prognozy: "+subcategory,rodzaj:"target",kategoria:category,
+        podkategoria:subcategory===EMPTY_SUBCATEGORY?"":subcategory,
+        pierwszy_miesiac:month+"-01",ostatni_miesiac:null,liczba_rat:null,koszt_id:null,aktywny:true,kwota_netto:null,
+        kwota_brutto:costDimension==="cash"?value:Number(existing?.kwota_brutto||0),
+        cel_platnosci:costDimension==="cash"?true:existing?.cel_platnosci??Boolean(existing),
+        cel_wyniku_netto:costDimension==="net"?value:existing?.cel_wyniku_netto??null};
+    });
     setSaving(true);
     try {
-    const result = await saveBudgetPaymentPlan({
-      id: existing?.id,
-      nazwa: `Cel miesiąca: ${subcategory}`, rodzaj: "target", kategoria: category,
-      podkategoria: subcategory === EMPTY_SUBCATEGORY ? "" : subcategory,
-      kwota_brutto: nextValue, kwota_netto: null,
-      pierwszy_miesiac: monthToDate(selectedMonth), ostatni_miesiac: null, liczba_rat: null, koszt_id: null, aktywny: true,
+      const result=await saveBudgetAssumptions(rows);
+      if(result.error){alert("Nie udało się zapisać założenia. Żaden z miesięcy nie został zmieniony.");return;}
+      await loadData();
+    } catch {alert("Nie udało się zapisać założenia. Odśwież dane i spróbuj ponownie.");}
+    finally {setSaving(false);}
+  }
+  async function restoreAutomatic(category:CfoCostCategory,subcategory:string) {
+    if(saving)return;
+    const months=assumptionMonths();
+    const rows:BudgetPaymentPlanInput[]=paymentPlans.filter(p=>p.aktywny&&p.rodzaj==="target"&&months.includes(p.pierwszy_miesiac.slice(0,7))&&planKey(p.kategoria,p.podkategoria)===planKey(category,subcategory)).map(p=>{
+      const cash=costDimension==="cash"?false:p.cel_platnosci!==false;
+      const net=costDimension==="net"?null:p.cel_wyniku_netto??null;
+      return {...p,cel_platnosci:cash,cel_wyniku_netto:net,aktywny:cash||net!==null};
     });
-    setSaving(false);
-
-    if (result.error) {
-      console.error(result.error);
-      return alert("Nie udało się zapisać planu kosztu.");
-    }
-
-    await loadData();
-    } catch { alert("Nie udało się zapisać planu. Spróbuj ponownie."); }
-    finally { setSaving(false); }
+    setSaving(true);
+    try {const r=await saveBudgetAssumptions(rows);if(r.error)alert("Nie udało się przywrócić prognozy.");else await loadData();}
+    catch {alert("Nie udało się połączyć z serwerem.");} finally {setSaving(false);}
   }
 
   return (
@@ -321,17 +334,24 @@ function BudgetContent() {
       </section>
 
       <section style={panelStyle}>
-        <h2 style={panelTitleStyle}>Plan pieniędzy i plan wyniku</h2>
-        <p>Płatności planujesz kwotami brutto. Wpisana kwota docelowa zastępuje prognozę, a zapisane zapłaty i zobowiązania z ustalonym terminem są jej minimum. Różnica może być ujemna, jeśli wykonanie przekroczy plan; sam plan wydatku nie jest ujemny.</p>
-        <p>Historia kosztów służy wyłącznie jako podpowiedź do zatwierdzenia. Starsze dokumenty bez rozliczonej płatności wymagają wyjaśnienia. Raty wpływają na pieniądze, a koszt sprzętu pozostaje w miesiącu jego ujęcia.</p>
-        <p>Saldo na start dotyczy początku {formatMonthField(startMonth)}. Uzupełnij wszystkie plany przed oceną prognozowanego salda.</p>
-        <label><input type="checkbox" checked={includeCrmGrowth} onChange={event => setIncludeCrmGrowth(event.target.checked)} /> Uwzględnij dodatkowy wzrost przychodów z CRM (scenariusz)</label>
-        {planIncomplete && <p role="status" style={{color:colors.warning}}><strong>Plan roboczy — prognoza salda jest niepełna.</strong> Uzupełnij harmonogram płatności i wyjaśnij dokumenty poniżej.</p>}
+        <h2 style={panelTitleStyle}>Automatyczna prognoza na 12 miesięcy</h2>
+        <p>Abonamenty klientów, regularne opłaty, koszty zmienne i Zespół CFO tworzą plan bez ręcznego zatwierdzania każdej pozycji. Rozliczenia płacowe zachowują przesunięcie terminów między miesiącami. Raty i umowy kończą się zgodnie z danymi w CFO.</p>
+        <p>Stałe koszty: ostatnia kwota regularnie występującej opłaty. Zmienne: średnia z maksymalnie 3 zakończonych miesięcy, z uwzględnieniem miesięcy bez wydatku. Zakupy jednorazowe i sprzęt nie są powielane.</p>
+        <p>Harmonogramy, faktury i zapłaty edytujesz w <a href="/cfo">CFO → Cashflow</a>. Tutaj zmieniasz tylko założenia prognozy. Saldo na start dotyczy początku {formatMonthField(startMonth)}.</p>
+        <label><input type="checkbox" checked={includeCrmGrowth} onChange={event=>setIncludeCrmGrowth(event.target.checked)}/> Uwzględnij dodatkowy wzrost przychodów z CRM (scenariusz)</label>
+        {unresolvedCount>0 && <p role="status">Dokumenty wymagające wyjaśnienia w CFO: <strong>{unresolvedCount}</strong>. Ich zaległych płatności nie przenosimy automatycznie do pierwszego miesiąca. Prognoza nie oznacza, że te zobowiązania zniknęły.</p>}
+        {planIncomplete && <p role="status">Brak historii kosztów lub zespołu. Prognoza wymaga danych w CFO.</p>}
       </section>
       {loading ? <section style={panelStyle}>Ładowanie budżetu...</section> : null}
 
       {!loading && !dataError ? (
         <section style={sectionGridStyle}>
+          <article style={widePanelStyle}>
+            <h2 style={panelTitleStyle}>Prognoza na 12 miesięcy</h2>
+            <div style={tableWrapperStyle}><table style={categoryTableStyle}><thead><tr>{["Miesiąc","Przychody netto","Koszty netto","Wynik","Wpływy","Wypływy","Saldo"].map(label=><Th key={label}>{label}</Th>)}</tr></thead><tbody>
+              {budget.map(month=><tr key={month.period}><Td><button style={smallButtonStyle} type="button" onClick={()=>setSelectedMonth(month.period)}>{formatMonthField(month.period)}</button></Td><Td>{formatMoney(month.plannedRevenue)}</Td><Td>{formatMoney(month.plannedCosts)}</Td><Td>{formatMoney(month.plannedResult)}</Td><Td>{formatMoney(month.plannedInflows)}</Td><Td>{formatMoney(month.plannedOutflows)}</Td><Td>{formatMoney(month.closingCash)}</Td></tr>)}
+            </tbody></table></div>
+          </article>
           <article style={widePanelStyle}>
             <div style={panelHeaderStyle}>
               <WalletCards size={21} style={panelIconStyle} />
@@ -392,21 +412,33 @@ function BudgetContent() {
           <article style={widePanelStyle}>
             <div style={panelHeaderStyle}>
               <Banknote size={21} style={panelIconStyle} />
-              <h2 style={panelTitleStyle}>Plan wydatków — przepływy pieniężne</h2>
+              <h2 style={panelTitleStyle}>Założenia prognozy</h2>
             </div>
-            <p style={{ color: colors.muted, fontSize: "13px", margin: "0 0 16px" }}>Kwoty brutto. Zapisz docelową sumę płatności podkategorii w wybranym miesiącu. Zapis nie zmienia kosztu netto ani historii zapłat. Dla powtarzalnych opłat i rat użyj harmonogramu powyżej.</p>
+            <p>Kwoty są wyliczane automatycznie. Możesz ustawić własną kwotę albo przywrócić automat. Wybierz, czy zmiana dotyczy wyniku netto czy płatności brutto. Zapisane płatności CFO pozostają minimum prognozy przepływów.</p>
+            <div style={{display:"flex",gap:12,flexWrap:"wrap",marginBottom:16}}>
+              <label>Zakres kwot<AppFormSelect value={costDimension} onChange={event=>{setCostDimension(event.target.value as "cash"|"net");setCostEditDrafts({});}}><option value="cash">Płatności brutto</option><option value="net">Koszty wyniku netto</option></AppFormSelect></label>
+              <label>Zastosuj zmianę<AppFormSelect value={assumptionScope} onChange={event=>setAssumptionScope(event.target.value as "month"|"future")}><option value="month">Tylko wybrany miesiąc</option><option value="future">Od tego miesiąca do końca prognozy</option></AppFormSelect></label>
+            </div>
+            <details style={{marginBottom:16}}>
+              <summary>Nowa pozycja prognozy</summary>
+              <div style={{display:"flex",flexWrap:"wrap",gap:12,alignItems:"end",marginTop:12}}>
+                <label>Kategoria<AppFormSelect value={newAssumption.category} onChange={event=>setNewAssumption(current=>({...current,category:event.target.value as CfoCostCategory}))}>{COST_OPTIONS.map(option=><option key={option.value} value={option.value}>{option.label}</option>)}</AppFormSelect></label>
+                <label>Nazwa pozycji<input style={inputStyle} value={newAssumption.subcategory} onChange={event=>setNewAssumption(current=>({...current,subcategory:event.target.value}))} /></label>
+                <label>Kwota<input style={inputStyle} inputMode="decimal" value={newAssumption.amount} onChange={event=>setNewAssumption(current=>({...current,amount:event.target.value}))} /></label>
+                <button type="button" disabled={saving||!newAssumption.subcategory.trim()} style={smallButtonStyle} onClick={()=>void saveCostPlan(newAssumption.category,newAssumption.subcategory.trim(),0,newAssumption.amount)}>Dodaj założenie</button>
+              </div>
+            </details>
             <CostCategoryEditor
-              groups={selected?.costSubcategories || []}
+              groups={(costDimension==="cash"?selected?.costSubcategories:selected?.netCostSubcategories) || []}
               selectedMonth={selectedMonth}
               drafts={costEditDrafts}
               onDraftChange={(key, value) => setCostEditDrafts((current) => ({ ...current, [key]: value }))}
               onSave={saveCostPlan}
+              onReset={restoreAutomatic}
               disabled={saving}
             />
           </article>
-          <article id="harmonogram" style={widePanelStyle}>
-            <BudgetPaymentPlans plans={paymentPlans} snapshot={cashflow} costs={costs} month={selectedMonth} startMonth={startMonth} legacy={overrides} categories={COST_OPTIONS} onReload={loadData} />
-          </article>
+
         </section>
       ) : null}
     </main>
@@ -478,10 +510,12 @@ function CostCategoryEditor({
   drafts,
   onDraftChange,
   onSave,
+  onReset,
   disabled = false,
 }: {
   groups: BudgetCostGroup[];
   disabled?: boolean;
+  onReset?: (category:CfoCostCategory,subcategory:string)=>Promise<void>;
   selectedMonth: string;
   drafts: Record<string, string>;
   onDraftChange: (key: string, value: string) => void;
@@ -511,10 +545,11 @@ function CostCategoryEditor({
                 <input aria-label={`Plan płatności: ${row.label}`} inputMode="decimal" style={smallInputStyle} value={value} onChange={(event) => onDraftChange(editKey, event.target.value)} />
                 <span style={rightAlignedStyle}>{formatMoney(row.actual)}</span>
                 <Diff value={row.planned - row.actual} />
-                <button type="button" disabled={disabled} style={smallButtonStyle} onClick={() => void onSave(group.key, row.key, row.planned)}>
+                <div style={{display:"flex",gap:6,justifyContent:"flex-end",flexWrap:"wrap"}}><button type="button" disabled={disabled} style={smallButtonStyle} onClick={() => void onSave(group.key, row.key, row.planned)}>
                   <Save size={15} />
                   Zapisz
                 </button>
+                {onReset && <button type="button" disabled={disabled} style={smallButtonStyle} onClick={()=>void onReset(group.key,row.key)}>Automat</button>}</div>
               </div>
             );
           })}
@@ -603,10 +638,12 @@ function buildBudgetMonths(
     const plannedRevenueEntries = plannedRevenueEntriesForMonth(period, baseline, clientRevenues, crmForecast);
     const plannedRevenueCategories = plannedRevenueForMonth(plannedRevenueEntries);
     const plannedCostSubcategories = cloneNestedMap((planActualByMonth.get(period) || emptyActual()).costBySubcategory);
-    for (const entry of plannedNetAmounts(period, paymentPlans)) {
+    const forecastPlansForNet = mergeForecastPlans(snapshot,startMonth,period,paymentPlans,asOf);
+    for (const entry of plannedNetAmounts(period, forecastPlansForNet)) {
       setSubcategoryAmount(plannedCostSubcategories, entry.category, entry.subcategory, Math.max(entry.amount, plannedCostSubcategories.get(entry.category)?.get(entry.subcategory) || 0));
     }
-    const explicitPayments = explicitPaymentMonth(period, startMonth, snapshot, paymentPlans, COST_OPTIONS);
+    const forecastPlans = mergeForecastPlans(snapshot,startMonth,period,paymentPlans,asOf);
+    const explicitPayments = explicitPaymentMonth(period, startMonth, snapshot, forecastPlans, COST_OPTIONS);
     const annual = annualCostForecast(period, snapshot.annualSchedules || [], snapshot.costs, invoicePaymentProfile.asOf);
     for (const cost of snapshot.costs.filter(cost => !cost.ignoruj && cost.harmonogram_id)) {
       upsertSubcategoryAmount(plannedCostSubcategories, cost.kategoria, cost.podkategoria || EMPTY_SUBCATEGORY, costShareForMonth(cost, period));
@@ -638,6 +675,10 @@ function buildBudgetMonths(
       }
     });
 
+    for (const entry of netAssumptions(period,paymentPlans)) {
+      const known=(planActualByMonth.get(period)||emptyActual()).costBySubcategory.get(entry.category)?.get(entry.subcategory)||0;
+      setSubcategoryAmount(plannedCostSubcategories,entry.category,entry.subcategory,Math.max(known,entry.amount));
+    }
     const plannedCostCategories = categoryTotalsFromSubcategories(plannedCostSubcategories);
     const plannedRevenue = sum(Array.from(plannedRevenueCategories.values()));
     const plannedCosts = sum(Array.from(plannedCostCategories.values()));
@@ -667,6 +708,7 @@ function buildBudgetMonths(
       revenueCategories: categoryRows("przychod", plannedRevenueCategories, actual.revenueByCategory),
       costCategories: categoryRows("koszt", plannedCostCategories, actual.costByCategory),
       costSubcategories: explicitPayments.groups,
+      netCostSubcategories: costGroupRows(plannedCostSubcategories,actual.costBySubcategory).map(group=>({...group,children:group.children.map(row=>({...row,source:netAssumptions(period,paymentPlans).some(p=>planKey(p.category,p.subcategory)===planKey(group.key,row.key))?"Twoje założenie wyniku":forecastPlansForNet.filter(p=>p.kwota_netto!==null&&planApplies(p,period)&&planKey(p.kategoria,p.podkategoria)===planKey(group.key,row.key)).map(p=>p.nazwa).join(" • ")||"CFO: koszt lub harmonogram roczny"}))})),
     };
   });
 }

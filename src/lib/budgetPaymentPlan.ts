@@ -15,6 +15,8 @@ export type BudgetPaymentPlan = {
   koszt_id: string | null;
   aktywny: boolean;
   created_at?: string;
+  cel_platnosci?: boolean;
+  cel_wyniku_netto?: number | null;
 };
 export type BudgetPaymentPlanInput = Omit<BudgetPaymentPlan, "id" | "created_at"> & { id?: string };
 export const EMPTY_BUDGET_SUBCATEGORY = "Bez podkategorii";
@@ -52,7 +54,10 @@ export function explicitPaymentMonth(month: string, startMonth: string, snapshot
   const linked = new Set(active.filter(p => p.koszt_id).map(p => p.koszt_id));
   for (const p of active.filter(p => planApplies(p, month))) {
     const row = get(p.kategoria, p.podkategoria);
-    if (p.rodzaj === "target") row.target = positive(p.kwota_brutto);
+    if (p.rodzaj === "target") {
+      if (p.cel_platnosci === false) continue;
+      row.target = positive(p.kwota_brutto);
+    }
     else { row.scheduled += positive(p.kwota_brutto); row.hasSchedule = true; }
     row.sources.add(p.rodzaj === "target" ? "Kwota docelowa" : p.nazwa);
   }

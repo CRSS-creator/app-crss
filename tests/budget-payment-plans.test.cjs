@@ -88,7 +88,7 @@ test("negative legacy adjustments cannot produce a negative expense forecast",()
   const compiled=ts.transpileModule(source+"\nexport { buildBudgetMonths };",{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText;
   vm.runInNewContext(compiled,{exports,console,Intl,Date,Map,Set,require:name=>{
     if(name==="@/app/design")return load("src/app/design.ts");
-    if(["@/lib/cfoCashflow","@/lib/cfoAnnualCosts","@/lib/cfoManualCashflow","@/lib/cfoManualRevenue","@/lib/budgetPaymentPlan"].includes(name))return load("src/lib/"+name.slice(6)+".ts");
+    if(["@/lib/cfoCashflow","@/lib/cfoAnnualCosts","@/lib/cfoManualCashflow","@/lib/cfoManualRevenue","@/lib/budgetPaymentPlan","@/lib/budgetAutomaticForecast"].includes(name))return load("src/lib/"+name.slice(6)+".ts");
     if(name.startsWith("@/")||name==="lucide-react")return {};
     return require(name);
   }});
@@ -96,4 +96,69 @@ test("negative legacy adjustments cannot produce a negative expense forecast",()
   const result=exports.buildBudgetMonths("2026-11",2,[],[],[],[],old,[],[],0,cash.emptyCashflow(),[]);
   assert.equal(result[0].plannedOutflows,0);assert.equal(result[0].plannedCosts,0);
   assert.ok(result.every(r=>r.costSubcategories.every(g=>g.children.every(c=>c.planned>=0))));
+});
+
+const auto=load("src/lib/budgetAutomaticForecast.ts");
+const history=[cost({id:"j",okres_start:"2026-07-01",okres_end:"2026-07-31"}),cost({id:"a",okres_start:"2026-08-01",okres_end:"2026-08-31"}),cost({id:"s",okres_start:"2026-09-01",okres_end:"2026-09-30"})];
+const forecast=(extras={},plans=[],period="2026-11")=>{
+  const snapshot={...cash.emptyCashflow(),costs:history,...extras};
+  return auto.mergeForecastPlans(snapshot,"2026-11",period,plans,"2026-10-26");
+};
+test("automatic subscription forecast is built without approving a payment plan",()=>{
+  const plans=forecast();
+  assert.equal(month(plans).total,233.70);
+  assert.equal(lib.plannedNetAmounts("2026-11",plans)[0].amount,190);
+  assert.match(plans[0].nazwa,/Automat/);
+});
+test("equipment and isolated purchases do not become recurring costs",()=>{
+  const costs=[...history,cost({id:"equipment",kwota_brutto:6548.20,kwota_netto_cfo:5323.74,okres_start:"2026-09-01",okres_end:"2026-09-30",opis:"Zakup środków trwałych"}),cost({id:"single",podkategoria:"Jednorazowy",okres_start:"2026-08-01",okres_end:"2026-08-31"})];
+  assert.equal(month(forecast({costs})).total,233.70);
+});
+test("fixed costs use the latest price and incomplete current month is excluded",()=>{
+  const costs=[...history,cost({id:"current",kwota_brutto:900,okres_start:"2026-10-01",okres_end:"2026-10-31"})];
+  assert.equal(month(forecast({costs})).total,233.70);
+  costs[2]={...costs[2],kwota_brutto:250};
+  assert.equal(month(forecast({costs})).total,250);
+});
+test("variable expense averages include months with no spending",()=>{
+  const costs=[...history,cost({id:"ads",podkategoria:"Reklama",charakter:"zmienny",kwota_brutto:900,kwota_netto_cfo:900,okres_start:"2026-08-01",okres_end:"2026-08-31"})];
+  const projected=forecast({costs}).find(p=>p.podkategoria==="Reklama");
+  assert.equal(projected.kwota_brutto,300);
+});
+test("ending a real monthly schedule cannot resurrect a historical subscription",()=>{
+  const ended=plan({pierwszy_miesiac:"2026-10-01",ostatni_miesiac:"2026-11-01",kwota_brutto:250});
+  assert.equal(month(forecast({},[ended],"2026-12"),[],{},"2026-12").total,0);
+});
+test("installment plan adds only its installment to the automatic subscription and stops on time",()=>{
+  const rate=plan({id:"rate",rodzaj:"installments",kwota_brutto:100,kwota_netto:null,pierwszy_miesiac:"2026-10-01",liczba_rat:2});
+  assert.equal(month(forecast({},[rate])).total,333.70);
+  assert.equal(month(forecast({},[rate],"2026-12"),[],{},"2026-12").total,233.70);
+});
+test("cash and net assumptions remain independent, including zero",()=>{
+  const target=plan({rodzaj:"target",kwota_brutto:0,kwota_netto:null,cel_platnosci:false,cel_wyniku_netto:0});
+  const plans=forecast({},[target]);
+  assert.equal(month(plans).total,233.70);
+  assert.equal(auto.netAssumptions("2026-11",plans)[0].amount,0);
+});
+test("automatic payroll preserves service-month due offsets and explicit zero replaces an estimate",()=>{
+  const obligations=[{id:"zus",typ:"zus",kwota:1000,okres:"2026-09-01",termin_platnosci:"2026-11-16",data_zaplaty:null}];
+  let plans=forecast({obligations},[],"2026-12");
+  assert.equal(month(plans,[],{obligations},"2026-12").groups.find(g=>g.key==="koszty_zespolu").planned,1000);
+  obligations.push({id:"zero",typ:"zus",kwota:0,okres:"2026-10-01",termin_platnosci:"2026-12-15",data_zaplaty:null});
+  plans=forecast({obligations},[],"2026-12");
+  assert.equal(month(plans,[],{obligations},"2026-12").groups.find(g=>g.key==="koszty_zespolu")?.planned||0,0);
+  plans=forecast({obligations},[],"2027-01");
+  assert.equal(month(plans,[],{obligations},"2027-01").groups.find(g=>g.key==="koszty_zespolu")?.planned||0,0);
+});
+test("team projection follows future CFO changes instead of restoring a past payroll month",()=>{
+  const employeeCosts=[{okres:"2026-09-01",zespol:"ksiegowy",podstawa:1000,zus_pracodawcy:200},{okres:"2026-11-01",zespol:"ksiegowy",podstawa:1500,zus_pracodawcy:300}];
+  const plans=forecast({employeeCosts},[],"2026-12");
+  assert.equal(lib.plannedNetAmounts("2026-12",plans).find(r=>r.subcategory==="Wynagrodzenie podstawowe").amount,1500);
+});
+
+test("a cash-only recurring decision does not silently erase the net cost estimate",()=>{
+  const cashOnly=plan({kwota_brutto:260,kwota_netto:null});
+  const projected=forecast({},[cashOnly]);
+  assert.equal(month(projected).total,260);
+  assert.equal(lib.plannedNetAmounts("2026-11",projected).find(r=>r.subcategory==="T-Mobile").amount,190);
 });

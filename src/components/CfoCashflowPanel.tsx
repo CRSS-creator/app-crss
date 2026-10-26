@@ -9,6 +9,7 @@ import Link from "next/link";
 import CfoPayrollSettlement from "./CfoPayrollSettlement";
 import CfoManualCashflows from "./CfoManualCashflows";
 import CfoAnnualSchedules from "./CfoAnnualSchedules";
+import CfoPaymentSchedules from "./CfoPaymentSchedules";
 import { OBLIGATION_TYPES, businessDate, type CashflowSnapshot, type CfoObligation } from "@/lib/cfoCashflow";
 import { saveObligation } from "@/lib/cfoCashflowService";
 import { updateCfoCost } from "@/lib/cfoService";
@@ -57,6 +58,7 @@ export default function CfoCashflowPanel({ snapshot, period, onUpdated }: {
   return <div style={{ display: "grid", gap: "18px" }}>
     <CfoManualCashflows key={period} period={period} rows={snapshot.manualFlows || []} onUpdated={onUpdated} />
     <CfoAnnualSchedules snapshot={snapshot} onUpdated={onUpdated} />
+    <CfoPaymentSchedules snapshot={snapshot} period={period} onUpdated={onUpdated} />
     {error && <div role="alert" style={ui.error}>{error}</div>}
     <section style={ui.panel}>
       <header style={ui.header}><div style={ui.titleGroup}><WalletCards size={21} color={colors.red} /><h2 style={ui.title}>Rozliczenie wynagrodzeń i podatków</h2></div><span style={ui.badge}>{period}</span></header>

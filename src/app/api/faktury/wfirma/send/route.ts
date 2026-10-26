@@ -95,6 +95,9 @@ export async function POST(request: NextRequest) {
     let createdWfirmaIssueDate = invoice.data_wystawienia || new Date().toISOString().slice(0, 10);
     let createdPaymentDate = specialInvoicePaymentDate(invoice, createdWfirmaIssueDate) || invoice.termin_platnosci || addDays(createdWfirmaIssueDate, 7);
     try {
+      if ((invoice.opis || "").length > 512) {
+        throw new Error("Opis faktury ma " + invoice.opis!.length + " znaków. wFirma dopuszcza maksymalnie 512. Skróć opis w szczegółach szkicu i ponów wysyłkę.");
+      }
       await assertNoDuplicateStandardInvoice(auth.admin, invoice);
       const validationErrors = validateWfirmaInvoice(invoice);
       if (validationErrors.length > 0) throw new Error(`Brakuje danych do wFirmy: ${validationErrors.join(", ")}.`);

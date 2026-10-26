@@ -567,6 +567,7 @@ function InvoicesContent() {
 
   async function saveDescription(invoice: Invoice) {
     if (!canEditDraftInvoice(invoice) || descriptionSaveLock.current || descriptionEdit?.invoiceId !== invoice.id) return;
+    if (descriptionEdit.value.trim().length > 512) return alert("Opis faktury może mieć maksymalnie 512 znaków. Skróć opis przed zapisaniem.");
     descriptionSaveLock.current = true;
     setSavingDescription(true);
     try {
@@ -650,7 +651,10 @@ function InvoicesContent() {
 
   async function removeLine(invoice: Invoice, line: InvoiceLine) {
     if (!canEditDraftInvoice(invoice)) return;
-    if (!window.confirm(`Usunąć pozycję "${line.nazwa}" z tej faktury?`)) return;
+    const confirmation = line.source_key?.startsWith("oplata:")
+      ? `Usunąć opłatę "${line.nazwa}" z tej faktury? Opłata zostanie pominięta w fakturowaniu i nie zostanie automatycznie naliczona ponownie.`
+      : `Usunąć pozycję "${line.nazwa}" z tej faktury?`;
+    if (!window.confirm(confirmation)) return;
 
     setDeletingLineId(line.id);
     const result = await deleteDraftInvoiceLine(invoice.id, line.id);
@@ -1314,7 +1318,8 @@ function InvoicesContent() {
                 {detailsDraftEditable && descriptionEdit?.invoiceId !== detailsInvoice.id && <button type="button" style={secondaryButtonStyle} disabled={savingDescription} onClick={() => setDescriptionEdit({ invoiceId: detailsInvoice.id, value: detailsInvoice.opis || "" })}><Pencil size={16} />Edytuj opis</button>}
               </div>
               {detailsDraftEditable && descriptionEdit?.invoiceId === detailsInvoice.id ? <>
-                <textarea aria-label="Opis faktury" style={{ ...inputStyle, width: "100%", minHeight: 160, resize: "vertical", boxSizing: "border-box", fontFamily: "inherit", lineHeight: 1.6 }} value={descriptionEdit.value} disabled={savingDescription} onChange={event => setDescriptionEdit({ invoiceId: detailsInvoice.id, value: event.target.value })} />
+                <textarea maxLength={512} aria-label="Opis faktury" style={{ ...inputStyle, width: "100%", minHeight: 160, resize: "vertical", boxSizing: "border-box", fontFamily: "inherit", lineHeight: 1.6 }} value={descriptionEdit.value} disabled={savingDescription} onChange={event => setDescriptionEdit({ invoiceId: detailsInvoice.id, value: event.target.value })} />
+                <small style={{ color: descriptionEdit.value.length > 512 ? colors.danger : colors.muted }}>{descriptionEdit.value.length}/512 znaków — limit wFirmy</small>
                 <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
                   <button type="button" style={primaryButtonStyle} disabled={savingDescription} onClick={() => void saveDescription(detailsInvoice)}><Save size={16} />{savingDescription ? "Zapisywanie…" : "Zapisz opis"}</button>
                   <button type="button" style={secondaryButtonStyle} disabled={savingDescription} onClick={() => setDescriptionEdit(null)}>Anuluj</button>
@@ -1492,6 +1497,7 @@ function wfirmaReadinessIssues(invoice: Invoice) {
   const issues: string[] = [];
   const lines = invoiceLines(invoice);
 
+  if ((invoice.opis || "").length > 512) issues.push("opis przekracza limit 512 znaków");
   if (!invoice.kontrahent_nazwa?.trim()) issues.push("brak kontrahenta");
   if (!invoice.kontrahent_nip?.trim()) issues.push("brak NIP");
   if (lines.length === 0) issues.push("brak pozycji");

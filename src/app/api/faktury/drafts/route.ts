@@ -99,6 +99,9 @@ export async function POST(request: NextRequest) {
     if (typeof payload.opis !== "string") {
       return NextResponse.json({ error: "Nieprawidłowy opis faktury." }, { status: 400 });
     }
+    if (payload.opis.trim().length > 512) {
+      return NextResponse.json({ error: "Opis faktury może mieć maksymalnie 512 znaków (limit wFirmy)." }, { status: 400 });
+    }
     const updated = await auth.admin.from("faktury")
       .update({ opis: payload.opis.trim() || null, opis_reczny: true })
       .eq("id", invoice.data.id)

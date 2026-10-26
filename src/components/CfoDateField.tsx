@@ -13,7 +13,7 @@ export default function CfoDateField({ value, onChange, disabled = false, max, a
   const [invalid, setInvalid] = useState(false);
   return <div style={{ minWidth: 0 }}>
     <div style={{ display: "grid", gridTemplateColumns: value ? "minmax(0, 1fr) 24px" : "minmax(0, 1fr)", alignItems: "center", gap: "4px" }}>
-      <AppDateInput ariaLabel={ariaLabel} value={value} disabled={disabled} style={{ ...(compact ? ui.compactInput : ui.input), ...style }} onChange={date => {
+      <AppDateInput ariaLabel={ariaLabel} value={value} max={max} disabled={disabled} style={{ ...(compact ? ui.compactInput : ui.input), ...style }} onChange={date => {
         if (max && date > max) { setInvalid(true); return; }
         setInvalid(false); onChange(date);
       }} />

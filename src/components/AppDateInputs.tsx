@@ -24,12 +24,15 @@ type CommonInputProps = {
   max?: string;
   id?: string;
   className?: string;
+  required?: boolean;
+  name?: string;
+  readOnly?: boolean;
 };
 
-export function AppMonthInput({ value, onChange, disabled = false, style, ariaLabel, min, max, id, className }: CommonInputProps) {
+export function AppMonthInput({ value, onChange, disabled = false, style, ariaLabel, min, max, id, className, required, name, readOnly = false }: CommonInputProps) {
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState<PickerPosition | null>(null);
-  const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const buttonRef = useRef<HTMLDivElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const selected = parseMonth(value);
   const [year, setYear] = useState(selected.year);
@@ -38,46 +41,43 @@ export function AppMonthInput({ value, onChange, disabled = false, style, ariaLa
 
   return (
     <>
-      <button
-        ref={buttonRef}
-        type="button"
-        disabled={disabled}
-        aria-label={ariaLabel}
-        id={id}
-        className={className}
-        aria-expanded={open}
-        style={{ ...inputButtonStyle, ...(disabled ? disabledStyle : null), ...style }}
-        onClick={() => {
+      <EditablePickerField
+        anchorRef={buttonRef}
+        mode="month"
+        value={value} onChange={onChange} disabled={disabled} readOnly={readOnly}
+        required={required} name={name} min={min} max={max}
+        id={id} className={className} ariaLabel={ariaLabel} style={style}
+        open={open} onOpen={() => {
           setYear(parseMonth(value).year);
           setOpen((current) => !current);
         }}
-      >
-        <span>{formatMonthLabel(value)}</span>
-        <Calendar size={16} />
-      </button>
+      />
 
-      {open && position && createPortal(
+      {open && !disabled && !readOnly && position && createPortal(
         <div ref={menuRef} style={{ ...pickerStyle, top: position.top, left: position.left, width: position.width }}>
           <div style={pickerHeaderStyle}>
-            <button type="button" style={iconButtonStyle} onClick={() => setYear((current) => current - 1)} aria-label="Poprzedni rok">
+            <button type="button" style={iconButtonStyle} onClick={() => setYear((current) => Math.max(100, current - 1))} aria-label="Poprzedni rok">
               <ChevronLeft size={16} />
             </button>
-            <strong>{year}</strong>
-            <button type="button" style={iconButtonStyle} onClick={() => setYear((current) => current + 1)} aria-label="Następny rok">
+            <YearInput year={year} onChange={setYear} />
+            <button type="button" style={iconButtonStyle} onClick={() => setYear((current) => Math.min(9999, current + 1))} aria-label="Następny rok">
               <ChevronRight size={16} />
             </button>
           </div>
           <div style={monthGridStyle}>
             {MONTHS.map((month, index) => {
-              const monthValue = `${year}-${String(index + 1).padStart(2, "0")}`;
+              const monthValue = `${String(year).padStart(4, "0")}-${String(index + 1).padStart(2, "0")}`;
               const active = monthValue === value;
+              const isToday = monthValue === currentMonthValue();
               const unavailable = Boolean((min && monthValue < min) || (max && monthValue > max));
               return (
                 <button
                   key={month}
                   disabled={unavailable}
                   type="button"
-                  style={{ ...(active ? activeCellStyle : cellStyle), ...(unavailable ? disabledStyle : null) }}
+                  aria-current={isToday ? "date" : undefined}
+                  aria-pressed={active}
+                  style={{ ...cellStyle, ...(isToday ? todayCellStyle : null), ...(active ? selectedCellStyle : null), ...(unavailable ? disabledStyle : null) }}
                   onClick={() => {
                     onChange(monthValue);
                     setOpen(false);
@@ -105,45 +105,45 @@ export function AppMonthInput({ value, onChange, disabled = false, style, ariaLa
   );
 }
 
-export function AppDateInput({ value, onChange, disabled = false, style, ariaLabel, min, max, id, className }: CommonInputProps) {
+export function AppDateInput({ value, onChange, disabled = false, style, ariaLabel, min, max, id, className, required, name, readOnly = false }: CommonInputProps) {
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState<PickerPosition | null>(null);
-  const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const buttonRef = useRef<HTMLDivElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const [viewDate, setViewDate] = useState(() => parseDate(value) || new Date());
 
   usePickerPosition(open, buttonRef, menuRef, setPosition, setOpen, 292);
 
   const days = useMemo(() => calendarDays(viewDate), [viewDate]);
-  const monthValue = `${viewDate.getFullYear()}-${String(viewDate.getMonth() + 1).padStart(2, "0")}`;
+  const today = toDateValue(new Date());
 
   return (
     <>
-      <button
-        ref={buttonRef}
-        type="button"
-        disabled={disabled}
-        aria-label={ariaLabel}
-        id={id}
-        className={className}
-        aria-expanded={open}
-        style={{ ...inputButtonStyle, ...(disabled ? disabledStyle : null), ...style }}
-        onClick={() => {
+      <EditablePickerField
+        anchorRef={buttonRef}
+        mode="date"
+        value={value} onChange={onChange} disabled={disabled} readOnly={readOnly}
+        required={required} name={name} min={min} max={max}
+        id={id} className={className} ariaLabel={ariaLabel} style={style}
+        open={open} onOpen={() => {
           setViewDate(parseDate(value) || new Date());
           setOpen((current) => !current);
         }}
-      >
-        <span>{formatDateLabel(value)}</span>
-        <Calendar size={16} />
-      </button>
+      />
 
-      {open && position && createPortal(
+      {open && !disabled && !readOnly && position && createPortal(
         <div ref={menuRef} style={{ ...pickerStyle, top: position.top, left: position.left, width: position.width }}>
           <div style={pickerHeaderStyle}>
             <button type="button" style={iconButtonStyle} onClick={() => setViewDate(addMonths(viewDate, -1))} aria-label="Poprzedni miesiąc">
               <ChevronLeft size={16} />
             </button>
-            <strong>{formatMonthLabel(monthValue)}</strong>
+            <div style={{ display: "flex", gap: 4, minWidth: 0 }}>
+              <select aria-label="Miesiąc kalendarza" value={viewDate.getMonth()} style={navigationInputStyle}
+                onChange={event => setViewDate(new Date(viewDate.getFullYear(), Number(event.target.value), 1))}>
+                {MONTHS.map((month, index) => <option key={month} value={index}>{month}</option>)}
+              </select>
+              <YearInput year={viewDate.getFullYear()} onChange={year => setViewDate(new Date(year, viewDate.getMonth(), 1))} />
+            </div>
             <button type="button" style={iconButtonStyle} onClick={() => setViewDate(addMonths(viewDate, 1))} aria-label="Następny miesiąc">
               <ChevronRight size={16} />
             </button>
@@ -155,15 +155,21 @@ export function AppDateInput({ value, onChange, disabled = false, style, ariaLab
             {days.map((day) => {
               const dayValue = toDateValue(day.date);
               const active = dayValue === value;
+              const isToday = dayValue === today;
               const unavailable = Boolean((min && dayValue < min) || (max && dayValue > max));
               return (
                 <button
                   key={dayValue}
                   disabled={unavailable}
                   type="button"
+                  aria-label={formatDateLabel(dayValue)}
+                  aria-current={isToday ? "date" : undefined}
+                  aria-pressed={active}
                   style={{
-                    ...(active ? activeCellStyle : cellStyle),
+                    ...cellStyle,
                     ...(day.inMonth ? null : outsideMonthStyle),
+                    ...(isToday ? todayCellStyle : null),
+                    ...(active ? selectedCellStyle : null),
                     ...(unavailable ? disabledStyle : null),
                   }}
                   onClick={() => {
@@ -195,7 +201,7 @@ export function AppDateInput({ value, onChange, disabled = false, style, ariaLab
 
 function usePickerPosition(
   open: boolean,
-  buttonRef: RefObject<HTMLButtonElement | null>,
+  buttonRef: RefObject<HTMLDivElement | null>,
   menuRef: RefObject<HTMLDivElement | null>,
   setPosition: (position: PickerPosition | null) => void,
   setOpen: (open: boolean) => void,
@@ -224,15 +230,24 @@ function usePickerPosition(
       setOpen(false);
     }
 
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setOpen(false);
+        buttonRef.current?.querySelector("input")?.focus();
+      }
+    }
+
     placeMenu();
     const frame = window.requestAnimationFrame(placeMenu);
     document.addEventListener("mousedown", closeOnOutside);
+    document.addEventListener("keydown", closeOnEscape);
     window.addEventListener("resize", placeMenu);
     window.addEventListener("scroll", placeMenu, true);
 
     return () => {
       window.cancelAnimationFrame(frame);
       document.removeEventListener("mousedown", closeOnOutside);
+      document.removeEventListener("keydown", closeOnEscape);
       window.removeEventListener("resize", placeMenu);
       window.removeEventListener("scroll", placeMenu, true);
     };
@@ -246,7 +261,7 @@ function currentMonthValue() {
 
 function parseMonth(value: string) {
   const match = value.match(/^(\d{4})-(\d{2})$/);
-  if (!match) {
+  if (!match || Number(match[1]) < 100 || Number(match[2]) < 1 || Number(match[2]) > 12) {
     const now = new Date();
     return { year: now.getFullYear(), month: now.getMonth() + 1 };
   }
@@ -256,7 +271,7 @@ function parseMonth(value: string) {
 function parseDate(value: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
   const date = new Date(`${value}T12:00:00`);
-  return Number.isNaN(date.getTime()) ? null : date;
+  return Number.isNaN(date.getTime()) || toDateValue(date) !== value ? null : date;
 }
 
 function formatMonthLabel(value: string) {
@@ -286,11 +301,12 @@ function calendarDays(viewDate: Date) {
 }
 
 function addMonths(date: Date, months: number) {
-  return new Date(date.getFullYear(), date.getMonth() + months, 1);
+  const next = new Date(date.getFullYear(), date.getMonth() + months, 1);
+  return next.getFullYear() < 100 || next.getFullYear() > 9999 ? date : next;
 }
 
 function toDateValue(date: Date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  return `${String(date.getFullYear()).padStart(4, "0")}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
 const inputButtonStyle: CSSProperties = {
@@ -306,7 +322,7 @@ const inputButtonStyle: CSSProperties = {
   color: colors.text,
   padding: "10px 12px",
   fontSize: "14px",
-  fontWeight: 750,
+  fontWeight: 500,
   cursor: "pointer",
   textAlign: "left",
   boxSizing: "border-box",
@@ -386,10 +402,20 @@ const cellStyle: CSSProperties = {
   cursor: "pointer",
 };
 
-const activeCellStyle: CSSProperties = {
+const todayCellStyle: CSSProperties = {
   ...cellStyle,
   background: colors.navy,
   color: colors.white,
+};
+
+const selectedCellStyle: CSSProperties = {
+  outline: `2px solid ${colors.red}`,
+  outlineOffset: "-2px",
+};
+
+const navigationInputStyle: CSSProperties = {
+  minWidth: 0, padding: "5px", border: `1px solid ${colors.border}`,
+  borderRadius: "6px", background: colors.white, color: colors.text, fontSize: "13px",
 };
 
 const outsideMonthStyle: CSSProperties = {
@@ -408,3 +434,107 @@ const todayButtonStyle: CSSProperties = {
   fontWeight: 850,
   cursor: "pointer",
 };
+
+
+function YearInput({ year, onChange }: { year: number; onChange: (year: number) => void }) {
+  function commit(input: HTMLInputElement) {
+    const next = Number(input.value);
+    if (/^\d{3,4}$/.test(input.value) && next >= 100 && next <= 9999) onChange(next);
+    else input.value = String(year);
+  }
+  return <input key={year} type="number" aria-label="Rok kalendarza" min={100} max={9999}
+    defaultValue={year} style={{ ...navigationInputStyle, width: 76 }}
+    onBlur={event => commit(event.currentTarget)}
+    onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); commit(event.currentTarget); } }} />;
+}
+
+type EditablePickerProps = CommonInputProps & {
+  mode: "date" | "month";
+  anchorRef: RefObject<HTMLDivElement | null>;
+  open: boolean;
+  onOpen: () => void;
+};
+
+function typedValue(text: string, mode: "date" | "month"): string | null {
+  const trimmed = text.trim();
+  if (!trimmed) return "";
+  if (mode === "month") {
+    const polish = trimmed.match(/^(\d{2})[.\/-](\d{4})$/);
+    const iso = polish ? `${polish[2]}-${polish[1]}` : trimmed;
+    return /^\d{4}-(0[1-9]|1[0-2])$/.test(iso) && Number(iso.slice(0, 4)) >= 100 ? iso : null;
+  }
+  const polish = trimmed.match(/^(\d{2})[.\/](\d{2})[.\/](\d{4})$/);
+  const iso = polish ? `${polish[3]}-${polish[2]}-${polish[1]}` : trimmed;
+  return parseDate(iso) && Number(iso.slice(0, 4)) >= 100 ? iso : null;
+}
+
+function editableLabel(value: string, mode: "date" | "month") {
+  if (!value) return "";
+  return mode === "month" ? `${value.slice(5, 7)}.${value.slice(0, 4)}` : formatDateLabel(value);
+}
+
+function EditablePickerField({ mode, anchorRef, open, onOpen, value, onChange, disabled, readOnly,
+  required, name, min, max, style, ariaLabel, id, className }: EditablePickerProps) {
+  const [draft, setDraft] = useState(() => editableLabel(value, mode));
+  const [error, setError] = useState("");
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [source, setSource] = useState({ value, mode, open });
+  if (source.value !== value || source.mode !== mode || source.open !== open) {
+    setSource({ value, mode, open });
+    setDraft(editableLabel(value, mode));
+    setError("");
+  }
+  useEffect(() => {
+    inputRef.current?.setCustomValidity("");
+  }, [value, mode, open]);
+
+  function validation(text: string) {
+    const parsed = typedValue(text, mode);
+    if (parsed === null) return mode === "date" ? "Wpisz poprawną datę: DD.MM.RRRR." : "Wpisz poprawny miesiąc: MM.RRRR.";
+    if (!parsed && required) return "Uzupełnij to pole.";
+    if (parsed && min && parsed < min) return `Najwcześniejsza dozwolona wartość: ${editableLabel(min, mode)}.`;
+    if (parsed && max && parsed > max) return `Najpóźniejsza dozwolona wartość: ${editableLabel(max, mode)}.`;
+    return "";
+  }
+  function commit() {
+    if (disabled || readOnly) return;
+    const message = validation(draft);
+    setError(message);
+    inputRef.current?.setCustomValidity(message);
+    if (message) return;
+    const parsed = typedValue(draft, mode)!;
+    setDraft(editableLabel(parsed, mode));
+    if (parsed !== value) onChange(parsed);
+  }
+  return <div ref={anchorRef} style={{ minWidth: 0, width: "100%" }}>
+    <div style={{ ...inputButtonStyle, padding: 0, ...(disabled ? disabledStyle : null), ...style,
+      display: "flex", minWidth: 0, cursor: "text" }}>
+      <input ref={inputRef} type="text" inputMode="numeric" value={draft}
+        id={id} name={name} className={className} disabled={disabled} readOnly={readOnly} required={required}
+        aria-label={ariaLabel || (mode === "date" ? "Data" : "Miesiąc")}
+        aria-invalid={Boolean(error)} placeholder={mode === "date" ? "DD.MM.RRRR" : "MM.RRRR"}
+        style={{ width: "100%", minWidth: 0, flex: 1, border: 0, background: "transparent", color: "inherit",
+          font: "inherit", padding: "8px", borderRadius: "inherit", boxSizing: "border-box" }}
+        onChange={event => {
+          setDraft(event.target.value);
+          const message = validation(event.target.value);
+          event.target.setCustomValidity(message);
+          if (error) setError(message);
+        }}
+        onBlur={commit}
+        onKeyDown={event => {
+          if (event.key === "Enter") { event.preventDefault(); commit(); }
+          if (event.key === "Escape") {
+            setDraft(editableLabel(value, mode)); setError(""); event.currentTarget.setCustomValidity("");
+          }
+          if (event.key === "ArrowDown" && event.altKey) { event.preventDefault(); onOpen(); }
+        }} />
+      <button type="button" disabled={disabled || readOnly} aria-label="Otwórz kalendarz"
+        aria-expanded={open} onClick={onOpen}
+        style={{ ...iconButtonStyle, flexShrink: 0, border: 0, background: "transparent" }}>
+        <Calendar size={16} />
+      </button>
+    </div>
+    {error && <small role="alert" style={{ color: colors.danger, fontSize: 11 }}>{error}</small>}
+  </div>;
+}

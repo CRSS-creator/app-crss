@@ -1,4 +1,5 @@
 "use client";
+import { AppDateInput } from "@/components/AppDateInputs";
 
 import { AppFormInput } from "@/components/AppFormControls";
 import NotificationDeliveryStatus from "@/components/NotificationDeliveryStatus";
@@ -935,102 +936,9 @@ function SmallPlusAmountInput({ value, onCommit, ariaLabel }: { value: number | 
 }
 
 function InlineDateInput({ value, onChange, ariaLabel }: { value: string; onChange: (value: string) => void; ariaLabel: string }) {
-  const [open, setOpen] = useState(false);
-  const [textValue, setTextValue] = useState(() => formatDateInputText(value));
-  const [viewDate, setViewDate] = useState(() => dateFromInput(value) || new Date());
-  const days = calendarDays(viewDate);
-
-  useEffect(() => {
-    setTextValue(formatDateInputText(value));
-    if (value) setViewDate(dateFromInput(value) || new Date());
-  }, [value]);
-
-  function changeMonth(delta: number) {
-    setViewDate((current) => new Date(current.getFullYear(), current.getMonth() + delta, 1, 12));
-  }
-
-  function selectDate(date: Date) {
-    onChange(dateToInputValue(date));
-    setTextValue(formatDateInputText(dateToInputValue(date)));
-    setViewDate(new Date(date.getFullYear(), date.getMonth(), 1, 12));
-    setOpen(false);
-  }
-
-  function handleTextChange(nextValue: string) {
-    const masked = maskPolishDateText(nextValue);
-    setTextValue(masked);
-    const parsed = parsePolishDateText(masked);
-    if (parsed !== null) {
-      onChange(parsed);
-      setViewDate(dateFromInput(parsed) || new Date());
-    }
-  }
-
-  function handleBlur() {
-    if (!textValue.trim()) {
-      onChange("");
-      return;
-    }
-
-    const parsed = parsePolishDateText(textValue);
-    if (parsed === null) setTextValue(formatDateInputText(value));
-  }
-
-  return (
-    <div style={inlineDateWrapStyle}>
-      <input
-        aria-label={ariaLabel}
-        type="text"
-        value={textValue}
-        onChange={(event) => handleTextChange(event.target.value)}
-        onBlur={handleBlur}
-        inputMode="numeric"
-        placeholder="dd.mm.rrrr"
-        style={inlineDateInputStyle}
-      />
-      <button type="button" style={inlineDateIconButtonStyle} onClick={() => setOpen((current) => !current)} aria-label={`Otwórz kalendarz: ${ariaLabel}`}>
-        <CalendarDays size={16} />
-      </button>
-      {open && (
-        <div style={inlineDateCalendarStyle}>
-          <div style={dateCalendarHeaderStyle}>
-            <button type="button" style={dateNavButtonStyle} onClick={() => changeMonth(-1)} aria-label="Poprzedni miesiąc">
-              <ChevronLeft size={18} />
-            </button>
-            <strong>{formatCalendarMonth(viewDate)}</strong>
-            <button type="button" style={dateNavButtonStyle} onClick={() => changeMonth(1)} aria-label="Następny miesiąc">
-              <ChevronRight size={18} />
-            </button>
-          </div>
-          <div style={dateWeekdaysStyle}>
-            {["pon", "wt", "śr", "czw", "pt", "sob", "nie"].map((day) => <span key={day}>{day}</span>)}
-          </div>
-          <div style={dateDaysGridStyle}>
-            {days.map((day) => {
-              const inputValue = dateToInputValue(day.date);
-              const selected = value === inputValue;
-              const muted = day.date.getMonth() !== viewDate.getMonth();
-              return (
-                <button
-                  key={inputValue}
-                  type="button"
-                  style={selected ? selectedDateDayStyle : muted ? mutedDateDayStyle : dateDayStyle}
-                  onClick={() => selectDate(day.date)}
-                >
-                  {day.date.getDate()}
-                </button>
-              );
-            })}
-          </div>
-          <div style={dateCalendarFooterStyle}>
-            <button type="button" style={dateFooterButtonStyle} onClick={() => { onChange(""); setTextValue(""); setOpen(false); }}>Wyczyść</button>
-            <button type="button" style={dateFooterButtonStyle} onClick={() => selectDate(new Date())}>Dzisiaj</button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+  return <AppDateInput value={value} onChange={onChange} ariaLabel={ariaLabel} style={inlineDateInputStyle} />;
 }
+
 
 function ZusContributionsModal({ schemes, onClose }: { schemes: string[]; onClose: () => void }) {
   const currentYear = new Date().getFullYear();

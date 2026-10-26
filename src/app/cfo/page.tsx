@@ -41,7 +41,7 @@ import {
 
 import CfoCashflowPanel from "@/components/CfoCashflowPanel";
 import CfoDateField from "@/components/CfoDateField";
-import { AppMonthInput } from "@/components/AppDateInputs";
+import { AppDateInput, AppMonthInput } from "@/components/AppDateInputs";
 import * as cfoUi from "@/components/cfoStyles";
 import { cashflowTransactions, emptyCashflow, actualCostPayment, outstandingReceivables, type CashflowSnapshot } from "@/lib/cfoCashflow";
 import { fetchCashflowSnapshot } from "@/lib/cfoCashflowService";
@@ -520,213 +520,14 @@ function renderRevenueSection(lines: CfoInvoiceLine[], onChange: (line: CfoInvoi
 }
 
 function DateField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
-  const [open, setOpen] = useState(false);
-  const [text, setText] = useState(formatDateForField(value));
-  const [visibleMonth, setVisibleMonth] = useState(() => dateFromIso(value));
-  const rootRef = useRef<HTMLDivElement | null>(null);
-  const selectedDate = dateFromIso(value);
-  const days = calendarDays(visibleMonth);
-  const fieldText = open ? text : formatDateForField(value);
-
-  useEffect(() => {
-    if (!open) return;
-    function closeOnOutside(event: MouseEvent) {
-      if (rootRef.current?.contains(event.target as Node)) return;
-      setOpen(false);
-    }
-    document.addEventListener("mousedown", closeOnOutside);
-    return () => document.removeEventListener("mousedown", closeOnOutside);
-  }, [open]);
-
-  function commitText(nextText: string) {
-    const parsed = parseDateFieldText(nextText);
-    if (parsed) onChange(parsed);
-    else setText(formatDateForField(value));
-  }
-
-  function pickDate(date: Date) {
-    const iso = formatIsoDate(date);
-    onChange(iso);
-    setText(formatDateForField(iso));
-    setOpen(false);
-  }
-
-  return (
-    <div ref={rootRef} style={dateFieldStyle}>
-      <div style={dateControlStyle}>
-        <input
-          style={dateTextInputStyle}
-          value={fieldText}
-          placeholder="dd.mm.rrrr"
-          onChange={(event) => {
-            setText(event.target.value);
-            const parsed = parseDateFieldText(event.target.value);
-            if (parsed) onChange(parsed);
-          }}
-          onBlur={() => commitText(text)}
-          onFocus={() => {
-            setText(formatDateForField(value));
-            setVisibleMonth(dateFromIso(value));
-            setOpen(true);
-          }}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.currentTarget.blur();
-              commitText(text);
-            }
-            if (event.key === "Escape") setOpen(false);
-          }}
-        />
-        <button
-          type="button"
-          style={dateIconButtonStyle}
-          onClick={() => {
-            setText(formatDateForField(value));
-            setVisibleMonth(dateFromIso(value));
-            setOpen((current) => !current);
-          }}
-          aria-label="Wybierz datę"
-        >
-          <CalendarDays size={17} />
-        </button>
-      </div>
-      {open ? (
-        <div style={datePickerStyle}>
-          <div style={datePickerHeaderStyle}>
-            <button type="button" style={dateNavButtonStyle} onClick={() => setVisibleMonth(addMonths(visibleMonth, -1))}>‹</button>
-            <strong>{MONTH_LABELS[visibleMonth.getMonth()]} {visibleMonth.getFullYear()}</strong>
-            <button type="button" style={dateNavButtonStyle} onClick={() => setVisibleMonth(addMonths(visibleMonth, 1))}>›</button>
-          </div>
-          <div style={dateWeekGridStyle}>
-            {["pon", "wt", "śr", "czw", "pt", "sob", "nie"].map((day) => <span key={day} style={dateWeekdayStyle}>{day}</span>)}
-            {days.map((day) => {
-              const iso = formatIsoDate(day);
-              const currentMonth = day.getMonth() === visibleMonth.getMonth();
-              const selected = iso === formatIsoDate(selectedDate);
-              return (
-                <button
-                  key={iso}
-                  type="button"
-                  style={{ ...dateDayStyle, ...(currentMonth ? null : dateMutedDayStyle), ...(selected ? dateSelectedDayStyle : null) }}
-                  onClick={() => pickDate(day)}
-                >
-                  {day.getDate()}
-                </button>
-              );
-            })}
-          </div>
-          <button type="button" style={todayButtonStyle} onClick={() => pickDate(new Date())}>Dzisiaj</button>
-        </div>
-      ) : null}
-    </div>
-  );
+  return <AppDateInput value={value} onChange={onChange} style={inputStyle} />;
 }
+
 
 function MonthField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
-  const [open, setOpen] = useState(false);
-  const [text, setText] = useState(formatMonthField(value));
-  const [visibleYear, setVisibleYear] = useState(() => Number(value.slice(0, 4)) || new Date().getFullYear());
-  const rootRef = useRef<HTMLDivElement | null>(null);
-  const selectedMonth = parseMonthValue(value);
-  const fieldText = open ? text : formatMonthField(value);
-
-  useEffect(() => {
-    if (!open) return;
-    function closeOnOutside(event: MouseEvent) {
-      if (rootRef.current?.contains(event.target as Node)) return;
-      setOpen(false);
-    }
-    document.addEventListener("mousedown", closeOnOutside);
-    return () => document.removeEventListener("mousedown", closeOnOutside);
-  }, [open]);
-
-  function commitText(nextText: string) {
-    const parsed = parseMonthFieldText(nextText);
-    if (parsed) onChange(parsed);
-    else setText(formatMonthField(value));
-  }
-
-  function pickMonth(monthIndex: number) {
-    const nextValue = `${visibleYear}-${String(monthIndex + 1).padStart(2, "0")}`;
-    onChange(nextValue);
-    setText(formatMonthField(nextValue));
-    setOpen(false);
-  }
-
-  return (
-    <div ref={rootRef} style={monthFieldWrapperStyle}>
-      <div style={monthControlStyle}>
-        <CalendarDays size={17} style={monthIconStyle} />
-        <input
-          style={monthTextInputStyle}
-          value={fieldText}
-          placeholder="miesiąc rrrr"
-          onChange={(event) => {
-            setText(event.target.value);
-            const parsed = parseMonthFieldText(event.target.value);
-            if (parsed) onChange(parsed);
-          }}
-          onBlur={() => commitText(text)}
-          onFocus={() => {
-            setText(formatMonthField(value));
-            setVisibleYear(Number(value.slice(0, 4)) || new Date().getFullYear());
-            setOpen(true);
-          }}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.currentTarget.blur();
-              commitText(text);
-            }
-            if (event.key === "Escape") setOpen(false);
-          }}
-        />
-        <button
-          type="button"
-          style={dateIconButtonStyle}
-          onClick={() => {
-            setText(formatMonthField(value));
-            setVisibleYear(Number(value.slice(0, 4)) || new Date().getFullYear());
-            setOpen((current) => !current);
-          }}
-          aria-label="Wybierz miesiąc"
-        >
-          <CalendarDays size={17} />
-        </button>
-      </div>
-      {open ? (
-        <div style={monthPickerStyle}>
-          <div style={datePickerHeaderStyle}>
-            <button type="button" style={dateNavButtonStyle} onClick={() => setVisibleYear((year) => year - 1)}>‹</button>
-            <strong>{visibleYear}</strong>
-            <button type="button" style={dateNavButtonStyle} onClick={() => setVisibleYear((year) => year + 1)}>›</button>
-          </div>
-          <div style={monthGridStyle}>
-            {MONTH_LABELS.map((label, index) => {
-              const selected = selectedMonth.year === visibleYear && selectedMonth.month === index + 1;
-              return (
-                <button
-                  key={label}
-                  type="button"
-                  style={{ ...monthButtonStyle, ...(selected ? monthSelectedButtonStyle : null) }}
-                  onClick={() => pickMonth(index)}
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </div>
-          <button type="button" style={todayButtonStyle} onClick={() => {
-            const today = new Date();
-            const nextValue = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
-            onChange(nextValue);
-            setText(formatMonthField(nextValue));
-            setOpen(false);
-          }}>Bieżący miesiąc</button>
-        </div>
-      ) : null}
-    </div>
-  );
+  return <AppMonthInput value={value} onChange={onChange} style={monthControlStyle} />;
 }
+
 
 function renderCostSection(
   period: string,

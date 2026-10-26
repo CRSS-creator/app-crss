@@ -1,4 +1,5 @@
 "use client";
+import { AppDateInput } from "@/components/AppDateInputs";
 import NotificationDeliveryStatus from "@/components/NotificationDeliveryStatus";
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
@@ -915,105 +916,9 @@ function AmlTabContent({
 }
 
 function AmlDatePicker({ value, onChange }: { value: string; onChange: (value: string) => void }) {
-  const [open, setOpen] = useState(false);
-  const [viewDate, setViewDate] = useState(() => dateFromInput(value) || new Date());
-  const [draft, setDraft] = useState(() => value ? formatDate(value) : "");
-  const days = calendarDays(viewDate);
-
-  useEffect(() => {
-    setDraft(value ? formatDate(value) : "");
-    if (value) setViewDate(dateFromInput(value) || new Date());
-  }, [value]);
-
-  function changeMonth(delta: number) {
-    setViewDate((current) => new Date(current.getFullYear(), current.getMonth() + delta, 1, 12));
-  }
-
-  function selectDate(date: Date) {
-    onChange(dateToInputValue(date));
-    setViewDate(new Date(date.getFullYear(), date.getMonth(), 1, 12));
-    setOpen(false);
-  }
-
-  function commitTypedDate(rawValue = draft) {
-    const parsed = inputValueFromPolishDate(rawValue);
-    if (parsed) {
-      onChange(parsed);
-      setDraft(formatDate(parsed));
-      setViewDate(dateFromInput(parsed) || new Date());
-      return;
-    }
-    if (!rawValue.trim()) onChange("");
-    setDraft(value ? formatDate(value) : "");
-  }
-
-  return (
-    <div style={datePickerWrapStyle}>
-      <div style={dateInputWrapStyle}>
-        <input
-          type="text"
-          inputMode="numeric"
-          value={draft}
-          placeholder="dd.mm.rrrr"
-          style={dateTextInputStyle}
-          onChange={(event) => setDraft(event.target.value)}
-          onBlur={() => commitTypedDate()}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.preventDefault();
-              commitTypedDate();
-              setOpen(false);
-            }
-            if (event.key === "Escape") {
-              setDraft(value ? formatDate(value) : "");
-              setOpen(false);
-            }
-          }}
-        />
-        <button type="button" style={dateIconButtonStyle} onClick={() => setOpen((current) => !current)} aria-label="Wybierz datę z kalendarza">
-          <CalendarDays size={18} />
-        </button>
-      </div>
-      {open && (
-        <div style={dateCalendarStyle}>
-          <div style={dateCalendarHeaderStyle}>
-            <button type="button" style={dateNavButtonStyle} onClick={() => changeMonth(-1)} aria-label="Poprzedni miesiąc">
-              <ChevronLeft size={18} />
-            </button>
-            <strong>{formatCalendarMonth(viewDate)}</strong>
-            <button type="button" style={dateNavButtonStyle} onClick={() => changeMonth(1)} aria-label="Następny miesiąc">
-              <ChevronRight size={18} />
-            </button>
-          </div>
-          <div style={dateWeekdaysStyle}>
-            {["pon", "wt", "śr", "czw", "pt", "sob", "nie"].map((day) => <span key={day}>{day}</span>)}
-          </div>
-          <div style={dateDaysGridStyle}>
-            {days.map((day) => {
-              const inputValue = dateToInputValue(day.date);
-              const selected = value === inputValue;
-              const muted = day.date.getMonth() !== viewDate.getMonth();
-              return (
-                <button
-                  key={inputValue}
-                  type="button"
-                  style={selected ? selectedDateDayStyle : muted ? mutedDateDayStyle : dateDayStyle}
-                  onClick={() => selectDate(day.date)}
-                >
-                  {day.date.getDate()}
-                </button>
-              );
-            })}
-          </div>
-          <div style={dateCalendarFooterStyle}>
-            <button type="button" style={dateFooterButtonStyle} onClick={() => { onChange(""); setOpen(false); }}>Wyczyść</button>
-            <button type="button" style={dateFooterButtonStyle} onClick={() => selectDate(new Date())}>Dzisiaj</button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+  return <AppDateInput value={value} onChange={onChange} />;
 }
+
 
 function tabEmptyMessage(tab: AmlCheckKey) {
   if (tab === "initial_form") return "Brak zapisanego formularza wstępnego dla tego klienta.";

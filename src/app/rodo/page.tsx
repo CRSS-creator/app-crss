@@ -1,4 +1,5 @@
 "use client";
+import { AppDateInput } from "@/components/AppDateInputs";
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import AppLayout from "@/components/AppLayout";
@@ -1415,108 +1416,17 @@ function FileRow({ label, fileName, onOpen, onDownload, onDelete, deleting }: { 
 }
 
 function DatePickerInput({ value, onChange, mode = "date" }: { value: string; onChange: (value: string) => void; mode?: "date" | "datetime-local" }) {
-  const [open, setOpen] = useState(false);
-  const [viewDate, setViewDate] = useState(() => parseRodoInputDate(value) || new Date());
-  const selectedDate = parseRodoInputDate(value);
-  const shownValue = formatRodoDateInputValue(value, mode);
-  const selectedTime = mode === "datetime-local" ? extractDateTimeLocalTime(value) : "";
-  const calendarDays = buildCalendarDays(viewDate);
-
-  function openCalendar() {
-    setViewDate(selectedDate || new Date());
-    setOpen(true);
-  }
-
-  function selectDate(date: Date) {
-    const isoDate = toIsoDate(date);
-    onChange(mode === "datetime-local" ? `${isoDate}T${selectedTime || "09:00"}` : isoDate);
-    setOpen(false);
-  }
-
-  function changeMonth(offset: number) {
-    setViewDate((current) => new Date(current.getFullYear(), current.getMonth() + offset, 1));
-  }
-
-  function updateTime(time: string) {
-    const isoDate = selectedDate ? toIsoDate(selectedDate) : toIsoDate(new Date());
-    onChange(`${isoDate}T${time}`);
-  }
-
-  return (
-    <div style={datePickerWrapperStyle}>
-      <div style={datePickerShellStyle} onClick={openCalendar}>
-        <input
-          data-rodo-date-input
-          type="text"
-          value={shownValue}
-          placeholder={mode === "datetime-local" ? "dd.mm.rrrr, gg:mm" : "dd.mm.rrrr"}
-          readOnly
-          style={datePickerInputStyle}
-        />
-        <button
-          type="button"
-          aria-label="Wybierz datę"
-          style={datePickerButtonStyle}
-          onClick={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            openCalendar();
-          }}
-        >
-          <CalendarDays size={17} strokeWidth={2.3} />
-        </button>
-      </div>
-      {open && (
-        <div style={calendarPopoverStyle}>
-          <div style={calendarHeaderStyle}>
-            <button type="button" style={calendarIconButtonStyle} onClick={() => changeMonth(-1)} aria-label="Poprzedni miesiąc">
-              <ChevronLeft size={17} />
-            </button>
-            <strong>{formatCalendarMonth(viewDate)}</strong>
-            <button type="button" style={calendarIconButtonStyle} onClick={() => changeMonth(1)} aria-label="Następny miesiąc">
-              <ChevronRight size={17} />
-            </button>
-          </div>
-          <div style={calendarWeekdaysStyle}>
-            {["pon", "wt", "śr", "czw", "pt", "sob", "nie"].map((day) => <span key={day}>{day}</span>)}
-          </div>
-          <div style={calendarGridStyle}>
-            {calendarDays.map((date) => {
-              const inCurrentMonth = date.getMonth() === viewDate.getMonth();
-              const selected = selectedDate ? isSameCalendarDay(date, selectedDate) : false;
-              const today = isSameCalendarDay(date, new Date());
-              return (
-                <button
-                  key={toIsoDate(date)}
-                  type="button"
-                  style={{
-                    ...calendarDayStyle,
-                    ...(!inCurrentMonth ? calendarDayMutedStyle : {}),
-                    ...(today ? calendarDayTodayStyle : {}),
-                    ...(selected ? calendarDaySelectedStyle : {}),
-                  }}
-                  onClick={() => selectDate(date)}
-                >
-                  {date.getDate()}
-                </button>
-              );
-            })}
-          </div>
-          {mode === "datetime-local" && (
-            <label style={calendarTimeRowStyle}>
-              <span>Godzina</span>
-              <input type="time" value={selectedTime || "09:00"} onChange={(event) => updateTime(event.target.value)} style={calendarTimeInputStyle} />
-            </label>
-          )}
-          <div style={calendarFooterStyle}>
-            <button type="button" style={calendarTextButtonStyle} onClick={() => { onChange(""); setOpen(false); }}>Wyczyść</button>
-            <button type="button" style={calendarTextButtonStyle} onClick={() => selectDate(new Date())}>Dzisiaj</button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+  const date = value.slice(0, 10);
+  const time = extractDateTimeLocalTime(value) || "09:00";
+  return <div style={{ display: "grid", gridTemplateColumns: mode === "datetime-local" ? "minmax(0, 1fr) 100px" : "minmax(0, 1fr)", gap: 6 }}>
+    <AppDateInput value={date} ariaLabel="Data" onChange={next => onChange(next && mode === "datetime-local" ? `${next}T${time}` : next)} />
+    {mode === "datetime-local" && <input type="time" aria-label="Godzina" value={time}
+      style={calendarTimeInputStyle} onChange={event => {
+        if (event.target.value) onChange(`${date || toIsoDate(new Date())}T${event.target.value}`);
+      }} />}
+  </div>;
 }
+
 
 function EditableInput({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (value: string) => void; type?: "text" | "email" | "date" }) {
   if (type === "date") {

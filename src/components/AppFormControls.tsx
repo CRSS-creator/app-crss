@@ -9,12 +9,12 @@ import { colors } from "@/app/design";
 type ValueChange = (event: { target: { value: string } }) => void;
 
 // Preserve the value-based handlers used by existing forms while sharing the app's pickers.
-export function AppFormInput({ type, value, onChange, min, max, style, disabled, required, id, className, "aria-label": ariaLabel, ...rest }: Omit<InputHTMLAttributes<HTMLInputElement>, "onChange"> & { onChange?: ValueChange }) {
-  if (type !== "date" && type !== "month") return <input {...rest} type={type} value={value} onChange={onChange} min={min} max={max} style={style} disabled={disabled} required={required} id={id} className={className} aria-label={ariaLabel} />;
+export function AppFormInput({ type, value, onChange, min, max, style, disabled, required, name, readOnly, id, className, "aria-label": ariaLabel, ...rest }: Omit<InputHTMLAttributes<HTMLInputElement>, "onChange"> & { onChange?: ValueChange }) {
+  if (type !== "date" && type !== "month") return <input {...rest} type={type} value={value} onChange={onChange} min={min} max={max} style={style} disabled={disabled} required={required} name={name} readOnly={readOnly} id={id} className={className} aria-label={ariaLabel} />;
   const Picker = type === "month" ? AppMonthInput : AppDateInput;
   return <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, width: style?.width || (type === "month" ? "auto" : "100%") }}>
-    <Picker value={String(value || "")} onChange={next => onChange?.({ target: { value: next } })} min={min ? String(min) : undefined} max={max ? String(max) : undefined} disabled={disabled} id={id} className={className} ariaLabel={ariaLabel} style={{ ...style, flex: 1, minWidth: 0 }} />
-    {type === "date" && value && !required ? <button type="button" disabled={disabled} aria-label={ariaLabel ? `Wyczyść: ${ariaLabel}` : "Wyczyść datę"} onClick={() => onChange?.({ target: { value: "" } })} style={{ border: 0, background: "transparent", color: colors.muted, cursor: disabled ? "default" : "pointer", padding: 4, display: "flex" }}><X size={14} /></button> : null}
+    <Picker required={required} name={name} readOnly={readOnly} value={String(value || "")} onChange={next => onChange?.({ target: { value: next } })} min={min ? String(min) : undefined} max={max ? String(max) : undefined} disabled={disabled} id={id} className={className} ariaLabel={ariaLabel} style={{ ...style, flex: 1, minWidth: 0 }} />
+    {type === "date" && value && !required ? <button type="button" disabled={disabled || readOnly} aria-label={ariaLabel ? `Wyczyść: ${ariaLabel}` : "Wyczyść datę"} onClick={() => onChange?.({ target: { value: "" } })} style={{ border: 0, background: "transparent", color: colors.muted, cursor: disabled ? "default" : "pointer", padding: 4, display: "flex" }}><X size={14} /></button> : null}
   </div>;
 }
 

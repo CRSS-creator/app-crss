@@ -326,7 +326,7 @@ function CfoContent() {
             <button type="button" style={viewMode === "year" ? viewModeActiveButtonStyle : viewModeButtonStyle} onClick={() => setViewMode("year")}>Rok</button>
           </div>
           <MonthField value={period} onChange={setPeriod} />
-          <button type="button" style={secondaryButtonStyle} onClick={loadData} disabled={loading || saving}>
+          <button type="button" style={{ ...secondaryButtonStyle, flexShrink: 0 }} onClick={loadData} disabled={loading || saving}>
             <RefreshCw size={17} />
             Odśwież
           </button>
@@ -525,7 +525,7 @@ function DateField({ value, onChange }: { value: string; onChange: (value: strin
 
 
 function MonthField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
-  return <AppMonthInput value={value} onChange={onChange} style={monthControlStyle} />;
+  return <div style={{ width: 160, maxWidth: "100%", minWidth: 0, flex: "0 1 160px" }}><AppMonthInput ariaLabel="Miesiąc CFO" value={value} onChange={onChange} style={{ minHeight: 40, padding: 0, fontSize: 14 }} /></div>;
 }
 
 
@@ -1819,7 +1819,7 @@ function sum(values: number[]) {
 
 const contentStyle: CSSProperties = { padding: "32px", display: "grid", gap: "20px" };
 const headerStyle: CSSProperties = { display: "flex", justifyContent: "space-between", gap: "18px", alignItems: "flex-start", flexWrap: "wrap" };
-const headerActionsStyle: CSSProperties = { display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" };
+const headerActionsStyle: CSSProperties = { display: "flex", gap: "10px", alignItems: "center", flexWrap: "nowrap", maxWidth: "100%" };
 const viewModeToggleStyle: CSSProperties = { display: "inline-flex", border: `1px solid ${colors.border}`, borderRadius: radius.input, overflow: "hidden", background: colors.white, minHeight: "42px" };
 const viewModeButtonStyle: CSSProperties = { border: 0, background: "transparent", color: colors.navy, padding: "9px 13px", fontWeight: 600, cursor: "pointer" };
 const viewModeActiveButtonStyle: CSSProperties = { ...viewModeButtonStyle, background: colors.navy, color: colors.white };

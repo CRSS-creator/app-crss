@@ -1,4 +1,7 @@
 "use client";
+import BudgetPaymentPlans from "@/components/BudgetPaymentPlans";
+import { explicitPaymentMonth, plannedNetAmounts, unresolvedBudgetCosts, historyPaymentSuggestions, payrollPlanSuggestions, planKey, type BudgetPaymentPlan } from "@/lib/budgetPaymentPlan";
+import { fetchBudgetPaymentPlans, saveBudgetPaymentPlan } from "@/lib/budgetPaymentPlanService";
 
 import { manualCashflowForecast } from "@/lib/cfoManualCashflow";
 import { manualRevenueCashflow } from "@/lib/cfoManualRevenue";
@@ -27,7 +30,6 @@ import {
   fetchCfoBudgetClientRevenues,
   fetchCfoBudgetCrmRevenues,
   fetchCfoBudgetOverrides,
-  upsertCfoBudgetOverride,
   type CfoBudgetClientRevenue,
   type CfoBudgetCrmRevenue,
   type CfoBudgetOverride,
@@ -41,6 +43,8 @@ import { fetchCashflowSnapshot } from "@/lib/cfoCashflowService";
 type BudgetMonth = {
   period: string;
   plannedRevenue: number;
+  plannedInflows: number;
+  plannedOutflows: number;
   actualRevenue: number;
   plannedCosts: number;
   actualCosts: number;
@@ -80,6 +84,7 @@ type BudgetCostSubcategoryRow = {
   planned: number;
   actual: number;
   diff: number;
+  source?: string;
 };
 
 type BudgetInvoice = {
@@ -172,6 +177,8 @@ function BudgetContent() {
   const [overrides, setOverrides] = useState<CfoBudgetOverride[]>([]);
   const [clientRevenues, setClientRevenues] = useState<CfoBudgetClientRevenue[]>([]);
   const [crmRevenues, setCrmRevenues] = useState<CfoBudgetCrmRevenue[]>([]);
+  const [paymentPlans, setPaymentPlans] = useState<BudgetPaymentPlan[]>([]);
+  const [includeCrmGrowth, setIncludeCrmGrowth] = useState(false);
   const [costEditDrafts, setCostEditDrafts] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -180,11 +187,14 @@ function BudgetContent() {
   }, [startMonth]);
 
   const budget = useMemo(
-    () => buildBudgetMonths(startMonth, DEFAULT_HORIZON, revenueLines, costs, employeeCosts, cashflowTransactions(cashflow), overrides, clientRevenues, crmRevenues, parsePolishNumber(openingCash), cashflow),
-    [startMonth, revenueLines, costs, employeeCosts, cashflow, overrides, clientRevenues, crmRevenues, openingCash],
+    () => buildBudgetMonths(startMonth, DEFAULT_HORIZON, revenueLines, costs, employeeCosts, cashflowTransactions(cashflow), overrides, clientRevenues, includeCrmGrowth ? crmRevenues : [], parsePolishNumber(openingCash), cashflow, paymentPlans),
+    [startMonth, revenueLines, costs, employeeCosts, cashflow, overrides, clientRevenues, crmRevenues, openingCash, paymentPlans, includeCrmGrowth],
   );
 
   const selected = budget.find((month) => month.period === selectedMonth) || budget[0];
+  const pendingSuggestions = [...historyPaymentSuggestions(costs,startMonth),...payrollPlanSuggestions(cashflow,startMonth)].filter(s=>!paymentPlans.some(p=>p.aktywny && p.rodzaj==="monthly" && planKey(p.kategoria,p.podkategoria)===planKey(s.category,s.subcategory)));
+  const planIncomplete = !paymentPlans.some(p=>p.aktywny && p.rodzaj!=="target") || pendingSuggestions.length>0 || unresolvedBudgetCosts(cashflow,startMonth,paymentPlans).length>0
+    || cashflow.obligations.some(o=>!o.data_zaplaty && Number(o.kwota)>0 && (!o.termin_platnosci || o.termin_platnosci<startMonth+"-01"));
   const firstShortfall = budget.find((month) => month.closingCash < parsePolishNumber(safetyThreshold));
   const selectedRevenueDiff = selected ? selected.actualRevenue - selected.plannedRevenue : 0;
   const selectedCostDiff = selected ? selected.plannedCosts - selected.actualCosts : 0;
@@ -193,7 +203,7 @@ function BudgetContent() {
     setLoading(true);
     const historyStart = shiftMonth(startMonth, -6);
     const forecastEnd = shiftMonth(startMonth, DEFAULT_HORIZON - 1);
-    const [revenueResult, costsResult, employeeResult, cashflowResult, overridesResult, clientRevenueResult, crmRevenueResult] = await Promise.all([
+    const [revenueResult, costsResult, employeeResult, cashflowResult, overridesResult, clientRevenueResult, crmRevenueResult, paymentPlansResult] = await Promise.all([
       fetchCfoBudgetRevenueLinesRange(monthToDate(historyStart), monthEndDate(forecastEnd)),
       fetchCfoCostsRange(monthToDate(historyStart), monthEndDate(forecastEnd)),
       fetchCfoEmployeeCostsRange(monthToDate(historyStart), monthEndDate(forecastEnd)),
@@ -201,6 +211,7 @@ function BudgetContent() {
       fetchCfoBudgetOverrides(monthToDate(historyStart), monthEndDate(forecastEnd)),
       fetchCfoBudgetClientRevenues(),
       fetchCfoBudgetCrmRevenues(),
+      fetchBudgetPaymentPlans(),
     ]);
 
     if (revenueResult.error) console.error("Błąd pobierania przychodów do budżetu:", revenueResult.error);
@@ -211,7 +222,7 @@ function BudgetContent() {
     if (clientRevenueResult.error) console.error("Błąd pobierania abonamentów klientów do budżetu:", clientRevenueResult.error);
     if (crmRevenueResult.error) console.error("Błąd pobierania CRM do budżetu:", crmRevenueResult.error);
 
-    const failed = [revenueResult, costsResult, employeeResult, cashflowResult, overridesResult, clientRevenueResult, crmRevenueResult].some(result => result.error);
+    const failed = [revenueResult, costsResult, employeeResult, cashflowResult, overridesResult, clientRevenueResult, crmRevenueResult, paymentPlansResult].some(result => result.error);
     setDataError(failed ? "Nie udało się pobrać kompletu danych. Prognoza jest niedostępna — odśwież budżet." : null);
     setRevenueLines((revenueResult.data || []) as unknown as CfoInvoiceLine[]);
     setCosts((costsResult.data || []) as CfoCostItem[]);
@@ -220,6 +231,7 @@ function BudgetContent() {
     setOverrides((overridesResult.data || []) as CfoBudgetOverride[]);
     setClientRevenues((clientRevenueResult.data || []) as CfoBudgetClientRevenue[]);
     setCrmRevenues((crmRevenueResult.data || []) as CfoBudgetCrmRevenue[]);
+    setPaymentPlans(paymentPlansResult.data || []);
     setCostEditDrafts({});
     setLoading(false);
   }
@@ -243,18 +255,20 @@ function BudgetContent() {
 
   async function saveCostPlan(category: CfoCostCategory, subcategory: string, plannedValue: number) {
     const editKey = costEditKey(selectedMonth, category, subcategory);
-    const nextValue = parsePolishNumber(costEditDrafts[editKey] ?? String(plannedValue));
+    if (saving) return;
+    const raw = costEditDrafts[editKey] ?? formatPlainNumber(plannedValue);
+    if (!/^\d+(?:[.,]\d{1,2})?$/.test(raw.replace(/\s/g,""))) return alert("Podaj nieujemną kwotę z maksymalnie dwoma miejscami po przecinku.");
+    const nextValue = parsePolishNumber(raw);
+    if (!Number.isFinite(nextValue) || nextValue < 0) return alert("Plan wydatków nie może być ujemny.");
+    const existing = paymentPlans.find(p => p.aktywny && p.rodzaj === "target" && p.pierwszy_miesiac.slice(0,7) === selectedMonth && p.kategoria === category && (p.podkategoria || EMPTY_SUBCATEGORY) === subcategory);
     setSaving(true);
-    const result = await upsertCfoBudgetOverride({
-      okres: monthToDate(selectedMonth),
-      typ: "koszt",
-      kategoria: category,
-      podkategoria: subcategory === EMPTY_SUBCATEGORY ? null : subcategory,
-      opis: `Korekta budżetu: ${categoryLabel("koszt", category)} / ${subcategory}`,
-      kwota_plan: 0,
-      kwota_cashflow: nextValue - plannedValue,
-      powtarzanie: "jednorazowo",
-      aktywne: true,
+    try {
+    const result = await saveBudgetPaymentPlan({
+      id: existing?.id,
+      nazwa: `Cel miesiąca: ${subcategory}`, rodzaj: "target", kategoria: category,
+      podkategoria: subcategory === EMPTY_SUBCATEGORY ? "" : subcategory,
+      kwota_brutto: nextValue, kwota_netto: null,
+      pierwszy_miesiac: monthToDate(selectedMonth), ostatni_miesiac: null, liczba_rat: null, koszt_id: null, aktywny: true,
     });
     setSaving(false);
 
@@ -264,6 +278,8 @@ function BudgetContent() {
     }
 
     await loadData();
+    } catch { alert("Nie udało się zapisać planu. Spróbuj ponownie."); }
+    finally { setSaving(false); }
   }
 
   return (
@@ -284,12 +300,13 @@ function BudgetContent() {
 
       {!loading && dataError ? <section role="alert" style={panelStyle}>{dataError}</section> : null}
       <section style={{ ...metricGridStyle, ...(dataError ? { display: "none" } : {}) }}>
-        <Metric label={`Wynik plan ${formatMonthField(selectedMonth)}`} value={formatMoney(selected?.plannedResult || 0)} tone={(selected?.plannedResult || 0) >= 0 ? "good" : "bad"} />
+        <Metric label="Wpływy plan" value={formatMoney(selected?.plannedInflows || 0)} />
+        <Metric label="Wypływy plan" value={formatMoney(selected?.plannedOutflows || 0)} tone="bad" />
         <Metric label="Przychody plan" value={formatMoney(selected?.plannedRevenue || 0)} />
         <Metric label="Koszty plan" value={formatMoney(selected?.plannedCosts || 0)} tone="bad" />
         <Metric label="Cash flow plan" value={formatMoney(selected?.plannedCashFlow || 0)} tone={(selected?.plannedCashFlow || 0) >= 0 ? "good" : "bad"} />
         <Metric label="Gotówka po miesiącu" value={formatMoney(selected?.closingCash || 0)} tone={(selected?.closingCash || 0) < parsePolishNumber(safetyThreshold) ? "bad" : "good"} />
-        <Metric label="Pierwszy alarm" value={firstShortfall ? formatMonthField(firstShortfall.period) : "Brak"} tone={firstShortfall ? "bad" : "good"} />
+        <Metric label="Pierwszy alarm" value={planIncomplete ? "Plan niepełny" : firstShortfall ? formatMonthField(firstShortfall.period) : "Brak"} tone={firstShortfall ? "bad" : "good"} />
       </section>
 
       <section style={controlsPanelStyle}>
@@ -304,12 +321,12 @@ function BudgetContent() {
       </section>
 
       <section style={panelStyle}>
-        <p>Przepływy wynikają z dat zapłaty w Fakturach, kosztach i zobowiązaniach CFO. Średni czas zapłaty jest liczony osobno dla klienta i dostawcy z faktur wystawionych w ostatnich 6 miesiącach (lub z krótszej dostępnej historii). Dla sprzedaży bez historii stosowany jest termin dokumentu. Zwykłe koszty są planowane według średniego czasu zapłaty dostawcy, a bez historii — po 14 dniach od wystawienia. Zaległości trafiają do pierwszego miesiąca prognozy.</p>
-        <p>Koszty z harmonogramów rocznych obciążają wynik po 1/12 netto miesięcznie, a gotówkę jednorazowo kwotą brutto. Powiązana faktura zastępuje prognozę danego odnowienia.</p>
-        <p>Budżet jest dostępny od listopada 2026. Wcześniejsze miesiące służą do wyliczania średnich historycznych.</p>
-        <p>Gotówka na start oznacza saldo na początek pierwszego miesiąca prognozy. Nie jest odczytywana z wyciągu.</p>
-        {cashflow.invoices.some(i => i.status === "oplacona" && !i.data_zaplaty) && <p role="status">Część opłaconych faktur nie ma daty zapłaty. Są rozliczone, ale nie wchodzą do średnich ani wykonanego cash flow. Uzupełnij daty w Fakturach.</p>}
-        {OBLIGATION_TYPES.some(kind => !cashflow.obligations.some(o => o.typ === kind.value && (Number(o.kwota) === 0 || o.termin_platnosci))) && <p role="status">Uzupełnij kwoty i terminy wynagrodzeń netto, ZUS, PIT-4, VAT i CIT w CFO → Cash flow. Brakujące rodzaje zobowiązań nie są uwzględnione w prognozie.</p>}
+        <h2 style={panelTitleStyle}>Plan pieniędzy i plan wyniku</h2>
+        <p>Płatności planujesz kwotami brutto. Wpisana kwota docelowa zastępuje prognozę, a zapisane zapłaty i zobowiązania z ustalonym terminem są jej minimum. Różnica może być ujemna, jeśli wykonanie przekroczy plan; sam plan wydatku nie jest ujemny.</p>
+        <p>Historia kosztów służy wyłącznie jako podpowiedź do zatwierdzenia. Starsze dokumenty bez rozliczonej płatności wymagają wyjaśnienia. Raty wpływają na pieniądze, a koszt sprzętu pozostaje w miesiącu jego ujęcia.</p>
+        <p>Saldo na start dotyczy początku {formatMonthField(startMonth)}. Uzupełnij wszystkie plany przed oceną prognozowanego salda.</p>
+        <label><input type="checkbox" checked={includeCrmGrowth} onChange={event => setIncludeCrmGrowth(event.target.checked)} /> Uwzględnij dodatkowy wzrost przychodów z CRM (scenariusz)</label>
+        {planIncomplete && <p role="status" style={{color:colors.warning}}><strong>Plan roboczy — prognoza salda jest niepełna.</strong> Uzupełnij harmonogram płatności i wyjaśnij dokumenty poniżej.</p>}
       </section>
       {loading ? <section style={panelStyle}>Ładowanie budżetu...</section> : null}
 
@@ -334,7 +351,7 @@ function BudgetContent() {
           <article style={widePanelStyle}>
             <div style={panelHeaderStyle}>
               <WalletCards size={21} style={panelIconStyle} />
-              <h2 style={panelTitleStyle}>Plan miesiąca</h2>
+              <h2 style={panelTitleStyle}>Plan wyniku (netto)</h2>
               <span style={badgeStyle}>{formatMonthField(selectedMonth)}</span>
             </div>
             <div style={profitSummaryStyle}>
@@ -369,18 +386,26 @@ function BudgetContent() {
           </article>
 
           <article style={widePanelStyle}>
+            <h2 style={panelTitleStyle}>Koszty wyniku — netto</h2>
+            <CategoryTable rows={selected?.costCategories || []} reverseDiff totalLabel="Suma kosztów netto" />
+          </article>
+          <article style={widePanelStyle}>
             <div style={panelHeaderStyle}>
               <Banknote size={21} style={panelIconStyle} />
               <h2 style={panelTitleStyle}>Plan wydatków — przepływy pieniężne</h2>
             </div>
-            <p style={{ color: colors.muted, fontSize: "13px", margin: "0 0 16px" }}>Kwoty brutto według dat płatności. Harmonogramy roczne są ujmowane jednorazowo w miesiącu płatności. Wykonanie obejmuje tylko zapisane zapłaty. Korekta planu dotyczy wybranego miesiąca.</p>
+            <p style={{ color: colors.muted, fontSize: "13px", margin: "0 0 16px" }}>Kwoty brutto. Zapisz docelową sumę płatności podkategorii w wybranym miesiącu. Zapis nie zmienia kosztu netto ani historii zapłat. Dla powtarzalnych opłat i rat użyj harmonogramu powyżej.</p>
             <CostCategoryEditor
               groups={selected?.costSubcategories || []}
               selectedMonth={selectedMonth}
               drafts={costEditDrafts}
               onDraftChange={(key, value) => setCostEditDrafts((current) => ({ ...current, [key]: value }))}
               onSave={saveCostPlan}
+              disabled={saving}
             />
+          </article>
+          <article id="harmonogram" style={widePanelStyle}>
+            <BudgetPaymentPlans plans={paymentPlans} snapshot={cashflow} costs={costs} month={selectedMonth} startMonth={startMonth} legacy={overrides} categories={COST_OPTIONS} onReload={loadData} />
           </article>
         </section>
       ) : null}
@@ -453,8 +478,10 @@ function CostCategoryEditor({
   drafts,
   onDraftChange,
   onSave,
+  disabled = false,
 }: {
   groups: BudgetCostGroup[];
+  disabled?: boolean;
   selectedMonth: string;
   drafts: Record<string, string>;
   onDraftChange: (key: string, value: string) => void;
@@ -480,11 +507,11 @@ function CostCategoryEditor({
             const value = drafts[editKey] ?? formatPlainNumber(row.planned);
             return (
               <div key={row.key} style={costSubcategoryRowStyle}>
-                <span>{row.label}</span>
-                <input style={smallInputStyle} value={value} onChange={(event) => onDraftChange(editKey, event.target.value)} />
+                <span>{row.label}{row.source && <small style={{display:"block",color:colors.muted,fontSize:11}}>{row.source}</small>}</span>
+                <input aria-label={`Plan płatności: ${row.label}`} inputMode="decimal" style={smallInputStyle} value={value} onChange={(event) => onDraftChange(editKey, event.target.value)} />
                 <span style={rightAlignedStyle}>{formatMoney(row.actual)}</span>
                 <Diff value={row.planned - row.actual} />
-                <button type="button" style={smallButtonStyle} onClick={() => void onSave(group.key, row.key, row.planned)}>
+                <button type="button" disabled={disabled} style={smallButtonStyle} onClick={() => void onSave(group.key, row.key, row.planned)}>
                   <Save size={15} />
                   Zapisz
                 </button>
@@ -537,7 +564,10 @@ function buildBudgetMonths(
   crmRevenues: CfoBudgetCrmRevenue[],
   openingCash: number,
   snapshot: CashflowSnapshot = emptyCashflow(),
+  paymentPlans: BudgetPaymentPlan[] = [],
 ): BudgetMonth[] {
+  // Legacy expense deltas remain available for review, but cannot modify the new plan.
+  overrides = overrides.filter(row => row.typ !== "koszt");
   const months = monthsForRange(startMonth, horizon);
   const costHistoryMonths = monthsForRange(shiftMonth(startMonth, -3), 3);
   const revenueHistoryMonths = monthsForRange(shiftMonth(startMonth, -6), 6);
@@ -572,7 +602,11 @@ function buildBudgetMonths(
     const monthOverrides = overrides.filter((override) => overrideApplies(override, period));
     const plannedRevenueEntries = plannedRevenueEntriesForMonth(period, baseline, clientRevenues, crmForecast);
     const plannedRevenueCategories = plannedRevenueForMonth(plannedRevenueEntries);
-    const plannedCostSubcategories = plannedCostSubcategoriesForMonth(baseline.costSubcategories, (planActualByMonth.get(period) || emptyActual()).costBySubcategory);
+    const plannedCostSubcategories = cloneNestedMap((planActualByMonth.get(period) || emptyActual()).costBySubcategory);
+    for (const entry of plannedNetAmounts(period, paymentPlans)) {
+      setSubcategoryAmount(plannedCostSubcategories, entry.category, entry.subcategory, Math.max(entry.amount, plannedCostSubcategories.get(entry.category)?.get(entry.subcategory) || 0));
+    }
+    const explicitPayments = explicitPaymentMonth(period, startMonth, snapshot, paymentPlans, COST_OPTIONS);
     const annual = annualCostForecast(period, snapshot.annualSchedules || [], snapshot.costs, invoicePaymentProfile.asOf);
     for (const cost of snapshot.costs.filter(cost => !cost.ignoruj && cost.harmonogram_id)) {
       upsertSubcategoryAmount(plannedCostSubcategories, cost.kategoria, cost.podkategoria || EMPTY_SUBCATEGORY, costShareForMonth(cost, period));
@@ -589,7 +623,7 @@ function buildBudgetMonths(
     const crmCumulativeRevenueGrowth = crmForecast.cumulativeRevenueGrowthByMonth.get(period) || 0;
     const invoiceCashFlow = plannedInvoiceCustomerCashFlowForMonth(period, budgetInvoices, invoicePaymentProfile);
     const plannedCustomerCashFlow = invoiceCashFlow.amount
-      + plannedUnissuedRevenueCashFlowForMonth(period, [...revenueHistoryMonths, ...months], baseline, clientRevenues, crmForecast, actualByMonth, invoiceIssueProfile, invoicePaymentProfile);
+      + plannedUnissuedRevenueCashFlowForMonth(period, months, baseline, clientRevenues, crmForecast, actualByMonth, invoiceIssueProfile, invoicePaymentProfile);
     let manualRevenueCashFlow = 0;
     let manualCostCashFlow = 0;
 
@@ -608,18 +642,17 @@ function buildBudgetMonths(
     const plannedRevenue = sum(Array.from(plannedRevenueCategories.values()));
     const plannedCosts = sum(Array.from(plannedCostCategories.values()));
     const plannedResult = plannedRevenue - plannedCosts;
-    const costCashFlow = plannedCostCashFlowForMonth(period, budgetCostPayments, costPaymentProfile);
-    const plannedEmployeeCashFlow = obligationCashflow(period, snapshot.obligations, startMonth, asOf > monthToDate(startMonth) ? asOf : monthToDate(startMonth));
-    const plannedOtherCostCashFlow = costCashFlow.amount
-      + plannedUnrecordedCostCashFlowForMonth(period, [...costHistoryMonths, ...months], baseline.costPlanEntries, planActualByMonth, costPaymentProfile) + annual.cash;
-    const plannedCostCashFlow = plannedEmployeeCashFlow + plannedOtherCostCashFlow + manualCostCashFlow;
-    const plannedCashFlow = plannedCustomerCashFlow + manualRevenueCashFlow + manualRevenueReceipts - plannedCostCashFlow
-      + manualCashflowForecast(period, snapshot.manualFlows || [], invoicePaymentProfile.asOf);
+    const extraFlow = manualCashflowForecast(period, snapshot.manualFlows || [], invoicePaymentProfile.asOf);
+    const plannedInflows = plannedCustomerCashFlow + manualRevenueCashFlow + manualRevenueReceipts + Math.max(0, extraFlow);
+    const plannedOutflows = explicitPayments.total + Math.max(0, -extraFlow);
+    const plannedCashFlow = plannedInflows - plannedOutflows;
     cash += plannedCashFlow;
 
     return {
       period,
       plannedRevenue,
+      plannedInflows,
+      plannedOutflows,
       actualRevenue: actual.revenue,
       plannedCosts,
       actualCosts: actual.costs,
@@ -633,7 +666,7 @@ function buildBudgetMonths(
       overrides: monthOverrides,
       revenueCategories: categoryRows("przychod", plannedRevenueCategories, actual.revenueByCategory),
       costCategories: categoryRows("koszt", plannedCostCategories, actual.costByCategory),
-      costSubcategories: buildCostCashflowGroups(period, [...costHistoryMonths, ...months], baseline.costPlanEntries, planActualByMonth, budgetCostPayments, costPaymentProfile, snapshot, monthOverrides, startMonth),
+      costSubcategories: explicitPayments.groups,
     };
   });
 }
@@ -733,8 +766,9 @@ function plannedInvoiceCustomerCashFlowForMonth(period: string, invoices: Budget
 
     const baseDate = invoice.issueDate || invoice.dueDate || monthEndDate(invoice.servicePeriod);
     const average = profile.averageDaysByCounterparty.get(invoice.payerKey);
-    const expectedDate = average !== undefined ? addDays(baseDate, average) : invoice.dueDate || addDays(baseDate, 14);
-    const expectedMonth = (expectedDate < profile.asOf ? profile.asOf : expectedDate).slice(0, 7);
+    const expectedDate = invoice.dueDate || (average !== undefined ? addDays(baseDate, average) : addDays(baseDate, 14));
+    if (expectedDate < profile.asOf) return;
+    const expectedMonth = expectedDate.slice(0, 7);
     if (expectedMonth !== period) return;
 
     amount += unpaidAmount;

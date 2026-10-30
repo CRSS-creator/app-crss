@@ -253,7 +253,7 @@ async function loadSelectedWfirmaInvoices(
     const id = stringify(invoice.wfirma_id);
     try {
       const detail = firstWfirmaInvoice(await retryWfirmaRead(() => getWfirmaInvoice(config, id)));
-      if (detail && stringify(detail.id) === id) {
+      if (detail && stringify(detail.id) === id && !isDraftInvoiceNumber(detail)) {
         resolved.set(id, detail);
         detailSnapshots.add(detail);
         continue;
@@ -287,9 +287,9 @@ async function loadWfirmaInvoicesByMonth(
   selectedRecovery = false
 ) {
   let listingError: string | null = null;
-  // A selected refresh must not enumerate neighbouring months to find a removed draft.
+  // Issuing a draft can change its date; search its whole issue month.
   const ranges = selectedRecovery
-    ? [...new Set(invoices.map(invoice => dateOnly(invoice.data_wystawienia)).filter((date): date is string => Boolean(date)))].map(date => ({ dateFrom: date, dateTo: date }))
+    ? [...new Set(invoices.map(invoice => dateOnly(invoice.data_wystawienia)?.slice(0, 7)).filter((month): month is string => Boolean(month)))].map(monthRange)
     : syncSearchMonths(invoices, requestedMonth).map(monthRange);
   const invoicesById = new Map<string, WfirmaInvoice>();
   const requestedWfirmaIds = new Set(invoices.map((invoice) => stringify(invoice.wfirma_id)).filter(Boolean));
@@ -349,7 +349,7 @@ async function loadWfirmaInvoicesByMonth(
       }
     }
     if (currentMatch && !isDraftInvoiceNumber(currentMatch)) continue;
-    const replacement = findMatchingFinalWfirmaInvoice(invoice, Array.from(invoicesById.values()), reservedIds);
+    const replacement = listingError ? null : findMatchingFinalWfirmaInvoice(invoice, Array.from(invoicesById.values()), reservedIds);
     if (!replacement) {
       if (recoveryCandidates) {
         const possible = Array.from(invoicesById.values()).filter(candidate => isRecoveryCandidate(invoice, candidate) && !reservedIds.has(stringify(candidate.id)));
@@ -370,6 +370,30 @@ async function loadWfirmaInvoicesByMonth(
     const nextId = stringify(replacement.id);
     const occupied = await admin.from("faktury").select("id").eq("wfirma_id", nextId).neq("id", invoice.id).maybeSingle();
     if (occupied.error || occupied.data) continue;
+    // Check all local documents, including ones outside this refresh batch.
+    // Two identical drafts must not claim the same final invoice by iteration order.
+    const issueMonth = dateOnly(invoice.data_wystawienia)?.slice(0, 7);
+    if (isLocalDraft(invoice) && issueMonth) {
+      const range = monthRange(issueMonth);
+      const competing = await admin.from("faktury")
+        .select("id,numer,kontrahent_nip,kwota_brutto,data_wystawienia")
+        .gte("data_wystawienia", range.dateFrom).lte("data_wystawienia", range.dateTo)
+        .neq("id", invoice.id).neq("status", "anulowana").neq("kategoria", "korekta");
+      if (competing.error) {
+        lookupErrors.set(wfirmaId, "Nie udało się sprawdzić jednoznaczności powiązania faktury. Spróbuj ponownie.");
+        continue;
+      }
+      if ((competing.data || []).some(other => isLocalDraft(other)
+        && normalizeNip(other.kontrahent_nip) === normalizeNip(invoice.kontrahent_nip)
+        && Math.abs(numberValue(other.kwota_brutto) - numberValue(invoice.kwota_brutto)) < 0.02)) {
+        recoveryCandidates?.set(wfirmaId, [{
+          wfirmaId: nextId, number: stringify(replacement.fullnumber || replacement.number),
+          date: dateOnly(replacement.date), gross: numberValue(replacement.total_composed ?? replacement.total),
+          nip: normalizeNip(wfirmaInvoiceContractorNip(replacement)),
+        }]);
+        continue;
+      }
+    }
     invoicesById.set(wfirmaId, replacement);
     reservedIds.add(nextId);
   }
@@ -450,7 +474,7 @@ function findMatchingFinalWfirmaInvoice(invoice: InvoiceRow, candidates: WfirmaI
   const nip = normalizeNip(invoice.kontrahent_nip);
   if (!nip) return null;
   const number = stringify(invoice.numer).trim();
-  const isDraft = !number || number.toUpperCase().startsWith("WRF");
+  const isDraft = isLocalDraft(invoice);
   const matches = candidates.filter(candidate => {
     const id = stringify(candidate.id);
     if (!id || reservedWfirmaIds.has(id) || isDraftInvoiceNumber(candidate) || isCorrectionInvoice(candidate)
@@ -458,10 +482,15 @@ function findMatchingFinalWfirmaInvoice(invoice: InvoiceRow, candidates: WfirmaI
     if (!isDraft) return stringify(candidate.fullnumber || candidate.number).trim() === number;
     const issueDate = dateOnly(invoice.data_wystawienia);
     const gross = numberValue(candidate.total_composed ?? candidate.total);
-    return Boolean(issueDate && issueDate === dateOnly(candidate.date))
+    return Boolean(issueDate && issueDate.slice(0, 7) === dateOnly(candidate.date)?.slice(0, 7))
       && numberValue(invoice.kwota_brutto) > 0 && Math.abs(gross - numberValue(invoice.kwota_brutto)) < 0.02;
   });
   return matches.length === 1 ? matches[0] : null;
+}
+
+function isLocalDraft(invoice: { numer: string | null }) {
+  const number = stringify(invoice.numer).toUpperCase();
+  return !number || number.startsWith("WRF");
 }
 
 function isDraftInvoiceNumber(invoice: WfirmaInvoice) {

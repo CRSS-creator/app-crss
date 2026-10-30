@@ -349,7 +349,22 @@ async function loadWfirmaInvoicesByMonth(
       }
     }
     if (currentMatch && !isDraftInvoiceNumber(currentMatch)) continue;
-    const replacement = listingError ? null : findMatchingFinalWfirmaInvoice(invoice, Array.from(invoicesById.values()), reservedIds);
+    // Exclude links owned by documents outside the current refresh batch before
+    // deciding whether a match is unique (not only when building the manual list).
+    const possibleIds = [...new Set(Array.from(invoicesById.values())
+      .filter(candidate => isRecoveryCandidate(invoice, candidate))
+      .map(candidate => stringify(candidate.id)))];
+    const unavailableIds = new Set(reservedIds);
+    if (possibleIds.length) {
+      const existingLinks = await admin.from("faktury").select("wfirma_id")
+        .in("wfirma_id", possibleIds).neq("id", invoice.id);
+      if (existingLinks.error) {
+        lookupErrors.set(wfirmaId, "Nie udało się sprawdzić istniejących powiązań faktur. Spróbuj ponownie.");
+        continue;
+      }
+      for (const row of existingLinks.data || []) unavailableIds.add(stringify(row.wfirma_id));
+    }
+    const replacement = listingError ? null : findMatchingFinalWfirmaInvoice(invoice, Array.from(invoicesById.values()), unavailableIds);
     if (!replacement) {
       if (recoveryCandidates) {
         const possible = Array.from(invoicesById.values()).filter(candidate => isRecoveryCandidate(invoice, candidate) && !reservedIds.has(stringify(candidate.id)));

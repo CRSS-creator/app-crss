@@ -43,7 +43,7 @@ export default function SubscriptionTiersEditor({ value, onChange }: {
         </label>
         <button type="button" aria-label={`Usuń abonament ${index + 1}`} disabled={value.abonamenty_progi.length <= 2}
           onClick={() => changeTiers(value.abonamenty_progi.filter((_, i) => i !== index))}
-          style={{ minWidth: 40, minHeight: 40, border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.navy, cursor: "pointer" }}><X size={16} /></button>
+          style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 40, minHeight: 40, border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.navy, cursor: "pointer" }}><X size={16} /></button>
       </div>)}
       <button type="button" onClick={() => changeTiers([...value.abonamenty_progi, { abonament: "", limit_dokumentow: "" }])}
         style={{ justifySelf: "start", display: "flex", alignItems: "center", gap: 6, padding: "8px 12px", border: `1px solid ${colors.border}`, borderRadius: radius.input, background: colors.white, color: colors.navy, cursor: "pointer" }}>

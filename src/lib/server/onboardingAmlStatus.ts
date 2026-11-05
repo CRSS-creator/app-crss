@@ -37,19 +37,20 @@ async function setOnboardingAmlStatus(
   actorId: string | null,
   description: string
 ) {
-  const { data: stage } = await admin
+  const { data: stage, error: stageError } = await admin
     .from("onboarding_etapy")
     .select("id, klient_id, etap, status")
     .eq("klient_id", clientId)
     .eq("etap", "aml")
     .maybeSingle<OnboardingAmlStage>();
 
+  if (stageError) throw stageError;
   if (!stage) return;
   if (stage.status === status) return;
   if (status === "w_toku" && DONE_STATUSES.has(stage.status)) return;
 
   const completedAt = status === "gotowe" ? new Date().toISOString() : null;
-  await admin
+  const { data: updatedStage, error: updateError } = await admin
     .from("onboarding_etapy")
     .update({
       status,
@@ -57,7 +58,13 @@ async function setOnboardingAmlStatus(
       completed_at: completedAt,
       completed_by: status === "gotowe" ? actorId : null,
     })
-    .eq("id", stage.id);
+    .eq("id", stage.id)
+    .eq("status", stage.status)
+    .select("id")
+    .maybeSingle();
+
+  if (updateError) throw updateError;
+  if (!updatedStage) return;
 
   await admin.from("onboarding_historia").insert({
     klient_id: clientId,
@@ -102,6 +109,10 @@ async function getAmlCompletion(admin: SupabaseClient, clientId: string): Promis
       .or("completed_at.not.is.null,completed_pdf_document_id.not.is.null")
       .limit(1),
   ]);
+
+  for (const result of [registerResult, verificationsResult, initialFormsResult, statementsResult, riskAssessmentsResult]) {
+    if (result.error) throw result.error;
+  }
 
   const riskAssessment = riskAssessmentsResult.data?.[0] as { risk_level?: string | null } | undefined;
   const register = registerResult.data as { poziom_ryzyka?: string | null } | null;

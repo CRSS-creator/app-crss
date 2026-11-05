@@ -53,7 +53,7 @@ export const DATA_SOURCE_FIELDS = [
   { key: "initialForm", label: "Formularz wstępny klienta" },
   { key: "krs", label: "KRS", allowNa: true },
   { key: "ceidg", label: "CEIDG", allowNa: true },
-  { key: "regon", label: "GUS albo REGON", allowNa: true },
+  { key: "regon", label: "REGON (GUS)", allowNa: true },
   { key: "vatWhitelist", label: "Biała lista podatników VAT", allowNa: true },
   { key: "vies", label: "VIES", allowNa: true },
   { key: "crbr", label: "Centralny Rejestr Beneficjentów Rzeczywistych", allowNa: true },

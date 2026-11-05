@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { isContributionHolidayClient } from "@/lib/contributionHolidayEligibility";
 import { splitEmails } from "@/lib/contactFields";
 
 const ALLOWED_ROLES = new Set(["owner", "manager", "admin", "accountant"]);
@@ -272,6 +273,8 @@ export async function POST(request: NextRequest) {
       schemat_zus,
       forma_opodatkowania,
       status_klienta,
+      pierwszy_okres_rozliczeniowy,
+      ostatni_okres_rozliczeniowy,
       opiekun_id,
       profiles!klienci_opiekun_id_fkey (
         full_name,
@@ -285,11 +288,7 @@ export async function POST(request: NextRequest) {
   }
 
   const allowedClients = (clients || []).filter((client) => auth.role !== "accountant" || client.opiekun_id === auth.requesterId);
-  if (isHoliday && (allowedClients.length !== new Set(clientIds).size || allowedClients.some(client => {
-    const form = (client.forma_prawna || "").trim().toLowerCase();
-    const scheme = (client.schemat_zus || "").trim().toLowerCase().replace(/\s+/g, " ");
-    return !(form === "jdg" || form.includes("jednoosob")) || scheme === "ulga na start" || scheme === "brak zus";
-  }))) {
+  if (isHoliday && (allowedClients.length !== new Set(clientIds).size || allowedClients.some(client => !isContributionHolidayClient(client)))) {
     return NextResponse.json({ error: "Lista zawiera niedostępnych klientów lub klientów spoza wakacji składkowych. Odśwież listę." }, { status: 403 });
   }
   const skippedCount = allowedClients.filter((client) => splitEmails(client.email).length === 0).length;

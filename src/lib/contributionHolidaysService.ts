@@ -15,15 +15,13 @@ export type ContributionHolidayClient = {
   nip: string | null;
   forma_prawna: string | null;
   schemat_zus: string | null;
+  status_klienta?: string | null;
+  pierwszy_okres_rozliczeniowy?: string | null;
+  ostatni_okres_rozliczeniowy?: string | null;
   profiles?: { full_name: string | null; email: string | null } | { full_name: string | null; email: string | null }[] | null;
 };
 
-export function isContributionHolidayClient(client: ContributionHolidayClient) {
-  const legalForm = (client.forma_prawna || "").trim().toLowerCase();
-  const scheme = (client.schemat_zus || "").trim().toLowerCase().replace(/\s+/g, " ");
-  return (legalForm === "jdg" || legalForm.includes("jednoosob"))
-    && scheme !== "ulga na start" && scheme !== "brak zus";
-}
+export { isContributionHolidayClient } from "@/lib/contributionHolidayEligibility";
 
 export async function fetchContributionHolidays(year: number) {
   return supabase.from("kadry_wakacje_skladkowe").select("*").eq("rok", year);

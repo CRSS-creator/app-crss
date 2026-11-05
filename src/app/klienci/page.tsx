@@ -1,6 +1,8 @@
 
 "use client";
 
+import SubscriptionTiersEditor from "@/components/SubscriptionTiersEditor";
+import { subscriptionPricingPayload, type SubscriptionPricingDraft, type SubscriptionTier } from "@/lib/subscriptionPricing";
 import { AppFormInput } from "@/components/AppFormControls";
 
 import { useEffect, useRef, useState } from "react";
@@ -62,6 +64,9 @@ type Client = {
   obsluga_kadrowa: boolean | null;
   status_klienta: string | null;
   abonament: number | null;
+  kilka_abonamentow: boolean;
+  abonamenty_od: string | null;
+  abonamenty_progi: SubscriptionTier[];
   model_fakturowania: string | null;
   czynny_vat: boolean | null;
   vat_okres_rozliczeniowy: string | null;
@@ -81,7 +86,7 @@ type Client = {
   profiles?: ClientCaregiver | ClientCaregiver[] | null;
 };
 
-type ClientDraft = {
+type ClientDraft = SubscriptionPricingDraft & {
   nazwa: string;
   nip: string;
   telefon: string;
@@ -722,6 +727,9 @@ function ClientDrawer({
   }
 
   async function saveChanges() {
+    let pricing: ReturnType<typeof subscriptionPricingPayload> | undefined;
+    try { if (canEditAdministrative) pricing = subscriptionPricingPayload(draft); }
+    catch (error) { alert(error instanceof Error ? error.message : "Sprawdź progi abonamentów."); return; }
     setSaving(true);
 
     const operationalPayload = {
@@ -752,7 +760,7 @@ function ClientDrawer({
           obsluga_kadrowa: draft.obsluga_kadrowa,
           status_klienta: draft.status_klienta.trim() || null,
           aktywny: activeFlagFromClientStatus(draft.status_klienta),
-          abonament: draft.abonament ? Number(draft.abonament) : null,
+          ...pricing,
           model_fakturowania: draft.model_fakturowania || "z_dolu",
           pierwszy_okres_rozliczeniowy: normalizeMonthInput(
             draft.pierwszy_okres_rozliczeniowy
@@ -1049,12 +1057,13 @@ function ClientDrawer({
           <InfoSection title="Abonament i limity">
             {editing && canEditAdministrative ? (
               <>
-                <EditableInput
+                <SubscriptionTiersEditor value={draft} onChange={pricing => setDraft(current => ({ ...current, ...pricing }))} />
+                {!draft.kilka_abonamentow && (<EditableInput
                   label="Abonament"
                   type="number"
                   value={draft.abonament}
                   onChange={(value) => updateDraft("abonament", value)}
-                />
+                />)}
                 <EditableSelect
                   label="Schemat płatności faktury"
                   value={draft.model_fakturowania}
@@ -1104,14 +1113,16 @@ function ClientDrawer({
               </>
             ) : (
               <>
-                <InfoRow
+                {client.kilka_abonamentow ? (client.abonamenty_progi || []).map((tier, index) => (
+                  <InfoRow key={tier.limit_dokumentow} label={`Abonament ${index + 1} · do ${tier.limit_dokumentow} dokumentów`} value={formatMoney(tier.abonament)} />
+                )) : (<InfoRow
                   label="Abonament"
                   value={
                     client.abonament !== null
                       ? `${client.abonament.toLocaleString("pl-PL")} zł`
                     : null
                   }
-                />
+                />)}
                 <InfoRow
                   label="Schemat płatności faktury"
                   value={billingModelLabel(client.model_fakturowania)}
@@ -1145,12 +1156,12 @@ function ClientDrawer({
 
             {editing ? (
               <>
-                <EditableInput
+                {!draft.kilka_abonamentow && (<EditableInput
                   label="Limit dokumentów"
                   type="number"
                   value={draft.limit_dokumentow}
                   onChange={(value) => updateDraft("limit_dokumentow", value)}
-                />
+                />)}
                 <EditableTextarea
                   label="Dodatkowe usługi"
                   value={draft.dodatkowe_uslugi}
@@ -1160,13 +1171,14 @@ function ClientDrawer({
             ) : (
               <>
                 <InfoRow
-                  label="Limit dokumentów"
+                  label={client.kilka_abonamentow ? "Najwyższy limit dokumentów" : "Limit dokumentów"}
                   value={
-                    client.limit_dokumentow !== null
-                      ? `${client.limit_dokumentow} dokumentów`
-                      : null
+                    client.kilka_abonamentow
+                      ? `${client.abonamenty_progi[client.abonamenty_progi.length - 1]?.limit_dokumentow || 0} dokumentów`
+                      : client.limit_dokumentow !== null ? `${client.limit_dokumentow} dokumentów` : null
                   }
                 />
+                {client.kilka_abonamentow && <InfoRow label="Progi obowiązują od" value={formatSettlementPeriod(client.abonamenty_od)} />}
                 <InfoRow
                   label="Dodatkowe usługi"
                   value={client.dodatkowe_uslugi}
@@ -1326,6 +1338,8 @@ function CreateClientDrawer({
     obsluga_kadrowa: false,
     status_klienta: "Aktywny",
     abonament: "",
+    kilka_abonamentow: false,
+    abonamenty_progi: [],
     model_fakturowania: "z_dolu",
     opiekun_id: canAssignCaregiver ? "" : userId || "",
     czynny_vat: false,
@@ -1364,6 +1378,9 @@ function CreateClientDrawer({
       return;
     }
 
+    let pricing: ReturnType<typeof subscriptionPricingPayload>;
+    try { pricing = subscriptionPricingPayload(draft); }
+    catch (error) { alert(error instanceof Error ? error.message : "Sprawdź progi abonamentów."); return; }
     setSaving(true);
 
     const payload = {
@@ -1379,7 +1396,7 @@ function CreateClientDrawer({
       obsluga_kadrowa: draft.obsluga_kadrowa,
       status_klienta: draft.status_klienta.trim() || "Aktywny",
       aktywny: activeFlagFromClientStatus(draft.status_klienta || "Aktywny"),
-      abonament: draft.abonament ? Number(draft.abonament) : null,
+      ...pricing,
       model_fakturowania: draft.model_fakturowania || "z_dolu",
       pierwszy_okres_rozliczeniowy: normalizeMonthInput(
         draft.pierwszy_okres_rozliczeniowy
@@ -1403,9 +1420,7 @@ function CreateClientDrawer({
       schemat_zus: isJdg ? normalizeZusScheme(draft.schemat_zus) || null : null,
       zus_preferencja_start: isJdg ? emptyToNull(draft.zus_preferencja_start) : null,
       zus_preferencja_koniec: isJdg ? emptyToNull(draft.zus_preferencja_koniec) : null,
-      limit_dokumentow: draft.limit_dokumentow
-        ? Number(draft.limit_dokumentow)
-        : null,
+      limit_dokumentow: pricing.limit_dokumentow,
       dodatkowe_uslugi: draft.dodatkowe_uslugi.trim() || null,
       notatki: draft.notatki.trim() || null,
     };
@@ -1634,12 +1649,13 @@ function CreateClientDrawer({
 </InfoSection>
 
 <InfoSection title="Abonament i limity">
-  <EditableInput
+  <SubscriptionTiersEditor value={draft} onChange={pricing => setDraft(current => ({ ...current, ...pricing }))} />
+  {!draft.kilka_abonamentow && (<EditableInput
     label="Abonament"
     type="number"
     value={draft.abonament}
     onChange={(v) => updateDraft("abonament", v)}
-  />
+  />)}
 
   <EditableSelect
     label="Schemat płatności faktury"
@@ -1683,12 +1699,12 @@ function CreateClientDrawer({
     onChange={(v) => updateDraft("koszt_dodatkowego_dokumentu", v)}
   />
 
-  <EditableInput
+  {!draft.kilka_abonamentow && (<EditableInput
     label="Limit dokumentów"
     type="number"
     value={draft.limit_dokumentow}
     onChange={(v) => updateDraft("limit_dokumentow", v)}
-  />
+  />)}
 
   <EditableTextarea
     label="Dodatkowe usługi"
@@ -1802,6 +1818,9 @@ function createDraft(client: Client): ClientDraft {
     glowna_stawka_ryczaltu: client.glowna_stawka_ryczaltu || "",
     obsluga_kadrowa: Boolean(client.obsluga_kadrowa),
     status_klienta: client.status_klienta || "",
+    kilka_abonamentow: Boolean(client.kilka_abonamentow),
+    abonamenty_od: client.abonamenty_od,
+    abonamenty_progi: (client.abonamenty_progi || []).map(tier => ({ abonament: String(tier.abonament), limit_dokumentow: String(tier.limit_dokumentow) })),
     abonament:
       client.abonament !== null && client.abonament !== undefined
         ? String(client.abonament)

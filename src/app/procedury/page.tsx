@@ -7,7 +7,7 @@ import { useCurrentUserRole } from "@/hooks/useCurrentUserRole";
 import { Download, Plus } from "lucide-react";
 import { colors, radius } from "@/app/design";
 import {
-  downloadProcedureDocument, fetchProcedureDocuments, uploadProcedureDocument,
+  downloadProcedureDocument, fetchProcedureDocuments, uploadProcedureDocument, getProcedureDownloadName,
   MAX_PROCEDURE_FILE_SIZE, PROCEDURE_CATEGORIES, type ProcedureCategory, type ProcedureDocument,
 } from "@/lib/procedureDocumentsService";
 
@@ -79,7 +79,7 @@ function ProceduresContent() {
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = item.nazwa_pliku;
+      anchor.download = getProcedureDownloadName(item);
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();

@@ -62,3 +62,9 @@ export async function downloadProcedureDocument(document: ProcedureDocument) {
   if (result.error || !result.data) throw new Error("Nie udało się pobrać pliku. Spróbuj ponownie.");
   return result.data;
 }
+
+export function getProcedureDownloadName(document: Pick<ProcedureDocument, "nazwa" | "nazwa_pliku">) {
+  const extension = document.nazwa_pliku.match(/\.[a-z0-9]{1,16}$/i)?.[0] || "";
+  const name = document.nazwa.trim().replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_").replace(/[. ]+$/, "") || "plik";
+  return extension && !name.toLowerCase().endsWith(extension.toLowerCase()) ? name + extension : name;
+}

@@ -20,6 +20,7 @@ function ProceduresContent() {
   const { role } = useCurrentUserRole();
   const isOwner = role === "owner";
   const [documents, setDocuments] = useState<ProcedureDocument[]>([]);
+  const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [actionError, setActionError] = useState("");
@@ -102,6 +103,10 @@ function ProceduresContent() {
         onClick={() => { setFormOpen(true); setActionError(""); }}><Plus size={18} aria-hidden="true" />Dodaj</button>}
     </header>
 
+    <input type="search" aria-label="Szukaj po nazwie pliku" placeholder="Szukaj po nazwie pliku…"
+      value={search} onChange={event => setSearch(event.target.value)}
+      style={{ ...input, marginBottom: 24 }} />
+
     {isOwner && formOpen && <form id="procedure-upload-form" onSubmit={save} style={{ ...panel, display: "grid", gap: 18, marginBottom: 24 }}>
       <h2 style={{ margin: 0, color: colors.navy, fontSize: 22 }}>Dodaj procedurę lub wzór</h2>
       <label style={label}>Kategoria
@@ -136,11 +141,11 @@ function ProceduresContent() {
         : loadError ? <div role="alert"><p style={{ color: colors.danger }}>{loadError}</p><button type="button" style={secondaryButton} onClick={() => void loadDocuments()}>Spróbuj ponownie</button></div>
         : <div style={{ display: "grid", gap: 28 }}>
           {PROCEDURE_CATEGORIES.map(group => {
-            const items = documents.filter(item => item.kategoria === group.value);
+            const items = documents.filter(item => item.kategoria === group.value && item.nazwa.toLocaleLowerCase("pl").includes(search.trim().toLocaleLowerCase("pl")));
             return <section key={group.value} aria-label={group.heading} style={group.value === "wzor" ? { borderTop: `1px solid ${colors.border}`, paddingTop: 28 } : undefined}>
-              <h2 style={{ margin: "0 0 16px", color: colors.navy, fontSize: 22 }}>{group.heading}</h2>
+              <h2 style={{ margin: "0 0 16px", color: colors.navy, fontSize: 22, fontWeight: 700 }}>{group.heading}</h2>
               {items.length === 0 ? <p style={{ margin: 0, padding: "18px 0", color: colors.muted }}>
-                {group.value === "procedura" ? "Nie dodano jeszcze procedur." : "Nie dodano jeszcze wzorów."}
+                {search.trim() ? "Brak plików pasujących do wyszukiwania." : group.value === "procedura" ? "Nie dodano jeszcze procedur." : "Nie dodano jeszcze wzorów."}
               </p> : <ul style={{ padding: 0, margin: 0, listStyle: "none", display: "grid", gap: 12 }}>
                 {items.map(item => <li key={item.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16, padding: "16px 18px", border: `1px solid ${colors.border}`, borderRadius: radius.input }}>
                   <span style={{ color: colors.navy, overflowWrap: "anywhere", minWidth: 0, flex: "1 1 200px" }}>{item.nazwa}</span>

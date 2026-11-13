@@ -14,6 +14,7 @@ import CrmDetailsLayoutFixWidget from "@/components/CrmDetailsLayoutFixWidget";
 import RodoRegisterPrintWidget from "@/components/RodoRegisterPrintWidget";
 import {
   Home,
+  BookOpen,
   Users,
   ListTodo,
   BarChart3,
@@ -53,6 +54,7 @@ const menu = [
       { href: "/klienci", label: "Klienci", icon: Users, page: "klienci" },
       { href: "/zadania", label: "Zadania", icon: ListTodo, page: "zadania" },
       { href: "/rozliczenia", label: "Rozliczenia", icon: BarChart3, page: "rozliczenia" },
+      { href: "/procedury", label: "Procedury/wzory", icon: BookOpen, page: "procedury" },
       { href: "/komunikaty", label: "Komunikaty", icon: Megaphone, page: "komunikaty" },
       { href: "/kadry", label: "Kadry i ZUS", icon: CalendarClock, page: "kadry" },
       { href: "/limity", label: "Limity", icon: TriangleAlert, page: "limity" },

@@ -673,7 +673,7 @@ function RodoRegisterDrawer({ definition, record, profiles, onClose, onSaved }: 
   }
 
   return (
-    <div style={drawerOverlayStyle} onClick={onClose}>
+    <div style={drawerOverlayStyle}>
       <aside style={drawerStyle} onClick={(event) => event.stopPropagation()}>
         <div style={drawerHeaderStyle}>
           <div>
@@ -989,7 +989,7 @@ function RodoDrawer({ contract, clients, accountingContracts, profiles, onClose,
   const busy = saving || generating || deletingPdf || uploadingSignedPdf;
 
   return (
-    <div style={drawerOverlayStyle} onClick={onClose}>
+    <div style={drawerOverlayStyle}>
       <aside style={drawerStyle} onClick={(event) => event.stopPropagation()}>
         <div style={drawerHeaderStyle}>
           <div>

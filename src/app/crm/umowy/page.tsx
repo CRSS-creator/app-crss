@@ -433,7 +433,7 @@ function ContractDrawer({ contract, leads, clients, onClose, onSaved, onDeleted 
   }
 
   return (
-    <div style={drawerOverlayStyle} onClick={onClose}>
+    <div style={drawerOverlayStyle}>
       <aside style={drawerStyle} onClick={(event) => event.stopPropagation()}>
         <div style={drawerHeaderStyle}>
           <div>

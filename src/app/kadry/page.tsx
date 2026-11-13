@@ -855,7 +855,7 @@ function ZusNotificationHistoryModal({ history, clients, onClose }: { history: Z
   const clientById = useMemo(() => new Map(clients.map((client) => [client.id, client])), [clients]);
 
   return (
-    <div style={modalOverlayStyle} onClick={onClose}>
+    <div style={modalOverlayStyle}>
       <section style={detailsModalStyle} onClick={(event) => event.stopPropagation()}>
         <div style={modalHeaderStyle}>
           <div>
@@ -1013,7 +1013,7 @@ function ZusContributionsModal({ schemes, onClose }: { schemes: string[]; onClos
   }
 
   return (
-    <div style={modalOverlayStyle} onClick={onClose}>
+    <div style={modalOverlayStyle}>
       <section style={zusContributionsModalStyle} onClick={(event) => event.stopPropagation()}>
         <div style={modalHeaderStyle}>
           <div>
@@ -1242,7 +1242,7 @@ function A1DetailsModal({
   }
 
   return (
-    <div style={modalOverlayStyle} onClick={onClose}>
+    <div style={modalOverlayStyle}>
       <section style={a1DetailsModalStyle} onClick={(event) => event.stopPropagation()}>
         <div style={modalHeaderStyle}>
           <div>
@@ -1550,7 +1550,7 @@ function PayrollDetailsModal({
 
   return (
     <>
-      <div style={payrollDetailsOverlayStyle} onClick={onClose}>
+      <div style={payrollDetailsOverlayStyle}>
         <section style={payrollDetailsModalStyle} onClick={(event) => event.stopPropagation()}>
           <div style={modalHeaderStyle}>
             <div>
@@ -1678,7 +1678,7 @@ function PayrollContractFormModal({
   onSave: () => void;
 }) {
   return (
-    <div style={modalOverlayStyle} onClick={onClose}>
+    <div style={modalOverlayStyle}>
       <section style={contractFormModalStyle} onClick={(event) => event.stopPropagation()}>
         <div style={modalHeaderStyle}>
           <div>

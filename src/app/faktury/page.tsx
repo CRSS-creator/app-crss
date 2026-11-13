@@ -929,7 +929,7 @@ function InvoicesContent() {
       </section>
 
       {overdueModalOpen && (
-        <div style={overdueOverlayStyle} onClick={() => setOverdueModalOpen(false)}>
+        <div style={overdueOverlayStyle}>
           <aside style={overdueModalStyle} onClick={(event) => event.stopPropagation()}>
             <header style={overdueModalHeaderStyle}>
               <div>
@@ -1075,7 +1075,7 @@ function InvoicesContent() {
         </div>
       )}
       {detailsInvoice && (
-        <div style={overlayStyle} onClick={() => setDetailsInvoice(null)}>
+        <div style={overlayStyle}>
           <aside style={detailsPanelStyle} onClick={(event) => event.stopPropagation()}>
             <div style={detailsHeaderStyle}>
               <div>

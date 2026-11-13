@@ -576,7 +576,7 @@ function ManualTimeModal({
   }
 
   return (
-    <div style={modalOverlayStyle} onClick={onClose}>
+    <div style={modalOverlayStyle}>
       <section style={manualTimeModalStyle} onClick={(event) => event.stopPropagation()}>
         <header style={timeModalHeaderStyle}>
           <div>
@@ -717,7 +717,7 @@ function TimeDetailsModal({
   onClose: () => void;
 }) {
   return (
-    <div style={modalOverlayStyle} onClick={onClose}>
+    <div style={modalOverlayStyle}>
       <section style={timeModalStyle} onClick={(event) => event.stopPropagation()}>
         <header style={timeModalHeaderStyle}>
           <div>

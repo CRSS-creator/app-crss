@@ -545,7 +545,7 @@ function OnboardingContent() {
       </section>
 
       {selectedRow && (
-        <aside style={overlayStyle} onClick={() => setSelectedClientId(null)}>
+        <aside style={overlayStyle}>
           <div style={drawerStyle} onClick={(event) => event.stopPropagation()}>
             <div style={drawerHeaderStyle}>
               <div>

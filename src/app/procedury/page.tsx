@@ -137,7 +137,7 @@ function ProceduresContent() {
         : <div style={{ display: "grid", gap: 28 }}>
           {PROCEDURE_CATEGORIES.map(group => {
             const items = documents.filter(item => item.kategoria === group.value);
-            return <section key={group.value} aria-label={group.heading}>
+            return <section key={group.value} aria-label={group.heading} style={group.value === "wzor" ? { borderTop: `1px solid ${colors.border}`, paddingTop: 28 } : undefined}>
               <h2 style={{ margin: "0 0 16px", color: colors.navy, fontSize: 22 }}>{group.heading}</h2>
               {items.length === 0 ? <p style={{ margin: 0, padding: "18px 0", color: colors.muted }}>
                 {group.value === "procedura" ? "Nie dodano jeszcze procedur." : "Nie dodano jeszcze wzorów."}

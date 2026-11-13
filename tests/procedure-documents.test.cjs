@@ -55,3 +55,18 @@ test("download requests stored path and returns file content", async () => {
   assert.equal(await service.downloadProcedureDocument(document), "file-content");
   assert.equal(calls[0][1], document.sciezka);
 });
+
+test("both categories are stored and procedures are displayed before templates", async () => {
+  for (const category of ["procedura", "wzor"]) {
+    const { service, calls } = setup();
+    await service.uploadProcedureDocument("Materiał", file, category);
+    assert.equal(calls[1][1].kategoria, category);
+    assert.equal(service.PROCEDURE_CATEGORIES[0].value, "procedura");
+    assert.equal(service.PROCEDURE_CATEGORIES[1].value, "wzor");
+  }
+});
+test("unknown categories are rejected before uploading", async () => {
+  const { service, calls } = setup();
+  await assert.rejects(service.uploadProcedureDocument("Materiał", file, "other"), /kategorię/);
+  assert.equal(calls.length, 0);
+});

@@ -4,11 +4,11 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties, type Form
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
 import { useCurrentUserRole } from "@/hooks/useCurrentUserRole";
-import { BookOpen, Download, Plus } from "lucide-react";
+import { Download, Plus } from "lucide-react";
 import { colors, radius } from "@/app/design";
 import {
   downloadProcedureDocument, fetchProcedureDocuments, uploadProcedureDocument,
-  MAX_PROCEDURE_FILE_SIZE, type ProcedureDocument,
+  MAX_PROCEDURE_FILE_SIZE, PROCEDURE_CATEGORIES, type ProcedureCategory, type ProcedureDocument,
 } from "@/lib/procedureDocumentsService";
 
 export default function ProceduresPage() {
@@ -24,6 +24,7 @@ function ProceduresContent() {
   const [actionError, setActionError] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [name, setName] = useState("");
+  const [category, setCategory] = useState<ProcedureCategory>("procedura");
   const [file, setFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [downloading, setDownloading] = useState<string[]>([]);
@@ -55,9 +56,10 @@ function ProceduresContent() {
     savingRef.current = true;
     setSaving(true);
     try {
-      const saved = await uploadProcedureDocument(name, file);
+      const saved = await uploadProcedureDocument(name, file, category);
       setDocuments(current => [saved, ...current]);
       setName("");
+      setCategory("procedura");
       setFile(null);
       if (fileInput.current) fileInput.current.value = "";
       setFormOpen(false);
@@ -101,6 +103,11 @@ function ProceduresContent() {
 
     {isOwner && formOpen && <form id="procedure-upload-form" onSubmit={save} style={{ ...panel, display: "grid", gap: 18, marginBottom: 24 }}>
       <h2 style={{ margin: 0, color: colors.navy, fontSize: 22 }}>Dodaj procedurę lub wzór</h2>
+      <label style={label}>Kategoria
+        <select value={category} disabled={saving} onChange={event => setCategory(event.target.value as ProcedureCategory)} style={input}>
+          {PROCEDURE_CATEGORIES.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
+        </select>
+      </label>
       <label style={label}>Nazwa pliku
         <input autoFocus required maxLength={200} value={name} disabled={saving} onChange={event => setName(event.target.value)} style={input} placeholder="Np. Procedura przyjęcia nowego klienta" />
       </label>
@@ -122,17 +129,24 @@ function ProceduresContent() {
     <section aria-label="Procedury i wzory dokumentów" style={panel}>
       {loading ? <p role="status" style={{ color: colors.muted }}>Ładowanie materiałów…</p>
         : loadError ? <div role="alert"><p style={{ color: colors.danger }}>{loadError}</p><button type="button" style={secondaryButton} onClick={() => void loadDocuments()}>Spróbuj ponownie</button></div>
-        : documents.length === 0 ? <div style={{ padding: "24px 0", textAlign: "center" }}>
-          <BookOpen size={40} strokeWidth={1.5} color={colors.navy} aria-hidden="true" style={{ display: "inline-block" }} />
-          <h2 style={{ margin: "18px 0 10px", color: colors.navy, fontSize: 22 }}>Brak materiałów</h2>
-          <p style={{ margin: 0, color: colors.muted, lineHeight: 1.6 }}>Nie dodano jeszcze procedur ani wzorów dokumentów.</p>
-        </div> : <ul style={{ padding: 0, margin: 0, listStyle: "none", display: "grid", gap: 12 }}>
-          {documents.map(item => <li key={item.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16, padding: "16px 18px", border: `1px solid ${colors.border}`, borderRadius: radius.input }}>
-            <span style={{ color: colors.navy, overflowWrap: "anywhere", minWidth: 0, flex: "1 1 200px" }}>{item.nazwa}</span>
-            <button type="button" style={secondaryButton} disabled={downloading.includes(item.id)} aria-label={`Pobierz: ${item.nazwa}`}
-              onClick={() => void download(item)}><Download size={16} aria-hidden="true" />{downloading.includes(item.id) ? "Pobieranie…" : "Pobierz"}</button>
-          </li>)}
-        </ul>}
+        : <div style={{ display: "grid", gap: 28 }}>
+          {PROCEDURE_CATEGORIES.map(group => {
+            const items = documents.filter(item => item.kategoria === group.value);
+            return <section key={group.value} aria-label={group.heading}>
+              <h2 style={{ margin: "0 0 16px", color: colors.navy, fontSize: 22 }}>{group.heading}</h2>
+              {items.length === 0 ? <p style={{ margin: 0, padding: "18px 0", color: colors.muted }}>
+                {group.value === "procedura" ? "Nie dodano jeszcze procedur." : "Nie dodano jeszcze wzorów."}
+              </p> : <ul style={{ padding: 0, margin: 0, listStyle: "none", display: "grid", gap: 12 }}>
+                {items.map(item => <li key={item.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16, padding: "16px 18px", border: `1px solid ${colors.border}`, borderRadius: radius.input }}>
+                  <span style={{ color: colors.navy, overflowWrap: "anywhere", minWidth: 0, flex: "1 1 200px" }}>{item.nazwa}</span>
+                  <button type="button" style={secondaryButton} disabled={downloading.includes(item.id)} aria-label={`Pobierz: ${item.nazwa}`}
+                    onClick={() => void download(item)}><Download size={16} aria-hidden="true" />{downloading.includes(item.id) ? "Pobieranie…" : "Pobierz"}</button>
+                </li>)}
+              </ul>}
+            </section>;
+          })}
+        </div>}
+
     </section>
   </>;
 }

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
+import AppSelect from "@/components/AppSelect";
 import { useCurrentUserRole } from "@/hooks/useCurrentUserRole";
 import { Download, Plus } from "lucide-react";
 import { colors, radius } from "@/app/design";
@@ -104,9 +105,13 @@ function ProceduresContent() {
     {isOwner && formOpen && <form id="procedure-upload-form" onSubmit={save} style={{ ...panel, display: "grid", gap: 18, marginBottom: 24 }}>
       <h2 style={{ margin: 0, color: colors.navy, fontSize: 22 }}>Dodaj procedurę lub wzór</h2>
       <label style={label}>Kategoria
-        <select value={category} disabled={saving} onChange={event => setCategory(event.target.value as ProcedureCategory)} style={input}>
-          {PROCEDURE_CATEGORIES.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
-        </select>
+        <AppSelect
+          value={category}
+          options={PROCEDURE_CATEGORIES}
+          onChange={value => setCategory(value as ProcedureCategory)}
+          disabled={saving}
+          ariaLabel="Kategoria"
+        />
       </label>
       <label style={label}>Nazwa pliku
         <input autoFocus required maxLength={200} value={name} disabled={saving} onChange={event => setName(event.target.value)} style={input} placeholder="Np. Procedura przyjęcia nowego klienta" />

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import AppLayout from "@/components/AppLayout";
 import AccessGuard from "@/components/AccessGuard";
 import AppSelect from "@/components/AppSelect";
+import TaskTimeDetails from "@/components/TaskTimeDetails";
 import { AppDateInput } from "@/components/AppDateInputs";
 import { colors, radius, shadow } from "@/app/design";
 import { supabase } from "@/lib/supabaseClient";
@@ -272,7 +273,7 @@ function TasksContent({ currentRole }: { currentRole: UserRole | null }) {
   );
 }
 
-function TaskDrawer({ mode, task, currentUserId, assignees, clients, onClose, onCreated, onSaved }: {
+function TaskDrawer({ mode, task, currentUserId, currentRole, assignees, clients, onClose, onCreated, onSaved }: {
   mode: "create" | "edit";
   task: Task | null;
   currentUserId: string | null;
@@ -285,6 +286,7 @@ function TaskDrawer({ mode, task, currentUserId, assignees, clients, onClose, on
 }) {
   const [draft, setDraft] = useState<TaskDraft>(() => createDraft(task, currentUserId));
   const [saving, setSaving] = useState(false);
+  const [timeDetailsOpen, setTimeDetailsOpen] = useState(false);
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
   const [documents, setDocuments] = useState<TaskDocument[]>([]);
   const [timerNote, setTimerNote] = useState("");
@@ -531,7 +533,10 @@ function TaskDrawer({ mode, task, currentUserId, assignees, clients, onClose, on
           {mode === "edit" && task && (
             <>
               <section style={drawerSectionStyle}>
-                <h3 style={drawerSectionTitleStyle}>Czas pracy</h3>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 12 }}>
+                  <h3 style={drawerSectionTitleStyle}>Czas pracy</h3>
+                  <button type="button" style={secondaryButtonStyle} aria-expanded={timeDetailsOpen} aria-controls="task-time-details" onClick={() => setTimeDetailsOpen(open => !open)}>{timeDetailsOpen ? "Ukryj szczegóły" : "Szczegóły"}</button>
+                </div>
                 <div style={timerBoxStyle}>
                   <div><p style={timerLabelStyle}>Łącznie</p><strong style={timerValueStyle}>{formatDuration(totalSeconds)}</strong></div>
                   <button style={activeTimeEntry ? stopButtonStyle : timerButtonStyle} onClick={activeTimeEntry ? stopTimer : startTimer} disabled={!canUseTimer}>
@@ -571,6 +576,7 @@ function TaskDrawer({ mode, task, currentUserId, assignees, clients, onClose, on
                   {activeTimeEntry && <p style={manualTimeHintStyle}>Zatrzymaj licznik, aby ręcznie zmienić czas pracy.</p>}
                   {manualTimeMessage && <p style={manualTimeSuccessStyle}>{manualTimeMessage}</p>}
                 </div>
+                {timeDetailsOpen && <TaskTimeDetails entries={timeEntries} userId={currentUserId} role={currentRole} people={assignees} onSaved={updated => setTimeEntries(current => current.map(row => row.id === updated.id ? { ...row, ...updated } : row))} />}
               </section>
 
               <section style={drawerSectionStyle}>

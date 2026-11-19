@@ -6,6 +6,7 @@ import NotificationDeliveryStatus from "@/components/NotificationDeliveryStatus"
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { CalendarClock, DownloadCloud, FileText, Mail, Pencil, RotateCw, Save, Send, Trash2, TriangleAlert, X } from "lucide-react";
 import AppLayout from "@/components/AppLayout";
+import { isCorrectionInvoice, isOverdueCollectionInvoice } from "@/lib/invoiceCollection";
 import AccessGuard from "@/components/AccessGuard";
 import AppSelect from "@/components/AppSelect";
 import { AppMonthInput } from "@/components/AppDateInputs";
@@ -137,7 +138,7 @@ function InvoicesContent() {
 
   const overdueInvoices = useMemo(
     () => invoices
-      .filter((invoice) => invoice.status === "przeterminowana")
+      .filter(isOverdueCollectionInvoice)
       .sort(compareOverdueInvoices),
     [invoices]
   );
@@ -1485,7 +1486,7 @@ function paymentStatusTone(invoice: Invoice): "success" | "danger" | "neutral" {
 }
 
 function isInvoiceOverdue(invoice: Invoice) {
-  if (!invoice.termin_platnosci || ["oplacona", "anulowana"].includes(invoice.status)) return false;
+  if (isCorrectionInvoice(invoice) || !invoice.termin_platnosci || ["oplacona", "anulowana"].includes(invoice.status)) return false;
   return invoice.termin_platnosci < new Date().toISOString().slice(0, 10);
 }
 
@@ -1565,7 +1566,7 @@ function canRefreshSelectedMonthInvoice(invoice: Invoice, month: string) {
 }
 
 function canSendOverdueReminder(invoice: Invoice) {
-  return Boolean(invoice.status === "przeterminowana" && hasInvoiceEmail(invoice) && hasInvoicePhone(invoice));
+  return Boolean(isOverdueCollectionInvoice(invoice) && hasInvoiceEmail(invoice) && hasInvoicePhone(invoice));
 }
 
 function canSelectInvoice(invoice: Invoice) {

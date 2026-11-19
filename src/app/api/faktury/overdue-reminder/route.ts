@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isCorrectionInvoice } from "@/lib/invoiceCollection";
 import { getAuthorizedServerUser } from "@/lib/serverAuth";
 import { splitEmails, splitPhones } from "@/lib/contactFields";
 import { sendInvoiceNotificationTargets } from "@/lib/invoiceNotificationDelivery";
@@ -15,6 +16,8 @@ type OverdueInvoiceRow = {
   klient_id: string | null;
   numer: string | null;
   status: string;
+  typ: string;
+  kategoria: string;
   kontrahent_nazwa: string;
   kontrahent_email: string | null;
   kwota_brutto: number | string | null;
@@ -96,6 +99,8 @@ export async function POST(request: NextRequest) {
       klient_id,
       numer,
       status,
+      typ,
+      kategoria,
       kontrahent_nazwa,
       kontrahent_email,
       kwota_brutto,
@@ -121,6 +126,10 @@ export async function POST(request: NextRequest) {
 
   const failed: { invoiceId: string; error: string }[] = [];
   const rows = ((invoices || []) as OverdueInvoiceRow[]).filter((invoice) => {
+    if (isCorrectionInvoice(invoice)) {
+      failed.push({ invoiceId: invoice.id, error: "Faktury korygujące nie podlegają przypomnieniom o zaległości." });
+      return false;
+    }
     if (invoice.status !== "przeterminowana") {
       failed.push({ invoiceId: invoice.id, error: "Ta faktura nie ma statusu przeterminowana." });
       return false;

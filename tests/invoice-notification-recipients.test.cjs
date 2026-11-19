@@ -66,6 +66,7 @@ function setup(route, invoices, fail = () => false) {
     'next/server': { NextResponse: { json: (body, options = {}) => ({ body, status: options.status || 200 }) } },
     '@/lib/serverAuth': { getAuthorizedServerUser: async () => ({ admin, requesterId: 'owner' }) },
     '@/lib/contactFields': contactFields,
+    '@/lib/invoiceCollection': loadModule('lib/invoiceCollection.ts', {}),
     '@/lib/invoiceNotificationDelivery': delivery,
   }, {
     process: { env: {
@@ -177,4 +178,37 @@ test('paid invoice status remains paid after sending to all contacts', async () 
   const s = setup('send-mail', [invoice({ status: 'oplacona' })]);
   assert.equal((await s.send()).status, 200);
   assert.equal(s.updates.length, 0);
+});
+
+test('overdue reminders reject correction category and correction type without notifications', async () => {
+  for (const correction of [{ typ: 'korekta', kategoria: 'standardowa' }, { typ: 'sprzedaz', kategoria: 'korekta' }]) {
+    const s = setup('overdue-reminder', [invoice(correction)]);
+    const result = await s.send();
+    assert.equal(result.status, 400);
+    assert.equal(s.calls.length, 0);
+    assert.equal(s.history.length, 0);
+    assert.match(result.body.failed[0].error, /korygujące/);
+  }
+});
+test('mixed overdue selection sends only regular invoices', async () => {
+  const s = setup('overdue-reminder', [
+    invoice({ id: 'regular', typ: 'sprzedaz', kategoria: 'standardowa' }),
+    invoice({ id: 'correction', typ: 'sprzedaz', kategoria: 'korekta' }),
+  ]);
+  const result = await s.send();
+  assert.equal(result.status, 200);
+  assert.equal(result.body.failed.length, 1);
+  assert.equal(s.history.length, 1);
+  assert.equal(s.history[0].faktura_id, 'regular');
+});
+test('overdue collection excludes both correction markers but retains standard and additional invoices', () => {
+  const api = loadModule('lib/invoiceCollection.ts', {});
+  const rows = [
+    invoice({ id: 'normal', typ: 'sprzedaz', kategoria: 'standardowa' }),
+    invoice({ id: 'extra', typ: 'sprzedaz', kategoria: 'dodatkowa' }),
+    invoice({ typ: 'sprzedaz', kategoria: 'korekta' }),
+    invoice({ typ: 'korekta', kategoria: 'standardowa' }),
+    invoice({ status: 'oplacona' }),
+  ];
+  assert.deepEqual(rows.filter(api.isOverdueCollectionInvoice).map(row => row.id), ['normal', 'extra']);
 });

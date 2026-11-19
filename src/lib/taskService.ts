@@ -28,6 +28,7 @@ export type Task = {
   osoba_id: string;
   klient_id: string | null;
   czy_wewnetrzne: boolean;
+  czy_roczne?: boolean;
   notatki: string | null;
   created_by: string | null;
   created_at: string;
@@ -63,6 +64,7 @@ export type TaskPayload = {
   osoba_id: string;
   klient_id?: string | null;
   czy_wewnetrzne: boolean;
+  czy_roczne?: boolean;
   notatki?: string | null;
 };
 

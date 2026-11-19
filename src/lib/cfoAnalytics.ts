@@ -214,5 +214,14 @@ export function applyCfoTimeCorrections(entries: CfoClientTimeEntry[], correctio
       });
     }
   }
-  return [...entries.map(row => adjusted.has(row.id) ? { ...row, duration_seconds: adjusted.get(row.id)! } : row), ...standalone];
+  return [...entries.map(row => adjusted.has(row.id) ? { ...row, duration_seconds: adjusted.get(row.id)! } : row), ...standalone].map(applyAnnualTaskCostPeriod);
+}
+
+/** Keep work dates/rates intact; only the client service month moves back. */
+export function applyAnnualTaskCostPeriod(entry: CfoClientTimeEntry): CfoClientTimeEntry {
+  const task = Array.isArray(entry.zadania) ? entry.zadania[0] : entry.zadania;
+  if (!entry.zadanie_id || !task?.czy_roczne || !entry.klient_id || entry.czy_wewnetrzne) return entry;
+  const [year, month] = workMonth(entry.started_at).split("-").map(Number);
+  const previous = new Date(Date.UTC(year, month - 2, 1, 12));
+  return { ...entry, miesiac_rozliczeniowy: previous.toISOString().slice(0, 10) };
 }

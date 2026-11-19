@@ -49,6 +49,7 @@ type TaskDraft = {
   osoba_id: string;
   klient_id: string;
   czy_wewnetrzne: boolean;
+  czy_roczne: boolean;
   notatki: string;
 };
 
@@ -355,6 +356,7 @@ function TaskDrawer({ mode, task, currentUserId, assignees, clients, onClose, on
       osoba_id: draft.osoba_id,
       klient_id: draft.czy_wewnetrzne ? null : draft.klient_id,
       czy_wewnetrzne: draft.czy_wewnetrzne,
+      czy_roczne: draft.czy_roczne,
       notatki: draft.notatki.trim() || null,
     };
     const result = mode === "create" || !task ? await createTask(payload) : await updateTask(task.id, payload);
@@ -472,6 +474,7 @@ function TaskDrawer({ mode, task, currentUserId, assignees, clients, onClose, on
             <EditableRow label="Osoba odpowiedzialna">
               <AppSelect style={inputStyle} value={draft.osoba_id} options={[{ value: "", label: "Wybierz osobę" }, ...assignees.map((assignee) => ({ value: assignee.id, label: formatProfileName(assignee) }))]} onChange={(value) => updateDraft("osoba_id", value)} />
             </EditableRow>
+            <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 24 }}>
             <label style={checkboxLabelStyle}>
               <input
                 type="checkbox"
@@ -486,6 +489,12 @@ function TaskDrawer({ mode, task, currentUserId, assignees, clients, onClose, on
               />
               Zadanie wewnętrzne
             </label>
+            <label style={checkboxLabelStyle}>
+              <input type="checkbox" checked={draft.czy_roczne} onChange={event => updateDraft("czy_roczne", event.target.checked)} />
+              Zadanie roczne
+            </label>
+            </div>
+            {draft.czy_roczne && <p style={{ color: colors.muted, fontSize: 13, margin: "4px 0 12px" }}>Koszt obsługi klienta trafia do poprzedniego miesiąca: praca w listopadzie → koszt października.</p>}
             {!draft.czy_wewnetrzne && (
               <EditableRow label="Klient">
                 <div style={clientSearchBoxStyle}>
@@ -610,6 +619,7 @@ function createDraft(task: Task | null, currentUserId: string | null): TaskDraft
     osoba_id: task?.osoba_id || currentUserId || "",
     klient_id: task?.klient_id || "",
     czy_wewnetrzne: task?.czy_wewnetrzne ?? false,
+    czy_roczne: task?.czy_roczne ?? false,
     notatki: task?.notatki || "",
   };
 }

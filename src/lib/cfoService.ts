@@ -182,6 +182,7 @@ export type CfoTeamMember = {
 export type CfoTimeCorrection = Omit<CfoClientTimeEntry, "started_at" | "ended_at"> & { created_at: string };
 
 export type CfoClientTimeEntry = {
+  zadania?: { czy_roczne: boolean } | { czy_roczne: boolean }[] | null;
   zadanie_id?: string | null;
   zadanie_cykliczne_id?: string | null;
   czy_wewnetrzne?: boolean;
@@ -540,10 +541,10 @@ export async function fetchCfoTeamMembers() {
 async function fetchCfoAdjustedTimeEntries() {
   const [time, corrections] = await Promise.all([
     allPages((a,b) => supabase.from("czas_pracy")
-      .select("id,zadanie_id,zadanie_cykliczne_id,klient_id,osoba_id,started_at,ended_at,duration_seconds,miesiac_rozliczeniowy,czy_wewnetrzne,klienci(nazwa),profiles!czas_pracy_osoba_id_fkey(client_work_hourly_rate)")
+      .select("id,zadanie_id,zadanie_cykliczne_id,klient_id,osoba_id,started_at,ended_at,duration_seconds,miesiac_rozliczeniowy,czy_wewnetrzne,zadania(czy_roczne),klienci(nazwa),profiles!czas_pracy_osoba_id_fkey(client_work_hourly_rate)")
       .not("ended_at", "is", null).order("id").range(a,b)),
     allPages((a,b) => supabase.from("korekty_czasu_zadan")
-      .select("id,zadanie_id,zadanie_cykliczne_id,klient_id,osoba_id,created_at,duration_seconds,miesiac_rozliczeniowy,klienci(nazwa),profiles!korekty_czasu_zadan_osoba_id_fkey(client_work_hourly_rate)")
+      .select("id,zadanie_id,zadanie_cykliczne_id,klient_id,osoba_id,created_at,duration_seconds,miesiac_rozliczeniowy,zadania(czy_roczne),klienci(nazwa),profiles!korekty_czasu_zadan_osoba_id_fkey(client_work_hourly_rate)")
       .order("id").range(a,b)),
   ]);
   if (time.error || corrections.error) return { data: null, error: time.error || corrections.error };
